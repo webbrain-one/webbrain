@@ -574,6 +574,9 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/"/>
   </url>
   <url>
+    <loc>https://webbrain.one/websites/</loc>
+  </url>
+  <url>
     <loc>https://webbrain.one/research/</loc>
   </url>
   <url>

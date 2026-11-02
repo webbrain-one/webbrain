@@ -18,7 +18,7 @@
   <meta name="twitter:title" content="WebBrain for websites — Add an AI guide to your website">
   <meta name="twitter:description" content="One script tag gives every visitor an AI guide that explains your pages, answers questions, and fills in forms when you allow it. Free forever.">
   <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
-  <meta name="robots" content="noindex, follow">
+  <meta name="robots" content="index, follow">
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="canonical" href="https://webbrain.one/websites/">
   <script type="application/ld+json">
@@ -469,7 +469,7 @@
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
-      <span class="nav-cta is-disabled" aria-disabled="true">Dashboard coming soon</span>
+      <a class="nav-cta" href="https://sites.webbrain.one/dashboard">Open the dashboard</a>
     </div>
   </div>
 </header>
@@ -481,16 +481,16 @@
       <h1 id="websites-title">Add an AI guide <span class="accent-line">to your website.</span></h1>
       <p class="lede">Paste one line of code and every visitor can ask about the page they're on. WebBrain reads the page, answers from it, and, if you allow it, fills in forms and clicks through for them.</p>
       
-      <form class="get-script" aria-describedby="get-script-soon" onsubmit="return false">
+      <form class="get-script" id="get-script" action="https://sites.webbrain.one/dashboard" method="get">
         <label for="get-script-url">Your website address</label>
-        <input id="get-script-url" type="text" placeholder="yourwebsite.com" disabled>
-        <button class="btn" type="button" disabled>Coming soon</button>
+        <input id="get-script-url" name="url" type="text" inputmode="url" autocomplete="url" placeholder="yourwebsite.com" spellcheck="false">
+        <button class="btn" type="submit">Get your script</button>
       </form>
       
       <p class="hero-note">
         <span class="free-dot">Free forever</span>
         <span>No credit card. Nothing for visitors to install.</span>
-        <span id="get-script-soon">The dashboard opens soon.</span>
+        <a href="https://sites.webbrain.one/playground">Try the live demo</a>
       </p>
     </div>
 
@@ -605,7 +605,7 @@ WebBrain.<span class="tok-attr">reloadConfig</span>();</pre>
     <h2 id="free-title">Free now. <span>Free forever.</span></h2>
     <div>
       <p>WebBrain for websites is free to use, and the free plan is here to stay. Paid tiers with extra features will come later, for teams that want more.</p>
-      <span class="btn is-disabled" aria-disabled="true">Coming soon</span>
+      <a class="btn" href="https://sites.webbrain.one/dashboard">Get your script</a>
     </div>
   </section>
 
@@ -646,7 +646,8 @@ WebBrain.<span class="tok-attr">reloadConfig</span>();</pre>
     <h2 id="closing-title">Give every visitor a guide to your site.</h2>
     <div class="closing-actions">
       
-      <span class="btn is-disabled" aria-disabled="true">Coming soon</span>
+      <a class="btn" href="https://sites.webbrain.one/dashboard">Get your script</a>
+      <a class="btn btn-quiet" href="https://sites.webbrain.one/playground">Try the live demo</a>
       
     </div>
   </section>
@@ -662,6 +663,7 @@ WebBrain.<span class="tok-attr">reloadConfig</span>();</pre>
     <div class="wb-footer-row">
       <div class="wb-footer-links">
         <a href="/">Browser extension</a>
+        <a href="/websites/">For websites</a>
         <a href="/companion/">Desktop Companion</a>
         <a href="/research/">Research</a>
         <a href="/docs/">Docs</a>

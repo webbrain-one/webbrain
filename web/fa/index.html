@@ -374,7 +374,7 @@
       "name": "WebBrain",
       "url": "https://webbrain.one/fa/",
       "inLanguage": "fa-IR",
-      "description": "WebBrain یک جایگزین رایگان و منبع باز برای پلاگین مرورگر کلود است. عامل مرورگر هوش مصنوعی برای Chrome، Firefox، و Edge - خواندن صفحات، استخراج داده ها، خودکار کردن وظایف. با llama.cpp، OpenAI، کلود، OpenRouter کار می کند. رابط کاربری چند زبانه، اسکرین‌شات‌های مبتنی بر نشانه. دارای مجوز GPL-3.0-or-later",
+      "description": "WebBrain یک عامل هوش مصنوعی رایگان است که صفحات وب را می‌خواند، توضیح می‌دهد و روی آن‌ها کار انجام می‌دهد. افزونه متن‌باز را به Chrome، Edge یا Firefox اضافه کنید، یا WebBrain را برای بازدیدکنندگان به وب‌سایت خود بیفزایید.",
       "publisher": {
         "@id": "https://webbrain.one/#organization"
       }
@@ -4187,7 +4187,7 @@
       <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
-      
+      <a href="/websites/">برای وب‌سایت‌ها</a>
       <a href="/research/" class="nav-secondary">پژوهش</a>
       <a href="/docs/" class="nav-secondary">اسناد</a>
       <a href="/blog/" class="nav-secondary">وبلاگ</a>
@@ -4252,10 +4252,10 @@
       <div class="hero-title">
         <!-- Until WebBrain for websites launches the hero speaks for the browser
              extension alone (WEBSITES_LAUNCHED in site-footer.mjs). -->
-        <p class="hero-kicker">رایگان و متن‌باز</p>
-        <h1 id="home-title"><span class="title-line">در هر صفحه‌ای که می‌بینید،</span> <span class="title-line title-accent">یک عامل هوش مصنوعی.</span></h1>
+        <p class="hero-kicker">رایگان برای مرورگرها و وب‌سایت‌ها</p>
+        <h1 id="home-title"><span class="title-line">در هر صفحه‌ای که می‌بینید یا می‌سازید،</span> <span class="title-line title-accent">یک عامل هوش مصنوعی.</span></h1>
       </div>
-      <p class="hero-lede">WebBrain صفحه‌های وب را می‌خواند، توضیح می‌دهد و روی آن‌ها کار انجام می‌دهد. آن را به Chrome، Edge یا Firefox اضافه کنید و در هر سایتی کمک بگیرید، با هر مدلی، از جمله مدل‌های محلی.</p>
+      <p class="hero-lede">WebBrain صفحات وب را می‌خواند، توضیح می‌دهد و روی آن‌ها کار انجام می‌دهد. آن را به مرورگرتان اضافه کنید تا در هر سایتی کمک بگیرید، یا به وب‌سایتتان تا بازدیدکنندگان هم همین کمک را بگیرند.</p>
       <div class="path-actions hero-actions-row">
         <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="path-btn" id="hero-install-cta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -4584,6 +4584,62 @@
 
   </div>
 
+  
+  <!-- WebBrain for websites: same weight of words, less room. The code
+       illustration marks it as the developer product. Shown while
+       WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+  <section class="path path-websites" aria-labelledby="path-websites-title">
+    <div class="illo illo-site" aria-hidden="true">
+      <div class="code-pane">
+        <div class="code-tabbar"><span class="code-tab">index.html</span></div>
+        <code class="code-lines">
+          <span class="code-line" data-n="40"><span class="tk-tag">&lt;body&gt;</span></span>
+          <span class="code-line" data-n="41">  <span class="tk-tag">&lt;main&gt;</span><span class="tk-dim">…</span><span class="tk-tag">&lt;/main&gt;</span></span>
+          <span class="code-line is-added">  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-str">"…/embed.js"</span></span>
+          <span class="code-line is-added">    <span class="tk-attr">data-site-id</span>=<span class="tk-str">"…"</span><span class="tk-tag">&gt;&lt;/script&gt;</span></span>
+          <span class="code-line" data-n="44"><span class="tk-tag">&lt;/body&gt;</span></span>
+          <span class="code-line" data-n="45"><span class="tk-tag">&lt;/html&gt;</span></span>
+        </code>
+      </div>
+      <div class="sp-pane">
+        <div class="sp-nav"><b class="sp-logo"></b><span class="ln"></span><span class="ln"></span><span class="ln"></span></div>
+        <div class="sp-body">
+          <span class="ln ln-title"></span>
+          <span class="ln w95"></span>
+          <span class="ln w75"></span>
+        </div>
+        <div class="sp-drawer">
+          <span class="ln w85"></span>
+          <span class="ln w60"></span>
+          <span class="sp-chip"></span>
+          <span class="sp-chip w60"></span>
+        </div>
+        <span class="sp-launcher">✦ Ask AI</span>
+      </div>
+    </div>
+    <div class="path-copy">
+      <div class="path-text">
+        <div class="path-head">
+          <h2 id="path-websites-title">در وب‌سایت شما</h2>
+          <span class="path-badge">رایگان</span>
+        </div>
+        <p>تنها با یک تگ script، هر بازدیدکننده یک راهنمای هوش مصنوعی دارد که صفحات شما را توضیح می‌دهد، به پرسش‌ها پاسخ می‌دهد و در صورت اجازه شما فرم‌ها را پر می‌کند.</p>
+      </div>
+      <div class="path-actions">
+        <a href="/websites/" class="path-btn path-btn-ink" id="hero-websites-cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>WebBrain را به وب‌سایت خود اضافه کنید</span>
+        </a>
+        <span class="path-more">
+          <a href="https://sites.webbrain.one/playground" class="path-action" id="home-demo-open" data-embed-src="https://sites.webbrain.one/embed.js" data-site-id="site_webbrain_one" data-error="دمو بارگیری نشد. لحظاتی دیگر دوباره امتحان کنید.">
+            <span class="path-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span>دمو</span>
+          </a>
+        </span>
+        <p class="path-status" id="home-demo-status" role="status"></p>
+      </div>
+    </div>
+  </section>
   
 </section>
 
@@ -5139,6 +5195,7 @@
     <div class="wb-footer-row">
       <div class="wb-footer-links">
         <a href="/fa/">افزونه مرورگر</a>
+        <a href="/websites/">برای وب‌سایت‌ها</a>
         <a href="/companion/fa/">Companion دسکتاپ</a>
         <a href="/research/">پژوهش</a>
         <a href="/docs/">اسناد</a>

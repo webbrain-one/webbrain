@@ -374,7 +374,7 @@
       "name": "WebBrain",
       "url": "https://webbrain.one/zh/",
       "inLanguage": "zh-CN",
-      "description": "WebBrain 是 Claude 浏览器插件的免费开源替代品。面向 Chrome、Firefox 与 Edge 的 AI 浏览器代理 —— 阅读页面、提取数据、自动化任务。兼容 llama.cpp、OpenAI、Claude、OpenRouter。多语言界面、截图节省 token。GPL-3.0-or-later 许可。",
+      "description": "WebBrain 是一款免费的 AI 代理，可以阅读、解释网页并在网页上执行操作。将开源扩展添加到 Chrome、Edge 或 Firefox，或将 WebBrain 添加到您的网站，为访客服务。",
       "publisher": {
         "@id": "https://webbrain.one/#organization"
       }
@@ -4187,7 +4187,7 @@
       <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
-      
+      <a href="/websites/">面向网站</a>
       <a href="/research/" class="nav-secondary">研究</a>
       <a href="/docs/zh/" class="nav-secondary">文档</a>
       <a href="/blog/" class="nav-secondary">博客</a>
@@ -4252,10 +4252,10 @@
       <div class="hero-title">
         <!-- Until WebBrain for websites launches the hero speaks for the browser
              extension alone (WEBSITES_LAUNCHED in site-footer.mjs). -->
-        <p class="hero-kicker">免费且开源</p>
-        <h1 id="home-title"><span class="title-line">您浏览的每个页面</span> <span class="title-line title-accent">都有一个 AI 代理。</span></h1>
+        <p class="hero-kicker">浏览器与网站均可免费使用</p>
+        <h1 id="home-title"><span class="title-line">您浏览或构建的每个页面</span> <span class="title-line title-accent">都有一个 AI 代理。</span></h1>
       </div>
-      <p class="hero-lede">WebBrain 能阅读、解释网页并在网页上执行操作。将它添加到 Chrome、Edge 或 Firefox，即可在任何网站获得帮助，支持任何模型，包括本地模型。</p>
+      <p class="hero-lede">WebBrain 能够阅读、解释网页，并在网页上执行操作。把它添加到浏览器，在任何网站上获得帮助；或添加到您的网站，让访客获得同样的帮助。</p>
       <div class="path-actions hero-actions-row">
         <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="path-btn" id="hero-install-cta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -4584,6 +4584,62 @@
 
   </div>
 
+  
+  <!-- WebBrain for websites: same weight of words, less room. The code
+       illustration marks it as the developer product. Shown while
+       WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+  <section class="path path-websites" aria-labelledby="path-websites-title">
+    <div class="illo illo-site" aria-hidden="true">
+      <div class="code-pane">
+        <div class="code-tabbar"><span class="code-tab">index.html</span></div>
+        <code class="code-lines">
+          <span class="code-line" data-n="40"><span class="tk-tag">&lt;body&gt;</span></span>
+          <span class="code-line" data-n="41">  <span class="tk-tag">&lt;main&gt;</span><span class="tk-dim">…</span><span class="tk-tag">&lt;/main&gt;</span></span>
+          <span class="code-line is-added">  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-str">"…/embed.js"</span></span>
+          <span class="code-line is-added">    <span class="tk-attr">data-site-id</span>=<span class="tk-str">"…"</span><span class="tk-tag">&gt;&lt;/script&gt;</span></span>
+          <span class="code-line" data-n="44"><span class="tk-tag">&lt;/body&gt;</span></span>
+          <span class="code-line" data-n="45"><span class="tk-tag">&lt;/html&gt;</span></span>
+        </code>
+      </div>
+      <div class="sp-pane">
+        <div class="sp-nav"><b class="sp-logo"></b><span class="ln"></span><span class="ln"></span><span class="ln"></span></div>
+        <div class="sp-body">
+          <span class="ln ln-title"></span>
+          <span class="ln w95"></span>
+          <span class="ln w75"></span>
+        </div>
+        <div class="sp-drawer">
+          <span class="ln w85"></span>
+          <span class="ln w60"></span>
+          <span class="sp-chip"></span>
+          <span class="sp-chip w60"></span>
+        </div>
+        <span class="sp-launcher">✦ Ask AI</span>
+      </div>
+    </div>
+    <div class="path-copy">
+      <div class="path-text">
+        <div class="path-head">
+          <h2 id="path-websites-title">在您的网站上</h2>
+          <span class="path-badge">免费</span>
+        </div>
+        <p>只需一个 script 标签，就能为每位访客提供 AI 向导：讲解您的页面、回答问题，并在您允许时帮忙填写表单。</p>
+      </div>
+      <div class="path-actions">
+        <a href="/websites/" class="path-btn path-btn-ink" id="hero-websites-cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>将 WebBrain 添加到您的网站</span>
+        </a>
+        <span class="path-more">
+          <a href="https://sites.webbrain.one/playground" class="path-action" id="home-demo-open" data-embed-src="https://sites.webbrain.one/embed.js" data-site-id="site_webbrain_one" data-error="演示加载失败，请稍后再试。">
+            <span class="path-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span>演示</span>
+          </a>
+        </span>
+        <p class="path-status" id="home-demo-status" role="status"></p>
+      </div>
+    </div>
+  </section>
   
 </section>
 
@@ -5139,6 +5195,7 @@
     <div class="wb-footer-row">
       <div class="wb-footer-links">
         <a href="/zh/">浏览器扩展</a>
+        <a href="/websites/">面向网站</a>
         <a href="/companion/zh/">桌面 Companion</a>
         <a href="/research/">研究</a>
         <a href="/docs/zh/">文档</a>
