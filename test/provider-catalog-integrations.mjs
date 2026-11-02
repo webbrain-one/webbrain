@@ -25,6 +25,17 @@ for (const browser of ['chrome', 'firefox']) {
   const { providerIconUrl } = await import(pathToFileURL(path.join(prefix, 'ui', 'provider-icons.js')).href);
   assert.ok(providerIconUrl('api-route').endsWith('/api-route.png'));
 
+  const runcrate = ADDITIONAL_PROVIDER_DEFAULTS.runcrate;
+  assert.equal(runcrate.type, 'openai', `${browser}: Runcrate must use the OpenAI-compatible adapter`);
+  assert.equal(runcrate.baseUrl, 'https://api.runcrate.ai/v1', `${browser}: Runcrate endpoint changed`);
+  assert.equal(runcrate.model, 'deepseek-ai/DeepSeek-V4.1-Flash');
+  assert.equal(runcrate.contextWindow, 1048576);
+  assert.equal(runcrate.enabled, false);
+  assert.equal(runcrate.apiKey, '');
+  assert.equal(runcrate.supportsTools, true);
+  assert.equal(runcrate.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('runcrate').endsWith('/runcrate.svg'));
+
   const ioNet = ADDITIONAL_PROVIDER_DEFAULTS['io-net'];
   assert.equal(ioNet.type, 'openai', `${browser}: IO.NET must use the OpenAI-compatible adapter`);
   assert.equal(ioNet.baseUrl, 'https://api.intelligence.io.solutions/api/v1', `${browser}: IO.NET endpoint changed`);
