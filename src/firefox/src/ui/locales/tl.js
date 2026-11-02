@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "mag-download ng files mula sa",
   "sp.perm.verb.upload": "mag-upload ng file sa",
   "sp.perm.verb.record": "i-record ang tab (at mikropono) sa",
-  "sp.help.shortcuts_html": "<strong>Mga Keyboard Shortcut</strong><br><code>Ctrl/Cmd+/</code> — I-focus ang input<br><code>Ctrl/Cmd+Shift+A</code> — Lumipat sa Ask mode<br><code>Ctrl/Cmd+Shift+X</code> — Lumipat sa Act mode<br><code>Ctrl/Cmd+Shift+D</code> — Lumipat sa Dev mode<br><code>Ctrl/Cmd+M</code> — I-toggle ang voice input",
+  "sp.help.shortcuts_html": "<strong>Mga Keyboard Shortcut</strong><br><code>Ctrl/Cmd+/</code> — I-focus ang input<br><code>Ctrl/Cmd+Shift+A</code> — Lumipat sa Ask mode<br><code>Ctrl/Cmd+Shift+X</code> — Lumipat sa Act mode<br><code>Ctrl/Cmd+Shift+D</code> — Lumipat sa Dev mode<br><code>Escape</code> — Ihinto ang aktibong run<br><code>1</code>–<code>9</code> — Piliin ang sagot na may ganoong numero",
   "sp.slash.record_transcribe": "I-record at i-save ang Whisper transcript pagkatapos huminto",
   "sp.slash.unknown_command": "Hindi kilalang slash command {command}. Gamitin ang /help upang makita ang mga available na command.",
   "sp.slash.invalid_usage": "Hindi wastong syntax ng slash command. Paggamit: {usage}",

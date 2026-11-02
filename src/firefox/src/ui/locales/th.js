@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "ดาวน์โหลดไฟล์จาก",
   "sp.perm.verb.upload": "อัปโหลดไฟล์ไปยัง",
   "sp.perm.verb.record": "บันทึกแท็บ (และไมโครโฟน) บน",
-  "sp.help.shortcuts_html": "<strong>แป้นพิมพ์ลัด</strong><br><code>Ctrl/Cmd+/</code> — โฟกัสช่องป้อนข้อความ<br><code>Ctrl/Cmd+Shift+A</code> — เปลี่ยนไปโหมดถาม<br><code>Ctrl/Cmd+Shift+X</code> — เปลี่ยนไปโหมดทำ<br><code>Ctrl/Cmd+Shift+D</code> — เปลี่ยนไปโหมดนักพัฒนา<br><code>Ctrl/Cmd+M</code> — สลับการป้อนด้วยเสียง",
+  "sp.help.shortcuts_html": "<strong>แป้นพิมพ์ลัด</strong><br><code>Ctrl/Cmd+/</code> — โฟกัสช่องป้อนข้อความ<br><code>Ctrl/Cmd+Shift+A</code> — เปลี่ยนไปโหมดถาม<br><code>Ctrl/Cmd+Shift+X</code> — เปลี่ยนไปโหมดทำ<br><code>Ctrl/Cmd+Shift+D</code> — เปลี่ยนไปโหมดนักพัฒนา<br><code>Escape</code> — หยุดการทำงานที่กำลังทำอยู่<br><code>1</code>–<code>9</code> — เลือกคำตอบที่มีหมายเลขนั้น",
   "sp.slash.record_transcribe": "บันทึกและบันทึกบทถอดเสียง Whisper หลังหยุด",
   "sp.slash.unknown_command": "ไม่รู้จักคำสั่งสแลช {command} ใช้ /help เพื่อดูคำสั่งที่ใช้ได้",
   "sp.slash.invalid_usage": "ไวยากรณ์คำสั่งสแลชไม่ถูกต้อง วิธีใช้: {usage}",

@@ -4695,6 +4695,9 @@ html[data-ui-scale="175"] .composer-toolbar {
 }
 
 .clarify-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   padding: 8px 10px;
   background: var(--bg-input);
@@ -4714,6 +4717,33 @@ html[data-ui-scale="175"] .composer-toolbar {
 .clarify-option:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* The answer's number, drawn from the data attribute so the button's own text
+   stays the answer WebBrain sends back. The empty alt text after the slash
+   keeps the digit out of the accessible name; aria-keyshortcuts announces the
+   shortcut instead. */
+.clarify-option[data-shortcut]::after {
+  content: attr(data-shortcut) / "";
+  box-sizing: border-box;
+  flex: none;
+  margin-left: auto;
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 40%, transparent);
+  border-radius: 3px;
+  background: var(--tint-soft);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.clarify-option:hover:not(:disabled)::after {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 /* The permission card's way to the skip dialog: set apart from the answers

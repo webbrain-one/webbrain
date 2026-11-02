@@ -527,7 +527,7 @@ export default {
   'sp.permissions.gate_off': 'Tắt: WebBrain hành động trên mọi trang web mà không hỏi.',
   'sp.permissions.manage': 'Quản lý quyền của trang web',
   'sp.permissions.enabled': 'Lời nhắc về quyền đã được bật lại.',
-  "sp.help.shortcuts_html": "<strong>Phím tắt</strong><br><code>Ctrl/Cmd+/</code> - Tập trung đầu vào<br><code>Ctrl/Cmd+Shift+A</code> - Chuyển sang chế độ Hỏi<br><code>Ctrl/Cmd+Shift+X</code> - Chuyển sang chế độ Act<br><code>Ctrl/Cmd+Shift+D</code> - Chuyển sang chế độ Dev<br><code>Escape</code> - Dừng quá trình chạy đang hoạt động<br><code>Escape</code> hai lần - Dừng quá trình ghi đang hoạt động",
+  "sp.help.shortcuts_html": "<strong>Phím tắt</strong><br><code>Ctrl/Cmd+/</code> - Tập trung đầu vào<br><code>Ctrl/Cmd+Shift+A</code> - Chuyển sang chế độ Hỏi<br><code>Ctrl/Cmd+Shift+X</code> - Chuyển sang chế độ Act<br><code>Ctrl/Cmd+Shift+D</code> - Chuyển sang chế độ Dev<br><code>Escape</code> - Dừng quá trình chạy đang hoạt động<br><code>Escape</code> hai lần - Dừng quá trình ghi đang hoạt động<br><code>1</code>–<code>9</code> - Chọn câu trả lời có số đó",
   "sp.slash.record_transcribe": "Ghi và lưu bản ghi Whisper sau khi dừng",
   "sp.slash.unknown_command": "Lệnh gạch chéo không xác định {command}. Sử dụng /help để xem các lệnh có sẵn.",
   "sp.slash.invalid_usage": "Cú pháp lệnh gạch chéo không hợp lệ. Cách sử dụng: {usage}",

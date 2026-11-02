@@ -510,7 +510,7 @@ export default {
   'sp.permissions.gate_off': 'Uit: WebBrain handelt op elke site zonder te vragen.',
   'sp.permissions.manage': 'Sitemachtigingen beheren',
   'sp.permissions.enabled': 'Machtigingsvragen staan weer aan.',
-  "sp.help.shortcuts_html": "<strong>Sneltoetsen</strong><br>...",
+  "sp.help.shortcuts_html": "<strong>Sneltoetsen</strong><br><code>Ctrl/Cmd+/</code> — Het invoerveld focussen<br><code>Ctrl/Cmd+Shift+A</code> — Naar de modus Vragen schakelen<br><code>Ctrl/Cmd+Shift+X</code> — Naar de modus Handelen schakelen<br><code>Ctrl/Cmd+Shift+D</code> — Naar de modus Dev schakelen<br><code>Escape</code> — De actieve run stoppen<br><code>1</code>–<code>9</code> — Het antwoord met dat nummer kiezen",
   "sp.slash.record_transcribe": "Opnemen en Whisper-transcriptie opslaan na stop",
   "sp.slash.unknown_command": "Onbekend slashcommando {command}. Gebruik /help om beschikbare commando's te zien.",
   "sp.slash.invalid_usage": "Ongeldige slashcommandosyntaxis. Gebruik: {usage}",

@@ -679,7 +679,7 @@ export default {
   "sp.perm.verb.download": "يُنزّل ملفات من",
   "sp.perm.verb.upload": "يرفع ملفًا إلى",
   "sp.perm.verb.record": "يُسجّل علامة التبويب (والميكروفون) على",
-  "sp.help.shortcuts_html": "<strong>اختصارات لوحة المفاتيح</strong><br><code>Ctrl/Cmd+/</code> — التركيز على حقل الإدخال<br><code>Ctrl/Cmd+Shift+A</code> — التبديل إلى وضع السؤال<br><code>Ctrl/Cmd+Shift+X</code> — التبديل إلى وضع التنفيذ<br><code>Ctrl/Cmd+Shift+D</code> — التبديل إلى وضع التطوير<br><code>Ctrl/Cmd+M</code> — تبديل الإدخال الصوتي",
+  "sp.help.shortcuts_html": "<strong>اختصارات لوحة المفاتيح</strong><br><code>Ctrl/Cmd+/</code> — التركيز على حقل الإدخال<br><code>Ctrl/Cmd+Shift+A</code> — التبديل إلى وضع السؤال<br><code>Ctrl/Cmd+Shift+X</code> — التبديل إلى وضع التنفيذ<br><code>Ctrl/Cmd+Shift+D</code> — التبديل إلى وضع التطوير<br><code>Escape</code> — إيقاف التشغيل النشط<br><code>Escape</code> مرتين — إيقاف تسجيل نشط<br><code>1</code>–<code>9</code> — اختيار الإجابة التي تحمل هذا الرقم",
   "sp.slash.record_transcribe": "التسجيل وحفظ نص Whisper بعد الإيقاف",
   "sp.slash.unknown_command": "أمر شرطة مائلة غير معروف {command}. استخدم /help لعرض الأوامر المتاحة.",
   "sp.slash.invalid_usage": "بنية أمر الشرطة المائلة غير صالحة. الاستخدام: {usage}",

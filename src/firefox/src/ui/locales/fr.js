@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "télécharger des fichiers depuis",
   "sp.perm.verb.upload": "téléverser un fichier vers",
   "sp.perm.verb.record": "enregistrer l'onglet (et le microphone) sur",
-  "sp.help.shortcuts_html": "<strong>Raccourcis clavier</strong><br><code>Ctrl/Cmd+/</code> — Focus sur la zone de saisie<br><code>Ctrl/Cmd+Shift+A</code> — Passer en mode Demander<br><code>Ctrl/Cmd+Shift+X</code> — Passer en mode Agir<br><code>Ctrl/Cmd+Shift+D</code> — Passer en mode Développement<br><code>Ctrl/Cmd+M</code> — Basculer la saisie vocale",
+  "sp.help.shortcuts_html": "<strong>Raccourcis clavier</strong><br><code>Ctrl/Cmd+/</code> — Focus sur la zone de saisie<br><code>Ctrl/Cmd+Shift+A</code> — Passer en mode Demander<br><code>Ctrl/Cmd+Shift+X</code> — Passer en mode Agir<br><code>Ctrl/Cmd+Shift+D</code> — Passer en mode Développement<br><code>Escape</code> — Arrêter l’exécution en cours<br><code>1</code>–<code>9</code> — Choisir la réponse portant ce numéro",
   "sp.slash.record_transcribe": "Enregistrer et sauvegarder une transcription Whisper à l'arrêt",
   "sp.slash.unknown_command": "Commande slash inconnue {command}. Utilisez /help pour voir les commandes disponibles.",
   "sp.slash.invalid_usage": "Syntaxe de commande slash invalide. Utilisation : {usage}",

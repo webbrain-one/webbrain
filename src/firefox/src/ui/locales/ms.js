@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "memuat turun fail dari",
   "sp.perm.verb.upload": "memuat naik fail ke",
   "sp.perm.verb.record": "merakam tab (dan mikrofon) pada",
-  "sp.help.shortcuts_html": "<strong>Pintasan Papan Kekunci</strong><br><code>Ctrl/Cmd+/</code> — Fokus pada medan input<br><code>Ctrl/Cmd+Shift+A</code> — Beralih ke mod Tanya<br><code>Ctrl/Cmd+Shift+X</code> — Beralih ke mod Lakukan<br><code>Ctrl/Cmd+Shift+D</code> — Beralih ke mod Dev<br><code>Ctrl/Cmd+M</code> — Togol input suara",
+  "sp.help.shortcuts_html": "<strong>Pintasan Papan Kekunci</strong><br><code>Ctrl/Cmd+/</code> — Fokus pada medan input<br><code>Ctrl/Cmd+Shift+A</code> — Beralih ke mod Tanya<br><code>Ctrl/Cmd+Shift+X</code> — Beralih ke mod Lakukan<br><code>Ctrl/Cmd+Shift+D</code> — Beralih ke mod Dev<br><code>Escape</code> — Hentikan larian aktif<br><code>1</code>–<code>9</code> — Pilih jawapan bernombor itu",
   "sp.slash.record_transcribe": "Rakam dan simpan transkrip Whisper selepas berhenti",
   "sp.slash.unknown_command": "Arahan slash tidak diketahui {command}. Gunakan /help untuk melihat arahan yang tersedia.",
   "sp.slash.invalid_usage": "Sintaks arahan slash tidak sah. Penggunaan: {usage}",
