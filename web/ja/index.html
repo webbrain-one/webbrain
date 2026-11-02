@@ -374,7 +374,7 @@
       "name": "WebBrain",
       "url": "https://webbrain.one/ja/",
       "inLanguage": "ja-JP",
-      "description": "WebBrain は Claude のブラウザプラグインに代わる無料・オープンソースの選択肢です。Chrome、Firefox、Edge 用の AI ブラウザエージェント — ページを読み、データを抽出し、タスクを自動化。llama.cpp、OpenAI、Claude、OpenRouter に対応。多言語 UI、トークンに配慮したスクリーンショット。GPL-3.0-or-later ライセンス。",
+      "description": "WebBrain は、ウェブページを読み、説明し、操作までこなす無料の AI エージェントです。オープンソースの拡張機能を Chrome、Edge、Firefox に追加するか、訪問者のために WebBrain をウェブサイトに導入しましょう。",
       "publisher": {
         "@id": "https://webbrain.one/#organization"
       }
@@ -4187,7 +4187,7 @@
       <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
-      
+      <a href="/websites/">ウェブサイト向け</a>
       <a href="/research/" class="nav-secondary">研究</a>
       <a href="/docs/" class="nav-secondary">ドキュメント</a>
       <a href="/blog/" class="nav-secondary">ブログ</a>
@@ -4252,10 +4252,10 @@
       <div class="hero-title">
         <!-- Until WebBrain for websites launches the hero speaks for the browser
              extension alone (WEBSITES_LAUNCHED in site-footer.mjs). -->
-        <p class="hero-kicker">無料でオープンソース</p>
-        <h1 id="home-title"><span class="title-line">閲覧するすべてのページに、</span> <span class="title-line title-accent">AI エージェントを。</span></h1>
+        <p class="hero-kicker">ブラウザでもウェブサイトでも無料</p>
+        <h1 id="home-title"><span class="title-line">閲覧するページにも、つくるページにも、</span> <span class="title-line title-accent">AI エージェントを。</span></h1>
       </div>
-      <p class="hero-lede">WebBrain はウェブページを読み、説明し、操作します。Chrome、Edge、Firefox に追加すれば、どのサイトでも、ローカルモデルを含むあらゆるモデルで手助けを受けられます。</p>
+      <p class="hero-lede">WebBrain はウェブページを読み、説明し、操作までこなします。ブラウザに追加すればどのサイトでも助けが得られ、ウェブサイトに導入すれば訪問者も同じ助けを受けられます。</p>
       <div class="path-actions hero-actions-row">
         <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="path-btn" id="hero-install-cta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -4584,6 +4584,62 @@
 
   </div>
 
+  
+  <!-- WebBrain for websites: same weight of words, less room. The code
+       illustration marks it as the developer product. Shown while
+       WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+  <section class="path path-websites" aria-labelledby="path-websites-title">
+    <div class="illo illo-site" aria-hidden="true">
+      <div class="code-pane">
+        <div class="code-tabbar"><span class="code-tab">index.html</span></div>
+        <code class="code-lines">
+          <span class="code-line" data-n="40"><span class="tk-tag">&lt;body&gt;</span></span>
+          <span class="code-line" data-n="41">  <span class="tk-tag">&lt;main&gt;</span><span class="tk-dim">…</span><span class="tk-tag">&lt;/main&gt;</span></span>
+          <span class="code-line is-added">  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-str">"…/embed.js"</span></span>
+          <span class="code-line is-added">    <span class="tk-attr">data-site-id</span>=<span class="tk-str">"…"</span><span class="tk-tag">&gt;&lt;/script&gt;</span></span>
+          <span class="code-line" data-n="44"><span class="tk-tag">&lt;/body&gt;</span></span>
+          <span class="code-line" data-n="45"><span class="tk-tag">&lt;/html&gt;</span></span>
+        </code>
+      </div>
+      <div class="sp-pane">
+        <div class="sp-nav"><b class="sp-logo"></b><span class="ln"></span><span class="ln"></span><span class="ln"></span></div>
+        <div class="sp-body">
+          <span class="ln ln-title"></span>
+          <span class="ln w95"></span>
+          <span class="ln w75"></span>
+        </div>
+        <div class="sp-drawer">
+          <span class="ln w85"></span>
+          <span class="ln w60"></span>
+          <span class="sp-chip"></span>
+          <span class="sp-chip w60"></span>
+        </div>
+        <span class="sp-launcher">✦ Ask AI</span>
+      </div>
+    </div>
+    <div class="path-copy">
+      <div class="path-text">
+        <div class="path-head">
+          <h2 id="path-websites-title">ウェブサイトで</h2>
+          <span class="path-badge">無料</span>
+        </div>
+        <p>script タグを 1 行追加するだけで、すべての訪問者に AI ガイドを。ページの説明、質問への回答、許可した場合はフォーム入力まで行います。</p>
+      </div>
+      <div class="path-actions">
+        <a href="/websites/" class="path-btn path-btn-ink" id="hero-websites-cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>ウェブサイトに WebBrain を追加</span>
+        </a>
+        <span class="path-more">
+          <a href="https://sites.webbrain.one/playground" class="path-action" id="home-demo-open" data-embed-src="https://sites.webbrain.one/embed.js" data-site-id="site_webbrain_one" data-error="デモを読み込めませんでした。少し待ってからもう一度お試しください。">
+            <span class="path-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span>デモ</span>
+          </a>
+        </span>
+        <p class="path-status" id="home-demo-status" role="status"></p>
+      </div>
+    </div>
+  </section>
   
 </section>
 
@@ -5139,6 +5195,7 @@
     <div class="wb-footer-row">
       <div class="wb-footer-links">
         <a href="/ja/">ブラウザ拡張機能</a>
+        <a href="/websites/">ウェブサイト向け</a>
         <a href="/companion/ja/">デスクトップ Companion</a>
         <a href="/research/">研究</a>
         <a href="/docs/">ドキュメント</a>

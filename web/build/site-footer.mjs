@@ -15,13 +15,14 @@
  * give it a solid background with --wb-footer-bg.
  */
 
-// WebBrain for websites is on hold until its dashboard launches: while this is
-// false, no page links to /websites/ and the homepage leaves out its block.
-// Nothing is deleted. Flip it to true (or build with
-// WEBBRAIN_WEBSITES_LAUNCHED=1 to preview) to bring it all back.
+// Whether the site shows WebBrain for websites: the homepage's "On your
+// website" block, the For websites links, and the /websites/ actions that lead
+// to the dashboard at sites.webbrain.one. Set it to false (or build with
+// WEBBRAIN_WEBSITES_LAUNCHED=0 to preview) to hide all of it again; nothing is
+// deleted either way.
 export const WEBSITES_LAUNCHED = process.env.WEBBRAIN_WEBSITES_LAUNCHED
   ? process.env.WEBBRAIN_WEBSITES_LAUNCHED === '1'
-  : false;
+  : true;
 
 export const MASTODON_PROFILE_URL = 'https://mastoturk.org/@webbrain';
 export const BLUESKY_PROFILE_URL = 'https://bsky.app/profile/webbrain-one.bsky.social';
