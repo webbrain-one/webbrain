@@ -1,6 +1,11 @@
 import { applyDOMTranslations, t } from './i18n.js';
 import { D1_CONSENT_VERSION } from '../providers/d1-config.js';
 import {
+  WEBBRAIN_COMPANION_SITE_URL,
+  companionDownloadFor,
+  detectCompanionPlatform,
+} from '../providers/companion-config.js';
+import {
   initializeCardSpotlight,
   initializeScenePlayback,
   initializeShowcaseAutoplay,
@@ -590,6 +595,99 @@ export function initializeLocalModelDownload({
   };
 }
 
+// ── Optional WebBrain Companion ──────────────────────────────────────────
+// The tray app that lets WebBrain use the Claude, ChatGPT, Gemini, Grok or
+// Kimi plan someone already pays for. The card links the build for this
+// computer and watches for the app the way onboarding's model scan does
+// (list_provider_models), so it turns green once the app runs and is signed in.
+
+const COMPANION_PROVIDER_ID = 'webbrain_companion';
+const COMPANION_POLL_MS = 4000;
+
+/** 'idle' (not running), 'signin' (running, no plan signed in) or 'ready'. */
+export function normalizeCompanionProbe(response) {
+  if (response?.ok !== true) return 'idle';
+  const models = Array.isArray(response.models) ? response.models.filter((model) => String(model || '').trim()) : [];
+  return models.length > 0 ? 'ready' : 'signin';
+}
+
+export function companionStatusKey(status) {
+  switch (status) {
+    case 'ready': return 'install.companion.ready';
+    case 'signin': return 'install.companion.signin';
+    case 'idle': return 'install.companion.idle';
+    default: return '';
+  }
+}
+
+export function initializeCompanionSetup({
+  documentLike = globalThis.document,
+  runtime = globalThis.chrome?.runtime,
+  navigatorLike = globalThis.navigator,
+  translate = t,
+  pollMs = COMPANION_POLL_MS,
+} = {}) {
+  const root = documentLike?.getElementById?.('companion-setup');
+  if (!root) return null;
+  const link = documentLike.getElementById('companion-download');
+  const label = documentLike.getElementById('companion-download-label');
+  const statusLine = documentLike.getElementById('companion-status');
+
+  // A computer with no build (ChromeOS, say) gets the download page instead.
+  const download = companionDownloadFor(detectCompanionPlatform(navigatorLike));
+  if (link) link.href = download?.url || WEBBRAIN_COMPANION_SITE_URL;
+  if (label) label.textContent = download ? translate('install.companion.download', { os: download.os }) : translate('install.companion.get');
+
+  let status = 'checking';
+  let timer = null;
+  let disposed = false;
+  let probing = false;
+  const render = () => {
+    root.dataset.state = status;
+    if (!statusLine) return;
+    const key = companionStatusKey(status);
+    statusLine.hidden = !key;
+    statusLine.textContent = key ? translate(key) : '';
+  };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (!disposed && status !== 'ready') timer = setTimeout(() => { void refresh(); }, pollMs);
+  };
+
+  async function refresh() {
+    if (disposed || probing || !runtime?.sendMessage) return;
+    probing = true;
+    try {
+      status = normalizeCompanionProbe(await backgroundCommand(runtime, 'list_provider_models', { providerId: COMPANION_PROVIDER_ID }));
+    } catch {
+      status = 'idle';
+    } finally {
+      probing = false;
+    }
+    render();
+    schedule();
+  }
+
+  // Coming back from the installer or the app's sign-in window checks at once.
+  const onVisible = () => {
+    if (documentLike.visibilityState !== 'hidden' && status !== 'ready') void refresh();
+  };
+  documentLike.addEventListener?.('visibilitychange', onVisible);
+
+  render();
+  void refresh();
+  return {
+    refresh,
+    getState: () => status,
+    dispose() {
+      disposed = true;
+      clearTimeout(timer);
+      documentLike.removeEventListener?.('visibilitychange', onVisible);
+    },
+  };
+}
+
 async function getInstallTab(build) {
   const tabs = build === 'firefox'
     ? globalThis.browser?.tabs
@@ -625,6 +723,12 @@ async function hydrateGuide() {
     initializeLocalModelDownload();
   } catch (error) {
     console.warn('[WebBrain] Local model download unavailable:', error);
+  }
+  try {
+    // Both builds: Firefox reaches the Companion through its background too.
+    initializeCompanionSetup({ runtime: globalThis.chrome?.runtime || globalThis.browser?.runtime });
+  } catch (error) {
+    console.warn('[WebBrain] Companion setup unavailable:', error);
   }
 
   const build = document.documentElement.dataset.build;
