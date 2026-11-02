@@ -18276,8 +18276,9 @@ const GENERIC_MESSAGING_MAIL_LIKE_RE = new RegExp(
 
 /**
  * True for a public composer whose adapter declares that it has no recipient
- * to bind (for example X /compose/post). Only the upload path may use this to
- * skip recipient binding; clicks and typing on the same route keep the guard.
+ * to bind (for example X /compose/post). The route carries no recipient at
+ * all, so no tool on it binds one: getMessageRecipientGuardPolicy returns no
+ * policy there, and the publication guards gate what is published.
  */
 export function isPublicComposerRoute(url) {
   try {
@@ -18318,6 +18319,15 @@ export function getMessageRecipientGuardPolicy(url) {
     enabled = false;
   }
   if (!enabled) {
+    // An adapter that declares this route a public composer has already
+    // classified it, so the generic path heuristic below must not reclaim it.
+    // X's /compose/post matches that heuristic's own /compose/ rule, which
+    // reads a public post composer as a mail-like recipient surface. The Post
+    // control sits beside the composer, so the probe's geometry rule called it
+    // a message send, a public composer offers no recipient identity to read,
+    // and every Post click was refused as recipient_identity_unavailable: a
+    // hard refusal no approval can clear.
+    if (isPublicComposerRoute(url)) return null;
     let mailLike = false;
     let chatLike = false;
     try {

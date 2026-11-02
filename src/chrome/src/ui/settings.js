@@ -289,7 +289,7 @@ function syncWebgpuDecisionProvider() {
   if (systemOneApiKeyInput) systemOneApiKeyInput.disabled = fixed;
 }
 
-// Auto, On or Off. Auto uses a downloaded Compass VLD Tiny v5 or D1, or else
+// Auto, On or Off. Auto uses a downloaded Compass VLD or D1, or else
 // Compass's managed model while Compass is the chat provider. Only On shows the provider fields and the
 // per-decision switches, so the card asks nothing until someone wants to
 // configure it.
@@ -332,7 +332,7 @@ async function syncDecisionStatus() {
   // Strict Secret Mode keeps page content away from every decision model, so Auto has nothing to use.
   const strict = strictSecretModeOn;
   const compass = !strict && activeProviderIsCompass();
-  // Auto uses Compass VLD Tiny v5 once it is downloaded, unless the active
+  // Auto uses Compass VLD once it is downloaded, unless the active
   // provider keeps another in-browser model loaded, else D1, Compass or not
   // (decision-availability.js).
   const chatModel = !strict && await chatDecisionModelReady()
@@ -515,7 +515,7 @@ let currentVisionConfig = {};
 // In-browser vision: the stored choice, the model it resolves to now, and the
 // state the status line and action button need (see renderLocalVision).
 let webgpuVisionChoice = WEBGPU_VISION_CHOICE_AUTO;
-let webgpuVisionLocal = { model: null, compassVldReady: false, bonsaiReady: false, readiness: null, chatDownload: null };
+let webgpuVisionLocal = { model: null, compassVldReady: false, compassVldModel: null, bonsaiReady: false, readiness: null, chatDownload: null };
 let webgpuVisionPollTimer = null;
 
 if (globalThis.chrome?.storage?.onChanged) {
@@ -1893,13 +1893,14 @@ function isWebgpuVisionEnabled() {
 
 // The chat preset that reads screenshots for the current choice: Ternary
 // Bonsai 2 2B Vision for its own choice, and for Auto when only it is
-// downloaded (resolveWebgpuVisionChoice); otherwise Compass VLD Tiny v5.
+// downloaded (resolveWebgpuVisionChoice); otherwise Compass VLD, the build
+// that is downloaded (v6 2B, or Tiny v5 where only that is), else v6 2B.
 function chatVisionModelId() {
   if (webgpuVisionChoice === WEBGPU_VISION_CHOICE_BONSAI) return WEBGPU_VISION_BONSAI_MODEL_ID;
   if (webgpuVisionChoice === WEBGPU_VISION_CHOICE_AUTO && !webgpuVisionLocal.compassVldReady && webgpuVisionLocal.bonsaiReady) {
     return WEBGPU_VISION_BONSAI_MODEL_ID;
   }
-  return WEBGPU_VISION_COMPASS_VLD_MODEL_ID;
+  return webgpuVisionLocal.compassVldModel || WEBGPU_VISION_COMPASS_VLD_MODEL_ID;
 }
 
 function chatVisionReady() {
@@ -2055,6 +2056,7 @@ async function refreshLocalVision() {
       ...webgpuVisionLocal,
       model: result.model || null,
       compassVldReady: result.compassVldReady === true,
+      compassVldModel: typeof result.compassVldModel === 'string' ? result.compassVldModel : null,
       bonsaiReady: result.bonsaiReady === true,
       readiness: result.readiness || null,
     };

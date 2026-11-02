@@ -101,6 +101,8 @@ let visionFallbackExplicitlyEnabled = false;
 // The in-browser vision choice shared with Settings (WEBGPU_VISION_CHOICE_KEY).
 let visionChoice = WEBGPU_VISION_CHOICE_AUTO;
 let visionCompassVldReady = false;
+// The downloaded Compass VLD build that reads screenshots (v6 2B, or Tiny v5 where only that is).
+let visionCompassVldModel = null;
 let visionBonsaiReady = false;
 let fixedWebgpuProviderConfigured = false;
 let fixedWebgpuProviderMarkedReady = false;
@@ -448,7 +450,7 @@ function selectedWebgpuModelId() {
 function updateWebgpuTextPresetUi() {
   const preset = selectedWebgpuPreset();
   const size = document.querySelector('[data-webgpu-text-size]');
-  if (size) size.textContent = `${preset?.size || '2.2 GB'} · WebGPU`;
+  if (size) size.textContent = `${preset?.size || '2.4 GB'} · WebGPU`;
   const warning = document.querySelector('[data-webgpu-text-warning]');
   if (warning) warning.hidden = true;
   const copy = document.querySelector('[data-webgpu-text-copy]');
@@ -511,11 +513,12 @@ function setWebgpuDownloadState(state, { syncActiveTransfer = false } = {}) {
 
 // The chat preset that reads screenshots for the current choice: Ternary
 // Bonsai 2 2B Vision for its own choice, and for Auto when only it is
-// downloaded (resolveWebgpuVisionChoice); otherwise Compass VLD Tiny v5.
+// downloaded (resolveWebgpuVisionChoice); otherwise Compass VLD, the build
+// that is downloaded (v6 2B, or Tiny v5 where only that is), else v6 2B.
 function chatVisionModelId() {
   if (visionChoice === WEBGPU_VISION_CHOICE_BONSAI) return WEBGPU_VISION_BONSAI_MODEL_ID;
   if (visionChoice === WEBGPU_VISION_CHOICE_AUTO && !visionCompassVldReady && visionBonsaiReady) return WEBGPU_VISION_BONSAI_MODEL_ID;
-  return WEBGPU_VISION_COMPASS_VLD_MODEL_ID;
+  return visionCompassVldModel || WEBGPU_VISION_COMPASS_VLD_MODEL_ID;
 }
 
 function chatVisionTextState() {
@@ -532,8 +535,8 @@ function chatVisionReady() {
 }
 
 async function refreshChatVisionReadiness() {
-  ({ compassVldReady: visionCompassVldReady, bonsaiReady: visionBonsaiReady } = await webgpuChatVisionReadiness()
-    .catch(() => ({ compassVldReady: false, bonsaiReady: false })));
+  ({ compassVldReady: visionCompassVldReady, compassVldModel: visionCompassVldModel, bonsaiReady: visionBonsaiReady } = await webgpuChatVisionReadiness()
+    .catch(() => ({ compassVldReady: false, compassVldModel: null, bonsaiReady: false })));
 }
 
 // Which model the Vision Model card speaks for: WebBrain VL 2 450M, a chat
@@ -888,7 +891,7 @@ function renderVisionDownload() {
   if (elements['vision-model-size']) {
     elements['vision-model-size'].textContent = path === 'webbrain-vl'
       ? '~810 MB · WebGPU'
-      : path === 'off' ? 'WebGPU' : `${webgpuModelPreset(chatVisionModelId())?.size || '2.2 GB'} · WebGPU`;
+      : path === 'off' ? 'WebGPU' : `${webgpuModelPreset(chatVisionModelId())?.size || '2.4 GB'} · WebGPU`;
   }
   if (path === 'webbrain-vl') {
     renderWebbrainVlVisionDownload();

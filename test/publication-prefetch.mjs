@@ -20,6 +20,11 @@ const deferred = () => {
   const promise = new Promise(resolve => { release = resolve; });
   return { promise, release };
 };
+// An X route whose sends the recipient guard checks, so the prefetch reads
+// whether a control sends a message as well as what it does. X's public post
+// composer (/compose/post) binds no recipient, so only control_effect is read
+// there.
+const GUARDED_PAGE = 'https://x.com/messages';
 const settle = async (turns = 20) => { for (let i = 0; i < turns; i++) await new Promise(resolve => setImmediate(resolve)); };
 const until = async (predicate, message) => {
   for (let i = 0; i < 400; i++) {
@@ -44,12 +49,13 @@ for (const browser of ['chrome', 'firefox']) {
   const { projectTraceEventData } = await import(`../src/${browser}/src/trace/privacy.js`);
   const { resolveAdapterWorkflowJob } = await import(`../src/${browser}/src/agent/adapters.js`);
 
-  function setup({ request = 'Post Hello on X', contract = rawContract(), authorize = () => true } = {}) {
+  function setup({ request = 'Post Hello on X', contract = rawContract(), authorize = () => true,
+    pageUrl = 'https://x.com/compose/post' } = {}) {
     const provider = { model: 'fake-checker', chat: async () => ({ content: '{}' }) };
     const agent = new Agent({ getActive: () => provider });
     const tabId = 811;
     const f = { agent, tabId, provider, contract, authorize, calls: [], probes: [], readings: [], holds: {},
-      pageUrl: 'https://x.com/compose/post' };
+      pageUrl };
     agent.useSiteAdapters = true;
     agent._persist = () => {};
     agent._currentUrl = async () => f.pageUrl;
@@ -972,18 +978,23 @@ for (const browser of ['chrome', 'firefox']) {
   });
 
   test(`${browser}: the prefetch reads the composer's captions the click and recipient guard would read`, async () => {
-    const f = setup();
-    f.detected.publicationPrefetchCaptions = ['Post', 'Close', 'Choose audience'];
-    assert.equal(await f.agent._socialPublicationPrefetch(f.tabId, 'type_text',
-      { selector: '[data-testid="tweetTextarea_0"]', text: 'Hello', clear: true }, { success: true }, f.provider), 'authorized');
-    assert.deepEqual(f.probes[0].args, { __wbPublicationPrefetch: { editorSelector: '[data-testid="tweetTextarea_0"]' } });
-    // x.com/compose/post is a page whose sends the recipient guard checks.
-    assert.deepEqual(f.readings.map(reading => reading.kind).sort(), ['control_effect', 'message_control']);
-    for (const reading of f.readings) assert.deepEqual(reading.texts, ['Post', 'Close', 'Choose audience']);
+    // X's public post composer binds no recipient, so only what each control
+    // does is read there. On an X route whose sends the recipient guard
+    // checks, whether a control sends a message is read too.
+    for (const [pageUrl, kinds] of [['https://x.com/compose/post', ['control_effect']],
+      [GUARDED_PAGE, ['control_effect', 'message_control']]]) {
+      const f = setup({ pageUrl });
+      f.detected.publicationPrefetchCaptions = ['Post', 'Close', 'Choose audience'];
+      assert.equal(await f.agent._socialPublicationPrefetch(f.tabId, 'type_text',
+        { selector: '[data-testid="tweetTextarea_0"]', text: 'Hello', clear: true }, { success: true }, f.provider), 'authorized');
+      assert.deepEqual(f.probes[0].args, { __wbPublicationPrefetch: { editorSelector: '[data-testid="tweetTextarea_0"]' } });
+      assert.deepEqual(f.readings.map(reading => reading.kind).sort(), kinds, pageUrl);
+      for (const reading of f.readings) assert.deepEqual(reading.texts, ['Post', 'Close', 'Choose audience']);
+    }
   });
 
   test(`${browser}: a caption read in flight is joined by a later prefetch and by the click, never asked twice`, async () => {
-    const f = setup();
+    const f = setup({ pageUrl: GUARDED_PAGE });
     const { agent, tabId } = f;
     agent._runAbortStates.set(tabId, { controller: new AbortController(), dispose() {} });
     f.detected.publicationPrefetchCaptions = ['Post'];
@@ -1029,7 +1040,7 @@ for (const browser of ['chrome', 'firefox']) {
 
   test(`${browser}: a prefetch that only joins another run's caption reads stops waiting when its own run stops or ends`, async () => {
     for (const end of ['run end', 'Stop']) {
-      const f = setup();
+      const f = setup({ pageUrl: GUARDED_PAGE });
       const { agent, tabId } = f;
       const otherTab = tabId + 1;
       agent._pageTextReading = () => null;
@@ -1059,7 +1070,7 @@ for (const browser of ['chrome', 'firefox']) {
   });
 
   test(`${browser}: the prefetch's caption reads belong to the run that started it`, async () => {
-    const f = setup();
+    const f = setup({ pageUrl: GUARDED_PAGE });
     const { agent, tabId } = f;
     agent._runAbortStates.set(tabId, { controller: new AbortController(), dispose() {} });
     agent.currentRunId.set(tabId, 'run-A');
@@ -1155,7 +1166,7 @@ for (const browser of ['chrome', 'firefox']) {
   test(`${browser}: a correction cancels the prefetch's caption reads, and an answer that outlived its run is kept nowhere`, async () => {
     // A correction cancels the reads the prefetch started, with its contract and audit.
     {
-      const f = setup();
+      const f = setup({ pageUrl: GUARDED_PAGE });
       const { agent, tabId } = f;
       agent._runAbortStates.set(tabId, { controller: new AbortController(), dispose() {} });
       f.detected.publicationPrefetchCaptions = ['Post', 'Close'];

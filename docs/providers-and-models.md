@@ -73,13 +73,14 @@ finished, did a watch find what it waited for, what does a request say about an
 action) so the chat model does not have to. The Decision tab of the Providers
 page asks one question first:
 
-- **Auto** (default) needs no setup. In Chrome, once Compass VLD Tiny v5 (the
-  in-browser chat model, below) is downloaded on this device, it is Auto's
+- **Auto** (default) needs no setup. In Chrome, once Compass VLD (the
+  in-browser chat model, below: v6 2B, or Tiny v5 where it is the only one
+  downloaded) is downloaded on this device, it is Auto's
   decision model for completion checks and scheduled watch and completion
   checks, whatever the chat provider, except while the task keeps another
-  in-browser model loaded: a WebGPU chat model other than v5, or the
-  in-browser model that reads screenshots for a provider that cannot see
-  them. The WebGPU worker holds one model at a time, so a check would unload
+  in-browser model loaded: a WebGPU chat model other than that Compass VLD
+  build, or the in-browser model that reads screenshots for a provider that
+  cannot see them. The WebGPU worker holds one model at a time, so a check would unload
   that model and the task's next turn or screenshot would load it again
   (`agent._inBrowserModels`). The Chrome install guide's **Download
   local models** button downloads it, and so does Providers → WebGPU or
@@ -90,8 +91,8 @@ page asks one question first:
   model** and Off end it. While Compass is the chat provider, Compass's
   managed decision model keeps semantic decisions, and answers completion
   checks too until one of these is downloaded. Otherwise no decision model is
-  used. Readiness (`agent/decision-availability.js`) is the chat model's
-  ready marker in Cache Storage and the task's in-browser models (read only
+  used. Readiness (`agent/decision-availability.js`) is the Compass VLD
+  builds' ready markers in Cache Storage and the task's in-browser models (read only
   when the chat model could answer), then D1's experimental-model consent, the
   stored Load request and the package's ready marker in its OPFS directory
   (`providers/d1-cache.js`), all read without starting the offscreen document,
@@ -148,7 +149,7 @@ does not download anything. Explicit consent and **Download and load** fetch
 about 0.95 GB of pinned model data and tokenizer/configuration files from
 the [Hugging Face model repository](https://huggingface.co/webbrain-one/d1-browser-decision-fp16)
 into OPFS. The Chrome first-install guide no longer downloads D1: its one
-download, Compass VLD Tiny v5, answers the same checks itself. The guide's
+download, Compass VLD v6 2B, answers the same checks itself. The guide's
 code for downloading D1 first and queueing the chat model after it
 (`initializeD1Download` in `ui/install.js`, `providers/install-download-queue.js`)
 stays in place and runs only for a page that has D1's line. The package stores FP16 weights and computes in FP32; it is the
@@ -191,22 +192,25 @@ No inference input goes to Hugging Face. Existing optional provider/research
 sharing settings and existing privacy boundaries are not bypassed.
 
 **In-browser chat model (experimental, Chrome)** answers decisions with the
-WebGPU chat model itself, Compass VLD Tiny v5, so one downloaded model serves
-chat, screenshots and decisions. It needs no extra download, key or endpoint:
+WebGPU chat model itself, Compass VLD (v6 2B, or Tiny v5 where it is the only
+one downloaded), so one downloaded model serves chat, screenshots and
+decisions. It needs no extra download, key or endpoint:
 download that preset under Providers → WebGPU, in Apocalypse Mode or from the
 install guide first. Auto uses it by itself once it is downloaded, before a
 downloaded D1; choosing it under On also sends it fast classifications, fast
-browser actions and semantic decisions. The model was fine-tuned on d1's
-synthetic train split for this decision protocol, and each option is scored
-from a short continuation of the prefilled page state by a small probe. On
-d1's held-out test it answers more questions correctly than D1 and accepted
-no false completion, but d1 is synthetic and it has not been validated on
-real browser traces, so like D1 a positive completion is never the sole
-authority. The first decision after a browser restart loads the model and can
+browser actions and semantic decisions. Each option is scored from a short
+continuation of the prefilled page state by a small probe trained on d1's
+synthetic train split: Tiny v5 was also fine-tuned on that split for this
+decision protocol, and v6 2B's probe scores the Yes-minus-No margin alone.
+On d1's held-out test both answer more questions correctly than D1 and
+accepted no false completion (v6 2B's result is the one its ONNX bundle
+reports; it has not yet run through the extension on a GPU), but d1 is
+synthetic and neither has been validated on real browser traces, so like D1
+a positive completion is never the sole authority. The first decision after a browser restart loads the model and can
 fall back to the existing chain. Ternary Bonsai 2 2B Vision no longer answers
 decisions: real trace replays showed confident false failures and false
-completions, so a saved selection of this provider now uses Compass VLD Tiny
-v5. Details and numbers are in [`docs/webgpu-models.md`](webgpu-models.md).
+completions, so a saved selection of this provider now uses Compass VLD.
+Details and numbers are in [`docs/webgpu-models.md`](webgpu-models.md).
 
 The adapter retains Python-style JSON spacing and fractional exponent
 formatting. JavaScript cannot distinguish an integer `1` from a Python float
@@ -226,7 +230,7 @@ Verify completion (`done`) defaults on when outsourcing is configured, with a
 90% acceptance threshold separate from the scheduled-check threshold. Compass
 uses its managed `/v1/decisions` route by default. An explicit in-browser
 selection (the chat model, or a consented experimental D1), or in Auto a
-downloaded Compass VLD Tiny v5 or D1 for completion and scheduled checks,
+downloaded Compass VLD (v6 2B or Tiny v5) or D1 for completion and scheduled checks,
 overrides only that decision route, not the main Compass provider. The fallback chain is decision model, active LLM, then existing
 completion checks. These outsourcing toggles control the decision model only;
 with outsourcing disabled or unconfigured, completion still uses a dedicated
@@ -236,9 +240,9 @@ existing checks. Strict Secret Mode disables these additional calls.
 | Active provider | First completion verifier | Fallback |
 | --- | --- | --- |
 | WebBrain Compass (default), no on-device decision model downloaded | Managed decision model | Active LLM, then existing checks |
-| Explicitly selected in-browser chat model (Chrome), including with Compass | Compass VLD Tiny v5; no sole success authority | Active LLM, then existing checks |
+| Explicitly selected in-browser chat model (Chrome), including with Compass | Compass VLD (v6 2B, or Tiny v5 where it is the only one downloaded); no sole success authority | Active LLM, then existing checks |
 | Explicitly enabled and consented D1, including with Compass | Experimental local D1; no sole success authority | Active LLM, then existing checks |
-| Auto, Compass VLD Tiny v5 downloaded and no other in-browser model serving the task (Chrome; Compass included) | Compass VLD Tiny v5; no sole success authority | Active LLM, then existing checks |
+| Auto, Compass VLD downloaded and no other in-browser model serving the task (Chrome; Compass included) | Compass VLD (v6 2B, or Tiny v5 where it is the only one downloaded); no sole success authority | Active LLM, then existing checks |
 | Auto, D1 downloaded and the chat model not, or serving the task would unload another in-browser model (Compass included) | Experimental local D1; no sole success authority | Active LLM, then existing checks |
 | Other provider, completion outsourcing enabled | Selected decision model | Active LLM, then existing checks |
 | Other provider, outsourcing disabled or unconfigured | Active LLM | Existing checks |
@@ -477,7 +481,7 @@ class BaseLLMProvider {
 | `webbrain_companion` | `openai`       | local    | (required)                                                         | Off / manual toggle             |
 | `local_openai_proxy` | `openai`       | local    | (required)                                                         | Off / manual toggle             |
 | `unsloth`            | `openai`       | local    | (required)                                                         | Off / manual toggle             |
-| `webgpu` (Chromium)  | `webgpu`       | local    | Compass VLD Tiny v5; Compass Tiny v2.1; Ternary Bonsai 2 2B Vision; custom HF repo | Compass VLD and Bonsai Vision presets |
+| `webgpu` (Chromium)  | `webgpu`       | local    | Compass VLD v6 2B; Compass VLD Tiny v5; Compass Tiny v2.1; Ternary Bonsai 2 2B Vision; custom HF repo | Compass VLD and Bonsai Vision presets |
 | `azure_openai`       | `azure_openai` | cloud    | (deployment)                                                       | Manual toggle                   |
 | `aws_bedrock`        | `aws_bedrock`  | cloud    | (model id)                                                         | No                              |
 | `openai`             | `openai`       | cloud    | `gpt-5.6-terra`                                                    | Model-name regex                |
@@ -662,12 +666,13 @@ duplicate request.
 ### Local Providers
 
 On Chromium, **WebGPU (In-browser)** is an endpoint-free local provider.
-The Providers page and Apocalypse Mode offer the same three presets, in this
+The Providers page and Apocalypse Mode offer the same four presets, in this
 order, and the Providers page also accepts a custom Hugging Face repository:
 
 | Model | Download | Images | Browser context |
 | --- | --- | --- | --- |
-| [Compass VLD Tiny v5](https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5-onnx) (default) | 2.2 GB, Q8/FP16 | Yes | 32k |
+| [Compass VLD v6 2B](https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-onnx) (default) | 2.4 GB, Q8/FP16 | Yes | 32k |
+| [Compass VLD Tiny v5](https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5-onnx) | 2.2 GB, Q8/FP16 | Yes | 32k |
 | [Compass Tiny v2.1](https://huggingface.co/webbrain-one/webbrain-compass-tiny-v2.1) | 1.87 GB, Q4/FP16 | No | 32k |
 | [Ternary Bonsai 2 2B Vision](https://huggingface.co/webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision) | 1.45 GB, Q2/FP16 | Yes | 16k |
 
@@ -694,14 +699,38 @@ with a short prompt (tiny Ask, see [`docs/webgpu-models.md`](webgpu-models.md)).
 Act and Dev mode are refused for this provider; choose another provider for
 browser actions. The standalone chat window keeps its own page-free profile.
 
+- [`webbrain-one/webbrain-compass-vld-v6-2b-onnx`](https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-onnx)
+  (Q8/FP16 decoder of 1.96 GB, FP16 vision encoder of 379 MB, plus tokenizer
+  and config files: about 2.4 GB), WebBrain's Compass VLD v6 2B fine-tune of
+  LFM3-VLD-2B Multipass, WebBrain's adaptation of Liquid's LFM3-VL-2B: one
+  model that chats and calls tools, reads screenshots and answers WebBrain's
+  decision questions. It is the default for a new installation, the install
+  guide's download, and Auto's in-browser vision and decision model once
+  downloaded. Transformers.js has no LFM3-VL processor, so the same worker
+  drives its two ONNX graphs (`vision_encoder`, `decoder`) through ONNX
+  Runtime Web 1.27.0 directly (`src/chrome/src/offscreen/compass-vld-v6-runtime.js`),
+  with `Lfm3VlImageProcessor` ported from Python: a 1280×720 screenshot
+  becomes 880 image tokens. Files are fetched at a pinned revision and each
+  is checked against its pinned size and SHA-256
+  (`src/chrome/src/offscreen/compass-vld-v6-files.js`). A lighter Q4/FP16
+  decoder (1.31 GB) is pinned too but not offered. The JS runtime matched a
+  Python ONNX Runtime reference token for token on a vision test case, but
+  it has not yet run on a real GPU in the browser. With it, tiny Ask stays
+  text-only: there is no trained screenshot gate probe for v6 yet. On the
+  first start after the update, a profile that never set up WebGPU and still
+  has the earlier default (Compass Tiny v2.1 or Compass VLD Tiny v5) moves to
+  v6 once, when that model was never downloaded there; a model the user
+  chose or downloaded stays. Quality numbers (vision suite, Compact routing)
+  are on the model card and in
+  [`docs/webgpu-models.md`](webgpu-models.md#compass-vld-v6-2b).
 - [`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`](https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5-onnx)
   (Q8 language model and embeddings, FP16 vision encoder, about 2.2 GB),
   WebBrain's Compass VLD Tiny v5 fine-tune of
   [MiniCPM-V-4.7-1B](https://huggingface.co/openbmb/MiniCPM-V-4.7-1B): one
   model that chats and calls tools (V-L: it reads screenshots; D: it answers
-  WebBrain's decision questions). It is the default for a new installation,
-  the install guide's download, Auto's in-browser vision model and Auto's
-  decision model once downloaded. Transformers.js has no MiniCPM-V runtime, so
+  WebBrain's decision questions). It was the default before v6 2B and stays
+  selectable. Where it is the only Compass VLD downloaded, Auto still uses it
+  to read screenshots and answer decisions. Transformers.js has no MiniCPM-V runtime, so
   the same worker drives its three ONNX graphs through ONNX Runtime Web
   directly (`src/chrome/src/offscreen/compass-vld-runtime.js`), with the
   processor ported from PyTorch. It runs greedy with thinking disabled and
@@ -710,10 +739,7 @@ browser actions. The standalone chat window keeps its own page-free profile.
   revision and each is checked against its pinned size and SHA-256. Message
   text that spells one of its added tokens (`<|image_pad|>`, `<|im_end|>`,
   and `</tool_response>`, which is added without being special) is encoded
-  as ordinary text. On the first start after the update, a profile that never
-  set up WebGPU moves from the previous default, Compass Tiny v2.1, to it when
-  Compass Tiny v2.1 was never downloaded there; choosing Compass Tiny v2.1
-  later stays.
+  as ordinary text.
 - [`webbrain-one/webbrain-compass-tiny-v2.1`](https://huggingface.co/webbrain-one/webbrain-compass-tiny-v2.1)
   (`q4f16`, about 1.87 GB across two external-data shards), WebBrain's Compass
   Tiny v2.1 fine-tune of MiniCPM5-2B for Compact tool routing. It runs greedy
@@ -729,7 +755,7 @@ retain Prism ML's original image tower and add its processor and image graph
 to the ternary language export. They accept screenshots directly as the main
 provider and also work for text-only turns. The 2B Vision preset is also an
 in-browser vision choice for a text-only active model, and Auto uses it once it
-is downloaded while Compass VLD Tiny v5 is not (see the Vision section below);
+is downloaded while no Compass VLD build is (see the Vision section below);
 the 4B preset is not. Browser image processing is bounded to
 approximately one megapixel per image. Build sources, tensor mapping checks,
 and the hardware browser verification command are documented in
@@ -767,10 +793,13 @@ work. They must be compatible with Transformers.js text generation, provide a
 `q4f16` ONNX variant, and use a chat template that accepts `tools`; WebBrain
 validates the template after loading and rejects incompatible repositories.
 
-The provider defaults to the Compact prompt tier. For Compass VLD Tiny v5,
-budget roughly 4 GB of GPU headroom (about 2.2 GB of weights plus about 12 KB
-of KV cache per token, and the recurrent state of its 18 linear-attention
-layers); for Compass Tiny v2.1, about 1.87 GB of weights plus KV cache that
+The provider defaults to the Compact prompt tier. For Compass VLD v6 2B,
+budget about 2.4 GB of weights plus about 12 KB of FP16 KV cache per token
+in its six full-attention layers (its five sliding-window layers keep at
+most 256 tokens and its convolution layers a fixed state). For Compass VLD
+Tiny v5, budget roughly 4 GB of GPU headroom (about 2.2 GB of weights plus
+about 12 KB of KV cache per token, and the recurrent state of its 18
+linear-attention layers); for Compass Tiny v2.1, about 1.87 GB of weights plus KV cache that
 grows with context length. On constrained GPUs,
 lower the context window on the WebGPU card on the Providers page (16384 is
 a safe fallback) and retry with a short prompt. Each repository is cached
@@ -1138,20 +1167,23 @@ const vision = await providerManager.getVisionProvider();
 ```
 
 On Chromium, **Providers -> Vision** also offers an
-in-browser vision model, chosen from **Auto** (default), **Compass VLD Tiny v5**,
-**Ternary Bonsai 2 2B Vision**, **WebBrain VL 2 450M** or **Off**. The choice is stored in the
+in-browser vision model, chosen from **Auto** (default), **Compass VLD**
+(labelled "Compass VLD v6 2B · 2.4 GB"), **Ternary Bonsai 2 2B Vision**,
+**WebBrain VL 2 450M** or **Off**. The choice is stored in the
 Chrome-only `webgpuVisionChoice` key (`storedWebgpuVisionChoice()` and
 `resolveWebgpuVisionChoice()` in `providers/webgpu.js`), separately from the
 synced OpenAI-compatible vision endpoint, so changing it never touches that
 endpoint or its credentials. It is not exported, profile-synced or imported by
 Firefox, whose build has no MV3 offscreen document and no local option.
 
-- **Auto** uses Compass VLD Tiny v5 once its ready marker is in Cache Storage,
-  Ternary Bonsai 2 2B Vision when only that one is downloaded, and is off until
+- **Auto** uses Compass VLD once a ready marker for v6 2B or Tiny v5 is in
+  Cache Storage (v6 2B when both are), Ternary Bonsai 2 2B Vision when only
+  that one is downloaded, and is off until
   then (`webgpuChatVisionReadiness()` in `providers/webgpu-model-cache.js`:
   cache lookups that never start the offscreen document).
-- **Compass VLD Tiny v5** (`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`,
-  2.2 GB) and **Ternary Bonsai 2 2B Vision**
+- **Compass VLD** (`webbrain-one/webbrain-compass-vld-v6-2b-onnx`, 2.4 GB, or
+  `webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, 2.2 GB, where only Tiny v5
+  is downloaded; `webgpuCompassVldModelFor()`) and **Ternary Bonsai 2 2B Vision**
   (`webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision`, 1.45 GB) are chat
   presets themselves, read through `WebGPUChatVisionProvider`: the WebGPU chat
   provider with tools removed. Each shares its chat download, cache and the

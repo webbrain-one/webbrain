@@ -185,6 +185,16 @@ Mastodon post is one WebBrain cannot match after the fact (the home timeline
 shows it, not a page of its own), and "now delete it" used to be refused on
 every click there.
 
+A public composer carries no recipient, so the `recipient` class does not
+apply there. X's `/compose/post` used to be claimed by the generic
+mail-and-chat path rule, which reads any `/compose/` route as a recipient
+surface. The Post control sits beside the composer, so the probe's geometry
+rule read it as a send, and a public composer shows no identity to read: every
+Post click was refused as `recipient_identity_unavailable`. An adapter's own
+`messaging.publicComposer` now settles the route, for every tool rather than
+uploads alone. Nothing there is checked against a recipient, and the
+publication guards decide what is published.
+
 A deletion stays bound to the item's text, with each `<time datetime>`
 element read as its datetime rather than as the relative time it shows.
 Mastodon's "8 min" turning into "9 min" while the user decides on the deletion

@@ -14,12 +14,18 @@ export const WEBGPU_LFM25_VL_3B_MODEL_ID = 'LiquidAI/LFM2.5-VL-3B-ONNX';
 export const WEBGPU_NANBEIGE42_3B_MODEL_ID = 'Michionlion/Nanbeige4.2-3B-ONNX-WebGPU';
 export const WEBGPU_MINICPM5_2B_MODEL_ID = 'RASMUS/MiniCPM5-2B-ONNX';
 export const WEBGPU_COMPASS_TINY_V2_MODEL_ID = 'webbrain-one/webbrain-compass-tiny-v2.1';
-// WebBrain Compass VLD Tiny v5: one in-browser model for chat and tool calls,
-// screenshots (VL) and decisions (D). Runs on its own ONNX Runtime port
-// (offscreen/compass-vld-runtime.js) inside the same worker and cache.
+// WebBrain Compass VLD: one in-browser model for chat and tool calls,
+// screenshots (VL) and decisions (D), on its own ONNX Runtime port inside the
+// same worker and cache. v6 2B (LFM3-VL, offscreen/compass-vld-v6-runtime.js)
+// is the default; Tiny v5 (MiniCPM-V, offscreen/compass-vld-runtime.js) stays
+// selectable, and keeps serving screenshots and decisions where it is the
+// only Compass VLD downloaded (WEBGPU_COMPASS_VLD_MODEL_IDS).
+export const WEBGPU_COMPASS_VLD_V6_MODEL_ID = 'webbrain-one/webbrain-compass-vld-v6-2b-onnx';
 export const WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID = 'webbrain-one/webbrain-compass-vld-tiny-v5-onnx';
+// Preference order where either build would do: the newest downloaded one.
+export const WEBGPU_COMPASS_VLD_MODEL_IDS = Object.freeze([WEBGPU_COMPASS_VLD_V6_MODEL_ID, WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID]);
 // The model Apocalypse Mode, the install guide and an empty WebGPU setting use.
-export const WEBGPU_DEFAULT_MODEL_ID = WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID;
+export const WEBGPU_DEFAULT_MODEL_ID = WEBGPU_COMPASS_VLD_V6_MODEL_ID;
 export const WEBGPU_BONSAI2_2B_MODEL_ID = 'danyalmalik/Ternary-Bonsai-2-2B-ONNX-WebGPU';
 export const WEBGPU_BONSAI2_4B_MODEL_ID = 'Mike0021/Ternary-Bonsai-2-4B-text-ONNX';
 export const WEBGPU_BONSAI2_VL_2B_MODEL_ID = 'webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision';
@@ -38,6 +44,11 @@ export const WEBGPU_COMPASS_VLD_DTYPE = Object.freeze({
   vision_encoder: 'fp16',
   decoder_model_merged: 'q8f16',
 });
+// The bundle's recommended build: the q8f16 decoder (q4f16 is pinned too).
+export const WEBGPU_COMPASS_VLD_V6_DTYPE = Object.freeze({
+  vision_encoder: 'fp16',
+  decoder: 'q8f16',
+});
 export const WEBGPU_RUNTIME_ONNX = 'onnx';
 export const WEBGPU_RUNTIME_ONNX_VL = 'onnx-vl';
 export const WEBGPU_RUNTIME_BITGPU = 'bitgpu';
@@ -52,6 +63,19 @@ export const WEBGPU_LFM25_VL_3B_DTYPE = Object.freeze({
   decoder_model_merged: 'q4',
 });
 export const WEBGPU_MODEL_PRESETS = Object.freeze([
+  Object.freeze({
+    id: WEBGPU_COMPASS_VLD_V6_MODEL_ID,
+    runtime: WEBGPU_RUNTIME_ONNX_VL,
+    label: 'Compass VLD v6 2B',
+    size: '2.4 GB',
+    dtype: WEBGPU_COMPASS_VLD_V6_DTYPE,
+    dtypeLabel: 'Q8/FP16',
+    // LFM3-VL-2B fine-tune: 6 of its 24 layers attend over the whole context
+    // (about 12 KB of FP16 KV per token), 5 over a 256-token window, and the
+    // rest keep a fixed conv state.
+    contextWindow: 32768,
+    supportsVision: true,
+  }),
   Object.freeze({
     id: WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID,
     runtime: WEBGPU_RUNTIME_ONNX_VL,
@@ -210,6 +234,7 @@ export const WEBGPU_MODEL_PRESETS = Object.freeze([
 // Both Chrome pickers use this order; Firefox has no offscreen chat runtime.
 // The Apocalypse Mode markup lists every preset here in the same order.
 export const WEBGPU_PICKER_MODEL_IDS = Object.freeze([
+  WEBGPU_COMPASS_VLD_V6_MODEL_ID,
   WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID,
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
   WEBGPU_BONSAI2_2B_MODEL_ID,
@@ -228,12 +253,13 @@ export const WEBGPU_HIDDEN_MODEL_IDS = Object.freeze([
 export const WEBGPU_SELECTABLE_MODEL_PRESETS = Object.freeze(WEBGPU_PICKER_MODEL_IDS
   .filter(id => !WEBGPU_HIDDEN_MODEL_IDS.includes(id))
   .map(id => WEBGPU_MODEL_PRESETS.find(preset => preset.id === id)));
-// The in-browser decision model: Compass VLD Tiny v5, fine-tuned on the
-// decision protocol, with its probe (offscreen/compass-vld-decision-probe.js).
+// The in-browser decision model: Compass VLD v6 2B, fine-tuned on the
+// decision protocol, with its probe (offscreen/compass-vld-decision-probe.js);
+// Tiny v5 and its probe answer where only v5 is downloaded.
 // Ternary Bonsai 2 2B Vision keeps its probe for diagnostics and tiny Ask's
 // screenshot gate; agent decisions no longer route to it.
-export const WEBGPU_DECISION_MODEL_ID = WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID;
-export const WEBGPU_DECISION_MODEL_IDS = new Set([WEBGPU_DECISION_MODEL_ID, WEBGPU_BONSAI2_VL_2B_MODEL_ID]);
+export const WEBGPU_DECISION_MODEL_ID = WEBGPU_COMPASS_VLD_V6_MODEL_ID;
+export const WEBGPU_DECISION_MODEL_IDS = new Set([...WEBGPU_COMPASS_VLD_MODEL_IDS, WEBGPU_BONSAI2_VL_2B_MODEL_ID]);
 export const WEBGPU_MODEL_NOT_READY_ERROR = `${WEBGPU_DEFAULT_MODEL_ID} is not downloaded. Open Providers > WebGPU or Apocalypse Mode > WebGPU to download it before chatting.`;
 // Chrome-only selection state. Keep this separate from the synced
 // `visionModel` endpoint so enabling the fallback never overwrites a user's
@@ -249,9 +275,9 @@ export const WEBGPU_VISION_AUTO_SELECTED_KEY = 'webgpuVisionAutoSelected';
 export const WEBGPU_VISION_CONSENT_VERSION_KEY = 'webgpuVisionConsentVersion';
 export const WEBGPU_VISION_CONSENT_VERSION = 2;
 // Which in-browser model reads screenshots (Chrome-local, never synced or
-// exported: Firefox has no WebGPU runtime). Auto follows Compass VLD Tiny v5:
-// on once it is downloaded, and Ternary Bonsai 2 2B Vision when only that is
-// downloaded; off until then. No choice starts a download; that always takes
+// exported: Firefox has no WebGPU runtime). Auto follows Compass VLD: on once
+// v6 2B or Tiny v5 is downloaded, and Ternary Bonsai 2 2B Vision when only
+// that is downloaded; off until then. No choice starts a download; that always takes
 // a click in Providers or Apocalypse Mode.
 export const WEBGPU_VISION_CHOICE_KEY = 'webgpuVisionChoice';
 export const WEBGPU_VISION_CHOICE_AUTO = 'auto';
@@ -269,7 +295,9 @@ export const WEBGPU_VISION_CHOICES = Object.freeze([
 // The chat-model readers see screenshots through the chat runtime, so they
 // share the chat preset's download, cache and worker queue rather than having
 // their own.
-export const WEBGPU_VISION_COMPASS_VLD_MODEL_ID = WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID;
+// Compass VLD: v6 2B, or Tiny v5 where only that is downloaded
+// (webgpuCompassVldModelFor).
+export const WEBGPU_VISION_COMPASS_VLD_MODEL_ID = WEBGPU_COMPASS_VLD_V6_MODEL_ID;
 export const WEBGPU_VISION_BONSAI_MODEL_ID = WEBGPU_BONSAI2_VL_2B_MODEL_ID;
 // The chat-model reader for each choice that has one.
 export const WEBGPU_VISION_CHAT_MODEL_IDS = Object.freeze({
@@ -288,6 +316,20 @@ export function storedWebgpuVisionChoice(stored = {}) {
     && stored?.[WEBGPU_VISION_CONSENT_VERSION_KEY] === WEBGPU_VISION_CONSENT_VERSION
     ? WEBGPU_VISION_CHOICE_WEBBRAIN_VL
     : WEBGPU_VISION_CHOICE_AUTO;
+}
+
+/**
+ * The Compass VLD build to use where either would do: the newest one
+ * downloaded (`ready`: the downloaded model ids), else v6 2B, the one a
+ * download would fetch.
+ */
+export function webgpuCompassVldModelFor(ready = []) {
+  const downloaded = new Set(Array.from(ready || [], id => String(id || '').trim()));
+  return WEBGPU_COMPASS_VLD_MODEL_IDS.find(id => downloaded.has(id)) || WEBGPU_COMPASS_VLD_V6_MODEL_ID;
+}
+
+export function isWebgpuCompassVldModel(modelId) {
+  return WEBGPU_COMPASS_VLD_MODEL_IDS.includes(String(modelId || '').trim());
 }
 
 /** The model a choice uses right now: 'compass-vld', 'bonsai', 'webbrain-vl', or null (off). */
@@ -882,7 +924,7 @@ export class WebGPUVisionProvider extends WebGPUOffscreenProvider {
 }
 
 /**
- * An in-browser chat preset that reads images (Compass VLD Tiny v5, Ternary
+ * An in-browser chat preset that reads images (Compass VLD v6 2B or Tiny v5, Ternary
  * Bonsai 2 2B Vision) as the screenshot reader for a text-only active model.
  * It is the chat preset itself, so it shares that download and the worker's
  * serialized model queue: a screenshot asked for during a chat generation

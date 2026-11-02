@@ -79,7 +79,7 @@
     "test:firefox-bidi": "node --test test/firefox-bidi.mjs test/firefox-full-page-screenshot.mjs",
     "test:firefox-bidi:e2e": "node test/firefox-bidi-e2e.mjs",
     "test:firefox-vision:e2e": "node test/firefox-vision-e2e.mjs",
-    "test:systemone": "node --test test/decision-mode.mjs test/systemone.mjs test/completion-verifier.mjs test/completion-result.mjs test/completion-document.mjs test/d1-decision.mjs test/d1-settings-ui.mjs test/webgpu-decisions.mjs test/compass-vld-runtime.mjs",
+    "test:systemone": "node --test test/decision-mode.mjs test/systemone.mjs test/completion-verifier.mjs test/completion-result.mjs test/completion-document.mjs test/d1-decision.mjs test/d1-settings-ui.mjs test/webgpu-decisions.mjs test/compass-vld-runtime.mjs test/compass-vld-v6-runtime.mjs",
     "test:d1": "node --test test/d1-decision.mjs test/d1-settings-ui.mjs",
     "test:systemone:ui": "node test/systemone-ui.mjs",
     "test:systemone:fast": "node --test test/systemone-fast.mjs && node test/systemone-fast-dom.mjs && node --test test/jev/fixtures.test.mjs",

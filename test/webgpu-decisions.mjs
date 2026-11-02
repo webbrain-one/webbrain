@@ -107,15 +107,22 @@ test('the worker routes decisions through the offscreen host and provider', asyn
 
 test('the trained probes score each option from its margin and hidden state', async () => {
   const { BONSAI_DECISION_PROBE, bonsaiProbeScores } = await import('../src/chrome/src/offscreen/bonsai-decision-probe.js');
-  const { COMPASS_VLD_DECISION_PROBE, compassVldProbeScores } = await import('../src/chrome/src/offscreen/compass-vld-decision-probe.js');
+  const { COMPASS_VLD_DECISION_PROBE, compassVldDecisionProbe, compassVldProbeScores } = await import('../src/chrome/src/offscreen/compass-vld-decision-probe.js');
   const webgpu = await import('../src/chrome/src/providers/webgpu.js');
   const chromeConfig = await import('../src/chrome/src/agent/decision-config.js');
   const firefoxConfig = await import('../src/firefox/src/agent/decision-config.js');
   assert.equal(BONSAI_DECISION_PROBE.model, webgpu.WEBGPU_BONSAI2_VL_2B_MODEL_ID);
-  assert.equal(COMPASS_VLD_DECISION_PROBE.model, webgpu.WEBGPU_DECISION_MODEL_ID, 'the agent decision model has its probe');
+  assert.equal(compassVldDecisionProbe(webgpu.WEBGPU_DECISION_MODEL_ID)?.model, webgpu.WEBGPU_DECISION_MODEL_ID, 'the agent decision model has its probe');
+  assert.equal(COMPASS_VLD_DECISION_PROBE.model, webgpu.WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID, 'Tiny v5 keeps its probe');
   for (const config of [chromeConfig, firefoxConfig]) {
     assert.equal(config.WEBGPU_CHAT_DECISION_MODEL, webgpu.WEBGPU_DECISION_MODEL_ID, 'decision-config keeps the model id in sync');
     assert.deepEqual(config.WEBGPU_CHAT_DECISION_DTYPE, webgpu.webgpuModelDtype(webgpu.WEBGPU_DECISION_MODEL_ID), 'and the dtype its ready marker is keyed by');
+    // Every Compass VLD build answers decisions where it is the newest downloaded, each with its probe and ready marker.
+    assert.deepEqual(config.WEBGPU_CHAT_DECISION_MODELS.map(entry => entry.model), webgpu.WEBGPU_COMPASS_VLD_MODEL_IDS);
+    for (const entry of config.WEBGPU_CHAT_DECISION_MODELS) {
+      assert.deepEqual(entry.dtype, webgpu.webgpuModelDtype(entry.model), `${entry.model}: the dtype its ready marker is keyed by`);
+      assert.ok(compassVldDecisionProbe(entry.model), `${entry.model} has a probe`);
+    }
   }
   for (const [probe, scores] of [[BONSAI_DECISION_PROBE, bonsaiProbeScores], [COMPASS_VLD_DECISION_PROBE, compassVldProbeScores]]) {
     const width = probe.hiddenSize;
@@ -202,7 +209,7 @@ test('Firefox never enables the Chrome-only chat-model provider and imports it w
   assert.equal(chrome.parseConfigImport(JSON.stringify(chromeExport)).settings.decisionProvider, 'webgpu_chat', 'Chrome round-trips it');
 });
 
-test('the agent judge asks Compass VLD Tiny v5 in the offscreen worker, and Firefox refuses the Chrome-only model', async () => {
+test('the agent judge asks Compass VLD in the offscreen worker, and Firefox refuses the Chrome-only model', async () => {
   const saved = { chrome: globalThis.chrome };
   const sent = [];
   const decideMessages = [];
@@ -243,7 +250,7 @@ test('the agent judge asks Compass VLD Tiny v5 in the offscreen worker, and Fire
     assert.equal(result.usage.output_tokens, 0);
     assert.equal(result.provider, 'webgpu_chat');
     await assert.rejects(evaluateWebgpuDecision({ ...args, config: { ...config, model: 'webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision' } }),
-      /Only Compass VLD Tiny v5 answers in-browser decisions/, 'Ternary Bonsai decisions stay off after failing validation');
+      /Only Compass VLD answers in-browser decisions/, 'Ternary Bonsai decisions stay off after failing validation');
     const firefox = await import('../src/firefox/src/agent/systemone-judge.js');
     const firefoxConfig = (await import('../src/firefox/src/agent/decision-config.js')).resolveDecisionConfig({ decisionProvider: 'webgpu_chat', systemOneEnabled: true });
     await assert.rejects(firefox.createSystemOneJudge({ fetchImpl: () => { throw new Error('no cloud request'); }, maxRetries: 0 })

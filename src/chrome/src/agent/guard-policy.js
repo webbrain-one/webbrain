@@ -226,6 +226,7 @@ export const GUARDS = Object.freeze({
   "recipient-draft-evidence-unavailable": { class: "quality", family: "predispatch", decides: "no-evidence", onDecided: "advise", onCannotDecide: "ask",
     summary: "The recipient is authorized (or confirmable) but the composer draft body cannot be read, or the existing-message baseline needed to verify a new send is unavailable." },
   "recipient-guard-refusal": { class: "recipient", family: "predispatch", decides: "mixed", onDecided: "block", onCannotDecide: "ask",
+    mustNotBlock: "test/social-publish-contract.mjs#a public X post is not a message send, so the recipient guard lets it through",
     summary: "_messageRecipientGuardBlock refusals on protected messaging pages (Gmail, X DMs, LinkedIn, Discord, native WhatsApp/Telegram, generic mail/chat): Enter with repeat>1, a send path that cannot be bound to the verified recipient (iframe_click, execute_js, WebMCP, ambiguous upload), no observable…" },
   "recipient-guard-target-preparation": { class: "quality", family: "predispatch", decides: "no-evidence", onDecided: "advise", onCannotDecide: "advise",
     summary: "Recipient-guard target failures that establish no mismatch: the requested control cannot be resolved in the page/frame (message_target_unresolved), or a native Telegram read-only preparation click is not bound to one exact current control/owner/binding token or changed before the click." },

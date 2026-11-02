@@ -21,10 +21,21 @@
  * Storage the Transformers.js presets use (one file at a time, each checked
  * against its pinned size and SHA-256). Inference reads them from the cache
  * and never downloads.
+ *
+ * The download, cache and tokenizer code here serves every Compass VLD build:
+ * each model ID has its own pinned files (compassVldSpec). Compass VLD v6 2B,
+ * an LFM3-VL model, has its own processor and decoder loop in
+ * compass-vld-v6-runtime.js; calls that name no model mean Tiny v5.
  */
 
+import {
+  COMPASS_VLD_V6_DTYPE, COMPASS_VLD_V6_FILE_PINS, COMPASS_VLD_V6_GRAPHS, COMPASS_VLD_V6_METADATA_FILES,
+  COMPASS_VLD_V6_MODEL_ID, COMPASS_VLD_V6_REVISION,
+} from './compass-vld-v6-files.js';
+
 export const COMPASS_VLD_TINY_V5_MODEL_ID = 'webbrain-one/webbrain-compass-vld-tiny-v5-onnx';
-export const COMPASS_VLD_MODEL_IDS = new Set([COMPASS_VLD_TINY_V5_MODEL_ID]);
+export { COMPASS_VLD_V6_MODEL_ID };
+export const COMPASS_VLD_MODEL_IDS = new Set([COMPASS_VLD_TINY_V5_MODEL_ID, COMPASS_VLD_V6_MODEL_ID]);
 // Files are read at this commit: a later commit (a model card edit, a new
 // graph) cannot change what an install downloads. A new graph needs a new
 // revision here and new pins below.
@@ -60,30 +71,65 @@ const COMPASS_VLD_METADATA_FILES = Object.freeze([
 ]);
 const COMPASS_VLD_GRAPHS = Object.freeze(['embed_tokens', 'vision_encoder', 'decoder_model_merged']);
 
+const COMPASS_VLD_SPECS = Object.freeze({
+  [COMPASS_VLD_TINY_V5_MODEL_ID]: Object.freeze({
+    label: 'Compass VLD Tiny v5',
+    revision: COMPASS_VLD_REVISION,
+    dtype: COMPASS_VLD_DTYPE,
+    graphs: COMPASS_VLD_GRAPHS,
+    metadataFiles: COMPASS_VLD_METADATA_FILES,
+    pins: COMPASS_VLD_FILE_PINS,
+  }),
+  [COMPASS_VLD_V6_MODEL_ID]: Object.freeze({
+    label: 'Compass VLD v6 2B',
+    revision: COMPASS_VLD_V6_REVISION,
+    dtype: COMPASS_VLD_V6_DTYPE,
+    graphs: COMPASS_VLD_V6_GRAPHS,
+    metadataFiles: COMPASS_VLD_V6_METADATA_FILES,
+    pins: COMPASS_VLD_V6_FILE_PINS,
+  }),
+});
+
 export function isCompassVldModel(modelId) {
   return COMPASS_VLD_MODEL_IDS.has(String(modelId || '').trim());
 }
 
-function graphDtype(dtype, graph) {
+export function isCompassVldV6Model(modelId) {
+  return String(modelId || '').trim() === COMPASS_VLD_V6_MODEL_ID;
+}
+
+/** A Compass VLD build's pinned revision, graphs, default dtype and files (Tiny v5 when unnamed). */
+export function compassVldSpec(modelId = COMPASS_VLD_TINY_V5_MODEL_ID) {
+  return COMPASS_VLD_SPECS[String(modelId || '').trim()] || COMPASS_VLD_SPECS[COMPASS_VLD_TINY_V5_MODEL_ID];
+}
+
+/** The dtype a Compass VLD build loads by default. */
+export function compassVldDtype(modelId) {
+  return compassVldSpec(modelId).dtype;
+}
+
+function graphDtype(dtype, graph, spec) {
   const value = dtype && typeof dtype === 'object' ? dtype[graph] : dtype;
-  return String(value || COMPASS_VLD_DTYPE[graph]);
+  return String(value || spec.dtype[graph]);
 }
 
 /** The files one dtype choice reads, each with its pinned size and SHA-256. */
-export function compassVldFiles(dtype = COMPASS_VLD_DTYPE) {
-  const graphFiles = COMPASS_VLD_GRAPHS.flatMap(graph => {
-    const name = `onnx/${graph}_${graphDtype(dtype, graph)}.onnx`;
+export function compassVldFiles(dtype, modelId = COMPASS_VLD_TINY_V5_MODEL_ID) {
+  const spec = compassVldSpec(modelId);
+  const choice = dtype || spec.dtype;
+  const graphFiles = spec.graphs.flatMap(graph => {
+    const name = `onnx/${graph}_${graphDtype(choice, graph, spec)}.onnx`;
     return [name, `${name}_data`];
   });
-  return [...COMPASS_VLD_METADATA_FILES, ...graphFiles].map(path => {
-    const pin = COMPASS_VLD_FILE_PINS[path];
-    if (!pin) throw new Error(`Compass VLD Tiny v5 has no ${path}.`);
+  return [...spec.metadataFiles, ...graphFiles].map(path => {
+    const pin = spec.pins[path];
+    if (!pin) throw new Error(`${spec.label} has no ${path}.`);
     return { path, bytes: pin[0], sha256: pin[1] };
   });
 }
 
 /** The file's Hugging Face URL at the pinned revision, which is also its Cache Storage key. */
-export function compassVldFileUrl(modelId, path, revision = COMPASS_VLD_REVISION) {
+export function compassVldFileUrl(modelId, path, revision = compassVldSpec(modelId).revision) {
   return `https://huggingface.co/${modelId}/resolve/${encodeURIComponent(revision)}/${path}`;
 }
 
@@ -95,7 +141,7 @@ export function compassVldFileUrl(modelId, path, revision = COMPASS_VLD_REVISION
  * say whether it was checked: a worker that stops between storing a file and
  * checking it leaves the file unchecked.
  */
-export function compassVldVerifiedUrl(modelId, path, revision = COMPASS_VLD_REVISION) {
+export function compassVldVerifiedUrl(modelId, path, revision = compassVldSpec(modelId).revision) {
   return `${compassVldFileUrl(modelId, path, revision)}?webbrain-verified`;
 }
 
@@ -113,7 +159,7 @@ async function fileVerified(cache, modelId, file) {
 }
 
 /** Whether every file is in the cache and passed its SHA-256 check (no hashing). */
-export async function compassVldFilesCached(cache, modelId, dtype = COMPASS_VLD_DTYPE, files = compassVldFiles(dtype)) {
+export async function compassVldFilesCached(cache, modelId, dtype = compassVldDtype(modelId), files = compassVldFiles(dtype, modelId)) {
   for (const file of files) {
     if (!await fileVerified(cache, modelId, file)) return false;
   }
@@ -148,7 +194,7 @@ const transient = error => error?.name !== 'AbortError' && (error instanceof Typ
  * `onProgress` gets Transformers.js-shaped events.
  */
 export async function downloadCompassVld({
-  cache, fetchImpl, modelId, dtype = COMPASS_VLD_DTYPE, files = compassVldFiles(dtype), onProgress = () => {}, isCancelled = () => false,
+  cache, fetchImpl, modelId, dtype = compassVldDtype(modelId), files = compassVldFiles(dtype, modelId), onProgress = () => {}, isCancelled = () => false,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
 }) {
   for (const file of files) {
@@ -189,7 +235,7 @@ export async function downloadCompassVld({
 }
 
 /** Delete this model's files from any other revision, left by an earlier pin. */
-export async function removeOtherCompassVldRevisions(cache, modelId, revision = COMPASS_VLD_REVISION) {
+export async function removeOtherCompassVldRevisions(cache, modelId, revision = compassVldSpec(modelId).revision) {
   if (typeof cache.keys !== 'function') return 0;
   const base = `https://huggingface.co/${modelId}/resolve/`;
   const current = `${base}${encodeURIComponent(revision)}/`;
@@ -254,16 +300,30 @@ export async function createCompassVldTokenizer(library, cache, modelId) {
   const Tokenizer = name && (library[name] === Base || library[name]?.prototype instanceof Base) ? library[name] : Base;
   const tokenizer = new Tokenizer(tokenizerJSON, tokenizerConfig);
   // The template ships as chat_template.jinja; Transformers.js reads only tokenizer_config.json.
-  tokenizer.chat_template = chatTemplate;
+  tokenizer.chat_template = jinjaForTransformersJs(chatTemplate);
   return tokenizer;
 }
 
-/** Create the three sessions from cached files, one at a time (ORT Web's WebGPU EP requires it). */
-export async function createCompassVldSessions(ort, cache, modelId, dtype = COMPASS_VLD_DTYPE, { sessionOptions = {} } = {}) {
+/**
+ * A chat template Transformers.js can render. `{% generation %}…{% endgeneration %}`
+ * (in Compass VLD v6's template) only marks assistant text for training masks in
+ * Python Transformers (AssistantTracker) and renders its body unchanged, but
+ * Transformers.js's Jinja does not know the tag; an always-true `if` with the
+ * same whitespace control renders identically.
+ */
+export function jinjaForTransformersJs(template) {
+  return String(template)
+    .replace(/\{%(-?)\s*generation\s*(-?)%\}/g, '{%$1 if true $2%}')
+    .replace(/\{%(-?)\s*endgeneration\s*(-?)%\}/g, '{%$1 endif $2%}');
+}
+
+/** Create the model's sessions from cached files, one at a time (ORT Web's WebGPU EP requires it). */
+export async function createCompassVldSessions(ort, cache, modelId, dtype = compassVldDtype(modelId), { sessionOptions = {} } = {}) {
+  const spec = compassVldSpec(modelId);
   const sessions = {};
   try {
-    for (const graph of COMPASS_VLD_GRAPHS) {
-      const name = `${graph}_${graphDtype(dtype, graph)}.onnx`;
+    for (const graph of spec.graphs) {
+      const name = `${graph}_${graphDtype(dtype, graph, spec)}.onnx`;
       const model = await cachedBytes(cache, modelId, `onnx/${name}`);
       const data = await cachedBytes(cache, modelId, `onnx/${name}_data`);
       sessions[graph] = await ort.InferenceSession.create(model, {
@@ -761,6 +821,11 @@ export class CompassVldRuntime {
 
   encode(text) {
     return Array.from(this.tokenizer.encode(text, { add_special_tokens: false }));
+  }
+
+  /** The processor for one decoded image (interleaved RGB). */
+  preprocess(rgb, width, height) {
+    return preprocessImage(rgb, width, height);
   }
 
   /** Token embeddings on the CPU (prompts, where image rows are written in). */

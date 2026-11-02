@@ -11,6 +11,7 @@ import {
   WebGPUProvider,
   WebGPUVisionProvider,
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID,
   WEBGPU_DEFAULT_MODEL_ID,
   WEBGPU_DTYPE,
   WEBGPU_MODEL_ID,
@@ -36,6 +37,7 @@ import {
   webgpuModelPreset,
   webgpuModelRuntime,
   webgpuVisionChoiceModelId,
+  webgpuCompassVldModelFor,
 } from './webgpu.js';
 import { hasWebgpuTextModelCache, webgpuChatVisionReadiness } from './webgpu-model-cache.js';
 import { ADDITIONAL_PROVIDER_DEFAULTS } from './provider-catalog.js';
@@ -1758,7 +1760,7 @@ export class ProviderManager {
 
   /**
    * The Chrome-only in-browser vision model, only when the stored choice
-   * resolves to a model that is ready. Auto uses Compass VLD Tiny v5 once it is
+   * resolves to a model that is ready. Auto uses Compass VLD (v6 2B, or Tiny v5) once it is
    * downloaded (Ternary Bonsai 2 2B Vision when only that is); WebBrain VL 2
    * 450M still needs its explicit, consented enable from Settings.
    */
@@ -1785,8 +1787,15 @@ export class ProviderManager {
     ]);
     const choice = storedWebgpuVisionChoice(stored);
     // Cache Storage lookups only; they never start the offscreen document.
-    const { compassVldReady, bonsaiReady } = await webgpuChatVisionReadiness();
-    return { choice, model: resolveWebgpuVisionChoice(choice, { compassVldReady, bonsaiReady }), compassVldReady, bonsaiReady };
+    const { compassVldReady, compassVldModel, bonsaiReady } = await webgpuChatVisionReadiness();
+    return {
+      choice,
+      model: resolveWebgpuVisionChoice(choice, { compassVldReady, bonsaiReady }),
+      compassVldReady,
+      // The Compass VLD build that reads screenshots: v6 2B, or Tiny v5 where only that is downloaded.
+      compassVldModel: webgpuCompassVldModelFor(compassVldModel ? [compassVldModel] : []),
+      bonsaiReady,
+    };
   }
 
   /**
@@ -1816,7 +1825,7 @@ export class ProviderManager {
    * shape for both models. Auto without Bonsai and Off report `disabled`.
    */
   async getWebgpuVisionReadiness() {
-    const { choice, model, compassVldReady, bonsaiReady } = await this.getWebgpuVisionChoice();
+    const { choice, model, compassVldReady, compassVldModel, bonsaiReady } = await this.getWebgpuVisionChoice();
     if (isWebgpuChatVisionChoice(model)) {
       // A chat preset's download is that preset's transfer; its progress lives
       // with the text model, so this cheap check reports only ready or not.
@@ -1830,7 +1839,7 @@ export class ProviderManager {
         total: 0,
         error: '',
         updatedAt: 0,
-        modelId: webgpuVisionChoiceModelId(model),
+        modelId: model === WEBGPU_VISION_CHOICE_COMPASS_VLD ? compassVldModel : webgpuVisionChoiceModelId(model),
         model,
         choice,
       };
@@ -1847,7 +1856,7 @@ export class ProviderManager {
       total: 0,
       error: '',
       updatedAt: 0,
-      modelId: choice === WEBGPU_VISION_CHOICE_AUTO ? webgpuVisionChoiceModelId(WEBGPU_VISION_CHOICE_COMPASS_VLD) : WEBGPU_VISION_MODEL_ID,
+      modelId: choice === WEBGPU_VISION_CHOICE_AUTO ? compassVldModel : WEBGPU_VISION_MODEL_ID,
       choice,
     };
   }
@@ -2040,14 +2049,15 @@ export class ProviderManager {
   }
 
   /**
-   * Compass VLD Tiny v5 replaced Compass Tiny v2.1 as the WebGPU default.
-   * Older releases stored every built-in provider's defaults, so a stored
-   * Compass Tiny v2.1 is not a choice by itself. Only a configuration nobody
-   * set up moves: not marked configured, not the active provider, and Compass
-   * Tiny v2.1 never downloaded here. This is decided once; an unreadable cache
-   * leaves it for a later start. Choosing Compass Tiny v2.1 afterwards stays,
-   * even where that choice is saved without marking the provider configured
-   * (Apocalypse Mode's model list). Returns whether it moved.
+   * Compass VLD v6 2B replaced Compass VLD Tiny v5 (which had replaced Compass
+   * Tiny v2.1) as the WebGPU default. Older releases stored every built-in
+   * provider's defaults, so a stored earlier default is not a choice by
+   * itself. Only a configuration nobody set up moves: not marked configured,
+   * not the active provider, and that model never downloaded here. This is
+   * decided once per default; an unreadable cache leaves it for a later
+   * start. Choosing an earlier model afterwards stays, even where that choice
+   * is saved without marking the provider configured (Apocalypse Mode's model
+   * list). Returns whether it moved.
    */
   async migrateUntouchedWebgpuDefault() {
     const stored = await chrome.storage.local.get(WEBGPU_DEFAULT_MIGRATION_KEY);
@@ -2055,9 +2065,10 @@ export class ProviderManager {
     const config = this.providers.get('webgpu')?.config;
     if (!config) return false;
     let moved = false;
+    const previous = String(config.model || '').trim();
     if (config.configured !== true && this.activeProviderId !== 'webgpu'
-        && String(config.model || '').trim() === WEBGPU_COMPASS_TINY_V2_MODEL_ID) {
-      const cached = await hasWebgpuTextModelCache(WEBGPU_COMPASS_TINY_V2_MODEL_ID);
+        && [WEBGPU_COMPASS_TINY_V2_MODEL_ID, WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID].includes(previous)) {
+      const cached = await hasWebgpuTextModelCache(previous);
       if (cached === null) return false;
       if (cached === false) {
         await this.updateProvider('webgpu', {
@@ -2073,7 +2084,7 @@ export class ProviderManager {
     return moved;
   }
 
-  /** Start the selected shipped Apocalypse chat model, defaulting to Compass VLD Tiny v5. */
+  /** Start the selected shipped Apocalypse chat model, defaulting to Compass VLD v6 2B. */
   async enableAndStartWebgpuTextDownload() {
     try {
       const currentModel = this.getAll().webgpu?.model;
