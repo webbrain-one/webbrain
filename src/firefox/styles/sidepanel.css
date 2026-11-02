@@ -5393,3 +5393,40 @@ html[data-ui-scale="175"] .composer-toolbar {
 .history-popover button { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: var(--bg-input); color: var(--text-primary); cursor: pointer; font: inherit; }
 .history-popover button:disabled { opacity: .5; cursor: default; }
 .history-popover .history-more { width: 100%; margin-top: 10px; }
+
+/* Onboarding's model step, nothing found: the optional Companion, with its menu bar icon. */
+.ob-companion-hint {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+.ob-companion-hint.hidden { display: none; }
+.ob-companion-hint b { color: var(--text-primary); font-weight: 600; }
+.ob-companion-hint a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ob-companion-hint a:hover { text-decoration: underline; }
+.ob-companion-optional { color: var(--text-muted); }
+.ob-companion-glyph {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-dim);
+  position: relative;
+}
+.ob-companion-glyph::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  background: var(--accent);
+  -webkit-mask: url("../icons/companion-tray.png") center / contain no-repeat;
+  mask: url("../icons/companion-tray.png") center / contain no-repeat;
+}

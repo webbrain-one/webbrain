@@ -73,14 +73,14 @@ import { AUTO_VISION_PROVIDER_IDS, visionDetectionMatches } from '../providers/v
 import { canonicalizeOllamaBaseUrl } from '../providers/context-windows.js';
 import {
   COMPANION_PREFERRED_MODEL_PATTERNS,
+  WEBBRAIN_COMPANION_DOWNLOAD_BASE,
+  WEBBRAIN_COMPANION_SITE_URL,
   selectPreferredCompanionModel,
 } from '../providers/companion-config.js';
 import { AUTO_GROUP_TABS_KEY } from '../tab-group-preference.js';
 
 const VISION_UI_PROVIDER_IDS = new Set(['ollama', ...AUTO_VISION_PROVIDER_IDS]);
 const EASY_CLI_PROXY_GUIDE_URL = 'https://webbrain.one/docs/easy-cli-proxy/';
-const WEBBRAIN_COMPANION_SITE_URL = 'https://webbrain.one/companion/#download';
-const WEBBRAIN_COMPANION_DOWNLOAD_BASE = 'https://github.com/webbrain-one/webbrain/releases/download/systray-v0.1.2/WebBrain-Companion-0.1.2-';
 const SUBSCRIPTION_GUIDE_PRODUCTS = Object.freeze({
   openai: 'ChatGPT/Codex',
   anthropic: 'Claude',
