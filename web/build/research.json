@@ -1,5 +1,5 @@
 {
-  "statsAsOf": "October 30, 2026",
+  "statsAsOf": "November 2, 2026",
   "index": {
     "metaTitle": "WebBrain Research — small, open models for browser agents",
     "metaDescription": "WebBrain’s open research: tiny models that see, decide and act in the browser, open-source ternary compression with OpenBonsai, and frozen public benchmarks.",
@@ -117,19 +117,19 @@
       "models": [
         {
           "id": "webbrain-one/openbonsai-qwen-3.5-9b",
-          "downloads": 202,
-          "likes": 4,
+          "downloads": 714,
+          "likes": 6,
           "note": "Qwen3.5-9B compressed to ternary with OpenBonsai"
         },
         {
           "id": "webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision",
-          "downloads": 373,
+          "downloads": 527,
           "likes": 1,
           "note": "Prism ML’s Ternary Bonsai 2 2B, rewritten for WebGPU with vision"
         },
         {
           "id": "webbrain-one/Ternary-Bonsai-2-4B-ONNX-WebGPU-Vision",
-          "downloads": 109,
+          "downloads": 114,
           "likes": 2,
           "note": "Prism ML’s Ternary Bonsai 2 4B, rewritten for WebGPU with vision"
         }
@@ -160,180 +160,203 @@
       "slug": "compass-vld",
       "name": "Compass VLD",
       "kind": "On-device model",
-      "summary": "One small model that sees the screenshot, reads the request and decides: vision, language and decision together, so the browser needs no separate captioner, planner and judge.",
+      "summary": "One 2B model that sees the screenshot, reads the request and decides. Compass VLD v6 puts vision, language and decisions in a single checkpoint that runs in the browser.",
       "tile": {
         "size": "l",
         "visual": "vld",
         "stats": [
           {
-            "value": "120/126",
-            "label": "page-state decisions, zero false completions"
+            "value": "66/100",
+            "label": "strict browser-vision passes, best of the small models tested"
           },
           {
-            "value": "0.94 s",
-            "label": "per decision, in the browser"
+            "value": "122/126",
+            "label": "page-state decisions, zero false completions"
           }
         ]
       },
       "page": {
-        "lede": "A single checkpoint that reads screenshots and points at elements, writes text and tool calls, and answers decision questions such as “is the task done?”. Running all three in one on-device model replaces a captioner, a planner and a judge.",
+        "lede": "Compass VLD v6 2B reads screenshots, answers questions about the page, picks the next browser tool and answers decision questions such as “is the task done?”. One checkpoint does the work of a captioner, a planner and a judge, and it is built to run in the browser.",
         "why": "Every extra model is another download, another wait and another place for an agent to go wrong. One small model that can see, talk and decide is what makes a capable agent practical on an ordinary computer.",
         "stats": [
           {
-            "value": "1.55B",
-            "label": "parameters, Compass VLD Tiny v5"
+            "value": "66/100",
+            "label": "strict passes on 100 frozen browser screenshots (90.2% rubric)"
           },
           {
-            "value": "120/126",
-            "label": "d1 page-state test, zero false completions"
+            "value": "122/126",
+            "label": "d1 page-state checks, 0 of 48 false completions"
           },
           {
-            "value": "0.94 s",
-            "label": "per decision in the browser (RTX 5090)"
+            "value": "38/89",
+            "label": "compact routing, loose match, with zero anti-patterns"
           },
           {
-            "value": "32/89",
-            "label": "compact routing, loose: top among newly tested"
+            "value": "1.87 s",
+            "label": "per screenshot on an RTX 5060 Ti (BF16, llama.cpp)"
           }
         ],
         "sections": [
           {
-            "heading": "Two models",
+            "heading": "What v6 is",
             "paragraphs": [
-              "**Compass VLD Tiny v5** is a fine-tune of OpenBMB MiniCPM-V-4.7-1B: 1.55B parameters in total (498M language layers, 508M embeddings and head, 522M vision encoder, 26M projector). Round 1 used 344,139 samples with LoRA rank 64 on every language layer; round 2 added d1 page-state decision data in 51,811 samples. It trained on one RTX 5090 in about 20 hours.",
-              "**LFM3-VLD-2B** applies the same idea to Liquid’s LFM3-VL-2B (1.92B parameters), where Liquid itself splits the roles between LFM3-VL-2B for chat and d1-2B for decisions."
+              "**Compass VLD v6 2B** fine-tunes LFM3-VLD-2B Multipass, WebBrain’s adaptation of Liquid’s LFM3-VL-2B. It trained on 70,717 reviewed rows, with 1,631 more held out for validation:",
+              "46,879 browser screenshots with six-section descriptions (WebSight, ScreenParse, MiniWoB++ and synthetic renders) and 5,880 more from a curated set, 7,236 d1 page-state decisions, 6,950 tool-routing turns and 3,822 multilingual in-browser chats, at least a fifth of them in Turkish."
             ]
           },
           {
-            "heading": "How they compare",
+            "heading": "Three jobs in one checkpoint",
             "paragraphs": [
-              "On general benchmarks (BenchKit, 4,857 tasks per model) the larger LFM3-VL-2B base wins 6 of 9 suites against Compass v5, and Compass wins none, while decoding faster: 157 tokens/s against 91. On WebBrain’s own compact routing test, both VLDs tie for the best loose score among the newly tested models at 32/89."
+              "**Seeing.** It describes a viewport in WebBrain’s six sections: page purpose, visible text, inputs, state signals, blockers and unknowns. 99.0% of its answers on 500 held-out screenshots keep that format.",
+              "**Deciding.** Questions like “is the task done?” are scored from the gap between its Yes and No logits, plus a small linear probe on its last hidden state. On the d1 final test it gets 122 of 126 checks right, confirms all 24 completed tasks, marks all 24 unknown cases as unknown and calls none of the 48 unfinished tasks done.",
+              "**Talking.** It answers from the page or from offline Wikipedia passages and cites every source it uses. It replies in the visitor’s language 96% of the time and turns down requests to act on the page, which belong to bigger models."
+            ]
+          },
+          {
+            "heading": "Against v5 and its base",
+            "paragraphs": [
+              "Fine-tuning took the LFM3-VLD-2B base from 4 to 66 strict passes on the vision suite. On compact routing, v6 matches the right tool family in 38 of 89 scenarios against 32 for Compass VLD Tiny v5, and drops v5’s 8 anti-patterns (loops on bad URLs, refetching stale trees) to none.",
+              "**Compass VLD Tiny v5**, the previous version, is a 1.55B fine-tune of OpenBMB MiniCPM-V-4.7-1B and remains available."
+            ]
+          },
+          {
+            "heading": "Running it",
+            "paragraphs": [
+              "For the browser there is an ONNX build for WebGPU: a 1.31 GB q4f16 or 1.96 GB q8f16 decoder plus a 379 MB vision encoder, with the decision probe in JavaScript. For desktops there are GGUF files from BF16 (3.46 GB) to Q4_K_M; at BF16 the model and its cache use under 4 GB of VRAM, process prompts at about 3,650 tokens/s and generate 100–128 tokens/s on an RTX 5060 Ti."
             ]
           }
         ],
         "results": {
-          "title": "BenchKit: LFM3-VL-2B vs Compass VLD v5",
+          "title": "100 frozen browser screenshots",
           "columns": [
-            "Suite",
-            "LFM3-VL-2B",
-            "Compass VLD v5"
+            "Model",
+            "Strict",
+            "Rubric",
+            "Latency"
           ],
           "rows": [
             {
               "cells": [
-                "V*",
-                "79.6",
-                "65.4"
+                "Qwen 3.8 27B NVFP4 (reference)",
+                "74/100",
+                "93.2%",
+                "—"
               ]
             },
             {
               "cells": [
-                "OCRBench",
-                "81.5",
-                "72.6"
-              ]
-            },
-            {
-              "cells": [
-                "ChartQA",
-                "82.0",
-                "65.6"
-              ]
-            },
-            {
-              "cells": [
-                "MMLU-Pro",
-                "46.7",
-                "23.0"
-              ]
-            },
-            {
-              "cells": [
-                "GSM8K",
-                "68.2",
-                "70.6"
+                "**Compass VLD v6 2B**",
+                "66/100",
+                "90.2%",
+                "1.87 s"
               ],
               "highlight": true
             },
             {
               "cells": [
-                "Decode speed",
-                "91 tok/s",
-                "157 tok/s"
-              ],
-              "highlight": true
+                "Qwen 3.5 4B",
+                "55/100",
+                "83.4%",
+                "25.92 s"
+              ]
+            },
+            {
+              "cells": [
+                "WebBrain VL 2 450M",
+                "44/100",
+                "76.2%",
+                "2.00 s"
+              ]
+            },
+            {
+              "cells": [
+                "Gemma 4 E4B",
+                "41/100",
+                "81.3%",
+                "5.96 s"
+              ]
+            },
+            {
+              "cells": [
+                "Qwen 3.5 2B",
+                "39/100",
+                "79.1%",
+                "10.01 s"
+              ]
+            },
+            {
+              "cells": [
+                "LFM3-VLD-2B (base)",
+                "4/100",
+                "44.7%",
+                "2.20 s"
+              ]
             }
           ],
-          "note": "General benchmarks, not WebBrain’s tasks, on an RTX A4000. GSM8K is a tie within noise. LFM3 ran thinking-off on a pre-release llama.cpp and had 52 MMLU-Pro timeouts; Compass hit repetition loops (60 on IFEval, 24 on GSM8K)."
+          "note": "Same screenshots, production prompt and regex rubric for every model; hardware and precision differ. v6 ran BF16 on llama.cpp (RTX 5060 Ti), the Qwen 3.5 and Gemma models 4-bit on MLX, WebBrain VL 2 in ONNX/WebGPU."
         },
         "caveats": [
-          "LFM3 has not yet been run on WebBrain’s decision and grounding tests.",
-          "An LFM3-based VLD becomes WebBrain’s default on-device model only if it holds up."
+          "These are WebBrain’s own frozen suites, not general benchmarks.",
+          "Latencies are from llama.cpp on a desktop GPU; in the browser, speed depends on the computer’s GPU.",
+          "Routing’s strict exact-action score stays low (7 of 89); v6 leads on the looser tool-family match."
         ]
       },
       "models": [
         {
-          "id": "webbrain-one/webbrain-compass-vld-tiny-v5",
-          "downloads": 7,
+          "id": "webbrain-one/webbrain-compass-vld-v6-2b",
+          "downloads": 17,
           "likes": 0,
-          "note": "Compass VLD Tiny v5, from MiniCPM-V-4.7-1B"
+          "note": "Compass VLD v6 2B"
         },
         {
-          "id": "webbrain-one/webbrain-compass-vld-tiny-v5-gguf",
-          "downloads": 327,
-          "likes": 0,
-          "note": "GGUF for llama.cpp"
-        },
-        {
-          "id": "webbrain-one/webbrain-compass-vld-tiny-v5-onnx",
-          "downloads": 28,
+          "id": "webbrain-one/webbrain-compass-vld-v6-2b-onnx",
+          "downloads": 12,
           "likes": 0,
           "note": "ONNX for WebGPU in the browser"
         },
         {
-          "id": "webbrain-one/lfm3-vld-2b",
-          "downloads": 53,
-          "likes": 15,
-          "note": "LFM3-VLD-2B, from Liquid LFM3-VL-2B"
-        },
-        {
-          "id": "webbrain-one/lfm3-vld-2b-gguf",
-          "downloads": 605,
-          "likes": 1,
+          "id": "webbrain-one/webbrain-compass-vld-v6-2b-gguf",
+          "downloads": 240,
+          "likes": 0,
           "note": "GGUF for llama.cpp"
         },
         {
-          "id": "webbrain-one/lfm3-vld-2b-onnx",
-          "downloads": 28,
-          "likes": 1,
-          "note": "ONNX for WebGPU"
+          "id": "webbrain-one/webbrain-compass-vld-tiny-v5",
+          "downloads": 13,
+          "likes": 0,
+          "note": "Compass VLD Tiny v5, the previous version"
+        },
+        {
+          "id": "webbrain-one/webbrain-compass-vld-tiny-v5-onnx",
+          "downloads": 35,
+          "likes": 0,
+          "note": "Tiny v5, ONNX"
+        },
+        {
+          "id": "webbrain-one/webbrain-compass-vld-tiny-v5-gguf",
+          "downloads": 381,
+          "likes": 0,
+          "note": "Tiny v5, GGUF"
         },
         {
           "id": "webbrain-one/lfm3-vld-2b-multipass",
-          "downloads": 29,
-          "likes": 16,
-          "note": "Multipass variant"
+          "downloads": 205,
+          "likes": 18,
+          "note": "LFM3-VLD-2B Multipass, v6’s base"
         },
         {
-          "id": "webbrain-one/lfm3-vld-2b-multipass-gguf",
-          "downloads": 243,
-          "likes": 4,
-          "note": "Multipass variant, GGUF"
-        },
-        {
-          "id": "webbrain-one/lfm3-vld-2b-multipass-onnx",
-          "downloads": 11,
-          "likes": 2,
-          "note": "Multipass variant, ONNX"
-        },
-        {
-          "id": "webbrain-one/minicpmv47-webbrain-v1",
-          "downloads": 18,
-          "likes": 0,
-          "note": "Earlier MiniCPM-V 4.7 fine-tune"
+          "id": "webbrain-one/lfm3-vld-2b",
+          "downloads": 231,
+          "likes": 15,
+          "note": "LFM3-VLD-2B, from Liquid LFM3-VL-2B"
         }
       ],
       "posts": [
+        {
+          "slug": "webbrain-compass-vld-v6-2b",
+          "title": "WebBrain Compass VLD v6 2B: State-of-the-Art Browser Vision and Agent Routing on Consumer Hardware",
+          "date": "2026-10-31"
+        },
         {
           "slug": "lfm3-vl-2b-vs-webbrain-compass-vld",
           "title": "Liquid LFM3-VL-2B vs WebBrain Compass VLD: a launch-day benchmark",
@@ -352,8 +375,12 @@
       ],
       "links": [
         {
-          "label": "Models on Hugging Face",
-          "url": "https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5"
+          "label": "Compass VLD v6 2B on Hugging Face",
+          "url": "https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b"
+        },
+        {
+          "label": "v6 collection",
+          "url": "https://huggingface.co/collections/webbrain-one/webbrain-compass-vld-v6-2b-6ae5de0980732cb99b006957"
         }
       ]
     },
@@ -468,25 +495,25 @@
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-v2.1",
-          "downloads": 331,
+          "downloads": 338,
           "likes": 1,
           "note": "Compass Tiny v2.1"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3",
-          "downloads": 208,
+          "downloads": 203,
           "likes": 2,
           "note": "Compass Tiny XS v3, from Spark-X2.5-1.7B"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3-onnx",
-          "downloads": 10,
+          "downloads": 11,
           "likes": 1,
           "note": "ONNX for WebGPU"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3.1-onnx",
-          "downloads": 15,
+          "downloads": 17,
           "likes": 1,
           "note": "v3.1, ONNX for WebGPU"
         }
@@ -654,13 +681,13 @@
       "models": [
         {
           "id": "webbrain-one/webbrain-vl-2-450M",
-          "downloads": 168,
+          "downloads": 93,
           "likes": 5,
           "note": "WebBrain VL 2, from LFM2.5-VL-450M"
         },
         {
           "id": "webbrain-one/webbrain-vl-2-450M-onnx",
-          "downloads": 387,
+          "downloads": 370,
           "likes": 0,
           "note": "ONNX build that ships in the extension"
         }
@@ -760,13 +787,13 @@
       "models": [
         {
           "id": "webbrain-one/d1-browser-decision-fp32",
-          "downloads": 42,
+          "downloads": 43,
           "likes": 0,
           "note": "FP32 release, from LiquidAI d1-omni-600M"
         },
         {
           "id": "webbrain-one/d1-browser-decision-fp16",
-          "downloads": 191,
+          "downloads": 275,
           "likes": 0,
           "note": "FP16 weights for WebGPU in the browser"
         }
@@ -856,7 +883,7 @@
           {
             "heading": "Vision",
             "paragraphs": [
-              "Each model gets 100 browser screenshots and WebBrain’s six-section vision prompt. MiMo-V2.6-Flash leads the hosted models at 81/100; among tiny models Qwen 3.5 4B scores 55 and WebBrain VL 2 450M scores 44."
+              "Each model gets 100 browser screenshots and WebBrain’s six-section vision prompt. MiMo-V2.6-Flash leads the hosted models at 81/100; among small models Compass VLD v6 2B scores 66, Qwen 3.5 4B 55 and WebBrain VL 2 450M 44."
             ]
           }
         ],
@@ -1016,19 +1043,19 @@
       "models": [
         {
           "id": "webbrain-one/Laguna-XS-2.1-Vision-NVFP4",
-          "downloads": 104,
+          "downloads": 101,
           "likes": 3,
           "note": "Poolside Laguna XS 2.1 with MoonViT vision, NVFP4"
         },
         {
           "id": "webbrain-one/Laguna-XS-2.1-Vision-BF16",
-          "downloads": 18,
+          "downloads": 14,
           "likes": 0,
           "note": "BF16"
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-Vision-NVFP4",
-          "downloads": 208,
+          "downloads": 211,
           "likes": 20,
           "note": "DeepSeek V4 Flash with vision, NVFP4"
         },
@@ -1040,13 +1067,13 @@
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-0731-Vision-NVFP4",
-          "downloads": 106,
+          "downloads": 104,
           "likes": 33,
           "note": "The 0731 revision with vision, NVFP4"
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-0731-Vision-BF16",
-          "downloads": 160,
+          "downloads": 153,
           "likes": 6,
           "note": "The 0731 revision with vision, BF16"
         }
@@ -1128,13 +1155,13 @@
       "models": [
         {
           "id": "webbrain-one/Nanbeige4.3-33B-NVFP4",
-          "downloads": 613,
-          "likes": 21,
+          "downloads": 987,
+          "likes": 20,
           "note": "Nanbeige 4.3 33B in NVFP4"
         },
         {
           "id": "webbrain-one/Ling-3.0-tiny-ONNX",
-          "downloads": 40,
+          "downloads": 39,
           "likes": 2,
           "note": "inclusionAI Ling-3.0-tiny for ONNX runtimes"
         }
