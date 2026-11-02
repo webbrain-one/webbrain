@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...还有 21 个",
   "hero.mockup.input_placeholder": "针对此页面随便问点什么...",
   "hero.mockup.scene_nav_aria": "切换演示场景",
+  "hero.mockup.scene_nav_label": "看看：",
   "hero.mockup.scene_prev_aria": "上一个演示场景",
   "hero.mockup.scene_next_aria": "下一个演示场景",
   "hero.mockup.scene_label.products": "产品提取演示",

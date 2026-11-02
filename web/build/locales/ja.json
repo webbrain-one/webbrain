@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...ほか 21 件",
   "hero.mockup.input_placeholder": "このページについて何でも聞いてください...",
   "hero.mockup.scene_nav_aria": "デモのシナリオを切り替え",
+  "hero.mockup.scene_nav_label": "見てみる：",
   "hero.mockup.scene_prev_aria": "前のデモシナリオ",
   "hero.mockup.scene_next_aria": "次のデモシナリオ",
   "hero.mockup.scene_label.products": "製品抽出デモ",

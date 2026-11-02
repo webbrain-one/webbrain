@@ -1574,6 +1574,16 @@
       margin-bottom: 4px;
     }
     .sp-msg .step .check { color: var(--success); }
+    /* Fill a form: the reply grows with the form. Each step appears once its
+       fields are done, and "Filled 9 fields" only after the last field
+       (field 11 types at 3.0s and is checked at 3.45s). */
+    .browser-mockup.scene-form.is-active .sp-msg.assistant { animation-delay: 0.9s; }
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .step,
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .sp-result { animation: fadeUp 0.35s ease both; }
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .step:nth-child(1) { animation-delay: 0.9s; }
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .step:nth-child(2) { animation-delay: 1.9s; }
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .step:nth-child(3) { animation-delay: 2.9s; }
+    .browser-mockup.scene-form.is-active .sp-msg.assistant .sp-result { animation-delay: 3.6s; }
     .sp-input {
       padding: 10px;
       border-top: 1px solid var(--border);
@@ -2188,7 +2198,9 @@
     /* Reduced motion — keep messages visible and disable cross-fade. */
     @media (prefers-reduced-motion: reduce) {
       .sp-msg { opacity: 1; }
-      .browser-mockup.is-active .sp-msg { animation: none; }
+      .browser-mockup.is-active .sp-msg,
+      .browser-mockup.scene-form.is-active .sp-msg.assistant .step,
+      .browser-mockup.scene-form.is-active .sp-msg.assistant .sp-result { animation: none; }
       .mockup-stack > .browser-mockup { transition: none; transform: none; }
       .tf-value, .browser-mockup.is-active .tf-value { animation: none; max-width: none; opacity: 1; }
       .tf-check, .browser-mockup.is-active .tf-check { animation: none; opacity: 1; }
@@ -4037,11 +4049,15 @@
     /* Carousel tabs: name each scene, like webbrain.cloud's CLI / Python
        / REST tabs. The rotation script keeps driving .is-active. */
     .path-browser .hero-visual { display: flex; flex-direction: column; padding-top: 14px; }
+    /* "See it:" frames the tabs as demos to watch, not page navigation. */
+    .scene-nav-row { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 22px; min-width: 0; }
+    .scene-nav-row .scene-nav { margin-top: 0; min-width: 0; }
+    .scene-nav-label { flex: 0 0 auto; color: var(--text-dim); opacity: 0.8; font-size: 13px; font-weight: 500; white-space: nowrap; }
+    .path-browser .scene-nav-row { order: -1; justify-content: flex-start; margin: 0 0 14px; }
     .path-browser .scene-nav {
-      order: -1;
       justify-content: flex-start;
       gap: 4px;
-      margin: 0 0 14px;
+      margin: 0;
       overflow-x: auto;
       scrollbar-width: none;
     }
@@ -4345,7 +4361,7 @@
       </div>
 
       <!-- Scene 2: Tax form fill (Act mode) — fields type themselves in -->
-      <div class="browser-mockup" data-scene="1" aria-hidden="true" inert>
+      <div class="browser-mockup scene-form" data-scene="1" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
           <div class="browser-url">https://tax.example.gov/filing/quarterly-return</div>
@@ -4356,40 +4372,40 @@
             <div class="tf-meta">税务部门 · 所有字段均为必填</div>
             <div class="tf-grid">
               <div class="tf-field wide">
-                <div class="tf-label"><span><b>1a</b> 法定企业名称</span> <span class="tf-tags"><span class="tf-mem" style="--d:0.7s;">来自记忆</span><span class="tf-check" style="--d:0.7s;">&#10003;</span></span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:0.7s;">Lumen Coffee LLC</span></div>
+                <div class="tf-label"><span><b>1a</b> 法定企业名称</span> <span class="tf-tags"><span class="tf-mem" style="--d:0.6s;">来自记忆</span><span class="tf-check" style="--d:0.6s;">&#10003;</span></span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:0.6s;">Lumen Coffee LLC</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>1b</b> EIN / 税号</span> <span class="tf-tags"><span class="tf-mem" style="--d:1.1s;">来自记忆</span><span class="tf-check" style="--d:1.1s;">&#10003;</span></span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:1.1s;">84-2917465</span></div>
+                <div class="tf-label"><span><b>1b</b> EIN / 税号</span> <span class="tf-tags"><span class="tf-mem" style="--d:0.9s;">来自记忆</span><span class="tf-check" style="--d:0.9s;">&#10003;</span></span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:0.9s;">84-2917465</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>2</b> 申报期间</span> <span class="tf-check" style="--d:1.6s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:1.6s;">Q2 2026</span></div>
+                <div class="tf-label"><span><b>2</b> 申报期间</span> <span class="tf-check" style="--d:1.2s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:1.2s;">Q2 2026</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>5a</b> 总收入</span> <span class="tf-check" style="--d:2.0s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:2.0s;">$148,220.00</span></div>
+                <div class="tf-label"><span><b>5a</b> 总收入</span> <span class="tf-check" style="--d:1.5s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:1.5s;">$148,220.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>5b</b> 可扣除费用</span> <span class="tf-check" style="--d:2.4s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:2.4s;">$61,884.00</span></div>
+                <div class="tf-label"><span><b>5b</b> 可扣除费用</span> <span class="tf-check" style="--d:1.8s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:1.8s;">$61,884.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>7</b> 工资总额</span> <span class="tf-tags"><span class="tf-mem" style="--d:2.8s;">来自记忆</span><span class="tf-check" style="--d:2.8s;">&#10003;</span></span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:2.8s;">$38,400.00</span></div>
+                <div class="tf-label"><span><b>7</b> 工资总额</span> <span class="tf-tags"><span class="tf-mem" style="--d:2.1s;">来自记忆</span><span class="tf-check" style="--d:2.1s;">&#10003;</span></span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:2.1s;">$38,400.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>9a</b> 已缴预估税款</span> <span class="tf-check" style="--d:3.2s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:3.2s;">$9,500.00</span></div>
+                <div class="tf-label"><span><b>9a</b> 已缴预估税款</span> <span class="tf-check" style="--d:2.4s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:2.4s;">$9,500.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>9b</b> 前期结转抵免</span> <span class="tf-check" style="--d:3.6s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:3.6s;">$1,250.00</span></div>
+                <div class="tf-label"><span><b>9b</b> 前期结转抵免</span> <span class="tf-check" style="--d:2.7s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:2.7s;">$1,250.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>11</b> 应付净税额</span> <span class="tf-check" style="--d:4.0s;">&#10003;</span></div>
-                <div class="tf-input"><span class="tf-value" style="--d:4.0s;">$12,067.40</span></div>
+                <div class="tf-label"><span><b>11</b> 应付净税额</span> <span class="tf-check" style="--d:3.0s;">&#10003;</span></div>
+                <div class="tf-input"><span class="tf-value" style="--d:3.0s;">$12,067.40</span></div>
               </div>
             </div>
             <span class="tf-submit">提交申报</span>
@@ -4406,7 +4422,7 @@
                 <div class="step"><span class="check">&#10003;</span> 已从<strong>记忆</strong>中调取名称、EIN 与工资信息</div>
                 <div class="step"><span class="check">&#10003;</span> 找到 9 个必填字段</div>
                 <div class="step"><span class="check">&#10003;</span> 根据数字计算合计</div>
-                <div style="margin-top:6px;">已填写 <strong>9 个字段</strong>。在提交前已停止 — 请核对后自行发送。</div>
+                <div class="sp-result" style="margin-top:6px;">已填写 <strong>9 个字段</strong>。在提交前已停止 — 请核对后自行发送。</div>
               </div>
             </div>
             <div class="sp-input">
@@ -4571,12 +4587,15 @@
       </button>
     </div>
 
+    <div class="scene-nav-row">
+    <span class="scene-nav-label" aria-hidden="true">看看：</span>
     <div class="scene-nav" role="tablist" aria-label="切换演示场景">
       <button class="scene-dot is-active" type="button" data-scene="0" role="tab" aria-selected="true" title="追问演示">总结</button>
       <button class="scene-dot" type="button" data-scene="1" role="tab" aria-selected="false" title="表单填写演示">填写表单</button>
       <button class="scene-dot" type="button" data-scene="2" role="tab" aria-selected="false" title="CSS 间距演示">Web 开发</button>
       <button class="scene-dot" type="button" data-scene="3" role="tab" aria-selected="false" title="视频下载演示">保存视频</button>
       <button class="scene-dot" type="button" data-scene="4" role="tab" aria-selected="false" title="产品提取演示">自动化</button>
+    </div>
     </div>
   </div>
 
