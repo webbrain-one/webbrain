@@ -112,7 +112,7 @@ const SUBSCRIPTION_GUIDE_PRODUCTS = Object.freeze({
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '45.0.4';
+const EXT_VERSION = '46.0.0';
 
 const providersContainer = document.getElementById('providers');
 const generalSearchInput = document.getElementById('input-general-search');
