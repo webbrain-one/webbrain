@@ -16,7 +16,7 @@ import { installPageFeedback, beforePageAgentDispatch, capturePageAgentInputComp
 import { JEV_FAST_KEYS, JEV_CLASSIFIER_THRESHOLD, JEV_BROWSER_THRESHOLD, confidentChoice, buildJevBrowserRequest, decideJevBrowser, jevVisualInputRequiresMainModel, JevFastSession } from './systemone-fast.js';
 import { redactSystemOneText, wrapSystemOneData, boundedSystemOneText, systemOneStateBytes } from './systemone-evidence.js';
 import { createSystemOneJudge, isSystemOneResponseContractError, systemOneFailureReason, SYSTEM_ONE_COST_PROVIDER } from './systemone-judge.js';
-import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, acceptModeEscalation, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
+import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, modeEscalationRefusal, readModeEscalation, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
 import { SEMANTIC_BATCH_LIMITS, SEMANTIC_DECISION_VERSION, acceptSemanticAnswer, acceptSemanticBatchAnswers, boundedSemanticData, controlEffectCommits, semanticDataComplete, semanticBatchChunks, semanticBatchDecisionMessages, semanticDecisionMessages, semanticQuestion, semanticSystemOneBatchQuestions, semanticSystemOneQuestion, WORKFLOW_STATES } from './semantic-decisions.js';
 import { SOCIAL_PLATFORMS, socialPublicationApiPlatform, normalizePublicationContract, resolvePublicationText, publicationProgress, exactPublicationText, publicationMediaMatches, publicationContractMessages, publicationAuditMessages, parsePublicationJson, publicationAuditValidation } from './social-publish-contract.js';
 import { mastodonPublicationIntentMessages, normalizeMastodonPublicationIntent, captureNativeMastodonPublication, mastodonPublicationBinding, mastodonPublicationReceipt, mastodonPublicationNavigation } from './mastodon-publication.js';
@@ -29114,9 +29114,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // page-free `run_mode` question about the corrected request must also
   // answer act or dev (a sure decision-model "answer" from routing is reused
   // from the cache). Returns { accepted: { mode, evidence }, corrections },
-  // { refusal: text }, or { superseded: true } when the user corrected the
-  // request while the check ran: the call no longer covers the request, and
-  // the model asks again (for Act or Dev) once it has read the correction.
+  // { refused: reason } (a readModeEscalation reason, or 'not_action' when
+  // the page-free answer does not confirm it), or { superseded: true } when
+  // the user corrected the request while the check ran: the call no longer
+  // covers the request, and the model asks again (for Act or Dev) once it
+  // has read the correction.
   async _autoModeEscalation(tabId, toolCalls, enriched, provider, question, messages, snapshot = null, continuedTask = '') {
     const call = (toolCalls || []).find(item => item?.function?.name === REQUEST_ACTION_MODE_TOOL_NAME);
     // A continuation's request is the continued task's own words, never
@@ -29127,10 +29129,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const tier = this._resolvePromptTier(provider);
     const corrected = corrections => [request, ...corrections.map(item => item.text)].join('\n');
     let corrections = this._autoModeTurnCorrections(tabId, messages, snapshot);
-    const requested = acceptModeEscalation(call?.function?.arguments, corrected(corrections), { tier });
-    if (!requested) {
-      return { refusal: 'request_action_mode was refused: `evidence` must quote the user\'s own words that ask for the action (from their request or a correction they sent), exactly as written. Answer the request read-only if you can.' };
-    }
+    const requested = readModeEscalation(call?.function?.arguments, corrected(corrections), { tier });
+    if (requested.refused) return { refused: requested.refused };
     const base = question || { request, page: {} };
     const asked = corrections.length ? { ...base, request: corrected(corrections) } : base;
     // A sure "answer" from routing settles it; an "unclear" one asks again.
@@ -29141,9 +29141,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return { superseded: true };
     }
     const mode = confirmedEscalationMode(requested, verdict.choice, { tier });
-    if (!mode) {
-      return { refusal: 'request_action_mode was refused: read on its own, the user\'s request does not ask for browser actions. Answer it read-only.' };
-    }
+    if (!mode) return { refused: 'not_action' };
     const plan = autoModePlanForChoice(verdict.alongside?.plan_need);
     return { accepted: { mode, evidence: requested.evidence, ...(plan ? { plan } : {}) }, corrections };
   }
@@ -58746,9 +58744,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return (finalResponse = '');
         }
         // A refused hand-off leaves the turn read-only and tells the model why;
-        // a second refusal withdraws the tool.
+        // a second refusal withdraws the tool. The trace keeps the reason code,
+        // never the quote.
         autoModeEscalationRefusals += 1;
-        if (autoModeEscalationRefusals >= 2) this._autoModeEscalationTabs.delete(tabId);
+        const escalationWithdrawn = autoModeEscalationRefusals >= 2;
+        if (escalationWithdrawn) this._autoModeEscalationTabs.delete(tabId);
+        if (runId) {
+          try {
+            trace.recordNote(runId, steps, 'mode_escalation_refused', { reason: handoff.refused, attempt: autoModeEscalationRefusals,
+              outcome: escalationWithdrawn ? 'tool_withdrawn' : 'retry_allowed' });
+          } catch {}
+        }
         messages.push(this._withResponseItems({
           role: 'assistant',
           content: result.content || null,
@@ -58759,7 +58765,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             role: 'tool',
             tool_call_id: call.id,
             content: JSON.stringify(call?.function?.name === REQUEST_ACTION_MODE_TOOL_NAME
-              ? { success: false, error: handoff.refusal }
+              ? { success: false, error: modeEscalationRefusal(handoff.refused, { withdrawn: escalationWithdrawn }) }
               : { success: false, skipped: true, dispatched: false, noDispatch: true, error: 'Skipped because request_action_mode was called in the same response. Repeat this call if you still need it.' }),
           });
         }
