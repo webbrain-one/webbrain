@@ -260,8 +260,11 @@ starts capture before `chat`, and finalizes it from the run's `finally` path.
 
 Settings transfer is also slash-driven. `/export --config` asks the background
 for an allowlisted, default-resolved `webbrain-config/1` snapshot, and
-`/import <json>` or `/import --file` validates that schema before replacing the
-portable Settings state and rehydrating providers and live agent settings.
+`/import <json>` or `/import --file` validates that schema before merging it
+into the portable Settings state (only the settings in the file change and
+providers merge by ID) and rehydrating providers and live agent settings.
+`/import --replace` restores a full snapshot instead, resetting omitted settings
+to their defaults and removing providers the file does not name.
 Provider and auxiliary-model API keys are intentionally included in plaintext;
 device-bound Cloud Sync credentials and device IDs, conversation/runtime data,
 scheduled jobs, usage counters, and spend history are intentionally excluded.

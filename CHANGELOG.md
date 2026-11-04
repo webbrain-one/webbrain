@@ -6,6 +6,9 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Changed
+- `/import` now merges a Settings snapshot into your current Settings instead of replacing them. Only the settings in the file change and providers merge by ID, so a file that carries a single model or provider no longer resets everything else (other providers and API keys, profile, memory, custom skills, permissions) to defaults. `/import --replace`, with inline JSON or `--file`, restores a full snapshot as before: settings missing from the file return to their defaults and providers it does not name are removed. A merge never takes the platform-managed WebBrain Compass providers from a file. `/help` and the slash autocomplete list the new flag, and its description and the "Merged N Settings values" confirmation are localized in 23 languages. Both builds.
+
 ## [46.0.0] - 2026-11-03
 
 ### Added

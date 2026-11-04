@@ -1008,12 +1008,13 @@ const SLASH_COMMANDS = [
   },
   {
     value: '/import',
-    usage: '/import <json> | /import --file',
+    usage: '/import [--replace] <json> | /import --file [--replace]',
     descriptionKey: 'sp.slash.import_config',
     action: 'json',
     acceptsPayload: true,
     options: [
       { value: '--file', descriptionKey: 'sp.slash.import_config_file', action: 'file', disallowPayload: true },
+      { value: '--replace', descriptionKey: 'sp.slash.import_config_replace' },
     ],
   },
   { value: '/profile', usage: '/profile', descriptionKey: 'sp.slash.profile', action: 'toggle' },
@@ -9645,12 +9646,13 @@ function resolvePendingPermissionPromptsForTab(tabId) {
   return resolved;
 }
 
-async function importConfigurationJson(json, tabId) {
+async function importConfigurationJson(json, tabId, { replace = false } = {}) {
   try {
-    const res = await sendToBackground('import_config', { json });
+    const res = await sendToBackground('import_config', { json, replace });
     await loadProviders();
     if (currentTabId === tabId) {
-      addPersistentSlashMessage(t('sp.import_config.done', { count: res?.settingCount || 0 }));
+      const replaced = (res?.mode || (replace ? 'replace' : 'merge')) === 'replace';
+      addPersistentSlashMessage(t(replaced ? 'sp.import_config.done' : 'sp.import_config.merged', { count: res?.settingCount || 0 }));
     }
   } catch (error) {
     if (currentTabId === tabId) {
@@ -9659,7 +9661,7 @@ async function importConfigurationJson(json, tabId) {
   }
 }
 
-function requestConfigurationFile(tabId) {
+function requestConfigurationFile(tabId, { replace = false } = {}) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.json,application/json';
@@ -9667,7 +9669,7 @@ function requestConfigurationFile(tabId) {
     const file = input.files?.[0];
     if (!file) return;
     file.text()
-      .then((json) => importConfigurationJson(json, tabId))
+      .then((json) => importConfigurationJson(json, tabId, { replace }))
       .catch((error) => {
         if (currentTabId === tabId) {
           addPersistentSlashMessage(t('sp.import_config.error', { error: error?.message || 'file read failed' }));
@@ -10098,12 +10100,12 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   }
 
   if (command.value === '/import' && action === 'file') {
-    requestConfigurationFile(tabId);
+    requestConfigurationFile(tabId, { replace: optionValues.has('--replace') });
     return '';
   }
 
   if (command.value === '/import' && action === 'json') {
-    await importConfigurationJson(payload, tabId);
+    await importConfigurationJson(payload, tabId, { replace: optionValues.has('--replace') });
     return '';
   }
 

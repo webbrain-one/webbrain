@@ -16069,20 +16069,45 @@ test('import_config_patch background handler merges against live provider storag
     assert.deepEqual(events, ['get', 'set', 'providerManager.load'], `${label}: handler must read current providers before writing, then reload providers`);
     results.push({ label, response, stored: structuredClone(stored) });
 
-    const fullResponse = await handler({ action: 'import_config', json: sparseJson }, api, helpers);
-    assert.equal(fullResponse.settingCount, configTransfer.CONFIG_STORAGE_KEYS.length, `${label}: full import should still write every setting`);
-    assert.equal(stored.themeMode, 'system', `${label}: full import should still restore omitted settings to defaults`);
-    assert.equal(stored.providers.webbrain_cloud.baseUrl, 'https://stale-export.example/v1', `${label}: full import intentionally keeps its replace-everything semantics`);
+    // /import merges by default, like the provisioning patch: settings missing
+    // from the file and providers it does not name stay as they are.
+    stored.themeMode = 'dark';
+    events.length = 0;
+    const mergeResponse = await handler({ action: 'import_config', json: sparseJson }, api, helpers);
+    assert.equal(mergeResponse.ok, true, `${label}: /import should succeed`);
+    assert.equal(mergeResponse.mode, 'merge', `${label}: /import should merge unless it is asked to replace`);
+    assert.equal(mergeResponse.settingCount, 2, `${label}: a merging /import should report only the applied settings`);
+    assert.equal(stored.themeMode, 'dark', `${label}: a merging /import must leave settings missing from the file untouched`);
+    assert.equal(stored.providers.anthropic.apiKey, 'existing-secret', `${label}: a merging /import must keep providers the file does not name`);
+    assert.equal(stored.providers.webbrain_cloud.baseUrl, 'https://platform.example/v1', `${label}: a merging /import must keep the platform-managed WebBrain Compass provider`);
+    assert.deepEqual(events, ['get', 'set', 'providerManager.load'], `${label}: a merging /import must read current providers before writing`);
+
+    // /import --replace restores a full snapshot: settings missing from the
+    // file return to their defaults and providers it does not name are dropped.
+    events.length = 0;
+    const fullResponse = await handler({ action: 'import_config', json: sparseJson, replace: true }, api, helpers);
+    assert.equal(fullResponse.mode, 'replace', `${label}: --replace should report the replace mode`);
+    assert.equal(fullResponse.settingCount, configTransfer.CONFIG_STORAGE_KEYS.length, `${label}: --replace should still write every setting`);
+    assert.equal(stored.themeMode, 'system', `${label}: --replace should still restore omitted settings to defaults`);
+    assert.equal(stored.providers.anthropic, undefined, `${label}: --replace should drop providers the file does not name`);
+    assert.equal(stored.providers.webbrain_cloud.baseUrl, 'https://stale-export.example/v1', `${label}: --replace intentionally keeps its replace-everything semantics`);
+    assert.deepEqual(events, ['set', 'providerManager.load'], `${label}: --replace does not read the current providers`);
 
     // Exports carry Record traces only. Full request details follow it on a
     // restore, as they do in Settings; a provisioning patch can turn both off
     // but never turns full request details on.
     const configWith = (settings) => JSON.stringify({ schema: 'webbrain-config/1', settings });
     stored.losslessTrace = false;
-    const tracedResponse = await handler({ action: 'import_config', json: configWith({ tracingEnabled: true }) }, api, helpers);
+    const tracedResponse = await handler({ action: 'import_config', json: configWith({ tracingEnabled: true }), replace: true }, api, helpers);
     assert.equal(tracedResponse.settingCount, configTransfer.CONFIG_STORAGE_KEYS.length, `${label}: the derived trace tier is not an imported setting`);
     assert.equal(stored.tracingEnabled, true, `${label}: a restored export should restore Record traces`);
     assert.equal(stored.losslessTrace, true, `${label}: full request details should follow a restored Record traces`);
+    stored.tracingEnabled = false;
+    stored.losslessTrace = false;
+    const tracedMerge = await handler({ action: 'import_config', json: configWith({ tracingEnabled: true }) }, api, helpers);
+    assert.equal(tracedMerge.settingCount, 1, `${label}: the derived trace tier is not a merged setting`);
+    assert.equal(stored.tracingEnabled, true, `${label}: a merging /import should restore Record traces`);
+    assert.equal(stored.losslessTrace, true, `${label}: a merging /import is still the user's own restore, so full request details follow Record traces`);
     stored.tracingEnabled = false;
     stored.losslessTrace = false;
     const tracedPatch = await handler({ action: 'import_config_patch', json: configWith({ tracingEnabled: true }) }, api, helpers);
@@ -16360,14 +16385,60 @@ test('/export --config and /import JSON or --file are wired in both browsers', (
     const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
     const bg = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
     assert.match(panel, /value: '--config'[\s\S]*?action: 'config'[\s\S]*?exclusiveGroup: 'export-format'/, `${label}: /export --config metadata missing`);
-    assert.match(panel, /usage: '\/import <json> \| \/import --file'[\s\S]*?value: '--file'[\s\S]*?action: 'file'/, `${label}: /import --file metadata missing`);
+    assert.match(panel, /usage: '\/import \[--replace\] <json> \| \/import --file \[--replace\]'[\s\S]*?value: '--file'[\s\S]*?action: 'file'[\s\S]*?value: '--replace'/, `${label}: /import --file and --replace metadata missing`);
     assert.match(panel, /command\.value === '\/export' && action === 'config'[\s\S]*?sendToBackground\('export_config', \{ locale: getLocale\(\) \}\)/, `${label}: config export handler missing`);
-    assert.match(panel, /command\.value === '\/import' && action === 'json'[\s\S]*?importConfigurationJson\(payload, tabId\)/, `${label}: inline config import handler missing`);
-    assert.match(panel, /command\.value === '\/import' && action === 'file'[\s\S]*?requestConfigurationFile\(tabId\)/, `${label}: file config import handler missing`);
+    assert.match(panel, /command\.value === '\/import' && action === 'json'[\s\S]*?importConfigurationJson\(payload, tabId, \{ replace: optionValues\.has\('--replace'\) \}\)/, `${label}: inline config import handler missing`);
+    assert.match(panel, /command\.value === '\/import' && action === 'file'[\s\S]*?requestConfigurationFile\(tabId, \{ replace: optionValues\.has\('--replace'\) \}\)/, `${label}: file config import handler missing`);
+    assert.match(panel, /sendToBackground\('import_config', \{ json, replace \}\)/, `${label}: the import request should carry --replace`);
+    assert.match(bg, /const merge = provisioning \|\| msg\.replace !== true;/, `${label}: /import should merge unless it is asked to replace`);
     assert.match(panel, /input\.accept = '\.json,application\/json'[\s\S]*?file\.text\(\)/, `${label}: file picker should read JSON files`);
     assert.match(bg, /case 'export_config':[\s\S]*?createConfigExport\(stored/, `${label}: background config export missing`);
     assert.match(bg, /case 'import_config':[\s\S]*?parseConfigImport\(msg\.json\)[\s\S]*?const traceTiers = Object\.hasOwn\(settings, 'tracingEnabled'\)[\s\S]*?storage\.local\.set\(\{ \.\.\.settings, \.\.\.traceTiers \}\);[\s\S]*?providerManager\.load\(\)/, `${label}: background config import and live provider reload missing`);
     assert.match(bg, /case 'import_config_patch':[\s\S]*?parseConfigPatchImport\(msg\.json\)[\s\S]*?mergeConfigPatchSettings/, `${label}: background sparse config import and provider merge missing`);
+  }
+});
+
+test('/import merges by default and takes --replace with --file or inline JSON', async () => {
+  for (const [label, browser] of [['chrome', 'chrome'], ['firefox', 'firefox']]) {
+    const slash = loadSlashCommandRuntime(`src/${browser}/src/ui/sidepanel.js`);
+    const parse = (text) => slash.parseSlashInvocation(text);
+    const json = '{"schema":"webbrain-config/1"}';
+
+    const file = parse('/import --file');
+    assert.equal(file.action, 'file', `${label}: /import --file should open the file picker`);
+    assert.equal(file.optionValues.has('--replace'), false, `${label}: /import --file should merge unless --replace is given`);
+    const replaceFile = parse('/import --file --replace');
+    assert.equal(replaceFile.action, 'file', `${label}: --replace should not change the file action`);
+    assert.equal(replaceFile.optionValues.has('--replace'), true, `${label}: /import --file --replace should ask to replace`);
+    assert.equal(parse('/import --replace --file').action, 'file', `${label}: flag order should not matter`);
+
+    const inline = parse(`/import ${json}`);
+    assert.equal(inline.action, 'json', `${label}: inline JSON should import`);
+    assert.equal(inline.payload, json, `${label}: inline JSON should reach the handler untouched`);
+    assert.equal(inline.optionValues.has('--replace'), false, `${label}: inline JSON should merge unless --replace is given`);
+    const inlineReplace = parse(`/import --replace ${json}`);
+    assert.equal(inlineReplace.action, 'json', `${label}: --replace should not change the inline action`);
+    assert.equal(inlineReplace.payload, json, `${label}: --replace should leave the inline JSON alone`);
+    assert.equal(inlineReplace.optionValues.has('--replace'), true, `${label}: /import --replace <json> should ask to replace`);
+
+    assert.equal(parse(`/import --file ${json}`)?.error, 'invalid-usage', `${label}: --file takes no inline JSON`);
+    assert.equal(parse('/import --replace --replace')?.error, 'invalid-usage', `${label}: a repeated flag should be rejected`);
+    const importCommand = slash.findSlashCommand('/import');
+    assert.ok(slash.slashCommandOptions(importCommand).some((option) => option.value === '--replace'), `${label}: --replace should be discoverable`);
+    assert.match(slash.buildSlashCommandHelpHtml(), /<code>--replace<\/code> — sp\.slash\.import_config_replace/, `${label}: /help should describe --replace`);
+
+    const dir = path.join(ROOT, 'src', browser, 'src/ui/locales');
+    for (const localeFile of fs.readdirSync(dir).filter((name) => /^[a-z]{2}\.js$/.test(name))) {
+      const catalog = (await import(pathToFileURL(path.join(dir, localeFile)).href)).default;
+      for (const key of ['sp.slash.import_config_replace', 'sp.import_config.merged']) {
+        assert.equal(typeof catalog[key], 'string', `${label}/${localeFile} missing ${key}`);
+        assert.ok(catalog[key].trim(), `${label}/${localeFile} left ${key} empty`);
+      }
+      assert.ok(catalog['sp.import_config.merged'].includes('{count}'), `${label}/${localeFile} dropped the {count} placeholder`);
+      if (localeFile !== 'en.js') {
+        assert.notEqual(catalog['sp.import_config.merged'], 'Merged {count} Settings values. Settings not in the file are unchanged.', `${label}/${localeFile} left the merge message in English`);
+      }
+    }
   }
 });
 

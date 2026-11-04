@@ -41,8 +41,8 @@ WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `
 | `/screenshot [--full-page]` | 捕获可见标签页；使用 `--full-page` 捕获完整可滚动页面（仅 Chrome） |
 | `/record [--full-screen] [--hide-recording-indicator] [--transcribe]` | 录制当前标签页；使用 `--full-screen` 录制屏幕或窗口（仅 Chrome），`--hide-recording-indicator` 隐藏横幅，`--transcribe` 在停止后保存转录 |
 | `/export [--traces \| --config]` | 下载带版本戳的对话 Markdown；`--traces` 导出带版本戳的工具链；`--config` 导出设置快照 |
-| `/import <json>` | 导入内联粘贴的设置快照 |
-| `/import --file` | 选择并导入设置快照 JSON 文件 |
+| `/import [--replace] <json>` | 将内联粘贴的设置快照合并到当前设置：只有快照中出现的设置会改变。添加 `--replace` 则将其作为完整快照恢复 |
+| `/import --file [--replace]` | 选择设置快照 JSON 文件并以同样方式导入 |
 | `/profile` | 无需打开设置即可切换资料自动填充 |
 | `/vision` | 在当前提供商上切换视觉模式（截图理解） |
 
@@ -110,6 +110,9 @@ Firefox 会直接捕获该标签页而不激活它。如果录制或初始截图
   视觉、转录和 CapSolver API 密钥、资料数据、用户记忆、自定义技能和权限选择。
   **该 JSON 是明文的，应妥善保管。** 设备绑定的 Cloud Sync 会话/设备 ID、对话、
   追踪、计划任务、用量计数器和累计花费不会被导出。
+- **`/import` 会合并。** 只有文件中出现的设置会改变，提供商按 ID 合并，因此只包含
+  一个模型或提供商的文件不会影响其他任何设置。`/import --replace` 则恢复完整快照：
+  文件中缺少的设置恢复为默认值，文件未列出的提供商会被移除。
 - **已保存的工作流** 使用独立的 `webbrain-workflow/1` 架构；它们不是原始的追踪回放。
   历史 `ref_id` 值、动作 CSS 选择器、坐标、查询字符串、片段和输入的字段值都会被排除。
   输入值会成为运行时参数，每个动作都绑定到记录时的来源和 URL 族。运行时 WebBrain 会

@@ -44,8 +44,8 @@ for its available flags.
 | `/screenshot [--full-page]` | Capture the visible tab, or the full scrollable page with `--full-page` (Firefox requires the optional trusted-automation companion) |
 | `/record [--full-screen] [--hide-recording-indicator] [--transcribe]` | Record the current tab, or a selected screen/window with `--full-screen` (Chrome only); add `--hide-recording-indicator` to hide the banner or `--transcribe` to save a transcript after stop |
 | `/export [--traces [--full] \| --config]` | Download version-stamped conversation Markdown, export the version-stamped tool chain with `--traces`, add `--full` for the complete stored session JSON including screenshots, or export a Settings snapshot with `--config` |
-| `/import <json>` | Import a Settings snapshot pasted inline |
-| `/import --file` | Choose and import a Settings snapshot JSON file |
+| `/import [--replace] <json>` | Merge a Settings snapshot pasted inline into your current Settings: only the settings in the snapshot change. Add `--replace` to restore it as a full snapshot instead |
+| `/import --file [--replace]` | Choose a Settings snapshot JSON file and import it the same way |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 
@@ -139,6 +139,11 @@ version:
   JSON is plaintext and should be stored securely.** Device-bound Cloud Sync
   sessions/device IDs, conversations, traces, scheduled jobs, usage counters,
   and accumulated spend are not exported.
+- **`/import` merges.** Only the settings that appear in the file change, and
+  providers merge by ID, so a file that carries a single model or provider
+  leaves everything else alone. `/import --replace` restores a full snapshot
+  instead: settings missing from the file return to their defaults and
+  providers it does not name are removed.
 - **Saved workflows** use a separate `webbrain-workflow/1` schema; they are not
   raw trace replays. Historical `ref_id` values, action CSS selectors,
   coordinates, query strings, fragments, and typed field values are excluded.
