@@ -171,19 +171,99 @@ function parseArgs(args) {
 
 const spaced = value => String(value ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
 
-// The action mode a `request_action_mode` call asks for, when it is backed
-// by an exact quotation of the user's own request; null otherwise. A quote
-// shorter than six characters (or than the whole request) does not count.
-// This only proves the words are the user's: the caller must still confirm
-// the hand-off with `confirmedEscalationMode`.
-export function acceptModeEscalation(args, requestText, { tier = '' } = {}) {
+// Curly and low quotation marks, primes and guillemets, read as the straight
+// marks a model may type in their place (or the other way round).
+const QUOTE_MARKS = new Map([
+  ...['\u2018', '\u2019', '\u201A', '\u201B', '\u2032'].map(mark => [mark, "'"]),
+  ...['\u201C', '\u201D', '\u201E', '\u201F', '\u2033', '\u00AB', '\u00BB'].map(mark => [mark, '"']),
+]);
+
+// Dotted capital I (U+0130) and dotless small i (U+0131), as plain i:
+// Turkish capitalizes i as the one and lowers I to the other, which plain
+// lower-casing does not undo.
+const TURKISH_I = new Map([['\u0130', 'i'], ['\u0131', 'i']]);
+
+// `text` as a quotation is compared: NFC, quotation marks straightened,
+// lower case, whitespace runs as one space. `from[i]` and `to[i]` bound the
+// characters of `text` that folded character i came from, so a match maps
+// back to the words as the user wrote them.
+function foldQuotation(text) {
+  const source = String(text ?? '').normalize('NFC');
+  let folded = '';
+  const from = [], to = [];
+  let index = 0;
+  for (const char of source) {
+    const piece = /\s/.test(char) ? ' ' : TURKISH_I.get(char) ?? (QUOTE_MARKS.get(char) ?? char).toLowerCase();
+    if (!(piece === ' ' && folded.endsWith(' '))) {
+      for (let k = 0; k < piece.length; k++) { from.push(index); to.push(index + char.length); }
+      folded += piece;
+    }
+    index += char.length;
+  }
+  return { source, folded, from, to };
+}
+
+// The user's own words that `evidence` quotes, as they wrote them, or ''.
+// A model quoting the user often wraps the quote in quotation marks, ends
+// it with a full stop, capitalizes its first word or types curly quotes and
+// apostrophes for straight ones (or the other way round); none of that
+// changes whose words they are. Paraphrases, translations and parts joined
+// with an ellipsis still do not match.
+function quotedUserWords(evidence, requestText) {
+  const quote = foldQuotation(evidence).folded.replace(/^[\s"'`]+|[\s"'`.,;:!?\u2026]+$/g, '');
+  if (!quote) return '';
+  const request = foldQuotation(requestText);
+  const at = request.folded.indexOf(quote);
+  if (at < 0) return '';
+  return spaced(request.source.slice(request.from[at], request.to[at + quote.length - 1]));
+}
+
+// What a `request_action_mode` call asks for: { mode, evidence } when it is
+// backed by a quotation of the user's own request (`evidence` is then their
+// words as written), or { refused } with why it is not, from a closed list:
+// 'invalid_arguments', 'invalid_mode', 'missing_evidence',
+// 'evidence_not_found' or 'evidence_too_short' (a quote shorter than six
+// characters, or than the whole request). This only proves the words are the
+// user's: the caller must still confirm the hand-off with
+// `confirmedEscalationMode`.
+export function readModeEscalation(args, requestText, { tier = '' } = {}) {
   const parsed = parseArgs(args);
-  const requested = parsed?.mode;
-  if (requested !== 'act' && requested !== 'dev') return null;
-  const accepted = acceptSemanticAnswer('run_mode', { choice: requested, evidence: parsed.evidence }, requestText);
-  if (!accepted) return null;
-  if (accepted.evidence.length < Math.min(6, spaced(requestText).length)) return null;
-  return { mode: actionModeForTier(requested, tier), evidence: accepted.evidence };
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { refused: 'invalid_arguments' };
+  const requested = parsed.mode;
+  if (requested !== 'act' && requested !== 'dev') return { refused: 'invalid_mode' };
+  if (!spaced(typeof parsed.evidence === 'string' ? parsed.evidence : '')) return { refused: 'missing_evidence' };
+  const exact = acceptSemanticAnswer('run_mode', { choice: requested, evidence: parsed.evidence }, requestText);
+  const evidence = exact ? exact.evidence : quotedUserWords(parsed.evidence, requestText);
+  if (!evidence) return { refused: 'evidence_not_found' };
+  if (evidence.length < Math.min(6, spaced(requestText).length)) return { refused: 'evidence_too_short' };
+  return { mode: actionModeForTier(requested, tier), evidence };
+}
+
+// The mode and evidence of a call `readModeEscalation` accepts; null otherwise.
+export function acceptModeEscalation(args, requestText, options = {}) {
+  const read = readModeEscalation(args, requestText, options);
+  return read.refused ? null : read;
+}
+
+const ESCALATION_REFUSALS = Object.freeze({
+  invalid_arguments: 'its arguments must be a JSON object with `mode` and `evidence`.',
+  invalid_mode: '`mode` must be "act" or "dev".',
+  missing_evidence: '`evidence` is empty: it must quote the user\'s own words that ask for the action.',
+  evidence_not_found: '`evidence` must quote the user\'s own words that ask for the action (from their request or a correction they sent), exactly as written: copy one passage word for word, without paraphrasing, translating or joining separate parts.',
+  evidence_too_short: '`evidence` is too short: quote at least six characters of the user\'s words that ask for the action, or their whole request when it is shorter.',
+  not_action: 'read on its own, the user\'s request does not ask for browser actions.',
+});
+
+// The tool result for a refused `request_action_mode` call. `reason` is one
+// of `readModeEscalation`'s, or 'not_action' when the page-free `run_mode`
+// answer did not confirm the hand-off; `withdrawn` says the turn no longer
+// offers the tool, so the model answers instead of calling it again.
+export function modeEscalationRefusal(reason, { withdrawn = false } = {}) {
+  const detail = ESCALATION_REFUSALS[reason] || ESCALATION_REFUSALS.evidence_not_found;
+  const next = reason === 'not_action' ? 'Answer it read-only.'
+    : withdrawn ? 'The tool is withdrawn for this turn: answer the request read-only if you can.'
+      : 'Call it again with an exact quote, or answer the request read-only if you can.';
+  return `request_action_mode was refused: ${detail} ${next}`;
 }
 
 // The mode a hand-off may use once the page-free `run_mode` answer is known:
