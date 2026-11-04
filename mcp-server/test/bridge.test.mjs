@@ -523,3 +523,61 @@ test("awaitSettled reports a timeout without aborting the run", async (t) => {
   ext.close();
   await bridge.stop();
 });
+
+test("describeSnapshot relays WebBrain's confirmation cards with their decisions", () => {
+  const recipient = describeSnapshot({
+    runId: "r",
+    status: "needs_user_input",
+    pendingInput: {
+      promptKind: "recipientConfirmation",
+      clarifyId: "recipient_1",
+      recipientConfirmation: { recipients: [{ identity: "@someone" }], host: "x.com" },
+      question: "Send to @someone?",
+      options: ["once", "deny"],
+    },
+  });
+  assert.match(recipient, /prompt_kind: recipientConfirmation/);
+  assert.match(recipient, /allowed_answers: once, deny/);
+  assert.match(recipient, /structured_prompt: .*@someone/);
+  assert.match(recipient, /question: Send to @someone\?/);
+  assert.doesNotMatch(recipient, /unsupported by this client/);
+
+  // Older extensions omit promptKind; the payload key identifies the card.
+  const video = describeSnapshot({
+    runId: "r",
+    status: "needs_user_input",
+    pendingInput: {
+      clarifyId: "video_1",
+      videoLengthConfirmation: { estimatedSeconds: 90, maxSeconds: 60 },
+      question: "Generate a 1:00 version instead?",
+      options: ["once", "deny"],
+    },
+  });
+  assert.match(video, /prompt_kind: video_length/);
+  assert.match(video, /question: Generate a 1:00 version instead\?/);
+});
+
+test("describeSnapshot gives clarify options exactly and says when WebBrain answers itself", () => {
+  const text = describeSnapshot({
+    runId: "r",
+    status: "needs_user_input",
+    pendingInput: {
+      promptKind: "clarify",
+      clarifyId: "c",
+      question: "Which reply?",
+      options: ["Yes, post it", "No"],
+      deadlineTs: 1700000000000,
+    },
+  });
+  assert.match(text, /suggested_answers: Yes, post it, No/);
+  assert.match(text, /answer_options: \["Yes, post it","No"\]/);
+  assert.match(text, /deadline_ts: 1700000000000/);
+  assert.doesNotMatch(text, /require_explicit_answer/);
+
+  const explicit = describeSnapshot({
+    runId: "r",
+    status: "needs_user_input",
+    pendingInput: { promptKind: "clarify", clarifyId: "c", question: "Share this?", requireExplicitAnswer: true },
+  });
+  assert.match(explicit, /require_explicit_answer: true/);
+});

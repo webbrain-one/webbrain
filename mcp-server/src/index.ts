@@ -183,7 +183,7 @@ server.registerTool(
             "time range, rows and fields the result should cover.",
         ),
       output_schema: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
           "A JSON Schema object describing the exact result. Prefer an object root with " +
             "properties and required fields so the caller can rely on the returned shape.",
