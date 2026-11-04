@@ -294,6 +294,7 @@ export default {
   'sp.slash.export_config': 'Alle Einstellungen exportieren, einschließlich API-Schlüssel der Anbieter',
   'sp.slash.import_config': 'WebBrain-Konfigurations-Snapshot als JSON importieren',
   'sp.slash.import_config_file': 'WebBrain-Konfigurations-JSON-Datei auswählen',
+  'sp.slash.import_config_replace': 'Alle Einstellungen durch die Datei ersetzen, statt sie zusammenzuführen (fehlende Werte werden auf die Standardwerte zurückgesetzt)',
   'sp.workflows.run_prompt': 'Gespeicherten Workflow „{name}" ausführen',
   "sp.workflows.standalone_unavailable": "Dieses eigenständige Fenster ist nur für den Fragen-Modus vorgesehen. Öffnen Sie WebBrain in der Seitenleiste, um gespeicherte Workflows im Handeln-Modus auszuführen.",
   'sp.workflows.parameters_for': 'Parameter für „{name}" eingeben. Die Werte werden nur für diesen Durchlauf verwendet.',
@@ -585,6 +586,7 @@ export default {
   'sp.export_config.done': 'Konfiguration als Klartext-JSON exportiert. Sie enthält API-Schlüssel der Anbieter, Profildaten, Benutzermemorie und andere sensible Einstellungswerte. Verwahren Sie sie sicher.',
   'sp.export_config.error': 'Konfiguration konnte nicht exportiert werden: {error}',
   'sp.import_config.done': '{count} Einstellungswerte importiert. Anbieter-Schlüssel und Konfiguration sind aktiv.',
+  'sp.import_config.merged': '{count} Einstellungswerte zusammengeführt. Einstellungen, die nicht in der Datei stehen, bleiben unverändert.',
   'sp.import_config.error': 'Konfiguration konnte nicht importiert werden: {error}',
   // --- Tool labels ---
   'tool.read_page': 'Seite lesen',

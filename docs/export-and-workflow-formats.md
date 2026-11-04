@@ -214,9 +214,30 @@ conversations, traces, schedules, usage counters, accumulated spend, and
 device-bound WebBrain Compass or Cloud Sync identity and session data.
 
 Import with `/import <json>` or `/import --file`. Import validates known setting
-types, ignores unknown setting keys, and fills omitted known settings with the
-importing version's defaults. A provider's device-bound identity is preserved
-locally rather than replaced by a portable snapshot.
+types and ignores unknown setting keys. It merges: only the settings present in
+the file change, and `providers` merge by provider ID, so a provider in the file
+replaces the local entry with the same ID while local providers the file does
+not name stay. The WebBrain Compass providers (`webbrain_cloud`,
+`webbrain_cloud_max`) are managed by the platform, so a merge never takes them
+from a file. A sparse file is therefore safe to import:
+
+```json
+{
+  "schema": "webbrain-config/1",
+  "settings": {
+    "activeProvider": "openai",
+    "providers": { "openai": { "type": "openai", "apiKey": "sk-...", "configured": true } }
+  }
+}
+```
+
+adds that provider and makes it active without touching anything else.
+
+Add `--replace` (`/import --replace <json>` or `/import --file --replace`) to
+restore a full snapshot instead: known settings missing from the file return to
+the importing version's defaults, and providers the file does not name are
+removed. A provider's device-bound identity is preserved locally rather than
+replaced by a portable snapshot.
 
 ## Portable workflows: `webbrain-workflow/1`
 

@@ -4631,12 +4631,20 @@ async function handleMessage(msg, sender) {
     // The cloud launcher calls import_config_patch directly from a privileged
     // extension page. It must not be exposed through the offscreen WebSocket
     // bridge, whose allowlist is limited to managed run operations.
+    //
+    // import_config is the user's /import. Like the launcher's patch it merges:
+    // only the settings in the file change and providers merge by id, so a file
+    // that carries one model cannot wipe the rest. msg.replace (/import
+    // --replace) restores a full snapshot instead: settings missing from the
+    // file return to their defaults and providers missing from it are dropped.
     case 'import_config':
     case 'import_config_patch': {
-      const imported = msg.action === 'import_config_patch'
+      const provisioning = msg.action === 'import_config_patch';
+      const merge = provisioning || msg.replace !== true;
+      const imported = merge
         ? parseConfigPatchImport(msg.json)
         : parseConfigImport(msg.json);
-      const settings = msg.action === 'import_config_patch'
+      const settings = merge
         ? mergeConfigPatchSettings(
           await chrome.storage.local.get(['providers']),
           imported.settings,
@@ -4646,7 +4654,7 @@ async function handleMessage(msg, sender) {
       // details along with it, as the Settings switch does. A provisioning
       // patch can turn both off, but never turns full request details on.
       const traceTiers = Object.hasOwn(settings, 'tracingEnabled')
-        && (msg.action === 'import_config' || settings.tracingEnabled !== true)
+        && (!provisioning || settings.tracingEnabled !== true)
         ? { losslessTrace: settings.tracingEnabled === true }
         : {};
       await chrome.storage.local.set({ ...settings, ...traceTiers });
@@ -4674,6 +4682,7 @@ async function handleMessage(msg, sender) {
       agent._refreshSystemPrompts();
       return {
         ok: true,
+        mode: merge ? 'merge' : 'replace',
         settingCount: Object.keys(settings).length,
         ignoredKeys: imported.ignoredKeys,
       };

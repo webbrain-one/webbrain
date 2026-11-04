@@ -43,8 +43,8 @@ d'une espace ouvre l'autocomplétion de ses options disponibles.
 | `/screenshot [--full-page]` | Capture l'onglet visible, ou la page entière défilable avec `--full-page` (Chrome uniquement) |
 | `/record [--full-screen] [--hide-recording-indicator] [--transcribe]` | Enregistre l'onglet actuel, ou un écran/une fenêtre avec `--full-screen` (Chrome uniquement) ; `--hide-recording-indicator` masque la bannière et `--transcribe` enregistre une transcription |
 | `/export [--traces \| --config]` | Télécharge la conversation en Markdown horodatée par version, la chaîne d'outils avec `--traces`, ou un instantané des Paramètres avec `--config` |
-| `/import <json>` | Importer un instantané de Paramètres collé en ligne |
-| `/import --file` | Choisir et importer un fichier JSON d'instantané de Paramètres |
+| `/import [--replace] <json>` | Fusionne dans les Paramètres actuels un instantané collé en ligne : seuls les paramètres présents dans l'instantané changent. `--replace` le restaure plutôt comme instantané complet |
+| `/import --file [--replace]` | Choisir un fichier JSON d'instantané de Paramètres et l'importer de la même manière |
 | `/profile` | Bascule le remplissage automatique du profil sans ouvrir les Paramètres |
 | `/vision` | Bascule le mode vision (compréhension de captures d'écran) sur le fournisseur actif |
 
@@ -140,6 +140,12 @@ décrits dans [export and workflow formats](../export-and-workflow-formats.md)
   sécurisée.** Les sessions/IDs d'appareil Cloud Sync liés à l'appareil, les
   conversations, les traces, les tâches planifiées, les compteurs d'usage et les
   dépenses cumulées ne sont pas exportés.
+- **`/import` fusionne.** Seuls les paramètres présents dans le fichier
+  changent et les fournisseurs sont fusionnés par ID : un fichier qui ne contient
+  qu'un modèle ou qu'un fournisseur laisse tout le reste intact.
+  `/import --replace` restaure à la place un instantané complet : les paramètres
+  absents du fichier reviennent à leurs valeurs par défaut et les fournisseurs
+  qu'il ne nomme pas sont supprimés.
 - **Les workflows enregistrés** utilisent un schéma distinct
   `webbrain-workflow/1` ; ce ne sont pas des rejeux bruts de traces. Les valeurs
   `ref_id` historiques, les sélecteurs CSS d'action, les coordonnées, les chaînes
