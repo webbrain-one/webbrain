@@ -3,7 +3,6 @@
 </p>
 
 <h1 align="center">WebBrain</h1>
-
 <p align="center">
   Open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with your choice of LLM.
 </p>
