@@ -145,7 +145,29 @@ export async function awaitSettled(
 
 type PendingInput = NonNullable<CloudSnapshot["pendingInput"]>;
 
-const STRUCTURED_PROMPT_KINDS = ["permission", "submitConfirmation", "workflowHealing"] as const;
+const STRUCTURED_PROMPT_KINDS = [
+  "permission",
+  "submitConfirmation",
+  "workflowHealing",
+  // WebBrain's own confirmation cards: who receives a message, a deletion,
+  // an unverified step, a shorter video, reading a downloaded file. Each takes
+  // the stable decisions in `options` ('once', optionally 'always', 'deny').
+  "recipientConfirmation",
+  "mutationConfirmation",
+  "unverifiedStepConfirmation",
+  "video_length",
+  "download_read",
+] as const;
+
+/** The payload key carrying a kind's details, where it differs from the kind. */
+const PROMPT_DETAILS_KEYS: Record<string, string> = {
+  video_length: "videoLengthConfirmation",
+  download_read: "downloadReadConfirmation",
+};
+
+function promptDetails(kind: string, pending: PendingInput): unknown {
+  return pending[PROMPT_DETAILS_KEYS[kind] || kind];
+}
 
 /**
  * An extension older than the `promptKind` protocol sends no discriminator at
@@ -160,7 +182,7 @@ function resolvePromptKind(pending: PendingInput): string {
   const declared = typeof pending.promptKind === "string" ? pending.promptKind.trim() : "";
   if (declared) return declared;
   for (const kind of STRUCTURED_PROMPT_KINDS) {
-    const details = pending[kind];
+    const details = promptDetails(kind, pending);
     if (details && typeof details === "object") return kind;
   }
   return "clarify";
@@ -208,10 +230,15 @@ export function describeSnapshot(snapshot: CloudSnapshot, timedOut = false): str
     switch (promptKind) {
       case "permission":
       case "submitConfirmation":
-      case "workflowHealing": {
+      case "workflowHealing":
+      case "recipientConfirmation":
+      case "mutationConfirmation":
+      case "unverifiedStepConfirmation":
+      case "video_length":
+      case "download_read": {
         const options = allowedAnswers(promptKind, pending);
         if (options.length) lines.push(`allowed_answers: ${options.join(", ")}`);
-        const details = pending[promptKind];
+        const details = promptDetails(promptKind, pending);
         if (details && typeof details === "object") {
           lines.push(`structured_prompt: ${JSON.stringify(details)}`);
         }
@@ -219,7 +246,12 @@ export function describeSnapshot(snapshot: CloudSnapshot, timedOut = false): str
       }
       case "clarify": {
         const options = allowedAnswers(promptKind, pending);
-        if (options.length) lines.push(`suggested_answers: ${options.join(", ")}`);
+        if (options.length) {
+          lines.push(`suggested_answers: ${options.join(", ")}`);
+          // The joined line is for reading; an option may itself contain a
+          // comma, so clients that offer choices read this exact list.
+          lines.push(`answer_options: ${JSON.stringify(options)}`);
+        }
         break;
       }
       default:
@@ -233,6 +265,13 @@ export function describeSnapshot(snapshot: CloudSnapshot, timedOut = false): str
         );
     }
     if (supported) {
+      // When WebBrain answers the question itself if nobody does, and whether
+      // it deliberately waits for an explicit answer instead.
+      const deadline = Number(pending.deadlineTs ?? pending.deadline_ts);
+      if (Number.isFinite(deadline) && deadline > 0) lines.push(`deadline_ts: ${deadline}`);
+      if (pending.requireExplicitAnswer === true || pending.require_explicit_answer === true) {
+        lines.push("require_explicit_answer: true");
+      }
       lines.push(`question: ${question}`);
       lines.push(
         "Relay this to the user and send their answer with webbrain_respond. " +

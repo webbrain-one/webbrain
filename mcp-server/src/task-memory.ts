@@ -11,8 +11,8 @@ export const taskMemorySchema = z.object({
   policyVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   callbackUrl: z.string().max(4096),
   callbackToken: z.string().min(32).max(2048),
-  policy: z.object({ schemaVersion: z.literal(1), actions: z.array(z.record(z.unknown())).min(1).max(20) }).passthrough(),
-  context: z.record(z.unknown()),
+  policy: z.object({ schemaVersion: z.literal(1), actions: z.array(z.record(z.string(), z.unknown())).min(1).max(20) }).passthrough(),
+  context: z.record(z.string(), z.unknown()),
 }).strict().superRefine((value, ctx) => {
   try {
     const url = new URL(value.callbackUrl);
