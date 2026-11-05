@@ -26133,6 +26133,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         return { proceed: true, readScope: 'complete_thread', classificationFailed: true };
       }
+      if (error?.modelUnavailableMessage) {
+        return { proceed: false, message: `${error.modelUnavailableMessage} No page tools ran.`, reason: 'read_scope_error' };
+      }
       const detail = formatErrorMessage(error, { fallback: 'Unknown read-scope classifier error.' });
       return {
         proceed: false,
@@ -49130,6 +49133,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
       }
 
+      // A whole-conversation answer can still be rejected for unread pages.
+      // Keep those draft tokens out of the bubble until the terminal checks pass.
+      const deferReadScopeText = mode === 'ask' && !!this._readCompletenessBlock(requestContext?.tabId);
       let firstDeltaMs = null;
       let textDeltaCount = 0;
       let textChars = 0;
@@ -49145,6 +49151,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         firstDeltaMs,
         textDeltaCount,
         textChars,
+        textDeferred: deferReadScopeText,
       });
       try {
         const result = await this._chatStreamWithCostAllowance(
@@ -49158,7 +49165,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             if (firstDeltaMs == null) firstDeltaMs = Date.now() - streamStartedAt;
             textDeltaCount += 1;
             textChars += delta.length;
-            onUpdate('text_delta', { content: delta });
+            if (!deferReadScopeText) onUpdate('text_delta', { content: delta });
           },
         );
         recordAskStreaming({
@@ -50888,6 +50895,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           };
         }
         this._throwIfAborted(streamOpts.signal);
+        const deferReadScopeText = mode === 'ask' && !!this._readCompletenessBlock(tabId);
         let streamAttempt = 0;
         const modelStream = fastResult ? this._jevToolStream(fastResult) : retryModelStream(async () => {
           streamAttempt++;
@@ -50921,7 +50929,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (chunk.type === 'text') {
             streamEmittedOutput = true;
             fullText += chunk.content;
-            onUpdate('text_delta', { content: chunk.content });
+            if (!deferReadScopeText) onUpdate('text_delta', { content: chunk.content });
           } else if (chunk.type === 'reasoning') {
             reasoningContent += String(chunk.content || '');
           } else if (chunk.type === 'usage') {
@@ -51410,7 +51418,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('text', { content: fullText, replace: true });
         }
         if (costStopMessage) {
-          onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
+          if (!deferReadScopeText) onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
           fullText = `${fullText}\n\n${costStopMessage}`;
         }
         this._notePrematureCalculationFinal(tabId);
@@ -51419,6 +51427,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           fullText = caveatedFullText;
           onUpdate('text', { content: fullText, replace: true });
         }
+        if (deferReadScopeText) onUpdate('text', { content: fullText, replace: true });
         messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
         this._persist(tabId);
         closeTraceStep({ ok: true });

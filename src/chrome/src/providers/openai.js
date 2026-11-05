@@ -444,8 +444,9 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
   _httpError(status, body, prefix, retryAfter = null) {
     const error = this._httpStatusError(`${prefix}: ${this._formatHttpError(status, body)}`, status, retryAfter);
+    let parsed;
     try {
-      const parsed = JSON.parse(body || '{}');
+      parsed = JSON.parse(body || '{}');
       const providerCode = parsed?.error?.code;
       if (status === 402 && (this.config.providerName || '').toLowerCase() === 'webbrain-cloud') {
         error.quota = { code: providerCode, usage: parsed.usage || {},
@@ -454,6 +455,28 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       }
       if (typeof providerCode === 'string' && providerCode) error.code = providerCode;
     } catch { /* keep the formatted HTTP error without provider metadata */ }
+    // Error-body reads are bounded and can cut off the outer JSON. Recognize
+    // Companion's exact error prefix too, without rendering any raw payload.
+    const companionCooldown = status === 429
+      && (this.config.providerName || '').toLowerCase() === 'webbrain-companion'
+      && (error.code === 'model_cooldown'
+        || /^\s*\{\s*"error"\s*:\s*\{\s*"code"\s*:\s*"model_cooldown"\s*[,}]/.test(body || ''));
+    if (companionCooldown) {
+      error.code = 'model_cooldown';
+      let upstream;
+      try { upstream = JSON.parse(parsed?.error?.last_upstream_error || '{}'); } catch {}
+      // The nested upstream JSON may itself be escaped or truncated. Extract
+      // only known quota/reset facts, never its raw credential/provider data.
+      const detail = upstream?.error?.message || parsed?.error?.last_upstream_error || body;
+      const reset = typeof detail === 'string'
+        ? detail.match(/\bResets in ((?:\d{1,6}h)?(?:\d{1,6}m)?(?:\d{1,6}s)?)\./i)?.[1] : null;
+      const exhausted = typeof detail === 'string' && /\bIndividual quota reached\b/i.test(detail);
+      const wait = reset ? ` The provider reports a reset in ${reset}.` : '';
+      error.modelUnavailableMessage = exhausted
+        ? `WebBrain Companion's selected model has reached its provider quota.${wait} Switch to another model with available quota, or wait for the quota to reset.`
+        : 'WebBrain Companion has no available credentials for the selected model. Switch to another model, or wait for the provider cooldown to end.';
+      error.message = error.modelUnavailableMessage;
+    }
     return error;
   }
 
