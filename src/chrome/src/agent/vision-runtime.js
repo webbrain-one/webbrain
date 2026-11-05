@@ -58,10 +58,14 @@ const SETTLE_MAX_EXTRA_CAPTURES = 3;
 // into a new frame instead (vision-diff.js planFrameUpdate).
 const RETAINED_IMAGE_CHARS_BUDGET = 8_000_000;
 // An upload handoff (_visionNoteUploadHandoff) lasts this many model
-// decisions without a successful upload_file, and a run hands off at most
-// this many times: a page whose upload never succeeds goes back to vision
-// and then reports the chooser instead of handing off again.
+// decisions without a successful upload_file.
 const UPLOAD_HANDOFF_DECISIONS = 5;
+// A run stops handing off once this many handoffs have ended without an
+// upload (expired, or the page was left): a page whose upload never succeeds
+// goes back to vision and then reports the chooser instead of handing off
+// again. A handoff that attached its file does not count, because each file
+// takes its own handoff: a release with three assets needs three.
+const UNSUCCESSFUL_UPLOAD_HANDOFFS_PER_RUN = 2;
 // Screenshot redaction scans the page from a content script that starts when
 // the document is idle: a capture right after a navigation often finds no
 // scan yet. While the tab loads, WebBrain waits this long for one, then
@@ -84,7 +88,6 @@ const REDACTION_SCAN_POLL_MS = 250;
 // captured although redaction is on. Redaction is best-effort: the image is
 // still sent, and the user and the trace are told (_visionReportUnredacted).
 const UNREDACTED_OUTCOMES = new Set(['decode_failed', 'scan_unavailable', 'pixelate_failed', 'error']);
-const UPLOAD_HANDOFFS_PER_RUN = 2;
 // A change this small between two captures (a blinking caret, a ticking
 // clock, a spinner: a few 16 px cells) is not the page still reacting to an
 // action, and right after the model looked it is not worth a new image.
@@ -318,8 +321,11 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       quality: normalizeVisionQuality(this.visionQuality),
       // A file upload handed to the element tools (_visionNoteUploadHandoff):
       // per run, so an enclosing run gets its own back with its snapshot.
+      // `uploadHandoffs` counts every handoff (for the trace);
+      // `unsuccessfulUploadHandoffs` only those that ended without an upload.
       uploadHandoff: null,
       uploadHandoffs: 0,
+      unsuccessfulUploadHandoffs: 0,
       // Whether the step being run was planned with the tree tools
       // (_visionNoteStepTools).
       treeStep: false,
@@ -357,24 +363,34 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * model tool call from the batch pipeline with the final result, which it
    * returns as the model should read it. Changes take effect at the next step
    * (_visionUploadHandoffTick): the rest of this batch, and its screen update,
-   * run in the mode they were planned in.
+   * run in the mode they were planned in. Every file gets its own handoff;
+   * only handoffs that ended without an upload count toward
+   * UNSUCCESSFUL_UPLOAD_HANDOFFS_PER_RUN.
    */
   proto._visionNoteUploadHandoff = function _visionNoteUploadHandoff(tabId, name, result, { vision = null, promptTier = '' } = {}) {
     const snapshot = this._visionRunSnapshots?.get(tabId);
     if (vision?.tool === 'click_at' && result?.filePickerBlocked === true) {
+      const compact = promptTier === 'compact';
       // Only Chrome's protocol guard saw the chooser: its input is in a frame
       // or a closed shadow root, which upload_file cannot reach either. A
       // build whose upload_file has no file to use says so (agent
       // _visionUploadSourceAvailable).
-      const reason = result.protocolOnly === true ? 'unreachable'
+      let reason = result.protocolOnly === true ? 'unreachable'
         : this._visionUploadSourceAvailable?.(tabId, promptTier) === false ? 'no_source' : '';
-      const handoff = !!snapshot && !reason && !snapshot.uploadHandoff && snapshot.uploadHandoffs < UPLOAD_HANDOFFS_PER_RUN;
-      if (handoff) {
-        snapshot.uploadHandoffs += 1;
-        snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '' };
-        this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'armed', count: snapshot.uploadHandoffs });
+      if (!snapshot) return visionFilePickerBlockedResult(result, { compact, reason });
+      // Another chooser in the batch that armed a handoff: that handoff gives
+      // the next steps upload_file for this input too, so the model is told
+      // so, not that uploads are unavailable.
+      if (!reason && snapshot.uploadHandoff) return visionFilePickerBlockedResult(result, { handoff: true, compact });
+      if (!reason && snapshot.unsuccessfulUploadHandoffs >= UNSUCCESSFUL_UPLOAD_HANDOFFS_PER_RUN) reason = 'exhausted';
+      if (reason) {
+        this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'refused', reason });
+        return visionFilePickerBlockedResult(result, { compact, reason });
       }
-      return visionFilePickerBlockedResult(result, { handoff, compact: promptTier === 'compact', reason });
+      snapshot.uploadHandoffs += 1;
+      snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '' };
+      this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'armed', count: snapshot.uploadHandoffs });
+      return visionFilePickerBlockedResult(result, { handoff: true, compact });
     }
     const handoff = snapshot?.uploadHandoff;
     if (handoff?.active && name === 'upload_file' && uploadAttached(result)) handoff.done = true;
@@ -386,8 +402,9 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * an armed handoff starts on the page the tab shows now (the click that
    * armed it may itself have changed the address), and an active one ends
    * after its upload, when that page is left, or after
-   * UPLOAD_HANDOFF_DECISIONS decisions without an upload. `step` is the
-   * loop's count of model calls, which grows only when the model decides.
+   * UPLOAD_HANDOFF_DECISIONS decisions without an upload; the last two count
+   * as unsuccessful. `step` is the loop's count of model calls, which grows
+   * only when the model decides.
    */
   proto._visionUploadHandoffTick = async function _visionUploadHandoffTick(tabId, step) {
     const snapshot = this._visionRunSnapshots?.get(tabId);
@@ -407,6 +424,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (!end && step - handoff.since >= UPLOAD_HANDOFF_DECISIONS) end = 'expired';
     if (end) {
       snapshot.uploadHandoff = null;
+      if (end !== 'uploaded') snapshot.unsuccessfulUploadHandoffs += 1;
       this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'ended', reason: end });
     }
   };

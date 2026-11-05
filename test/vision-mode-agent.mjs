@@ -1226,24 +1226,53 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
     assert.deepEqual(offered, ['vision', 'tree', 'vision']);
   });
 
-  test(`${build}: a run hands off twice at most, then reports the chooser in vision terms`, async () => {
+  // A release with three assets: each file takes its own handoff, and the
+  // handoffs that attached their file do not use up the run's allowance.
+  test(`${build}: every file gets its own handoff, so a run attaches three files`, async () => {
     let tab;
     const offered = [];
     const ctx = runAgent((step, _messages, options) => {
       const vision = names(options.tools).includes('click_at');
       offered.push(vision ? 'vision' : 'tree');
-      if (step <= 5) return { toolCalls: [vision ? call('click_at', { x: 300, y: 200 + step }) : call('upload_file', { selector: '#upload', attachmentId: 'attachment_t_1' })] };
-      if (step === 6) return { toolCalls: [call('done', { summary: 'Stopped.', outcome: 'partial' })] };
+      if (step <= 6) return { toolCalls: [vision ? call('click_at', { x: 300, y: 200 + step }) : call('upload_file', { selector: '#upload', attachmentId: 'attachment_t_1' })] };
+      if (step === 7) return { toolCalls: [call('done', { summary: 'Attached three files.', outcome: 'success' })] };
+      return { content: 'done' };
+    }, { maxSteps: 12 });
+    ctx.upload = attached;
+    const restore = blockChooser(ctx);
+    tab = nextTab++;
+    try { await runLoop(ctx.agent, tab, false); } finally { restore(); }
+    assert.deepEqual(offered, ['vision', 'tree', 'vision', 'tree', 'vision', 'tree', 'vision']);
+    assert.equal(ctx.dispatched.filter(entry => entry.name === 'upload_file').length, 3);
+    const third = toolTexts(ctx.requests[5]).filter(text => /filePickerBlocked/.test(text)).at(-1);
+    assert.match(third, /"uploadHandoff":true/, third);
+    assert.doesNotMatch(third, /not available in vision mode|upload attempts/);
+  });
+
+  test(`${build}: two handoffs that attach nothing end the handoffs, and the next chooser says why`, async () => {
+    let tab;
+    const offered = [];
+    const ctx = runAgent((step, _messages, options) => {
+      const vision = names(options.tools).includes('click_at');
+      offered.push(vision ? 'vision' : 'tree');
+      if (vision && step <= 5) return { toolCalls: [call('click_at', { x: 300, y: 200 + step })] };
+      if (!vision && step <= 4) {
+        // Each handoff ends without an upload: the tab leaves its page.
+        ctx.scene.url = `${PAGE}?left=${step}`;
+        return { toolCalls: [call('find_text', { text: 'Upload' })] };
+      }
+      if (step === 6) return { toolCalls: [call('done', { summary: 'Could not attach.', outcome: 'partial' })] };
       return { content: 'done' };
     }, { maxSteps: 10 });
     ctx.upload = attached;
     const restore = blockChooser(ctx);
     tab = nextTab++;
-    try { await runLoop(ctx.agent, tab, false); } finally { restore(); }
+    try { await runLoop(ctx.agent, tab, false); } finally { restore(); ctx.scene.url = PAGE; }
     assert.deepEqual(offered, ['vision', 'tree', 'vision', 'tree', 'vision', 'vision']);
-    const third = toolTexts(ctx.requests[5]).filter(text => /filePickerBlocked/.test(text)).at(-1);
-    assert.match(third, /not available in vision mode/, third);
-    assert.doesNotMatch(third, /uploadHandoff/);
+    const refused = toolTexts(ctx.requests[5]).filter(text => /filePickerBlocked/.test(text)).at(-1);
+    assert.match(refused, /two earlier upload attempts in this run ended without a file attached/, refused);
+    assert.doesNotMatch(refused, /not available in vision mode/);
+    assert.doesNotMatch(refused, /uploadHandoff/);
   });
 
   if (build === 'firefox') {
