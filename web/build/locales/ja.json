@@ -51,6 +51,7 @@
   "home.websites.badge": "無料",
   "home.websites.desc": "script タグを 1 行追加するだけで、すべての訪問者に AI ガイドを。ページの説明、質問への回答、許可した場合はフォーム入力まで行います。",
   "home.websites.cta": "ウェブサイトに WebBrain を追加",
+  "home.websites.hero_cta": "ウェブサイトに追加",
   "home.websites.demo": "デモ",
   "home.websites.info": "詳細",
   "home.websites.demo_error": "デモを読み込めませんでした。少し待ってからもう一度お試しください。",

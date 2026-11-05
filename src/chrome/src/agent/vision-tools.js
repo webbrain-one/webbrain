@@ -405,7 +405,9 @@ export function visionSiteNotesPreface(notes = '') {
  * compact tier, whose upload_file finds its own target. The input's selector
  * stays in `selector`, never in the guidance: it is page data. Without a
  * handoff, `reason` says why: 'unreachable' (an input upload_file cannot
- * reach) or 'no_source' (no file this run's upload_file could attach).
+ * reach), 'no_source' (no file this run's upload_file could attach) or
+ * 'exhausted' (the run's handoffs that ended without an upload are used up;
+ * uploads did work in vision mode, so the generic text would mislead).
  */
 export function visionFilePickerBlockedResult(result, { handoff = false, compact = false, reason = '' } = {}) {
   if (result?.filePickerBlocked !== true) return result;
@@ -414,7 +416,9 @@ export function visionFilePickerBlockedResult(result, { handoff = false, compact
       ? 'this file input is inside a frame or a closed shadow root that upload_file cannot reach. Do not click this control again; finish the rest of the task and tell the user this file has to be attached by hand.'
       : reason === 'no_source'
         ? 'there is no file to attach in this run (upload_file attaches only a file attached to the user\'s message). Do not click this control again; finish the rest of the task and ask the user to attach the file to their message.'
-        : 'file uploads are not available in vision mode. Do not click this control again; finish the rest of the task and tell the user the upload needs Vision mode off (Settings → Advanced).';
+        : reason === 'exhausted'
+          ? 'two earlier upload attempts in this run ended without a file attached, so upload_file is not offered again. Do not click this control again; finish the rest of the task and tell the user which file is still missing: they can attach it by hand, or run the task with Vision mode off (Settings → Advanced).'
+          : 'file uploads are not available in vision mode. Do not click this control again; finish the rest of the task and tell the user the upload needs Vision mode off (Settings → Advanced).';
     return {
       ...result,
       success: false,
@@ -430,7 +434,7 @@ export function visionFilePickerBlockedResult(result, { handoff = false, compact
     ...result,
     success: false,
     uploadHandoff: true,
-    error: `Blocked a native file chooser: it opens outside the page, where screenshots cannot show or operate it. The next steps use the element tools instead of screenshots so the file can be attached: ${target} Do not click this control again. Screenshots and the coordinate tools come back after the upload.`,
+    error: `Blocked a native file chooser: it opens outside the page, where screenshots cannot show or operate it. The next steps use the element tools instead of screenshots so the file can be attached: ${target} Do not click this control again during these steps. Screenshots and the coordinate tools come back after the upload; to attach another file, click the upload control again then.`,
   };
 }
 

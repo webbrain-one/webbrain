@@ -176,10 +176,10 @@ const VISION_NOTES = new Set([
 ]);
 const VISION_NOTE_ENUMS = {
   kind: ['keyframe', 'patch', 'none', 'zoom'],
-  stage: ['start', 'observe', 'encode', 'resume', 'armed', 'ended'],
+  stage: ['start', 'observe', 'encode', 'resume', 'armed', 'ended', 'refused'],
   reason: ['start of turn', 'requested', 'page changed', 'layout changed', 'first frame', 'vision resumed',
     'forced', 'not comparable', 'no visible change', 'patch chain limit', 'large change', 'patch cost', 'local change',
-    'page_changed', 'scrolled', 'uploaded', 'navigated', 'expired'],
+    'page_changed', 'scrolled', 'uploaded', 'navigated', 'expired', 'unreachable', 'no_source', 'exhausted'],
   code: ['decode_failed', 'scan_unavailable', 'pixelate_failed', 'error', 'transient'],
   context: ['keyframe', 'patch', 'zoom'],
   tool: ['take_screenshot', 'zoom', 'scroll_at', 'hover_at', 'drag_at', 'wait', 'click_at'],

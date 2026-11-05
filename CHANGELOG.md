@@ -6,6 +6,9 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Fixed
+- Vision mode can attach more than two files in one task. Each file goes through its own upload hand-off, and a run used to stop after two hand-offs even when both uploads worked: the third file, such as the last zip of a three-asset GitHub release, was refused with "file uploads are not available in vision mode", and the agent asked you to turn Vision mode off. Now only hand-offs that end without attaching a file count toward the limit of two. When that limit is reached, the agent says the earlier attempts attached nothing instead of blaming vision mode. Chrome and Firefox.
+
 ## [46.1.0] - 2026-11-05
 
 ### Added
