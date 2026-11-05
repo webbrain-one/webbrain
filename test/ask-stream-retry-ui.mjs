@@ -36,6 +36,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         _interactiveAskStreamingProtocol: () => 'responses',
         _interactiveAskStreamingFailure: () => ({ errorCode: code }),
         _isCostAllowanceError: () => false,
+        _readCompletenessBlock: () => null,
         _shouldFallbackAskStream: value => value.isAskStreamFallbackSafe === true,
         async _chatStreamWithCostAllowance(_provider, passedMessages, passedOptions, _cost, passedContext, delta) {
           calls.push({ kind: 'stream', messages: passedMessages, options: passedOptions, context: passedContext });
