@@ -363,6 +363,38 @@ h1 { margin: 12px 0 16px; font-size: clamp(38px, 6vw, 64px); line-height: 1.02; 
 .doc-page h1 { font-size: clamp(36px, 5vw, 54px); }
 .lede { max-width: 680px; margin: 0; color: var(--muted); font-size: 18px; line-height: 1.65; }
 .meta { margin-top: 18px; color: var(--faint); font-size: 12px; }
+.mcp-quickstart {
+  margin-top: 28px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.mcp-quickstart-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.mcp-quickstart-step { min-width: 0; padding: 24px; }
+.mcp-quickstart-step + .mcp-quickstart-step { border-left: 1px solid var(--line); }
+.mcp-quickstart-step h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 21px; line-height: 1.25; }
+.mcp-quickstart-number { display: inline-grid; place-items: center; flex: 0 0 30px; height: 30px; border-radius: 50%; background: color-mix(in srgb, var(--brand) 85%, #000); color: #fff; font-size: 17px; }
+.mcp-quickstart-step p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
+.mcp-quickstart-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--canvas); }
+.mcp-quickstart-prompt code { flex: 1 1 100%; padding: 0; border: 0; background: transparent; overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; }
+.mcp-quickstart-copy { margin-left: auto; padding: 9px 16px; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--brand) 85%, #000); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.mcp-quickstart-copy:hover { background: color-mix(in srgb, var(--brand) 75%, #000); }
+.mcp-quickstart-copy:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.mcp-quickstart-status { display: block; color: var(--muted); font-size: 13px; }
+.mcp-quickstart-status:not(:empty) { margin-top: 10px; }
+.mcp-quickstart-example { margin: 0; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel-3); color: var(--ink); font-size: 16px; line-height: 1.6; }
+.mcp-quickstart-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 18px 24px; border-top: 1px solid var(--line); background: var(--panel-2); }
+.mcp-quickstart-footer a { flex-shrink: 0; font-size: 14px; font-weight: 700; }
+.mcp-quickstart-footer p { flex: 1 1 300px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 1080px) {
+  .mcp-quickstart-steps { grid-template-columns: 1fr; }
+  .mcp-quickstart-step + .mcp-quickstart-step { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 560px) {
+  .mcp-quickstart-step { padding: 20px; }
+  .mcp-quickstart-footer { padding: 18px 20px; }
+}
 .walkthrough-card {
   margin-top: 30px;
   overflow: hidden;
