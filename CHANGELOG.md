@@ -6,9 +6,20 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [46.1.0] - 2026-11-05
+
+### Added
+- A Japanese README is now available with localized UI labels.
+
 ### Changed
 - `@webbrain/mcp-server` is versioned 0.1.2 so it can be published. The npm registry still has 0.1.0, which predates the bridge pairing key, the bot-memory transport and the relay of WebBrain's own confirmation cards (an unverified step, who receives a message, a deletion, a shorter video, reading a downloaded file). Apps that bundle that older bridge showed those cards as "this version of the WebBrain bridge does not pass the details through", with only Deny, and declined them after a minute. 0.1.2 prints each card's question and choices. 0.1.1 was only ever a tarball vendored by webbrain.me, so the version skips it.
 - `/import` now merges a Settings snapshot into your current Settings instead of replacing them. Only the settings in the file change and providers merge by ID, so a file that carries a single model or provider no longer resets everything else (other providers and API keys, profile, memory, custom skills, permissions) to defaults. `/import --replace`, with inline JSON or `--file`, restores a full snapshot as before: settings missing from the file return to their defaults and providers it does not name are removed. A merge never takes the platform-managed WebBrain Compass providers from a file. `/help` and the slash autocomplete list the new flag, and its description and the "Merged N Settings values" confirmation are localized in 23 languages. Both builds.
+- Compass can select its decision model on the server without the extension rejecting the returned model name. Chrome and Firefox.
+
+### Fixed
+- Automatic mode accepts a quote of your request for an Ask-to-Act or Dev hand-off even when the model changes its capitalization, quotation marks, whitespace or trailing punctuation. A refused hand-off now tells the model why it was refused and when it cannot retry; paraphrases and words not in your request still do not qualify. Chrome and Firefox.
+- WebBrain Companion now explains when the selected model has exhausted its provider quota or has no available credentials, including the reset time when available. Ask answers that require a complete conversation read are held until the completeness checks pass, so a draft answer no longer appears and disappears while unread pages are checked. Chrome and Firefox.
+- MCP clients receive the question and choices for recipient, deletion, unverified-step, video-length and downloaded-file confirmations, along with question deadlines where applicable. Clarification options are encoded as a JSON list so commas in an option are preserved.
 
 ## [46.0.0] - 2026-11-03
 
