@@ -66,6 +66,28 @@ for (const build of ['chrome', 'firefox']) {
     await judge.evaluate({ config: { ...config, model: 'another/publisher' }, state: dense.cjk, questions: one });
     assert.equal(requests.length, 3, 'other models keep the full state');
   });
+  test(`${build}: Compass accepts the server-selected model while other providers enforce their selection`, async () => {
+    let responseModel = 'liquid/d1.1-20261027';
+    let responseAnswers = answers();
+    const judge = mod.createSystemOneJudge({ fetchImpl: async () => ({ ok: true, json: async () => ({
+      model: responseModel, answers: responseAnswers, usage: { input_tokens: 10, output_tokens: 0 },
+    }) }) });
+    const config = { provider: 'compass', model: 'cloudflare/clef-flash', url: 'https://example.test/v1/decisions' };
+    let usage;
+    const result = await judge.evaluate({ config, state: {}, questions, onUsage: value => { usage = value; } });
+    assert.equal(result.model, responseModel);
+    assert.equal(usage.model, responseModel);
+    assert.deepEqual(result.answers, answers());
+    await assert.rejects(judge.evaluate({ config: { ...config, provider: 'openrouter', apiKey: 'test' }, state: {}, questions }),
+      error => error.code === 'JEV_UNEXPECTED_MODEL');
+    responseModel = 'cloudflare/clef-flash-20261027';
+    await judge.evaluate({ config: { ...config, provider: 'openrouter', apiKey: 'test' }, state: {}, questions });
+    responseModel = '';
+    await assert.rejects(judge.evaluate({ config, state: {}, questions }), error => error.code === 'JEV_UNEXPECTED_MODEL');
+    responseModel = 'liquid/d1.1-20261027';
+    responseAnswers = {};
+    await assert.rejects(judge.evaluate({ config, state: {}, questions }), error => error.code === 'JEV_INVALID_ANSWER_TYPE');
+  });
   test(`${build}: singleton Choice requests fail locally before a service call`, async () => {
     let calls = 0;
     const judge = mod.createSystemOneJudge({ fetchImpl: async () => { calls++; throw new Error('must not call'); } });

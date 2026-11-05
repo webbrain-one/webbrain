@@ -392,7 +392,11 @@ export function createSystemOneJudge({
           // Account for billable responses even when the answer contract is invalid.
           if (onUsage) await abortable(onUsage(usageMetadata), request.signal);
           throwIfAborted(request.signal);
-          if (result.model !== model && !(config && typeof result.model === 'string' && result.model.startsWith(model + '-') && /^\d{8}$/.test(result.model.slice(model.length + 1)))) throw systemOneError('JEV_UNEXPECTED_MODEL', 'Unexpected Jev model version.');
+          // Compass selects and validates its upstream model on the server.
+          // Other providers must still return the model selected by the user.
+          if (config?.provider === 'compass'
+            ? typeof result.model !== 'string' || !result.model.trim()
+            : result.model !== model && !(config && typeof result.model === 'string' && result.model.startsWith(model + '-') && /^\d{8}$/.test(result.model.slice(model.length + 1)))) throw systemOneError('JEV_UNEXPECTED_MODEL', 'Unexpected Jev model version.');
           validateSystemOneAnswers(result.answers, questions);
           return { ...usageMetadata, answers: result.answers };
         }
