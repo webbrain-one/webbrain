@@ -45088,22 +45088,20 @@ test('homepage leads with the browser extension and offers WebBrain for websites
   assert.doesNotMatch(heroSection, /path-websites/, 'web home: the website card is no longer inside the hero');
   assert.match(build, /WEBSITES_LAUNCHED,/, 'web home: the build reads the launch switch');
   // The hero has a browser-only version for while the switch is off.
-  for (const key of ['kicker', 'title_line1', 'title_line2', 'lede']) {
+  for (const key of ['title_line1', 'title_line2', 'lede']) {
     assert.match(template, new RegExp(`<!-- if websites -->[^]*?\\{\\{t:home\\.${key}\\}\\}[^]*?<!-- else websites -->[^]*?\\{\\{t:home\\.${key}_browser\\}\\}[^]*?<!-- end websites -->`), `web home: ${key} has a browser-only version`);
   }
   const hero = english.slice(english.indexOf('<section class="home-hero"'), english.indexOf('id="voices"')).replace(/<!--[\s\S]*?-->/g, '');
   if (WEBSITES_LAUNCHED) {
     assert.match(english, /class="path path-websites"[\s\S]*?id="hero-websites-cta"[\s\S]*?id="home-demo-open"/, 'web home: the website card and its Demo are on the page');
-    const enStrings = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/locales/en.json'), 'utf8'));
-    assert.ok(english.includes(`<p class="hero-kicker">${enStrings['home.kicker']}</p>`), 'web home: the hero uses the two-product kicker');
-    assert.ok(!english.includes(`<p class="hero-kicker">${enStrings['home.kicker_browser']}</p>`) || enStrings['home.kicker'] === enStrings['home.kicker_browser'], 'web home: not the browser-only kicker');
+    assert.match(hero, /class="hero-install-actions"[\s\S]*?id="hero-install-cta"[\s\S]*?class="path-btn path-btn-outline" id="home-websites-link"[\s\S]*?id="home-video-open"/, 'web home: browser and website install buttons sit together before the video link');
   } else {
     assert.doesNotMatch(english, /class="path path-websites"|id="hero-websites-cta"|id="home-demo-open"/, 'web home: no website card before launch');
-    assert.match(english, /<p class="hero-kicker">Free and open source<\/p>/);
     assert.match(english, /<span class="title-line">An AI agent on every page<\/span> <span class="title-line title-accent">you visit\.<\/span>/);
     assert.match(turkish, /<span class="title-line">Gezdiğiniz her sayfada<\/span> <span class="title-line title-accent">bir AI ajanı\.<\/span>/);
     assert.doesNotMatch(hero, /website|or build/i, 'web home: the hero does not mention websites before launch');
   }
+  assert.doesNotMatch(hero, /class="hero-kicker"/, 'web home: the hero starts directly with the headline');
   for (const file of fs.readdirSync(path.join(ROOT, 'web/build/locales')).filter((name) => name.endsWith('.json'))) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/locales', file), 'utf8'));
     for (const key of ['kicker', 'title_line1', 'title_line2', 'lede']) {

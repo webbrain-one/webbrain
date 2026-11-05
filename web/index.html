@@ -3590,13 +3590,6 @@
       align-items: end;
       gap: 24px 56px;
     }
-    .hero-kicker {
-      margin: 0 0 20px;
-      color: var(--accent-text);
-      font: 730 11px/1.2 var(--mono);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-    }
     .home-hero h1 {
       font-size: clamp(44px, 6.4vw, 78px);
       font-weight: 770;
@@ -3620,15 +3613,6 @@
     .hero-copy[data-title="long"] { grid-template-columns: 1fr; }
     .hero-copy[data-title="long"] h1 { font-size: clamp(38px, 5.4vw, 64px); }
     .hero-copy[data-title="long"] .hero-lede { max-width: 640px; margin-bottom: 0; }
-    :lang(ar) .hero-kicker, :lang(fa) .hero-kicker, :lang(he) .hero-kicker,
-    :lang(hi) .hero-kicker, :lang(bn) .hero-kicker, :lang(th) .hero-kicker,
-    :lang(zh) .hero-kicker, :lang(ja) .hero-kicker, :lang(ko) .hero-kicker {
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0;
-      text-transform: none;
-    }
     :lang(ar) .home-hero h1, :lang(fa) .home-hero h1, :lang(he) .home-hero h1,
     :lang(hi) .home-hero h1, :lang(bn) .home-hero h1, :lang(th) .home-hero h1 {
       letter-spacing: 0;
@@ -3939,6 +3923,11 @@
     .hero-split .hero-copy[data-title="long"] h1 { font-size: clamp(36px, 4vw, 54px); }
     .hero-split .hero-lede { max-width: 540px; margin: 26px 0 0; }
     .hero-actions-row { margin-top: 32px; }
+    .hero-install-actions { display: flex; flex-wrap: wrap; gap: 12px; width: 100%; }
+    .hero-install-actions .path-btn { flex: 1 1 190px; white-space: normal; }
+    .path-btn-outline { background: transparent; color: var(--text); border-color: var(--border-strong); box-shadow: none; }
+    .path-btn-outline:hover { background: var(--bg-card-hover); color: var(--text); border-color: var(--accent); }
+    .hero-install-actions .path-btn:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; }
     .hero-split .hero-proof { justify-content: flex-start; max-width: none; margin: 30px 0 0; }
     .path-browser {
       margin-top: 0;
@@ -4235,15 +4224,17 @@
       <div class="hero-title">
         <!-- Until WebBrain for websites launches the hero speaks for the browser
              extension alone (WEBSITES_LAUNCHED in site-footer.mjs). -->
-        <p class="hero-kicker">Free for browsers and websites</p>
         <h1 id="home-title"><span class="title-line">An AI agent on every page</span> <span class="title-line title-accent">you visit or build.</span></h1>
       </div>
       <p class="hero-lede">WebBrain reads, explains, and acts on web pages. Add it to your browser to get help on any site, or to your website so your visitors get the same help.</p>
       <div class="path-actions hero-actions-row">
+        <div class="hero-install-actions">
         <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="path-btn" id="hero-install-cta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="hero-install-label">Add to Chrome — free</span>
         </a>
+        <a href="/websites/" class="path-btn path-btn-outline" id="home-websites-link">Add to your website</a>
+        </div>
         <a href="/assets/webbrain-home-demo.mp4" class="path-action" id="home-video-open" aria-haspopup="dialog">
           <span class="path-action-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11-6.86a1 1 0 0 0 0-1.7l-11-6.86A1 1 0 0 0 8 5.14z"/></svg></span>
           <span>Watch it in action</span>
