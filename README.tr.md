@@ -18,6 +18,7 @@ Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir
 <a href="README.md">İngilizce</a> ·
 <a href="README.zh-CN.md">Çince</a> ·
 <a href="README.fr.md">Fransızca</a> ·
+<a href="README.ja.md">Japonca</a> ·
 <a href="docs/">Belgeler</a> ·
 <a href="https://webbrain.one">Web Sitesi</a> ·
 <a href="https://discord.gg/cgC325ssfw">Discord</a> ·
