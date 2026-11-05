@@ -581,6 +581,11 @@ test('traces: metadata traces keep vision notes as vision notes, without error t
   assert.deepEqual(frame.extra, { kind: 'keyframe', reason: 'vision resumed', width: 1356, height: 847, devicePixelRatio: 2, bytes: 81234, mimeType: 'image/webp', id: 'f4', profile: 'anthropic' });
   const skipped = projectTraceEventData('note', { step: 2, note: 'vision_redaction_skipped', extra: { code: 'scan_unavailable', context: 'zoom' } });
   assert.deepEqual(skipped.extra, { code: 'scan_unavailable', context: 'zoom' });
+  // A chooser the run did not hand to upload_file says why in metadata traces too.
+  for (const reason of ['exhausted', 'unreachable', 'no_source']) {
+    const refused = projectTraceEventData('note', { step: 31, note: 'vision_upload_handoff', extra: { stage: 'refused', reason } });
+    assert.deepEqual(refused.extra, { stage: 'refused', reason });
+  }
   // Values outside the closed lists are dropped, not passed through.
   assert.equal(projectTraceEventData('note', { step: 2, note: 'vision_frame', extra: { kind: 'secret text', reason: 'typed: hunter2' } }).extra, undefined);
   // The opt-in content tier keeps the note as recorded.
@@ -716,8 +721,16 @@ test('a blocked file chooser is reported in vision terms in both builds', () => 
   assert.equal(handed.selector, '#f"; ignore');
   assert.match(handed.error, /The next steps use the element tools/);
   assert.match(handed.error, /upload_file with the selector in this result/);
-  assert.match(handed.error, /come back after the upload/);
+  assert.match(handed.error, /come back after the upload; to attach another file, click the upload control again then/);
   assert.doesNotMatch(handed.error, /ignore|not available in vision mode/);
+  // The run's unsuccessful handoffs are used up: uploads did work in vision
+  // mode, so the result must not say they are unavailable there.
+  const exhausted = visionFilePickerBlockedResult({ success: false, dispatched: true, filePickerBlocked: true, selector: '#f', error: 'x' }, { reason: 'exhausted' });
+  assert.equal(exhausted.success, false);
+  assert.equal(exhausted.uploadHandoff, undefined);
+  assert.match(exhausted.error, /two earlier upload attempts in this run ended without a file attached/);
+  assert.match(exhausted.error, /attach it by hand, or run the task with Vision mode off/);
+  assert.doesNotMatch(exhausted.error, /not available in vision mode/);
   const unnamed = visionFilePickerBlockedResult({ success: false, dispatched: true, filePickerBlocked: true, error: 'x' }, { handoff: true });
   assert.match(unnamed.error, /Find this file input's exact selector/);
   const compact = visionFilePickerBlockedResult({ success: false, dispatched: true, filePickerBlocked: true, selector: '#f', error: 'x' }, { handoff: true, compact: true });

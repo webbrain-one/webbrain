@@ -355,6 +355,13 @@ for (const build of ['chrome', 'firefox']) {
     agent._lastTabUrls = new Map([[tab, url]]);
     const blocked = () => ({ success: false, dispatched: true, filePickerBlocked: true, selector: '#upload', error: 'Blocked a native file chooser.' });
     const handoffs = () => agent._visionRunSnapshots.get(tab)?.uploadHandoff || null;
+    const unsuccessful = () => agent._visionRunSnapshots.get(tab)?.unsuccessfulUploadHandoffs;
+    const notes = [];
+    const traceNote = agent._visionTraceNote;
+    agent._visionTraceNote = function (tabId, note, data) {
+      if (note === 'vision_upload_handoff') notes.push(data);
+      return traceNote.call(this, tabId, note, data);
+    };
     // Between runs there is no handoff to start: the chooser is reported in vision terms.
     assert.match(agent._visionNoteUploadHandoff(tab, 'click', blocked(), { vision: { tool: 'click_at' } }).error, /not available in vision mode/);
     agent._beginVisionRun(tab);
@@ -382,8 +389,15 @@ for (const build of ['chrome', 'firefox']) {
     await agent._visionUploadHandoffTick(tab, 2);
     assert.equal(handoffs(), null);
     assert.equal(agent._visionRunState(tab, 'act').active, true);
+    assert.equal(unsuccessful(), 0, 'a handoff that attached its file does not count');
     // A second handoff, inside a nested run: the enclosing run gets its own state back.
     agent._visionNoteUploadHandoff(tab, 'click', blocked(), { vision: { tool: 'click_at' } });
+    // Another chooser in the batch that armed it: that handoff covers this
+    // input too, so the result says so and nothing more is armed.
+    const again = agent._visionNoteUploadHandoff(tab, 'click', { ...blocked(), selector: '#upload-2' }, { vision: { tool: 'click_at' } });
+    assert.equal(again.uploadHandoff, true, again.error);
+    assert.equal(again.selector, '#upload-2');
+    assert.equal(agent._visionRunSnapshots.get(tab).uploadHandoffs, 2);
     await agent._visionUploadHandoffTick(tab, 3);
     const enclosing = agent._visionRunSnapshots.get(tab);
     agent._beginVisionRun(tab);
@@ -397,11 +411,33 @@ for (const build of ['chrome', 'firefox']) {
     url = 'https://owned.example/next';
     await agent._visionUploadHandoffTick(tab, 5);
     assert.equal(agent._visionRunState(tab, 'act').active, true);
-    // Two handoffs per run: the third chooser is reported in vision terms.
+    assert.equal(unsuccessful(), 1, 'a handoff that left the page attached nothing');
+    // One unsuccessful handoff leaves room for another, which expires after
+    // five decisions without an upload.
     url = 'https://owned.example/upload';
-    const third = agent._visionNoteUploadHandoff(tab, 'click', blocked(), { vision: { tool: 'click_at' } });
-    assert.match(third.error, /not available in vision mode/);
+    assert.equal(agent._visionNoteUploadHandoff(tab, 'click', blocked(), { vision: { tool: 'click_at' } }).uploadHandoff, true);
+    await agent._visionUploadHandoffTick(tab, 6);
+    for (let step = 7; step <= 10; step++) {
+      await agent._visionUploadHandoffTick(tab, step);
+      assert.equal(agent._visionRunState(tab, 'act').active, false, `still handed off at step ${step}`);
+    }
+    await agent._visionUploadHandoffTick(tab, 11);
     assert.equal(handoffs(), null);
+    assert.equal(unsuccessful(), 2);
+    // Two handoffs that attached nothing: the next chooser is not handed off,
+    // and its result says why instead of blaming vision mode, where the
+    // first upload worked.
+    const exhausted = agent._visionNoteUploadHandoff(tab, 'click', blocked(), { vision: { tool: 'click_at' } });
+    assert.match(exhausted.error, /two earlier upload attempts in this run ended without a file attached/);
+    assert.doesNotMatch(exhausted.error, /not available in vision mode/);
+    assert.equal(exhausted.uploadHandoff, undefined);
+    assert.equal(handoffs(), null);
+    assert.deepEqual(notes, [
+      { stage: 'armed', count: 1 }, { stage: 'ended', reason: 'uploaded' },
+      { stage: 'armed', count: 2 }, { stage: 'ended', reason: 'navigated' },
+      { stage: 'armed', count: 3 }, { stage: 'ended', reason: 'expired' },
+      { stage: 'refused', reason: 'exhausted' },
+    ]);
     agent._endVisionRun(tab, null);
     // The compact tier's upload_file finds its own target. Chrome's attaches
     // only a file attached to the run's message; Firefox's can also ask the
