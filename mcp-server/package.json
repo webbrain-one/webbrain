@@ -2,7 +2,7 @@
   "name": "@webbrain/mcp-server",
   "displayName": "WebBrain MCP Server",
   "description": "Model Context Protocol server that lets any MCP client (Claude Code, Codex, Cursor, OpenClaw) delegate browser tasks to a running WebBrain extension — in the user's real, already-authenticated browser session.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
