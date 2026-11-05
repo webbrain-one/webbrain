@@ -20,7 +20,7 @@ globalThis.chrome = globalThis.browser = api;
 let nextTab = 9100;
 const call = answer => ({ toolCalls: [{ id: 'answer', function: { name: 'done', arguments: JSON.stringify({ summary: answer }) } }] });
 
-function fixture(Agent, { streaming, response, change = '', dependent = false, beforeDispatch = false }) {
+function fixture(Agent, { streaming, response, change = '', dependent = false, beforeDispatch = false, pendingRead = false }) {
   const tab = nextTab++, updates = [], reads = [], dispatched = [];
   let agent, mainCalls = 0, scopeCalls = 0, churnCount = 0;
   const fresh = change === 'prior-done' ? 'Opening line from the earlier poem.\nShorter ending.'
@@ -95,6 +95,10 @@ function fixture(Agent, { streaming, response, change = '', dependent = false, b
   for (const method of ['_hydrate', '_persistNow', '_persistSubmittedTurn', '_startTraceRun', '_endTraceRun',
     '_beginReadCompleteness', '_manageContext', '_checkCostAllowance', '_recordCostUsage', '_maybeEmitAskModeHandoff',
     '_maybeReinjectAdapter', '_ensureProgressSessionForCurrentTask']) agent[method] = async () => null;
+  if (pendingRead) {
+    agent._readCompletenessBlock = () => 'Conversation coverage is still incomplete; continue reading.';
+    provider._supportsInteractiveAskStreaming = () => true;
+  }
   agent._persist = () => {};
   agent._plannerMode = () => 'off';
   agent._currentUrl = async () => pageUrl;
@@ -142,9 +146,9 @@ function fixture(Agent, { streaming, response, change = '', dependent = false, b
     ? 'Keep the opening line of your poem above and shorten the rest.' : 'Draft a conversation-only announcement from the facts above.';
   const run = () => streaming
     ? agent.processMessageStream(tab, task,
-      (type, data) => updates.push({ type, data }), 'ask', { detachedRequestId: `owned-churn-${tab}`, askStreamingEnabled: true })
+      (type, data) => updates.push({ type, data }), 'ask', { detachedRequestId: `owned-churn-${tab}`, askStreamingEnabled: true, interactiveChat: pendingRead })
     : agent.processMessage(tab, task,
-      (type, data) => updates.push({ type, data }), 'ask', [], { detachedRequestId: `owned-churn-${tab}`, askStreamingEnabled: true });
+      (type, data) => updates.push({ type, data }), 'ask', [], { detachedRequestId: `owned-churn-${tab}`, askStreamingEnabled: true, interactiveChat: pendingRead });
   return { agent, tab, run, fresh, old, updates, dispatched, reads, counts: () => ({ mainCalls, scopeCalls }), clean: () => {
     documents.delete(tab); documentHooks.delete(tab); unnumberedDocuments.delete(tab); monitorReplies.delete(tab);
   } };
@@ -152,6 +156,31 @@ function fixture(Agent, { streaming, response, change = '', dependent = false, b
 
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+  for (const streaming of [false, true]) {
+    for (const coverageComplete of [false, true]) test(`${build}: ${streaming ? 'stream' : 'interactive chat'} hides rejected drafts before ${coverageComplete ? 'complete' : 'partial'} delivery`, async () => {
+      const f = fixture(Agent, { streaming, response: 'prose', change: 'dependent', dependent: true, pendingRead: true });
+      if (coverageComplete) f.agent._readCompletenessBlock = () => f.counts().mainCalls >= 3
+        ? null : 'Conversation coverage is still incomplete; continue reading.';
+      try {
+        assert.match(await f.run(), new RegExp(f.fresh));
+        assert.equal(f.counts().mainCalls, 3, 'Both rejected candidates are regenerated before the accepted reply.');
+        assert.equal(f.updates.filter(update => update.type === 'text_delta').length, 0,
+          'Draft tokens must not be shown and subsequently erased.');
+        const shown = f.updates.filter(update => update.type === 'text' && update.data.content);
+        assert.ok(shown.length > 0, 'The accepted reply must still reach the UI.');
+        assert.ok(shown.every(update => update.data.content.startsWith(f.fresh)));
+        assert.ok(!shown.some(update => update.data.content.includes(f.old)));
+      } finally { f.clean(); }
+    });
+    test(`${build}: ${streaming ? 'stream' : 'interactive chat'} still streams normally when no conversation reading is pending`, async () => {
+      const f = fixture(Agent, { streaming, response: 'prose', pendingRead: true });
+      f.agent._readCompletenessBlock = () => null;
+      try {
+        assert.equal(await f.run(), f.fresh);
+        assert.ok(f.updates.some(update => update.type === 'text_delta' && update.data.content === f.fresh));
+      } finally { f.clean(); }
+    });
+  }
   for (const streaming of [false, true]) for (const response of ['done', 'prose']) {
     test(`${build}: ${streaming ? 'stream' : 'chat'} ${response} delivers through child document churn`, async () => {
       const f = fixture(Agent, { streaming, response, beforeDispatch: response === 'done' });
