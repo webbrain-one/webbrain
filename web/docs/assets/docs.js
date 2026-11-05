@@ -24,6 +24,46 @@
   }
 
   setTheme(preferredTheme(), false);
+  document.querySelectorAll('[data-copy-target]').forEach(function (button) {
+    const target = document.getElementById(button.dataset.copyTarget);
+    const status = button.closest('.mcp-quickstart-step')?.querySelector('[data-copy-status]');
+    if (!target) return;
+    const original = button.textContent;
+    let timer;
+    function copied() {
+      button.textContent = 'Copied!';
+      if (status) status.textContent = 'Setup prompt copied.';
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        button.textContent = original;
+        if (status) status.textContent = '';
+      }, 2000);
+    }
+    function fallback() {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      try {
+        if (document.execCommand('copy')) {
+          copied();
+          return;
+        }
+      } catch (_) {}
+      if (status) status.textContent = 'Select and copy the setup prompt above.';
+    }
+    button.addEventListener('click', function () {
+      clearTimeout(timer);
+      button.textContent = original;
+      if (status) status.textContent = '';
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(target.textContent.trim()).then(copied, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
   themeButton?.addEventListener('click', function () {
     setTheme(root.dataset.theme === 'light' ? 'dark' : 'light', true);
   });

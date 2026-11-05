@@ -10,7 +10,7 @@
   <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/mcp/">
   <link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261028">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261105">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -75,7 +75,34 @@
 
     <main class="doc-main" id="main">
       <div class="breadcrumb"><a href="/docs/">Docs</a> / MCP server</div>
-      <section class="doc-hero"><div class="eyebrow">Real session, task-level control</div><h1>Let your coding or personal agent use the browser you are already signed into.</h1><p class="lede">WebBrain MCP connects Codex, Claude Code, Hermes Agent, OpenClaw, Cursor, OpenCode, and other local stdio MCP clients to your real Chromium profile. After the one-time setup, just describe the browser job in normal language. Your agent chooses and calls the appropriate WebBrain tool; WebBrain performs the goal inside the browser with the same modes, origin permissions, and visible stop controls as the side panel.</p><div class="callout tip"><strong class="callout-title">You do not type MCP function calls</strong><p>Say “Use WebBrain to summarize the dashboard already open in my browser” or “Use WebBrain in Act mode to update this form.” Your MCP client translates that request into the tool call and returns the result in the same conversation. Function-shaped examples later in this guide show what happens under the hood and are mainly for debugging or client builders.</p></div><div class="callout warning"><strong class="callout-title">Chromium only</strong><p>The bridge requires the extension’s offscreen document, so use Chrome, Edge, Brave, Opera, or Vivaldi. The Firefox extension remains fully usable on its own, but it cannot connect to this MCP server.</p></div></section>
+      <section class="doc-hero">
+        <div class="eyebrow">Real session, task-level control</div>
+        <h1>Let your coding or personal agent use the browser you are already signed into.</h1>
+        <p class="lede">Connect Codex, Claude Code, Hermes Agent, OpenClaw, Cursor, OpenCode, or another local MCP client to your signed-in Chromium tabs. Ask your agent to set it up, then describe the browser job in plain language.</p>
+        <div class="mcp-quickstart" id="quickstart" role="region" aria-label="Get started with WebBrain MCP">
+          <ol class="mcp-quickstart-steps">
+            <li class="mcp-quickstart-step">
+              <h2><span class="mcp-quickstart-number" aria-hidden="true">1</span>Ask your agent to set it up</h2>
+              <p>Paste this into your local coding or personal agent. It reads this guide and helps you connect WebBrain.</p>
+              <div class="mcp-quickstart-prompt">
+                <code id="mcp-setup-prompt">Read https://webbrain.one/docs/mcp/ and set up the WebBrain MCP server for me.</code>
+                <button class="mcp-quickstart-copy" type="button" data-copy-target="mcp-setup-prompt" aria-label="Copy setup prompt">Copy</button>
+              </div>
+              <span class="mcp-quickstart-status" role="status" data-copy-status></span>
+            </li>
+            <li class="mcp-quickstart-step">
+              <h2><span class="mcp-quickstart-number" aria-hidden="true">2</span>Then ask for browser work</h2>
+              <p>Your agent hands the job to WebBrain in the browser you are already signed into. WebBrain still asks before consequential actions.</p>
+              <blockquote class="mcp-quickstart-example">Use WebBrain to summarize the CI dashboard open in my browser.</blockquote>
+            </li>
+          </ol>
+          <div class="mcp-quickstart-footer">
+            <a href="#register">Prefer manual setup?</a>
+            <p>Needs Chrome, Edge, Brave, Opera, or Vivaldi with WebBrain installed, and Node.js 20+ on the same computer.</p>
+          </div>
+        </div>
+        <div class="callout warning"><strong class="callout-title">Chromium only</strong><p>The bridge requires the extension’s offscreen document, so use Chrome, Edge, Brave, Opera, or Vivaldi. The Firefox extension remains fully usable on its own, but it cannot connect to this MCP server.</p></div>
+      </section>
 
       <section class="doc-section" id="architecture"><div class="eyebrow">The complete path</div><h2>What starts where</h2><p>Your MCP client launches the npm package as a local child process over stdio. That process listens only on <code>127.0.0.1:17374</code>. The extension dials out to it, then carries each task through WebBrain’s agent loop in the selected browser tab.</p><div class="bridge-map" role="img" aria-label="Local agent over MCP stdio to local WebBrain server over loopback WebSocket to the signed-in Chromium extension"><div class="bridge-node"><strong>Codex, Claude Code, Hermes, OpenClaw, Cursor, OpenCode</strong><span>MCP client · owns the child process</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node local"><strong>@webbrain/mcp-server</strong><span>stdio · 127.0.0.1:17374</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node"><strong>WebBrain in your browser</strong><span>signed-in tabs · permission gate</span></div></div><p>The server is not a second browser and does not copy cookies. It is a local handoff point between the MCP client and the extension. The browser profile—and therefore the authenticated session—never moves.</p><div class="callout warning"><strong class="callout-title">The agent and browser must run on the same computer</strong><p><code>127.0.0.1</code> always means the machine running the MCP server. A Codex cloud task, remote SSH or dev-container session, hosted OpenClaw runtime, or remote Hermes gateway cannot reach the extension in your laptop browser. Run the MCP client locally instead. Do not expose or tunnel port <code>17374</code>; it can control signed-in tabs and is intentionally loopback-only.</p></div></section>
 
@@ -212,6 +239,6 @@ webbrain_status(run_id: "mcp_…")</code></pre><p>A WebBrain run timeout returns
   </div>
 </footer>
 <!-- Site footer: end -->
-  <script src="/docs/assets/docs.js?v=20260809"></script>
+  <script src="/docs/assets/docs.js?v=20261105"></script>
 </body>
 </html>
