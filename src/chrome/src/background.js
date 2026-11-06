@@ -4139,6 +4139,7 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           ...(msg.foreground ? { foreground: true } : {}),
           ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           ...(runProviderId ? { providerId: runProviderId } : {}),
           ...standaloneRagFilterOptions(msg),
           ...(normalizeSelectionSourceGrounding(msg.sourceGrounding)
@@ -4302,6 +4303,7 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           ...(msg.foreground ? { foreground: true } : {}),
           ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           ...(runProviderId ? { providerId: runProviderId } : {}),
           ...standaloneRagFilterOptions(msg),
           ...(normalizeSelectionSourceGrounding(msg.sourceGrounding)
@@ -4384,6 +4386,10 @@ async function handleMessage(msg, sender) {
           ...(msg.foreground ? { foreground: true } : {}),
           ...(runProviderId ? { providerId: runProviderId } : {}),
           ...standaloneRagFilterOptions(msg),
+          // Continue keeps the standalone boundary (and the new tab full-page chat's web tools);
+          // without these a continued standalone run would become a page-aware side panel run.
+          ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           detachedRequestId: runUi.requestId,
           isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
           beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
