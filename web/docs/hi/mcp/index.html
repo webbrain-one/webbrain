@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="hi" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP में WebBrain का उपयोग करें — WebBrain उपयोगकर्ता गाइड</title>
+  <meta name="description" content="Codex, Claude Code, Cursor, OpenClaw, OpenCode या अन्य stdio MCP क्लाइंट को अपने साइन-इन किए Chromium ब्राउज़र में WebBrain से जोड़ें, और ब्राउज़र टास्क सुरक्षित रूप से चलाएँ, एक्सट्रैक्ट करें, मॉनिटर करें, स्पष्टीकरण माँगें और रोकें।">
+  <link rel="canonical" href="https://webbrain.one/docs/hi/mcp/">
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/mcp/">
+  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/mcp/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/mcp/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/mcp/">
+  <link rel="icon" href="/favicon.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body class="doc-page">
+  <a class="skip-link" href="#main">मुख्य सामग्री पर जाएँ</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">उपयोगकर्ता गाइड</span></a><nav class="top-nav" aria-label="प्राथमिक नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">डॉक्स</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/mcp/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/mcp/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/mcp/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="दस्तावेज़ मेनू खोलें">☰</button></div></div></header>
+
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="डॉक्यूमेंटेशन"><div class="sidebar-group"><div class="sidebar-label">यहाँ से शुरू करें</div><nav><a href="/docs/hi/">अवलोकन</a><a href="/docs/hi/faq/">सामान्य प्रश्न</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग करें</div><nav><a href="/docs/hi/settings/">सेटिंग्स निर्देश</a><a href="/docs/hi/providers/">प्रदाता और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/safety/">मोड, सुरक्षा और गोपनीयता</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/mcp/" aria-current="page">MCP सर्वर</a><a href="/docs/hi/lm-studio/">LM Studio प्लगइन</a><a href="/docs/hi/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">MCP स्रोत</div><nav><a href="https://github.com/webbrain-one/webbrain/tree/main/mcp-server">सर्वर पैकेज ↗</a><a href="https://www.npmjs.com/package/@webbrain/mcp-server">npm पैकेज ↗</a><a href="/blog/mcp-server-introduction">लॉन्च घोषणा ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">समुदाय</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
+
+    <main class="doc-main" id="main">
+      <div class="breadcrumb"><a href="/docs/hi/">डॉक्स</a> / MCP सर्वर</div>
+      <section class="doc-hero"><div class="eyebrow">असली सेशन, टास्क-स्तरीय नियंत्रण</div><h1>अपने कोडिंग एजेंट को उस ब्राउज़र का उपयोग करने दें जिसमें आप पहले से साइन इन हैं।</h1><p class="lede">WebBrain MCP, Codex, Claude Code, Cursor, OpenClaw, OpenCode और अन्य stdio MCP क्लाइंट्स को आपके असली Chromium प्रोफ़ाइल से जोड़ता है। एक बार की सेटअप पूरी करने के बाद, बस ब्राउज़र टास्क को स्वाभाविक भाषा में बताएँ। आपका कोडिंग एजेंट उपयुक्त WebBrain टूल चुनकर उन्हें कॉल करता है; WebBrain लक्ष्य को ब्राउज़र के अंदर निष्पादित करता है, साइडबार जैसे ही मोड, सोर्स-अनुमति और दृश्यमान स्टॉप कंट्रोल का उपयोग करते हुए।</p><div class="callout tip"><strong class="callout-title">आपको MCP फ़ंक्शन कॉल खुद टाइप करने की ज़रूरत नहीं</strong><p>बस कहें "WebBrain का उपयोग करके मेरे ब्राउज़र में खुले डैशबोर्ड का सारांश बताओ" या "WebBrain के Act मोड से इस फ़ॉर्म को अपडेट करो"। आपका MCP क्लाइंट उस अनुरोध को टूल कॉल में बदल देगा और उसी बातचीत में परिणाम लौटाएगा। इस गाइड में आगे फ़ंक्शन के रूप में दिखाए गए उदाहरण मुख्यतः डीबगिंग या क्लाइंट डेवलपर्स के संदर्भ के लिए हैं।</p></div><div class="callout warning"><strong class="callout-title">केवल Chromium</strong><p>ब्रिज को एक्सटेंशन के ऑफ़स्क्रीन डॉक्यूमेंट की ज़रूरत होती है, इसलिए Chrome, Edge, Brave, Opera या Vivaldi उपयोग करें। Firefox एक्सटेंशन अपनी जगह पूरी तरह उपयोगी रहता है, पर इस MCP सर्वर से नहीं जुड़ सकता।</p></div></section>
+
+      <section class="doc-section" id="architecture"><div class="eyebrow">पूरा रास्ता</div><h2>क्या कहाँ शुरू होता है</h2><p>आपका MCP क्लाइंट npm पैकेज को stdio के ज़रिए एक लोकल चाइल्ड प्रोसेस के रूप में चलाता है। यह प्रोसेस केवल <code>127.0.0.1:17374</code> पर सुनता है। एक्सटेंशन उसी की ओर डायल करता है, और फिर चुने गए ब्राउज़र टैब में WebBrain के एजेंट लूप से हर टास्क निष्पादित करता है।</p><div class="bridge-map" role="img" aria-label="कोडिंग एजेंट MCP stdio से लोकल WebBrain सर्वर से जुड़ता है, और लोकल लूपबैक WebSocket से साइन इन किए Chromium एक्सटेंशन तक पहुँचता है"><div class="bridge-node"><strong>Codex, Claude Code, Cursor, OpenClaw, OpenCode</strong><span>MCP क्लाइंट · चाइल्ड प्रोसेस का मालिक</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node local"><strong>@webbrain/mcp-server</strong><span>stdio · 127.0.0.1:17374</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node"><strong>आपके ब्राउज़र में WebBrain</strong><span>साइन इन किए टैब · अनुमति गेट</span></div></div><p>सर्वर दूसरा ब्राउज़र नहीं है और न ही Cookie कॉपी करता है। यह MCP क्लाइंट और एक्सटेंशन के बीच एक लोकल हैंडऑफ पॉइंट है। ब्राउज़र प्रोफ़ाइल—और इसलिए प्रमाणित सेशन—कभी नहीं हिलती।</p></section>
+
+      <section class="doc-section" id="requirements"><h2>कनेक्ट करने से पहले</h2><div class="table-wrap"><table><thead><tr><th>आवश्यकता</th><th>क्या जाँचें</th></tr></thead><tbody><tr><td>Chromium ब्राउज़र</td><td>वर्तमान WebBrain एक्सटेंशन इंस्टॉल किए हुए Chrome, Edge, Brave, Opera या Vivaldi।</td></tr><tr><td>Node.js</td><td>Node 20 या उससे नया। <code>npx</code> पैकेज डाउनलोड करके चलाता है।</td></tr><tr><td>MCP क्लाइंट</td><td>Codex, Claude Code, Cursor, OpenClaw या OpenCode जैसे लोकल stdio सर्वर का समर्थन करने वाला क्लाइंट।</td></tr><tr><td>एक खाली लोकल पोर्ट</td><td><code>17374</code> किसी अन्य WebBrain MCP प्रोसेस से पहले से घिरा नहीं होना चाहिए।</td></tr><tr><td>सक्रिय WebBrain प्रदाता</td><td>सौंपे गए टास्क को निष्पादित करने के लिए एक्सटेंशन को फिर भी सेटअप किए WebBrain Compass, लोकल या API-समर्थित मॉडल चाहिए।</td></tr></tbody></table></div></section>
+
+      <section class="doc-section" id="register"><div class="eyebrow">चरण 1 · केवल एक बार</div><h2>अपने MCP क्लाइंट में सर्वर रजिस्टर करें</h2><p>नीचे दी गई क्लाइंट-विशिष्ट सेटअप में से कोई एक चुनेँ, केवल एक बार। ये इंस्टॉलेशन कमांड हैं, ब्राउज़र टास्क माँगने का तरीका नहीं। रजिस्ट्रेशन के बाद क्लाइंट आपके लिए सर्वर शुरू कर देगा और आप सामान्य बातचीत जारी रखें; उसी पोर्ट पर मैनुअल कॉपी एक साथ न चलाएँ।</p><h3>Codex ऐप, CLI या IDE एक्सटेंशन</h3><pre class="code-block"><code>codex mcp add webbrain -- npx -y @webbrain/mcp-server</code></pre><p>Codex MCP सर्वर को <code>~/.codex/config.toml</code> में सहेजता है; एक ही Codex होस्ट पर ऐप, CLI और IDE एक्सटेंशन यही सेटअप साझा करते हैं। लंबे ब्राउज़र टास्क के लिए यह फ़ाइल खोलें और टूल को Codex के डिफ़ॉल्ट प्रति-कॉल बजट से ज़्यादा समय दें:</p><pre class="code-block"><code>[mcp_servers.webbrain]
+command = "npx"
+args = ["-y", "@webbrain/mcp-server"]
+tool_timeout_sec = 360</code></pre><p>फ़ाइल बदलने के बाद ऐप या IDE एक्सटेंशन दोबारा चालू करें। CLI में, <code>codex mcp list</code> चलाकर एंट्री की पुष्टि करें, और Codex सेशन में <code>/mcp</code> से जुड़े सर्वर की जाँच करें। साझा होस्ट सेटअप और सभी समर्थित विकल्पों के लिए <a href="https://learn.chatgpt.com/docs/extend/mcp">आधिकारिक Codex MCP गाइड</a> देखें।</p><h3>Claude Code</h3><pre class="code-block"><code>claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server</code></pre><p>स्पष्ट ट्रांसपोर्ट मौजूदा <a href="https://code.claude.com/docs/en/mcp">Claude Code MCP सेटअप</a> से मेल खाता है। जोड़ने के बाद <code>claude mcp list</code> चलाकर सर्वर की स्थिति जाँचें।</p><h3>Cursor</h3><p>Cursor की MCP सेटिंग्स में लोकल stdio सर्वर जोड़ें, या यह सामग्री Cursor के MCP JSON फ़ाइल में डालें। फ़ॉर्मैट <a href="https://cursor.com/docs/context/mcp">Cursor लोकल MCP सर्वर फ़ॉर्मैट</a> का पालन करता है:</p><pre class="code-block"><code>{
+  "mcpServers": {
+    "webbrain": {
+      "command": "npx",
+      "args": ["-y", "@webbrain/mcp-server"]
+    }
+  }
+}</code></pre><h3>OpenCode</h3><p>यह एंट्री <code>~/.config/opencode/opencode.json</code> में जोड़ें, OpenCode के <a href="https://opencode.ai/docs/mcp-servers/">लोकल MCP सर्वर फ़ॉर्मैट</a> का उपयोग करते हुए:</p><pre class="code-block"><code>{
+  "mcp": {
+    "webbrain": {
+      "type": "local",
+      "command": ["npx", "-y", "@webbrain/mcp-server"]
+    }
+  }
+}</code></pre><h3>OpenClaw</h3><p>OpenClaw में WebBrain को आउटबाउंड MCP सर्वर के रूप में रजिस्टर करें। इस इंटीग्रेशन के लिए <code>openclaw mcp serve</code> उपयोग न करें: वह कमांड OpenClaw को स्वयं सर्वर बना देता है, जो उलटी दिशा है।</p><pre class="code-block"><code>openclaw mcp add webbrain \
+  --command npx \
+  --arg -y \
+  --arg @webbrain/mcp-server \
+  --timeout 360</code></pre><p><code>mcp add</code> सहेजने से पहले stdio सर्वर को जाँचता है। सहेजी गई परिभाषा देखने के लिए <code>openclaw mcp status --verbose</code> चलाएँ। सामान्य <code>coding</code> और <code>messaging</code> टूल प्रोफ़ाइल में सेट किए MCP सर्वर शामिल होते हैं; <code>minimal</code> प्रोफ़ाइल, स्पष्ट <code>bundle-mcp</code> डीनाई या सैंडबॉक्स टूल पॉलिसी उन्हें छिपा सकती हैं। मौजूदा रजिस्ट्री और पॉलिसी विवरण के लिए <a href="https://docs.openclaw.ai/cli/mcp">OpenClaw MCP गाइड</a> देखें।</p><h3>मैन्युअल रूप से चलाएँ</h3><p>लिस्टनर का निदान करने के लिए मैनुअल शुरुआत उपयोगी है, पर आम तौर पर MCP उपयोग में ज़रूरी नहीं:</p><pre class="code-block"><code>npx -y @webbrain/mcp-server</code></pre><p>उस टर्मिनल को खुला रखें। उसे बंद करने से ब्रिज लिस्टनर बंद हो जाता है। सोर्स चेकआउट से, <code>mcp-server/</code> के अंदर <code>npm install</code>, <code>npm run build</code>, फिर <code>npm start</code> चलाएँ।</p></section>
+
+      <section class="doc-section" id="browser"><div class="eyebrow">चरण 2</div><h2>WebBrain को लोकल लिस्टनर की ओर मोड़ें</h2><ol class="step-list"><li><strong>अपने MCP क्लाइंट को चालू या रीस्टार्ट करें।</strong>एक्सटेंशन के जुड़ने से पहले उसका WebBrain सर्वर चल रहा होना चाहिए।</li><li><strong>WebBrain सेटिंग्स खोलें।</strong><strong>सेटिंग्स → Bridge</strong> पर जाएँ।</li><li><strong>सटीक URL सेट करें।</strong><code>ws://127.0.0.1:17374/extension</code> दर्ज करें।</li><li><strong>पेयरिंग की चिपकाएँ।</strong>टर्मिनल में <code>npx -y @webbrain/mcp-server pairing-key</code> चलाएँ (या <code>~/.webbrain/bridge-key</code> खोलें), और कुंजी को <strong>पेयरिंग की</strong> फ़ील्ड में चिपकाएँ। सर्वर केवल उसी ब्राउज़र पर भरोसा करता है जो यह कुंजी रखने का सबूत दे। यदि फ़ील्ड नहीं दिखती, पहले WebBrain अपडेट करें।</li><li><strong>क्लाउड ब्रिज चालू करें।</strong>स्थिति "कनेक्ट हो रहा है" से "कनेक्ट हो गया" होनी चाहिए। यह नाम ऐतिहासिक कारणों से है: यह गंतव्य लोकल है।</li><li><strong>एंड-टू-एंड कनेक्शन जाँचें।</strong>MCP क्लाइंट से <code>webbrain_connection</code> कॉल करवाएँ। "Connected" इस बात का प्रमाण है कि क्लाइंट, लोकल सर्वर, WebSocket लिस्टनर और एक्सटेंशन हैंडशेक—सब तैयार हैं।</li></ol><div class="callout"><strong class="callout-title">एक समय में केवल एक ब्रिज गंतव्य</strong><p>एक्सटेंशन एक आउटबाउंड ब्रिज सॉकेट रखता है: WebBrain Cloud <code>17373</code> पर, यह MCP सर्वर <code>17374</code> पर, या LM Studio प्लगइन <code>17375</code> पर। URL बदलने से गंतव्य बदल जाता है; वे एक साथ नहीं चलते।</p></div></section>
+
+      <section class="doc-section" id="first-task"><div class="eyebrow">चरण 3 · बस पूछें</div><h2>ब्राउज़र टास्क को स्वाभाविक भाषा में बताएँ</h2><p>Codex, Claude Code, Cursor, OpenClaw या OpenCode में, वैसा ही लिखें जैसे किसी साथी को टास्क सौंपते। WebBrain का नाम लेने से आपका इरादा बिल्कुल स्पष्ट हो जाता है; पेज, अपेक्षित परिणाम, दायरा, और यह कि बदलाव की अनुमति है या नहीं—सब शामिल करें।</p><h3>पेज बदले बिना पढ़ाई</h3><blockquote>WebBrain का उपयोग करके मेरे ब्राउज़र में खुले Stripe डैशबोर्ड को पढ़ो। पिछले सात दिनों की असफल पेमेंट्स की सूची दो—ग्राहक, राशि, मुद्रा, तारीख और असफलता का कारण शामिल करते हुए। कुछ भी मत बदलो।</blockquote><h3>पूर्वानुमेय JSON लौटाएँ</h3><blockquote>WebBrain का उपयोग करके मेरे ब्राउज़र में खुले डैशबोर्ड से सभी बकाया इनवॉइस निकालो। ग्राहक, राशि, मुद्रा, देय तिथि और इनवॉइस URL वाला JSON लौटाओ। कुछ भी मत बदलो।</blockquote><h3>पेज से इंटरैक्ट करें</h3><blockquote>WebBrain के Act मोड से मेरे ब्राउज़र में दिख रही कस्टमर रिकॉर्ड खोलो, और कंपनी का नाम Acme Europe में अपडेट करो। किसी भी अंतिम सबमिट या पुष्टि से पहले रुक जाओ।</blockquote><p>कोडिंग एजेंट आम पढ़ाई या इंटरैक्शन के लिए <code>webbrain_run</code> चुनता है, और संरचित डेटा माँगे जाने पर <code>webbrain_extract</code> चुनता है। वह पैरामीटर देता है, रन की मॉनिटरिंग करता है, और WebBrain का परिणाम बातचीत में वापस प्रस्तुत करता है। Ask मोड पढ़ और एक्सट्रैक्ट सकता है; क्लिक, टाइप, नेविगेट या सबमिट नहीं कर सकता। Act मोड इंटरैक्ट कर सकता है, WebBrain की सामान्य ब्राउज़र-साइड अनुमतियों के अधीन रहते हुए।</p><div class="callout"><strong class="callout-title">अंदरूनी विवरण—आपको ये टाइप करने की ज़रूरत नहीं</strong><p>ऊपर वाले पहले प्रॉम्प्ट के लिए क्लाइंट कुछ इस तरह का कॉल करेगा। यह रूप MCP क्लाइंट बनाने या डीबग करते समय काम आता है; आम उपयोगकर्ता इसे छोड़ सकते हैं।</p></div><pre class="code-block"><code>webbrain_run(
+  task: "read the open Stripe dashboard and list failed payments from the last 7 days with customer, amount, currency, date, and failure reason",
+  mode: "ask"
+)</code></pre><p>जिन टास्क्स में इंटरैक्शन ज़रूरी है, साफ़ कहें "WebBrain का Act मोड उपयोग करें" और ब्राउज़र दृश्यमान रखें। WebBrain अपने सामान्य सोर्स-वार क्षमता अनुमोदन प्रॉम्प्ट लागू करेगा।</p></section>
+
+      <section class="doc-section" id="tools"><div class="eyebrow">छह टूल, एक भरोसे की सीमा</div><h2>वे टूल जो आपका MCP क्लाइंट आपके लिए इस्तेमाल करता है</h2><p>आप आम तौर पर परिणाम चुनते हैं, टूल नहीं। आपका MCP क्लाइंट ये विवरण पढ़ता है, उपयुक्त टूल चुनता है, आपके अनुरोध के अनुसार उसके इनपुट भरता है, और आगे की कॉल्स संभालता है। यह रेफरेंस आपको यह व्यवहार समझने या डीबग करने के लिए है।</p><div class="table-wrap"><table><thead><tr><th>टूल</th><th>किस काम के लिए</th><th>ज़रूरी इनपुट</th></tr></thead><tbody><tr><td><code>webbrain_run</code></td><td>कोई भी ब्राउज़र लक्ष्य, केवल-पढ़ने वाला या इंटरैक्टिव।</td><td><code>task</code>, <code>mode</code>, वैकल्पिक <code>tab_id</code>, <code>wait</code>, <code>timeout_seconds</code>, और केवल Act वाला <code>allow_api_mutations</code>।</td></tr><tr><td><code>webbrain_extract</code></td><td>प्रमाणित पेज डेटा से पूर्वानुमेय JSON निकालना। हमेशा Ask मोड।</td><td><code>task</code>, <code>output_schema</code>, वैकल्पिक <code>tab_id</code>, <code>wait</code> और <code>timeout_seconds</code>।</td></tr><tr><td><code>webbrain_status</code></td><td>एक बैकग्राउंड रन को पोल करना या सभी ज्ञात रन्स की सूची देना।</td><td>वैकल्पिक <code>run_id</code>। छोड़ देने पर रन्स की सूची मिलती है।</td></tr><tr><td><code>webbrain_respond</code></td><td>उपयोगकर्ता का जवाब रुके हुए रन तक पहुँचाना।</td><td><code>run_id</code>, <code>clarify_id</code>, <code>answer</code>, वैकल्पिक <code>timeout_seconds</code>।</td></tr><tr><td><code>webbrain_abort</code></td><td>गलत या अब ज़रूरी न रहे रन को रोकना।</td><td><code>run_id</code>। यह पहले हो चुके ऑपरेशन वापस नहीं करता।</td></tr><tr><td><code>webbrain_connection</code></td><td>एक्सटेंशन हैंडशेक जाँचना और टूटे कनेक्शन पर लक्षित समाधान पाना।</td><td>कोई इनपुट नहीं।</td></tr></tbody></table></div><div class="callout tip"><strong class="callout-title">MCP क्लिक या टाइप टूल क्यों नहीं है</strong><p>WebBrain की अनुमति जाँचें एक्सटेंशन के एजेंट लूप में होती हैं। निचले स्तर के प्राइमेटिव्स को सीधे MCP से सामने लाना उस सीमा को पार कर जाएगा। अगर आपको डिटर्मिनिस्टिक लो-लेवल ब्राउज़र ऑटोमेशन (जैसे Playwright) चाहिए, तो अन्य MCP सर्वर देखें। WebBrain ऑपरेशनों को एक्सटेंशन के अनुमति मॉडल के अंदर रखकर आपके साइन इन किए सेशन की रक्षा करता है।</p></div></section>
+
+      <section class="doc-section" id="structured"><h2>संरचित JSON माँगें</h2><p>आम उपयोग में, बताएँ क्या निकालना है और चाहिए वाले फ़ील्डों के नाम लें: "WebBrain से खुले डैशबोर्ड से सभी बकाया इनवॉइस निकालो और ग्राहक, राशि, मुद्रा, देय तिथि और इनवॉइस URL वाला JSON लौटाओ।" सक्षम MCP क्लाइंट इन फ़ील्डों को ज़रूरी schema में बदलकर आपके लिए <code>webbrain_extract</code> कॉल कर सकता है।</p><p>नीचे दिया गया फ़ंक्शन-रूप उदाहरण क्लाइंट डेवलपर्स और डीबगिंग के लिए बराबर टूल कॉल दिखाता है। <code>task</code> में चयन तर्क बताएँ; सिर्फ़ आउटपुट का रूप <code>output_schema</code> में बताएँ।</p><pre class="code-block"><code>webbrain_extract(
+  task: "extract every overdue invoice visible in this account; preserve the displayed currency and use ISO dates where the page provides a full date",
+  output_schema: {
+    type: "object",
+    properties: {
+      invoices: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            customer: { type: "string" },
+            amount: { type: "number" },
+            currency: { type: "string" },
+            due_date: { type: "string" },
+            invoice_url: { type: "string" }
+          },
+          required: ["customer", "amount", "currency", "due_date"]
+        }
+      }
+    },
+    required: ["invoices"]
+  }
+)</code></pre><ul><li>स्पष्ट <code>properties</code> और <code>required</code> फ़ील्ड वाले ऑब्जेक्ट रूट का उपयोग करें।</li><li>जितना कम डेटा चाहिए उतना ही माँगें। Schema उस डेटा तक पहुँच नहीं देता जो ब्राउज़र सेशन को दिखता ही नहीं।</li><li>यह टूल केवल-पढ़ने वाला है, पर पेज का टेक्स्ट और परिणाम फिर भी WebBrain के सेट LLM प्रदाता तक जाते हैं।</li><li>अगर परिणाम रन के स्थायी स्नैपशॉट के लिए बहुत बड़ा है, तो स्थिति रिपोर्ट कर सकती है कि सहेजा गया परिणाम कट गया। अनुरोध छोटा करें और दोबारा चलाएँ।</li></ul></section>
+
+      <section class="doc-section" id="lifecycle"><h2>रन लाइफसाइकल समझें</h2><p>ज़्यादातर MCP क्लाइंट यह लाइफसाइकल आपके लिए संभालते हैं: वे परिणाम का इंतज़ार करते हैं, जब मानव इनपुट चाहिए तब WebBrain का स्पष्टीकरण सवाल दिखाते हैं, और आपके जवाब से आगे बढ़ते हैं। नीचे दिए स्पष्ट कॉल क्लाइंट डेवलपर्स, समस्या निवारण, या जानबूझकर क्लाइंट से लंबा टास्क बैकग्राउंड में शुरू करवाने के लिए उपयोगी हैं।</p><p>फ़ोरग्राउंड कॉल डिफ़ॉल्ट रूप से इंतज़ार करते हैं। लंबे काम के लिए क्लाइंट <code>wait: false</code> सेट करके <code>webbrain_status</code> से पोल कर सकता है।</p><div class="status-strip" aria-label="WebBrain MCP रन स्थितियाँ"><div class="status-item"><code>running</code><span>ब्राउज़र में काम जारी रहता है</span></div><div class="status-item waiting"><code>needs_user_input</code><span>सवाल उपयोगकर्ता तक पहुँचाएँ</span></div><div class="status-item done"><code>completed</code><span>परिणाम तैयार है</span></div><div class="status-item"><code>failed</code><span>त्रुटि और प्रमाण देखें</span></div><div class="status-item"><code>aborted</code><span>रोका गया; पहले के ऑपरेशन बरकरार</span></div></div><pre class="code-block"><code># टूल-स्तरीय संदर्भ
+# बिना प्रतीक्षा के शुरू करें
+webbrain_run(task: "compare the invoices across all visible pages", mode: "ask", wait: false)
+
+# लौटे ID को बार-बार चेक करें
+webbrain_status(run_id: "mcp_…")</code></pre><p>WebBrain रन का टाइमआउट नियंत्रण MCP क्लाइंट को लौटा देता है, पर जानबूझकर ब्राउज़र टास्क को रोकता नहीं है। लौटे <code>run_id</code> को पोल करें। इससे बचाव होता है कि टाइमआउट किसी ऐसे टास्क को चुपचाप न मार दे जो शायद पहले ही महत्वपूर्ण ऑपरेशन कर चुका हो।</p><h3>जब WebBrain सवाल पूछे</h3><p>रुका हुआ स्नैपशॉट इंसानी भाषा का सवाल और <code>clarify_id</code> दोनों रखता है। वह सवाल उपयोगकर्ता को दिखाएँ। उनका जवाब शब्दशः भेजें; अनुमान न लगाएँ।</p><pre class="code-block"><code>webbrain_respond(
+  run_id: "mcp_…",
+  clarify_id: "clarify_…",
+  answer: "Use the Acme EU account."
+)</code></pre></section>
+
+      <section class="doc-section" id="modes"><h2>सबसे छोटी अनुमति चुनें</h2><div class="table-wrap"><table><thead><tr><th>विकल्प</th><th>क्या की अनुमति</th><th>कब उपयोग करें</th></tr></thead><tbody><tr><td><code>mode: "ask"</code></td><td>पढ़ना, सारांश, तुलना और एक्सट्रैक्ट। कोई पेज इंटरैक्शन नहीं।</td><td>आपको सिर्फ़ जानकारी चाहिए। यह डिफ़ॉल्ट विकल्प है।</td></tr><tr><td><code>mode: "act"</code></td><td>WebBrain के अनुमति गेट से नेविगेशन, क्लिक, टाइपिंग, डाउनलोड और फ़ॉर्म इंटरैक्शन।</td><td>परिणाम के लिए दृश्यमान ब्राउज़र ऑपरेशन ज़रूरी हैं।</td></tr><tr><td><code>allow_api_mutations: true</code></td><td>Act रन को UI रास्ता अनुपयुक्त होने पर बदलाव करने वाले HTTP रिक्वेस्ट की अनुमति देता है।</td><td>दुर्लभ, स्पष्ट अपवाद। Ask मोड में अस्वीकार होता है, और डिफ़ॉल्ट में बंद रहना चाहिए।</td></tr></tbody></table></div><p>MCP क्लाइंट का अनुमोदन और WebBrain का अनुमोदन अलग-अलग स्तर हैं। आपका क्लाइंट <code>webbrain_run</code> कॉल करने से पहले पूछ सकता है; WebBrain किसी सोर्स पर महत्वपूर्ण ऑपरेशन से पहले पूछ सकता है। एक अनुमोदन दूसरे की जगह नहीं लेता।</p></section>
+
+      <section class="doc-section" id="security"><h2>सुरक्षा सीमाएँ जो आपको बनाए रखनी चाहिए</h2><ul><li><strong>लिस्टनर को लोकल रखें।</strong>यह <code>127.0.0.1</code> से बँधा है। पोर्ट <code>17374</code> फ़ॉरवर्ड न करें, कंटेनर ब्रिज से पब्लिश न करें, या प्रॉक्सी के ज़रिए नेटवर्क पर न ले जाएँ।</li><li><strong>पेयरिंग की को सुरक्षित रखें।</strong>लोकल लूपबैक अपने आप में प्रमाणीकरण नहीं है, इसलिए सर्वर सॉकेट पर तभी भरोसा करता है जब वह पेयरिंग की से कुंजीपटल वाले HMAC से एक बार की चुनौती का जवाब दे; कुंजी स्वयं कभी सॉकेट से नहीं गुज़रती। <code>~/.webbrain/bridge-key</code> पढ़ने वाला कोई भी व्यक्ति पेयर कर सकता है, इसलिए कुंजी चैट में न चिपकाएँ। एक्सटेंशन सर्वर की पहचान जाँचता नहीं, इसलिए लोकल कोड और MCP पैकेजों को फिर भी भरोसेमंद सॉफ़्टवेयर मानें।</li><li><strong>पहले Ask उपयोग करें।</strong>केवल-पढ़ने वाला काम जाँचने में आसान है और उसका असर-दायरा छोटा होता है।</li><li><strong>Act मोड में ब्राउज़र दृश्यमान रखें।</strong>आप साइडबार में रन रोक सकते हैं, और अप्रत्याशित नेविगेशन या टाइपिंग को रोकने का कारण मानना चाहिए।</li><li><strong>प्रदाता सीमा याद रखें।</strong>MCP ब्रिज लोकल रहता है, पर पेज की सामग्री WebBrain में सेट मॉडल प्रदाता तक जाती है। जब सामग्री डिवाइस पर ही रहनी हो, लोकल मॉडल उपयोग करें।</li><li><strong>टाइमआउट को रॉलबैक न समझें।</strong>अबॉर्ट आगे के स्टेप्स रोकता है; भेजी गई ईमेल, सबमिट किए फ़ॉर्म, खरीद या अन्य पूर्ण ऑपरेशन उसे वापस नहीं कर सकते।</li></ul><p>पूरा डिज़ाइन देखने के लिए <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/security-model.md">सुरक्षा मॉडल</a>, <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/privacy-and-data-flow.md">गोपनीयता और डेटा प्रवाह</a>, और <a href="/docs/hi/safety/">मोड, सुरक्षा और गोपनीयता गाइड</a> देखें।</p></section>
+
+      <section class="doc-section" id="troubleshooting"><h2>लक्षण के अनुसार समस्या निवारण</h2><div class="table-wrap"><table><thead><tr><th>लक्षण</th><th>आमतौर पर इसका मतलब</th><th>उपाय</th></tr></thead><tbody><tr><td><strong>कनेक्शन त्रुटि: WebSocket त्रुटि</strong></td><td>सेट किए URL पर कोई प्रोसेस नहीं सुन रहा।</td><td>MCP क्लाइंट चालू या रीस्टार्ट करें, पोर्ट <code>17374</code> की पुष्टि करें, और सर्वर प्रोसेस चलता रखें।</td></tr><tr><td><code>webbrain_connection</code> असंयुक्त रिपोर्ट करता है</td><td>लोकल सर्वर मौजूद है, पर एक्सटेंशन ने हैंडशेक पूरा नहीं किया।</td><td>Chromium ब्राउज़र उपयोग करें, क्लाउड ब्रिज चालू करें, और सटीक <code>/extension</code> URL सेट करें।</td></tr><tr><td><code>EADDRINUSE</code> या सर्वर तुरंत बंद हो जाए</td><td>दूसरा MCP क्लाइंट या मैनुअल सर्वर पोर्ट <code>17374</code> पहले ही थामे हुए है।</td><td>दूसरा प्रोसेस रोकें। एक समय में केवल एक WebBrain MCP सर्वर डिफ़ॉल्ट पोर्ट घेर सकता है।</td></tr><tr><td>MCP टूल नहीं दिखते</td><td>क्लाइंट ने सेटअप दोबारा लोड नहीं किया या npm प्रोसेस शुरू नहीं हो सका।</td><td>क्लाइंट रीस्टार्ट करें, उसकी MCP सर्वर सूची/लॉग देखें, और Node 20+ तथा npm पहुँच की पुष्टि करें।</td></tr><tr><td>टूल <code>running</code> लौटाता है</td><td>सर्वर या क्लाइंट का इंतज़ार बजट खत्म हो गया; ब्राउज़र रन को जानबूझकर ज़िंदा रखा गया।</td><td>लौटे ID से <code>webbrain_status</code> पोल करें, या आगे के लंबे टास्क <code>wait: false</code> से शुरू करें।</td></tr><tr><td>रन <code>needs_user_input</code> दिखाता है</td><td>आगे बढ़ने के लिए WebBrain को मानव निर्णय चाहिए।</td><td>सटीक सवाल पहुँचाएँ, फिर मिलते-जुलते IDs से <code>webbrain_respond</code> कॉल करें।</td></tr><tr><td>Firefox कभी नहीं जुड़ता</td><td>Firefox में ऑफ़स्क्रीन-डॉक्यूमेंट ब्रिज रनटाइम नहीं है।</td><td>MCP के लिए Chrome, Edge, Brave, Opera या Vivaldi उपयोग करें। Firefox सीधी साइडबार उपयोग के लिए समर्थित रहता है।</td></tr><tr><td>WebBrain Cloud या LM Studio डिस्कनेक्ट हो गए</td><td>MCP URL ने एक्सटेंशन के एकमात्र ब्रिज गंतव्य की जगह ले ली।</td><td>काम पूरा होने पर सेटिंग्स को पोर्ट <code>17373</code> (Cloud) या <code>17375</code> (LM Studio) पर वापस मोड़ें।</td></tr></tbody></table></div></section>
+
+      <section class="doc-section" id="configuration"><h2>एनवायरनमेंट कॉन्फ़िगरेशन</h2><div class="table-wrap"><table><thead><tr><th>वेरिएबल</th><th>डिफ़ॉल्ट</th><th>मतलब</th></tr></thead><tbody><tr><td><code>WEBBRAIN_BRIDGE_PORT</code></td><td><code>17374</code></td><td>वह लूपबैक पोर्ट जिससे एक्सटेंशन जुड़ता है।</td></tr><tr><td><code>WEBBRAIN_BRIDGE_PATH</code></td><td><code>/extension</code></td><td>WebSocket पाथ; सेटिंग्स से मेल खाना ज़रूरी।</td></tr><tr><td><code>WEBBRAIN_COMMAND_TIMEOUT_MS</code></td><td><code>30000</code></td><td>एक ब्रिज कमांड और जवाब का टाइमआउट बजट।</td></tr><tr><td><code>WEBBRAIN_RUN_TIMEOUT_MS</code></td><td><code>300000</code></td><td>रन या एक्सट्रैक्शन की डिफ़ॉल्ट इंतज़ार की ऊपरी हद।</td></tr><tr><td><code>WEBBRAIN_POLL_INTERVAL_MS</code></td><td><code>1000</code></td><td>सर्वर चलते टास्क को कितनी बार पोल करता है।</td></tr></tbody></table></div><p>stdio क्लाइंट के लिए, उस क्लाइंट की MCP सेटिंग्स में एनवायरनमेंट वेरिएबल सेट करें। अगर पोर्ट या पाथ बदलें, तो WebBrain सेटिंग्स के क्लाउड ब्रिज URL को बिल्कुल वैसा ही अपडेट करें।</p></section>
+
+      <section class="doc-section" id="lm-studio"><div class="eyebrow">संबंधित इंटीग्रेशन</div><h2>LM Studio उपयोग कर रहे हैं?</h2><p>LM Studio अलग <strong>WebBrain Web Tools प्लगइन</strong> उपयोग करता है, इस MCP पैकेज को नहीं। उसके <code>fetch_url</code> और <code>research_url</code> टूल ब्राउज़र एक्सटेंशन के बिना सार्वजनिक पेज पढ़ सकते हैं; उसके ब्राउज़र टूल पोर्ट <code>17375</code> से लक्ष्य आपके साइन इन किए Chromium सेशन को सौंप सकते हैं।</p><div class="callout"><strong class="callout-title">एक ब्रिज गंतव्य चुनें</strong><p>सिर्फ़ पब्लिश किए प्लगइन के उपयोग के लिए LM Studio के अंदर <code>@webbrain/mcp-server</code> रजिस्टर न करें। <a href="/docs/hi/lm-studio/">LM Studio प्लगइन गाइड</a> देखें, और जब यह इंटीग्रेशन चाहिए तो एक्सटेंशन के क्लाउड ब्रिज URL को MCP पोर्ट <code>17374</code> से प्लगइन पोर्ट <code>17375</code> पर बदलें।</p></div></section>
+
+      <section class="doc-section" id="limits"><h2>ये सर्वर जानबूझकर क्या नहीं करता</h2><ul><li>यह हेडलेस ब्राउज़र नहीं चलाता और न ही बिल्कुल नया ब्राउज़र प्रोफ़ाइल बनाता है।</li><li>यह Firefox बिल्ड से काम नहीं करता।</li><li>यह Cookie, क्रेडेंशियल या सेशन स्टोरेज एक्सपोर्ट नहीं करता।</li><li>यह WebBrain के लगभग पचास क्लिक, टाइपिंग, फ़्रेम, स्क्रीनशॉट, नेटवर्क और DOM प्राइमेटिव्स को सीधे MCP क्लाइंट को नहीं दिखाता।</li><li>यह ब्रिज को दूर से सुरक्षित रूप से उजागर नहीं करता।</li><li>यह WebBrain के अंदर मॉडल सेट करने की ज़रूरत खत्म नहीं करता।</li></ul><p>अगर आपको अलग-थलग प्रोफ़ाइल में डिटर्मिनिस्टिक लो-लेवल ब्राउज़र ऑटोमेशन चाहिए, तो Playwright-शैली का MCP सर्वर ज़्यादा उपयुक्त हो सकता है। जब तय करने वाली ज़रूरत आपका पहले से साइन इन ब्राउज़र सेशन और WebBrain का ब्राउज़र-अंदर सुरक्षा मॉडल हो, तब WebBrain MCP उपयोग करें।</p></section>
+
+      <nav class="next-links" aria-label="आगे की गाइड"><a href="/docs/hi/safety/"><span>संबंधित</span>← मोड, सुरक्षा और गोपनीयता</a><a href="/docs/hi/lm-studio/"><span>एक अन्य लोकल इंटीग्रेशन</span>LM Studio प्लगइन गाइड →</a></nav>
+    </main>
+
+    <aside class="on-this-page" aria-label="इस पेज पर"><h2>इस पेज पर</h2><a href="#architecture">आर्किटेक्चर</a><a href="#requirements">इंस्टॉलेशन आवश्यकताएँ</a><a href="#register">क्लाइंट रजिस्टर करें</a><a href="#browser">ब्राउज़र कनेक्ट करें</a><a href="#first-task">पहला टास्क</a><a href="#tools">टूल रेफरेंस</a><a href="#structured">संरचित एक्सट्रैक्शन</a><a href="#lifecycle">रन लाइफसाइकल</a><a href="#modes">अनुमति नियंत्रण</a><a href="#security">सुरक्षा</a><a href="#troubleshooting">समस्या निवारण</a><a href="#configuration">कॉन्फ़िगरेशन</a><a href="#lm-studio">LM Studio</a><a href="#limits">जानबूझकर सीमाएँ</a></aside>
+  </div>
+
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">हमारा मिशन: वेब को ज़्यादा स्मार्ट बनाना।</p>
+      <p class="wb-footer-copy">© 2026 WebBrain। <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> और <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">योगदानकर्ताओं</a> द्वारा निर्मित।</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/hi/">ब्राउज़र एक्सटेंशन</a>
+        <a href="/websites/">वेबसाइट्स के लिए</a>
+        <a href="/companion/hi/">डेस्कटॉप Companion</a>
+        <a href="/research/">रिसर्च</a>
+        <a href="/docs/hi/">डॉक्स</a>
+        <a href="/docs/hi/faq/">सामान्य प्रश्न</a>
+        <a href="/blog/">ब्लॉग</a>
+        <a href="/privacy">गोपनीयता नीति</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">बग रिपोर्ट करें</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 लाइसेंस</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">प्रेस</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass सब्सक्रिप्शन</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="Mastodon पर WebBrain" title="Mastodon पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="Bluesky पर WebBrain" title="Bluesky पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="Discord पर WebBrain" title="Discord पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="Hugging Face पर WebBrain" title="Hugging Face पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end -->
+  <script src="/docs/assets/docs.js?v=20261106"></script>
+</body>
+</html>

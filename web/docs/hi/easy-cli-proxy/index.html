@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="hi" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EasyCLIProxyAPI के ज़रिए अकाउंट सब्सक्रिप्शन का उपयोग — WebBrain यूज़र गाइड</title>
+  <meta name="description" content="WebBrain को EasyCLIProxyAPI के लोकल OpenAI-कम्पैटिबल एंडपॉइंट से कनेक्ट करें, और एग्ज़िक्यूटेबल, OAuth, अकाउंट व नेटवर्क जोखिम की सीमाओं को समझें।">
+  <link rel="canonical" href="https://webbrain.one/docs/hi/easy-cli-proxy/">
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/">
+  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/">
+  <link rel="icon" href="/favicon.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body class="doc-page">
+  <a class="skip-link" href="#main">मुख्य सामग्री पर जाएँ</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">यूज़र गाइड</span></a><nav class="top-nav" aria-label="प्राथमिक नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">डॉक्यूमेंटेशन</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/easy-cli-proxy/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/easy-cli-proxy/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/easy-cli-proxy/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="डॉक्यूमेंटेशन मेनू खोलें">☰</button></div></div></header>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="डॉक्यूमेंटेशन अनुक्रमणिका"><div class="sidebar-group"><div class="sidebar-label">यहाँ से शुरू करें</div><nav><a href="/docs/hi/">अवलोकन</a><a href="/docs/hi/faq/">अक्सर पूछे जाने वाले प्रश्न</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग</div><nav><a href="/docs/hi/settings/">सेटिंग्स की व्याख्या</a><a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/easy-cli-proxy/" aria-current="page">सब्सक्रिप्शन प्रॉक्सी</a><a href="/docs/hi/safety/">मोड, सुरक्षा और निजता</a><a href="/docs/hi/apocalypse-mode/">Apocalypse मोड</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/mcp/">MCP सर्वर</a><a href="/docs/hi/lm-studio/">LM Studio प्लगइन</a><a href="/docs/hi/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">डेवलपर्स</div><nav><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/providers-and-models.md">प्रोवाइडर की आंतरिक कार्यप्रणाली ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">कम्युनिटी</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
+    <main class="doc-main" id="main">
+      <div class="breadcrumb"><a href="/docs/hi/">डॉक्यूमेंटेशन</a> / <a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a> / सब्सक्रिप्शन प्रॉक्सी</div>
+      <section class="doc-hero"><div class="eyebrow">स्वतंत्र लोकल कम्पैटिबिलिटी विकल्प</div><h1>API कुंजी के बजाय अकाउंट इस्तेमाल करें, पर भरोसे की सीमा को नज़रअंदाज़ न करें।</h1><p class="lede">EasyCLIProxyAPI समर्थित प्रोवाइडर अकाउंट्स को एक लोकल OpenAI-कम्पैटिबल एंडपॉइंट के रूप में उपलब्ध करा सकता है। WebBrain उस एंडपॉइंट का उपयोग कर सकता है, पर इस प्रॉक्सी प्रोग्राम को विकसित, ऑडिट, वितरित या समर्थित नहीं करता।</p><p class="meta">अंतिम जाँच: 26 अगस्त 2026 · EasyCLIProxyAPI v0.2.62</p></section>
+
+      <section class="trust-ledger" aria-labelledby="trust-ledger-title">
+        <div class="trust-ledger-heading"><span class="trust-signal" aria-hidden="true"></span><div><div class="eyebrow">भरोसे की सीमा</div><h2 id="trust-ledger-title">पहले यह समझें कि कौन-सा हिस्सा किसकी ज़िम्मेदारी है।</h2></div></div>
+        <dl>
+          <div><dt>WebBrain इंटीग्रेशन की सीमा</dt><dd>केवल लोकल OpenAI-कम्पैटिबल HTTP एंडपॉइंट</dd></div>
+          <div><dt>एग्ज़िक्यूटेबल और अपडेट</dt><dd><a href="https://github.com/router-for-me/EasyCLIProxyAPI">EasyCLIProxyAPI अपस्ट्रीम प्रोजेक्ट</a></dd></div>
+          <div><dt>WebBrain का ऑडिट या गारंटी</dt><dd><strong>कोई नहीं</strong></dd></div>
+          <div><dt>ज़्यादा सुरक्षित और स्थिर डिफ़ॉल्ट</dt><dd>प्रोवाइडर द्वारा जारी API कुंजी</dd></div>
+        </dl>
+      </section>
+
+      <section class="doc-section" id="before-download"><div class="eyebrow">डाउनलोड से पहले पढ़ें</div><h2>यह OAuth क्रेडेंशियल्स तक पहुँच रखने वाला एक थर्ड-पार्टी एग्ज़िक्यूटेबल है।</h2><div class="callout danger"><strong class="callout-title">न WebBrain द्वारा विकसित, न होस्ट, न ऑडिट, न गारंटीकृत</strong><p>EasyCLIProxyAPI प्रोवाइडर लॉगिन, लोकल क्रेडेंशियल्स, अलग से इंस्टॉल की गई CLIProxyAPI कोर और अपने खुद के अपडेट्स का प्रबंधन करता है। सोर्स कोड और मौजूदा रिलीज़ की समीक्षा करें, केवल अपस्ट्रीम रिपॉज़िटरी से डाउनलोड करें, और जहाँ अपस्ट्रीम डायजेस्ट देता है वहाँ रिलीज़ फ़ाइलों की जाँच करें। WebBrain भविष्य की अपस्ट्रीम बिल्ड्स क्या करती हैं, यह नहीं परख सकता।</p></div><p>लोकल प्रॉक्सी इस्तेमाल करने का मतलब यह नहीं कि इनफरेंस भी लोकल होता है। पेज का कॉन्टेक्स्ट और प्रॉम्प्ट फिर भी प्रॉक्सी द्वारा चुने गए प्रोवाइडर अकाउंट तक जाते हैं। प्रोवाइडर के नियम बदल सकते हैं; किसी OAuth फ़्लो का काम कर जाना यह नहीं दर्शाता कि प्रोवाइडर उसे हर थर्ड-पार्टी क्लाइंट के लिए अनुमति देता है।</p><ul><li><strong>OpenAI:</strong> ChatGPT सब्सक्रिप्शन और API बिलिंग दो अलग उत्पाद हैं। कृपया <a href="https://help.openai.com/en/articles/6950777">सब्सक्रिप्शन और API का अंतर</a> तथा <a href="https://openai.com/policies/terms-of-use/">मौजूदा उपयोग की शर्तें</a> देखें।</li><li><strong>Anthropic:</strong> इसकी कंज़्यूमर शर्तें API कुंजी या अन्य स्पष्ट रूप से अनुमत इंटरफ़ेस के अलावा ऑटोमेटेड या ग़ैर-इंसानी पहुँच को सीमित करती हैं। कृपया <a href="https://www.anthropic.com/legal/consumer-terms">मौजूदा कंज़्यूमर शर्तें</a> देखें।</li><li><strong>Google:</strong> Gemini CLI की शर्तें कहती हैं कि इसके OAuth प्रमाणीकरण का उपयोग थर्ड-पार्टी टूल्स या सेवाओं के साथ नहीं किया जा सकता। कृपया <a href="https://geminicli.com/docs/resources/tos-privacy/">मौजूदा Gemini CLI शर्तें</a> देखें।</li><li><strong>Kimi और xAI:</strong> अपस्ट्रीम पर OAuth उपलब्ध होना केवल एक तकनीकी क्षमता है, अनुमति या कम्पैटिबिलिटी की गारंटी नहीं। साइन इन करने से पहले अपने उत्पाद, प्लान, क्षेत्र और अकाउंट से जुड़ी शर्तें जाँचें।</li></ul><p>यह गाइड कम्पैटिबिलिटी सेटअप का वर्णन करती है, क़ानूनी सलाह नहीं। अकाउंट, डेटा और अनुपालन के फ़ैसले आपकी ज़िम्मेदारी हैं।</p><div class="doc-actions"><a class="doc-action primary" href="https://github.com/router-for-me/EasyCLIProxyAPI/releases/latest">अपस्ट्रीम रिलीज़ पेज खोलें ↗</a><a class="doc-action" href="https://github.com/router-for-me/EasyCLIProxyAPI">सोर्स कोड देखें ↗</a></div></section>
+
+      <section class="doc-section" id="supported"><h2>अपस्ट्रीम ऐप फ़िलहाल क्या प्रदान करता है</h2><p>EasyCLIProxyAPI फ़िलहाल ब्राउज़र-आधारित पाँच लॉगिन रास्ते सूचीबद्ध करता है। ये नाम अपस्ट्रीम ऐप से आते हैं और WebBrain के आधिकारिक इंटीग्रेशन नहीं हैं; ये काम करना बंद कर सकते हैं या बिना कोई सूचना दिए अलग-अलग मॉडल दिखा सकते हैं।</p><div class="table-wrap"><table><thead><tr><th>EasyCLIProxyAPI नाम</th><th>अकाउंट परिवार</th><th>इस गाइड की ओर इशारा करने वाली WebBrain कार्ड</th></tr></thead><tbody><tr><td>Codex OAuth</td><td>OpenAI / ChatGPT / Codex</td><td>OpenAI</td></tr><tr><td>Claude OAuth</td><td>Anthropic / Claude</td><td>Anthropic Claude</td></tr><tr><td>Antigravity OAuth</td><td>Google</td><td>Google Gemini</td></tr><tr><td>Kimi OAuth</td><td>Kimi</td><td>Kimi</td></tr><tr><td>xAI OAuth</td><td>xAI / Grok</td><td>xAI</td></tr></tbody></table></div><p>ये पाँचों रास्ते एक ही <strong>Local OpenAI-compatible Proxy</strong> कार्ड के ज़रिए WebBrain से जुड़ते हैं। OpenAI, Anthropic, Gemini, Kimi और xAI के डायरेक्ट कार्ड अब भी API कुंजी पर आधारित हैं।</p></section>
+
+      <section class="doc-section" id="video"><div class="walkthrough-card"><div class="walkthrough-copy"><div class="eyebrow">2 मिनट 18 सेकंड</div><h2>पूरा कनेक्शन एक बार देख लें।</h2><p>यह ट्यूटोरियल Antigravity OAuth, लूपबैक एंडपॉइंट, मॉडल खोज, कनेक्शन टेस्ट, Ask मोड और Act मोड दिखाता है। बाद की अपस्ट्रीम रिलीज़्स में इंटरफ़ेस लेबल बदल सकते हैं; अपने इंस्टॉल किए गए वर्ज़न द्वारा दिखाए गए सटीक एंडपॉइंट का उपयोग करें।</p></div><div class="walkthrough-player"><video controls preload="metadata" playsinline poster="/docs/assets/media/easy-cli-proxy-poster.webp"><source src="/docs/assets/media/easy-cli-proxy-tutorial.mp4" type="video/mp4"><track kind="captions" srclang="en" label="English" src="/docs/assets/media/easy-cli-proxy-tutorial.en.vtt"><track kind="captions" srclang="zh-CN" label="简体中文" src="/docs/assets/media/easy-cli-proxy-tutorial.zh-CN.vtt">आपका ब्राउज़र एम्बेडेड वीडियो सपोर्ट नहीं करता। <a href="/docs/assets/media/easy-cli-proxy-tutorial.mp4">ट्यूटोरियल डाउनलोड करें</a>।</video></div><div class="walkthrough-actions"><a href="/docs/assets/media/easy-cli-proxy-tutorial.mp4">वीडियो डाउनलोड करें</a><a href="/docs/assets/media/easy-cli-proxy-tutorial.en.vtt">English कैप्शन</a><a href="/docs/assets/media/easy-cli-proxy-tutorial.zh-CN.vtt">चीनी कैप्शन</a><span class="walkthrough-meta">H.264 · AAC · 1080p · 10.5 MB</span></div></div></section>
+
+      <section class="doc-section" id="flow"><h2>एक लाइन में रिक्वेस्ट की सीमा</h2><div class="bridge-map" aria-label="WebBrain से मॉडल प्रोवाइडर तक का रिक्वेस्ट पाथ"><div class="bridge-node"><strong>WebBrain</strong><span>ब्राउज़र एक्सटेंशन</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node local"><strong>127.0.0.1:8317</strong><span>EasyCLIProxyAPI + CLIProxyAPI</span></div><div class="bridge-arrow" aria-hidden="true">→</div><div class="bridge-node"><strong>प्रोवाइडर अकाउंट</strong><span>रिमोट इनफरेंस और अकाउंट नियम</span></div></div><p>पहला कनेक्शन आपके कंप्यूटर पर ही रहता है, दूसरा नहीं। EasyCLIProxyAPI अपस्ट्रीम OAuth जानकारी WebBrain के बाहर सुरक्षित रखता है; WebBrain केवल सेटिंग्स में आपके दर्ज की गई लोकल प्रॉक्सी क्लाइंट कुंजी को सहेजता है।</p></section>
+
+      <section class="doc-section" id="setup"><div class="eyebrow">सेटअप</div><h2>लोकल एंडपॉइंट से कनेक्ट करें</h2><ol class="step-list"><li><strong>अपस्ट्रीम की जाँच करें और इंस्टॉल करें।</strong> GitHub रिलीज़ पेज से EasyCLIProxyAPI डाउनलोड करें। <strong>Version Management</strong> में उसी के अनुरूप CLIProxyAPI कोर इंस्टॉल करें।</li><li><strong>प्रॉक्सी को लूपबैक तक सीमित रखें।</strong> लिस्टनर को <code>127.0.0.1</code> पर रहने दें, LAN पहुँच बंद रखें, और पोर्ट <code>8317</code> को कभी फ़ॉरवर्ड न करें। छोटी या डिफ़ॉल्ट क्लाइंट कुंजी की जगह एक मज़बूत रैंडम मान डालें; रिलीज़ के अनुसार यह सेटिंग <strong>Advanced Settings</strong> या <strong>API Access</strong> में दिख सकती है।</li><li><strong>केवल वही अकाउंट अनुमति दें जिसे आप इस्तेमाल करना चाहते हैं।</strong> <strong>OAuth</strong> खोलें, Codex, Claude, Antigravity, Kimi या xAI चुनें, और प्रोवाइडर का पेज पूरा करें। अगर प्रोवाइडर ऐसी शर्तें या अनुमतियाँ दिखाए जिन्हें आप स्वीकार नहीं करते, तो तुरंत रुक जाएँ।</li><li><strong>कोर चालू करें और OpenAI-कम्पैटिबल URL कॉपी करें।</strong> Home पर रनटाइम शुरू करें और OpenAI एंडपॉइंट कॉपी करें। आम डिफ़ॉल्ट <code>http://127.0.0.1:8317/v1</code> है; अपने चल रहे वर्ज़न द्वारा दिखाए गए मान पर भरोसा करें।</li><li><strong>WebBrain का Providers पेज खोलें।</strong> साइड पैनल के मॉडल मेनू में <strong>More…</strong> चुनें, फिर LLM टैब में <strong>Local OpenAI-compatible Proxy</strong> खोजें। सर्वर URL और प्रॉक्सी क्लाइंट कुंजी पेस्ट करें — प्रोवाइडर का OAuth टोकन नहीं।</li><li><strong>मॉडल लोड करें और चुनें।</strong> <strong>Load Models</strong> पर क्लिक करें और प्रॉक्सी द्वारा दिखाया गया कोई मॉडल चुनें। WebBrain <strong>Context window</strong> प्रॉक्सी की मॉडल लिस्ट, उसके पीछे मौजूद llama.cpp सर्वर, या ज्ञात होस्टेड मॉडल के नाम (अधिकतम 128k) से भर देता है; किसी से न पता चले तो 64k रखता है। जब तक सर्वर छोटी विंडो न बताए, आपका टाइप किया हुआ मान नहीं बदलता; इसलिए अगर प्रॉक्सी के पीछे कोई छोटा लोकल मॉडल है जो विंडो नहीं बताता, तो इसे खुद घटा दें। विज़ुअल केवल तभी चालू करें जब वही मॉडल इमेज स्वीकार करता हो।</li><li><strong>सेव करें, जाँचें, फिर चालू करें।</strong> <strong>Test Connection</strong> चलाएँ और हरी सफलता दिखने पर ही इसे चैट प्रोवाइडर बनाएँ। पहले संवेदनशील न होने वाली सामग्री पर Ask मोड से जाँच करें।</li></ol><div class="callout warning"><strong class="callout-title"><code>0.0.0.0</code>, LAN IP, टनल या पब्लिक रिवर्स प्रॉक्सी इस्तेमाल न करें</strong><p>लोकल क्लाइंट कुंजी इंटरनेट पर सुरक्षित पहचान की व्यवस्था नहीं है। कुंजी पाने वाला कोई भी प्रोसेस लॉग इन किए गए प्रोवाइडर अकाउंट के ज़रिए रिक्वेस्ट भेज सकता है।</p></div></section>
+
+      <section class="doc-section" id="troubleshooting"><h2>लक्षण के हिसाब से समस्या सुलझाएँ</h2><div class="table-wrap"><table><thead><tr><th>लक्षण</th><th>संभावित कारण</th><th>क्या जाँचें</th></tr></thead><tbody><tr><td>कनेक्शन अस्वीकृत</td><td>CLIProxyAPI कोर बंद है या पोर्ट बदल गया है।</td><td>रनटाइम शुरू करें, Home रिफ़्रेश करें, फिर दिखाई देने वाला OpenAI URL दोबारा कॉपी करें।</td></tr><tr><td>अनॉथराइज़्ड</td><td>WebBrain की कुंजी प्रॉक्सी क्लाइंट कुंजी से मेल नहीं खाती।</td><td>लोकल क्लाइंट कुंजी दोबारा कॉपी करें। अपस्ट्रीम OAuth टोकन कभी WebBrain में पेस्ट न करें।</td></tr><tr><td>कोई मॉडल लोड नहीं हुआ</td><td>OAuth पूरा नहीं हुआ, अकाउंट कोई कम्पैटिबल मॉडल नहीं दिखाता, या अपस्ट्रीम सपोर्ट बदल गया।</td><td>OAuth/अकाउंट स्थिति और EasyCLIProxyAPI लॉग जाँचें, फिर उसके मौजूदा रिलीज़ नोट्स देखें।</td></tr><tr><td>टेक्स्ट चलता है पर इमेज फेल</td><td>चुना गया मॉडल उर्फ़ इमेज इनपुट स्वीकार नहीं करता।</td><td>विज़ुअल बंद करें, या ऐसा मॉडल चुनें जिसे प्रॉक्सी विज़ुअल-सपोर्टेड बताता हो।</td></tr><tr><td>क्वोटा या अकाउंट एरर</td><td>अपस्ट्रीम अकाउंट, प्लान, क्षेत्र या प्रोवाइडर पॉलिसी ने रिक्वेस्ट ठुकरा दिया।</td><td>दोबारा कोशिश बंद करें, प्रोवाइडर अकाउंट सीधे जाँचें, और उपलब्ध हो तो आधिकारिक API कुंजी इस्तेमाल करें।</td></tr><tr><td>अपडेट के बाद मॉडल या व्यवहार अजीब</td><td>डेस्कटॉप ऐप, कोर, प्लगइन या प्रोवाइडर अनुबंध बदल गया।</td><td>वर्ज़न की तुलना करें, रिलीज़ नोट्स देखें, फिर "Load Models" और "Test Connection" दोबारा चलाएँ।</td></tr></tbody></table></div></section>
+
+      <section class="doc-section" id="limits"><h2>जो काम WebBrain जानबूझकर नहीं करता</h2><ul><li>यह EasyCLIProxyAPI या CLIProxyAPI को बंडल, लॉन्च, अपडेट या सत्यापित नहीं करता।</li><li>यह अपस्ट्रीम OAuth रिफ़्रेश टोकन प्राप्त या प्रबंधित नहीं करता।</li><li>यह नहीं कहता कि कंज़्यूमर सब्सक्रिप्शन में API-जैसी या ऑटोमेटेड पहुँच शामिल है।</li><li>यह प्रोवाइडर कोटा, क्षेत्रीय प्रतिबंध, अकाउंट समीक्षा या शर्तों को नहीं टालता।</li><li>रिमोट होस्टेड इनफरेंस इससे निजी या ऑन-डिवाइस नहीं हो जाता।</li></ul></section>
+
+      <nav class="next-links" aria-label="आगे की गाइड"><a href="/docs/hi/providers/"><span>पिछला</span>← प्रोवाइडर और मॉडल</a><a href="/docs/hi/safety/"><span>सुझाई गई</span>मोड, सुरक्षा और निजता →</a></nav>
+    </main>
+    <aside class="on-this-page" aria-label="इस पेज पर"><h2>इस पेज पर</h2><a href="#before-download">डाउनलोड से पहले</a><a href="#supported">समर्थित लॉगिन रास्ते</a><a href="#video">वीडियो ट्यूटोरियल</a><a href="#flow">रिक्वेस्ट की सीमा</a><a href="#setup">सेटअप</a><a href="#troubleshooting">समस्या निवारण</a><a href="#limits">स्पष्ट सीमाएँ</a></aside>
+  </div>
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">हमारा मिशन: वेब को ज़्यादा स्मार्ट बनाना।</p>
+      <p class="wb-footer-copy">© 2026 WebBrain। <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> और <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">योगदानकर्ताओं</a> द्वारा निर्मित।</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/hi/">ब्राउज़र एक्सटेंशन</a>
+        <a href="/websites/">वेबसाइट्स के लिए</a>
+        <a href="/companion/hi/">डेस्कटॉप Companion</a>
+        <a href="/research/">रिसर्च</a>
+        <a href="/docs/hi/">डॉक्यूमेंटेशन</a>
+        <a href="/docs/hi/faq/">अक्सर पूछे जाने वाले प्रश्न</a>
+        <a href="/blog/">ब्लॉग</a>
+        <a href="/privacy">गोपनीयता नीति</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">बग रिपोर्ट करें</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 लाइसेंस</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">प्रेस</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass सब्सक्रिप्शन</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="Mastodon पर WebBrain" title="Mastodon पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="Bluesky पर WebBrain" title="Bluesky पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="Discord पर WebBrain" title="Discord पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="Hugging Face पर WebBrain" title="Hugging Face पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261106"></script>
+</body>
+</html>

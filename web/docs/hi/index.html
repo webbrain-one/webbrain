@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="hi" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>WebBrain उपयोगकर्ता गाइड</title><meta name="description" content="पहला सवाल पूछने से शुरू करें और WebBrain की सेटिंग्स, मॉडल, सुरक्षा अनुमतियाँ, मेमोरी और एडवांस्ड फीचर्स समझें।"><link rel="canonical" href="https://webbrain.one/docs/hi/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/"><link rel="icon" href="/favicon.png"><script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script><link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body>
+  <a class="skip-link" href="#main">मुख्य सामग्री पर जाएं</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">उपयोगकर्ता गाइड</span></a><nav class="top-nav" aria-label="मुख्य नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">डॉक्स</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="दस्तावेज़ मेनू खोलें">☰</button></div></div></header>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="दस्तावेज़ विषय-सूची"><div class="sidebar-group"><div class="sidebar-label">यहां से शुरू करें</div><nav><a href="/docs/hi/" aria-current="page">अवलोकन</a><a href="/docs/hi/faq/">अक्सर पूछे जाने वाले सवाल</a><a href="#first-run">शुरू करें</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग करें</div><nav><a href="/docs/hi/settings/">सेटिंग्स की व्याख्या</a><a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/safety/">मोड, सुरक्षा और निजता</a><a href="/docs/hi/apocalypse-mode/">प्रलय मोड</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/mcp/">MCP सर्वर</a><a href="/docs/hi/lm-studio/">LM Studio प्लगइन</a><a href="/docs/hi/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">डेवलपर्स</div><nav><a href="https://github.com/webbrain-one/webbrain/tree/main/docs">तकनीकी दस्तावेज़ (अंग्रेज़ी)↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">कम्युनिटी</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
+    <main class="doc-main" id="main">
+      <section class="doc-hero"><div class="eyebrow">WebBrain उपयोग मैनुअल</div><h1>आपके ब्राउज़र एजेंट में बहुत से नियंत्रण हैं, लेकिन आपको शुरू में सब कुछ सीखने की ज़रूरत नहीं है।</h1><p class="lede">किसी वेबपेज को खोलें और सवाल पूछें। यह गाइड पहले सबसे छोटे रास्ते से नतीजा पाना दिखाती है, और फिर गहरी सेटिंग्स तभी समझाती है जब उन्हें सचमुच ज़रूरत हो।</p><div class="path-grid"><a class="path-card" href="#first-run"><span class="tab-key">पहली बार</span><h2>पहला काम पूरा करें</h2><p>साइडबार खोलें, सही मोड चुनें — बिना कोई सेटिंग बदले शुरू कर सकते हैं।</p><span class="arrow">शुरू करें →</span></a><a class="path-card" href="/docs/hi/settings/"><span class="tab-key">एजेंट को नियंत्रित करें</span><h2>सेटिंग्स समझें</h2><p>हर टैब क्या बदलता है, कौन-सी डिफ़ॉल्ट ज़्यादातर लोगों के लिए ठीक हैं, और किन पर अभी ध्यान देने की ज़रूरत नहीं।</p><span class="arrow">सेटिंग्स गाइड खोलें →</span></a><a class="path-card" href="/docs/hi/providers/"><span class="tab-key">मॉडल चुनें</span><h2>प्रोवाइडर कॉन्फ़िगर करें</h2><p>WebBrain Compass, क्लाउड API, मॉडल राउटिंग या लोकल मॉडल का उपयोग करें।</p><span class="arrow">मॉडल चुनें →</span></a><a class="path-card" href="/docs/hi/safety/"><span class="tab-key">नियंत्रण में रहें</span><h2>Act मोड का सुरक्षित उपयोग</h2><p>Ask, Act और Dev मोड, वेबसाइट अनुमतियाँ, मेमोरी की हदें और जोखिम वाले ओवरराइड समझें।</p><span class="arrow">सुरक्षा गाइड देखें →</span></a><a class="path-card" href="/docs/hi/formats/"><span class="tab-key">अपना काम ले जाएं</span><h2>बिना झंझट एक्सपोर्ट</h2><p>बातचीत, ट्रेस, सेटिंग्स और सेव किए गए वर्कफ़्लो फ़ाइलों में फ़र्क समझें, और जानें कि क्या संवेदनशील है।</p><span class="arrow">एक्सपोर्ट फ़ॉर्मैट समझें →</span></a></div></section>
+      <section class="doc-section" id="first-run"><div class="eyebrow">पहला रन</div><h2>पहले 10 मिनट</h2><ol class="step-list"><li><strong>जिस वेबपेज पर मदद चाहिए, उसे खोलें।</strong> WebBrain आइकन पर क्लिक करें ताकि साइडबार पेज के बगल में खुले।</li><li><strong>पहले Ask मोड में रहें।</strong> जैसे: “इस पेज का सार बताओ”, “ज़रूरी तारीख़ें लिखो”, “इस टेबल की प्लान तुलना करो”। Ask मोड पढ़ सकता है, पर क्लिक या टाइप नहीं करता।</li><li><strong>जब पेज बदलना हो तो Act मोड पर जाएं।</strong> जैसे: “सर्च बॉक्स में wireless headphones टाइप करके सर्च करो”। किसी नई साइट पर अहम कार्रवाई से पहले WebBrain अनुमति मांगेगा।</li><li><strong>प्रक्रिया देखते रहें।</strong> कभी भी Stop बटन या <kbd>Escape</kbd> से रोकें। अचानक नेविगेशन, टाइपिंग या बार-बार एक जैसी कार्रवाई दिखे तो तुरंत रुकें।</li><li><strong>सेटिंग्स तभी खोलें जब कोई ठोस ज़रूरत हो।</strong> पहले काम के लिए बना-पहले से मौजूद क्लाउड प्रोवाइडर और सुझाई गई सुरक्षित डिफ़ॉल्ट काफ़ी हैं।</li></ol><div class="callout tip"><strong class="callout-title">अच्छा प्रॉम्प्ट नतीजा साफ़ लिखता है</strong><p>“रिफ़ंड पॉलिसी खोजो और बताओ कि सेल आइटम पर वह लागू होती है या नहीं” — “इस साइट को देखो” से ज़्यादा जाँचने में आसान है। अपना मक़सद लिखें, और वह हद भी जो WebBrain को पार नहीं करनी चाहिए।</p></div></section>
+      <section class="doc-section" id="modes"><h2>प्रॉम्प्ट भेजने से पहले मोड चुनें</h2><div class="mode-strip"><div class="mode ask"><strong>Ask — पूछें</strong><span>पढ़ना, समझाना, तुलना और जानकारी निकालना; पेज नहीं बदलता।</span></div><div class="mode act"><strong>Act — करें</strong><span>क्लिक, टाइपिंग, नेविगेशन, डाउनलोड और शेड्यूल किए गए काम।</span></div><div class="mode dev"><strong>Dev — डेवलप</strong><span>सोर्स कोड, स्टाइल, DOM, फ़्रेम और पेज-डिबगिंग के अतिरिक्त टूल्स।</span></div></div></section>
+      <section class="doc-section" id="settings-map"><div class="eyebrow">यह नक्शा है, चेकलिस्ट नहीं</div><h2>एक नज़र में सेटिंग्स</h2><p>सब कुछ कॉन्फ़िगर करना ज़रूरी नहीं है। प्रोवाइडर और अनुमतियों के अपने पेज हैं; बाक़ी सेटिंग्स के टैब हैं, साथ ही विशेष ऐड-ऑन्स के लिए Skills, CAPTCHA और Bridge। हर ब्लॉक के नीचे का रंग बताता है कि आम उपयोगकर्ता को इसकी कितनी बार ज़रूरत पड़ती है।</p><div class="settings-map" aria-label="सेटिंग्स डेप्थ मैप"><div class="setting-node everyday"><strong>सामान्य</strong><span>व्यवहार और सुविधा</span></div><div class="setting-node everyday"><strong>प्रोवाइडर</strong><span>मॉडल और उसके हेल्पर मॉडल</span></div><div class="setting-node everyday"><strong>अनुमतियाँ</strong><span>जिन साइटों पर कार्रवाई की इजाज़त</span></div><div class="setting-node sometimes"><strong>बजट</strong><span>खर्च, समय और स्टेप्स</span></div><div class="setting-node sometimes"><strong>मेमोरी</strong><span>क्या संग्रहीत रहता है</span></div><div class="setting-node expert"><strong>एडवांस्ड</strong><span>एक्सपर्ट स्विच</span></div></div><div class="depth-legend"><span>रोज़ का नियंत्रण</span><span class="sometimes">ज़रूरत पड़ने पर</span><span class="expert">एडवांस्ड भरोसे का फ़ैसला</span></div><div class="callout"><strong class="callout-title">सुरक्षित बेसलाइन</strong><p>“Act से पहले प्लान” को “Try” पर रखें, प्लान समीक्षा confidence थ्रेशोल्ड पर रहे, शेड्यूल की गई पुष्टियाँ चालू रहें, और “अहम कार्रवाई से पहले पूछें” चालू रहे। बाक़ी विकल्प अभी के अभी छोड़ सकते हैं।</p></div></section>
+      <nav class="next-links" aria-label="आगे की गाइड"><a href="/docs/hi/settings/"><span>अगला</span>सेटिंग्स की व्याख्या →</a><a href="/docs/hi/safety/"><span>पढ़ने की सलाह</span>मोड, सुरक्षा और निजता →</a></nav>
+    </main>
+    <aside class="on-this-page" aria-label="इस पेज पर"><h2>इस पेज पर</h2><a href="#first-run">पहले 10 मिनट</a><a href="#modes">मोड चुनें</a><a href="#settings-map">सेटिंग्स नक्शा</a></aside>
+  </div>
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">हमारा मिशन: वेब को ज़्यादा स्मार्ट बनाना।</p>
+      <p class="wb-footer-copy">© 2026 WebBrain। <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> और<a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">कॉन्ट्रिब्यूटर्स</a> द्वारा निर्मित।</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/hi/">ब्राउज़र एक्सटेंशन</a>
+        <a href="/websites/">वेबसाइट्स के लिए</a>
+        <a href="/companion/hi/">डेस्कटॉप Companion</a>
+        <a href="/research/">रिसर्च</a>
+        <a href="/docs/hi/">डॉक्स</a>
+        <a href="/docs/hi/faq/">अक्सर पूछे जाने वाले सवाल</a>
+        <a href="/blog/">ब्लॉग</a>
+        <a href="/privacy">प्राइवेसी पॉलिसी</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">बग रिपोर्ट करें</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 लाइसेंस</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">प्रेस</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass सब्सक्रिप्शन</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="Mastodon पर WebBrain" title="Mastodon पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="Bluesky पर WebBrain" title="Bluesky पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="Discord पर WebBrain" title="Discord पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="Hugging Face पर WebBrain" title="Hugging Face पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261106"></script>
+</body></html>

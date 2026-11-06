@@ -7,6 +7,13 @@
     "isDefault": true
   },
   {
+    "code": "hi",
+    "bcp47": "hi-IN",
+    "label": "हिन्दी",
+    "dir": "ltr",
+    "isDefault": false
+  },
+  {
     "code": "es",
     "bcp47": "es-ES",
     "label": "Español",
@@ -102,13 +109,6 @@
     "bcp47": "he-IL",
     "label": "עברית",
     "dir": "rtl",
-    "isDefault": false
-  },
-  {
-    "code": "hi",
-    "bcp47": "hi-IN",
-    "label": "हिन्दी",
-    "dir": "ltr",
     "isDefault": false
   },
   {
