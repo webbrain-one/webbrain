@@ -108,6 +108,40 @@ html[data-ui-scale-ready="false"] body { visibility: hidden; }
   height: 100%;
 }
 
+/* Full-page chat: the page the new tab turns into when the user asks there
+   (sidepanel.html?…&tab=1). A centred column for readable lines, on the background
+   the new tab was showing (tab-chat-backdrop.js sets the variables) or on a plain,
+   slightly darker surround when there is none. The column itself stays solid: the
+   answers are never drawn over the picture. */
+html[data-tab-chat="true"] {
+  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-primary) 82%, #000);
+}
+
+html[data-tab-chat="true"] body {
+  max-width: 880px;
+  margin-inline: auto;
+  box-shadow: 0 0 0 1px var(--border), 0 0 48px rgba(0, 0, 0, 0.35);
+}
+
+html[data-tab-chat-backdrop]::before {
+  content: '';
+  position: fixed;
+  inset: var(--tab-chat-backdrop-bleed, 0px);
+  z-index: -1;
+  pointer-events: none;
+  /* The new tab's effects, for pictures and colours alike. */
+  filter: var(--tab-chat-backdrop-filter, none);
+}
+
+html[data-tab-chat-backdrop="image"]::before {
+  background: var(--tab-chat-backdrop-colour, #000) var(--tab-chat-backdrop-image) center / cover no-repeat;
+}
+
+html[data-tab-chat-backdrop="colour"]::before {
+  background: var(--tab-chat-backdrop-background);
+}
+
 /* ==========================================================================
    ONBOARDING OVERLAY — first-launch wizard
    ========================================================================== */

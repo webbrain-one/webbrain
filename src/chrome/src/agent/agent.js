@@ -184,7 +184,7 @@ import { clarifyQuestionIsHard, clarifyTimedAnswer, clarifyTimeoutChoice, normal
 import { guardAdvisory, guardEntry, guardOutcome, withGuardAdvisories } from './guard-policy.js';
 import { UNVERIFIED_STEP_CONTENT_LIMIT, UNVERIFIED_STEP_PROMPT_KIND, clipUnverifiedStepContent, normalizeUnverifiedStepConfirmation } from './unverified-step.js';
 import { leanSkipsGuard, normalizeLeanModeSetting, resolveLeanMode } from './lean-mode.js';
-import { RESPONSE_CUT_OFF_NOTICE, cutOffPartialFromError, emptyOutputFailureMessage, modelOutputDiagnostics, outputWasCutOff } from './model-output-diagnostics.js';
+import { RESPONSE_CUT_OFF_NOTICE, cutOffPartialFromError, emptyOutputFailureMessage, modelOutputDiagnostics, outputLimitedAnswer, outputLimitNotice, outputWasCutOff } from './model-output-diagnostics.js';
 import { stepLimitUserMessage, terminalGuardUserMessage } from './terminal-messages.js';
 import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefinitions, buildSkillToolRegistry, getEligibleCustomSkills, getEligibleSkillCatalog, normalizeCustomSkills } from './skills.js';
 import { OTP_EMAIL_PROVIDER_IDS, OTP_EMAIL_SKILL_ID, OTP_EMAIL_TOOL_NAME, otpEmailCandidates, otpEmailProviderForUrl, otpEmailUrlLooksLikeMessage, otpOpenMessageRootRef, otpRedactRefs, otpServiceDisplay, otpServiceKey, otpVerificationMessageExcerpt, selectOtpMailboxTab, selectUniqueOtpCandidateByPreview } from './otp-email-tool.js';
@@ -10310,6 +10310,7 @@ export class Agent extends LoopDetector {
     let usage = null;
     let responseItems = null;
     let finishReason = '';
+    let outputTruncated = false;
     let terminalRaw = null;
     let sawCompleted = false;
     let usageRecorded = false;
@@ -10380,13 +10381,8 @@ export class Agent extends LoopDetector {
         } else if (chunk?.type === 'done') {
           if (Array.isArray(chunk.responseItems)) responseItems = chunk.responseItems;
           if (chunk.usage) usage = chunk.usage;
-          finishReason = String(
-            chunk.finishReason
-              ?? chunk.finish_reason
-              ?? chunk.stopReason
-              ?? chunk.stop_reason
-              ?? '',
-          );
+          finishReason = modelOutputDiagnostics(chunk).finishReason || '';
+          outputTruncated = chunk.outputTruncated === true;
           if (chunk.raw) terminalRaw = chunk.raw;
           sawCompleted = true;
           break;
@@ -10416,6 +10412,7 @@ export class Agent extends LoopDetector {
       usage,
       responseItems,
       finishReason,
+      ...(outputTruncated ? { outputTruncated: true } : {}),
       ...(terminalRaw ? { raw: terminalRaw } : {}),
     };
     const after = await recordUsage();
@@ -59271,9 +59268,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       finalResponse = this._withStandaloneUnverifiedNotice(finalResponse, standaloneGroundingGap, runOptions);
       this._notePrematureCalculationFinal(tabId);
       finalResponse = this._withCompletionCaveat(tabId, finalResponse);
+      const outputLimited = outputWasCutOff(result);
+      if (outputLimited) {
+        finalResponse = outputLimitedAnswer(finalResponse, runOptions?.locale);
+        _traceStatus = 'partial';
+        traceFailureCode = 'OUTPUT_LIMIT';
+        traceTurnEndExtra = { ...traceTurnEndExtra, outputLimited: true, finishReason: modelOutputDiagnostics(result).finishReason };
+      }
       messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems, result.reasoningContent, provider));
       onUpdate('text', { content: finalResponse, replace: true });
-      if (this._completionOutcomeDowngraded(tabId)) {
+      if (outputLimited) {
+        onUpdate('warning', { code: 'OUTPUT_LIMIT', message: outputLimitNotice(runOptions?.locale) });
+        onUpdate('run_status', { status: 'partial', reason: 'output_limit', message: finalResponse });
+      } else if (this._completionOutcomeDowngraded(tabId)) {
         _traceStatus = 'partial';
         onUpdate('run_status', { status: 'partial', message: finalResponse });
       }
@@ -60034,6 +60041,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         let reasoningContent = '';
         let streamUsage = null;
         let finishReason = '';
+        let outputTruncated = false;
         let rejectedToolResponse = null;
 
         await this._capturePageFeedbackModelState(tabId, pendingVisionFallbackMessages || messages);
@@ -60164,13 +60172,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             if (Array.isArray(chunk.responseItems) && chunk.responseItems.length) {
               responseItems = chunk.responseItems;
             }
-            finishReason = String(
-              chunk.finishReason
-                ?? chunk.finish_reason
-                ?? chunk.stopReason
-                ?? chunk.stop_reason
-                ?? '',
-            );
+            finishReason = modelOutputDiagnostics(chunk).finishReason || '';
+            outputTruncated = chunk.outputTruncated === true;
             if (chunk.usage && !streamUsage) {
               streamUsage = chunk.usage;
               costStopMessage = (await this._recordCostUsage(provider, chunk.usage, costState)) || costStopMessage;
@@ -60715,9 +60718,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('text', { content: fullText, replace: true });
         }
         if (deferReadScopeText) onUpdate('text', { content: fullText, replace: true });
+        const outputLimited = outputWasCutOff({ finishReason, outputTruncated });
+        if (outputLimited) {
+          fullText = outputLimitedAnswer(fullText, runOptions?.locale);
+          traceFailureCode = 'OUTPUT_LIMIT';
+          traceTurnEndExtra = { ...traceTurnEndExtra, outputLimited: true, finishReason: finishReason || null };
+          onUpdate('text', { content: fullText, replace: true });
+          onUpdate('warning', { code: 'OUTPUT_LIMIT', message: outputLimitNotice(runOptions?.locale) });
+          onUpdate('run_status', { status: 'partial', reason: 'output_limit', message: fullText });
+        }
         messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
         this._persist(tabId);
         closeTraceStep({ ok: true });
+        if (outputLimited) return finish(fullText, 'partial');
         if (this._completionOutcomeDowngraded(tabId)) {
           onUpdate('run_status', { status: 'partial', message: fullText });
           return finish(fullText, 'partial');

@@ -12,6 +12,8 @@ const { createNamespacedStorage, NAMESPACE_PREFIX } = await load(nt('lib/storage
 const { buildHandoff, toNavigableUrl, submitTask, openAskChat, TAB_CHAT_PATH, HANDOFF_TARGET_PANEL, HANDOFF_TARGET_TAB_CHAT, handoffKey, HANDOFF_PREFIX, isHandoffPending, whenClaimed, adoptPendingHandoff, pendingHandoffText } = await load(nt('features/agent/handoff.js'));
 const { getTitleFromUrl } = await load(nt('utils/links/getTitleFromUrl.js'));
 const { normalizeLinkUrl } = await load(nt('utils/links/normalizeLinkUrl.js'));
+const { chatBackdropSnapshot, saveChatBackdrop, setShownBackground, CHAT_BACKDROP_KEY } = await load(nt('features/background/api/chatBackdrop.js'));
+const vm = await import('node:vm');
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -131,6 +133,221 @@ test('the full-page chat path is the one the side panel page treats as a tab cha
 test('the task box sends Ask to the full-page chat and Act to the side panel', () => {
   const src = readFileSync(nt('features/agent/TaskBox.jsx'), 'utf8');
   assert.match(src, /const handOver = mode === 'ask' \? openAskChat : submitTask;/);
+});
+
+// ---- The full-page chat keeps the new tab's background ----
+
+const NEWTAB_BASE = 'chrome-extension://wb/newtab/index.html';
+
+test('the chat backdrop describes the background on screen and never copies an upload', () => {
+  const snap = (data, settings = {}) => chatBackdropSnapshot(data, { storage: memoryStorage(settings), base: NEWTAB_BASE });
+  // A bundled photo, with the new tab's effects.
+  assert.deepEqual(
+    snap({ url: 'src/assets/offline-images/3.webp', photoInfo: { offline: true } },
+      { blur: '6', brightness: '70', backgroundFilter: 'sepia', backgroundFilterAmount: '40' }),
+    { v: 1, image: 'chrome-extension://wb/newtab/src/assets/offline-images/3.webp', blur: 6, brightness: 70, filter: 'sepia', filterAmount: 40 },
+  );
+  assert.deepEqual(snap({ url: 'https://example.com/a.jpg', photoInfo: { colour: '#123456' } }),
+    { v: 1, image: 'https://example.com/a.jpg', colour: '#123456', blur: 0, brightness: 100 });
+  // Out-of-range numbers are bounded and an unknown filter is dropped.
+  assert.deepEqual(snap({ url: 'https://example.com/a.jpg', photoInfo: {} }, { blur: '500', brightness: '-3', backgroundFilter: 'hue-rotate' }),
+    { v: 1, image: 'https://example.com/a.jpg', blur: 100, brightness: 0 });
+  // An upload goes by its id in the new tab's database; the picture itself stays behind.
+  const upload = snap({ url: 'data:image/png;base64,AAAA', photoInfo: { customId: 7 } });
+  assert.deepEqual(upload, { v: 1, customId: 7, blur: 0, brightness: 100 });
+  assert.equal(snap({ url: 'data:image/png;base64,AAAA', photoInfo: {} }), null, 'an inline picture without an id is not copied');
+  assert.equal(snap({ url: 'blob:chrome-extension://wb/1', photoInfo: {} }), null, 'a blob address dies with the new tab');
+  // Colours and gradients go as their CSS value, never anything that loads something. The new
+  // tab's effect overlay covers them too, so their effects go along.
+  assert.deepEqual(snap({ url: '', style: 'background: rgb(10, 120, 90)' }), { v: 1, background: 'rgb(10, 120, 90)', blur: 0, brightness: 100 });
+  assert.deepEqual(snap({ url: '', style: 'background:linear-gradient(to right, #abcdef, #123456);' }, { brightness: '30', backgroundFilter: 'invert', backgroundFilterAmount: '100' }),
+    { v: 1, background: 'linear-gradient(to right, #abcdef, #123456)', blur: 0, brightness: 30, filter: 'invert', filterAmount: 100 });
+  assert.equal(snap({ url: '', style: 'background: url(https://example.com/x.png)' }), null);
+  // Nothing to carry over.
+  assert.equal(snap({ url: 'https://example.com/v.mp4', video: true, photoInfo: {} }), null, 'videos are not carried over');
+  assert.equal(snap({ url: 'https://example.com/a.jpg', photoInfo: {} }, { background: 'false' }), null, 'backgrounds turned off');
+  assert.equal(snap({ url: '', style: '' }), null);
+  assert.equal(snap(null), null);
+});
+
+test('the new tab remembers what it shows, and uploads carry their id', () => {
+  setShownBackground({ url: 'https://example.com/b.jpg', photoInfo: {} });
+  assert.equal(chatBackdropSnapshot(undefined, { storage: memoryStorage(), base: NEWTAB_BASE }).image, 'https://example.com/b.jpg');
+  setShownBackground(null);
+  assert.equal(chatBackdropSnapshot(undefined, { storage: memoryStorage(), base: NEWTAB_BASE }), null);
+  const background = readFileSync(nt('features/background/Background.jsx'), 'utf8');
+  assert.match(background, /useEffect\(\(\) => setShownBackground\(backgroundData\), \[backgroundData\]\);/);
+  const loader = readFileSync(nt('features/background/api/backgroundLoader.js'), 'utf8');
+  assert.match(loader, /photoInfo: \{[\s\S]*?\{ customId: selected\.id \}[\s\S]*?\}/, 'custom backgrounds keep their database id');
+});
+
+test('saving the chat backdrop writes this tab\'s copy and never throws', () => {
+  const session = memoryStorage();
+  assert.equal(saveChatBackdrop(session, { v: 1, background: 'red' }), true);
+  assert.deepEqual(JSON.parse(session.getItem(CHAT_BACKDROP_KEY)), { v: 1, background: 'red' });
+  assert.equal(saveChatBackdrop(session, null), false);
+  assert.equal(session.getItem(CHAT_BACKDROP_KEY), null, 'nothing to carry over clears an older one');
+  assert.equal(saveChatBackdrop({ setItem() { throw new Error('quota'); }, removeItem() {} }, { v: 1 }), false);
+  assert.equal(saveChatBackdrop(undefined, { v: 1 }), false);
+});
+
+test('Ask leaves the backdrop for the chat right before it navigates', async () => {
+  const calls = [];
+  const api = {
+    storage: { local: { set: async () => { calls.push('set'); }, get: async () => ({}) } },
+    runtime: { getURL: (p) => p },
+  };
+  await openAskChat({ text: 'q' }, api, { id: 61 }, () => calls.push('navigate'), () => calls.push('backdrop'));
+  assert.deepEqual(calls, ['set', 'backdrop', 'navigate']);
+  // It is cosmetic: failing to save it never stops the hand-off.
+  let navigated = false;
+  await openAskChat({ text: 'q' }, api, { id: 62 }, () => { navigated = true; }, () => { throw new Error('blocked'); });
+  assert.equal(navigated, true);
+  // A task that could not be stored leaves no backdrop behind either.
+  let remembered = false;
+  const failing = { storage: { local: { set: async () => { throw new Error('quota'); } } }, runtime: { getURL: (p) => p } };
+  await assert.rejects(() => openAskChat({ text: 'q' }, failing, { id: 63 }, () => {}, () => { remembered = true; }));
+  assert.equal(remembered, false);
+});
+
+function fakeIdb({ listed = true, record = () => undefined } = {}) {
+  const opened = [];
+  return {
+    opened,
+    databases: async () => (listed ? [{ name: 'MueCustomBackgrounds' }] : []),
+    open(name) {
+      opened.push(name);
+      const request = {};
+      setTimeout(() => {
+        request.result = {
+          objectStoreNames: { contains: (store) => store === 'backgrounds' },
+          close() {},
+          transaction: () => ({
+            objectStore: () => ({
+              get(id) {
+                const get = {};
+                setTimeout(() => { get.result = record(id); get.onsuccess?.(); }, 0);
+                return get;
+              },
+            }),
+          }),
+        };
+        request.onsuccess?.();
+      }, 0);
+      return request;
+    },
+  };
+}
+
+function runChatBackdrop(browserDir, { search = '?mode=ask&standalone=true&tab=1', stored, supports = () => true, indexedDB } = {}) {
+  const src = readFileSync(path.join(root, 'src', browserDir, 'src', 'ui', 'tab-chat-backdrop.js'), 'utf8');
+  const attrs = new Map();
+  const props = new Map();
+  const seed = stored === undefined ? {} : { [CHAT_BACKDROP_KEY]: typeof stored === 'string' ? stored : JSON.stringify(stored) };
+  vm.runInNewContext(src, {
+    document: { documentElement: { setAttribute: (k, v) => attrs.set(k, String(v)), style: { setProperty: (k, v) => props.set(k, String(v)) } } },
+    window: { location: { search, origin: 'chrome-extension://wb' }, sessionStorage: memoryStorage(seed) },
+    URL,
+    URLSearchParams,
+    CSS: { supports },
+    indexedDB,
+    setTimeout,
+  });
+  return { attrs, props };
+}
+
+test('the full-page chat paints the new tab background it is given, and checks it first', async () => {
+  for (const browserDir of ['chrome', 'firefox']) {
+    const bundled = 'chrome-extension://wb/newtab/src/assets/offline-images/3.webp';
+    let { attrs, props } = runChatBackdrop(browserDir, {
+      stored: { v: 1, image: bundled, colour: '#123456', blur: 6, brightness: 70, filter: 'sepia', filterAmount: 40 },
+    });
+    assert.equal(attrs.get('data-tab-chat'), 'true', browserDir);
+    assert.equal(attrs.get('data-tab-chat-backdrop'), 'image', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-image'), `url("${bundled}")`, browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-colour'), '#123456', browserDir);
+    // The new tab's order: blur and the effect first, then darkened (brightness last). With
+    // brightness 0 and invert the new tab is black, and so must the chat be.
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'blur(6px) sepia(40%) brightness(70%)', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-bleed'), '-12px', browserDir);
+    ({ props } = runChatBackdrop(browserDir, { stored: { v: 1, image: bundled, brightness: 0, filter: 'invert', filterAmount: 100 } }));
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'invert(100%) brightness(0%)', browserDir);
+
+    ({ props } = runChatBackdrop(browserDir, { stored: { v: 1, image: 'https://example.com/a.jpg', blur: 999, brightness: -5, filter: 'url(x)' } }));
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'blur(100px) brightness(0%)', `${browserDir}: numbers are bounded, unknown filters dropped`);
+    ({ props } = runChatBackdrop(browserDir, { stored: { v: 1, image: 'https://example.com/a.jpg' } }));
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'none', browserDir);
+
+    ({ attrs, props } = runChatBackdrop(browserDir, { stored: { v: 1, background: 'linear-gradient(to right, #abcdef, #123456)' } }));
+    assert.equal(attrs.get('data-tab-chat-backdrop'), 'colour', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-background'), 'linear-gradient(to right, #abcdef, #123456)', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'none', browserDir);
+    ({ attrs, props } = runChatBackdrop(browserDir, { stored: { v: 1, background: 'rgb(10, 120, 90)', brightness: 30, filter: 'grayscale', filterAmount: 50 } }));
+    assert.equal(attrs.get('data-tab-chat-backdrop'), 'colour', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'grayscale(50%) brightness(30%)', `${browserDir}: colours keep their effects`);
+
+    // Anything else leaves the column on its plain surround.
+    for (const stored of [
+      { v: 1, image: 'javascript:alert(1)' },
+      { v: 1, image: 'file:///C:/secret.jpg' },
+      { v: 1, image: 'chrome-extension://other/x.webp' },
+      { v: 1, image: 'data:image/png;base64,AAAA' },
+      { v: 1, background: 'url(https://example.com/x.png)' },
+      { v: 1, background: 'red'.padEnd(400, ' ') },
+      { v: 2, image: bundled },
+      '{not json',
+      undefined,
+    ]) {
+      ({ attrs } = runChatBackdrop(browserDir, { stored }));
+      assert.equal(attrs.get('data-tab-chat'), 'true', `${browserDir}: ${JSON.stringify(stored)}`);
+      assert.equal(attrs.has('data-tab-chat-backdrop'), false, `${browserDir}: ${JSON.stringify(stored)}`);
+    }
+    ({ attrs } = runChatBackdrop(browserDir, { stored: { v: 1, background: 'nonsense' }, supports: () => false }));
+    assert.equal(attrs.has('data-tab-chat-backdrop'), false, `${browserDir}: a value the browser rejects is not used`);
+
+    // Only the full-page chat: the side panel and the standalone window keep their layout.
+    for (const search of ['', '?mode=ask&standalone=true', '?tab=1']) {
+      ({ attrs } = runChatBackdrop(browserDir, { search, stored: { v: 1, image: bundled } }));
+      assert.equal(attrs.size, 0, `${browserDir}: ${search || 'side panel'}`);
+    }
+
+    // An upload is read from the new tab's own database, by id.
+    const idb = fakeIdb({ record: (id) => (id === 4 ? { url: 'data:image/png;base64,AAAA' } : undefined) });
+    ({ attrs, props } = runChatBackdrop(browserDir, { stored: { v: 1, customId: 4 }, indexedDB: idb }));
+    for (let i = 0; i < 5; i += 1) await flush();
+    assert.equal(attrs.get('data-tab-chat-backdrop'), 'image', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-image'), 'url("data:image/png;base64,AAAA")', browserDir);
+    // ... but never opened when it does not exist (opening would create an empty one the new tab could not use).
+    const missing = fakeIdb({ listed: false });
+    ({ attrs } = runChatBackdrop(browserDir, { stored: { v: 1, customId: 4 }, indexedDB: missing }));
+    for (let i = 0; i < 5; i += 1) await flush();
+    assert.deepEqual(missing.opened, [], browserDir);
+    assert.equal(attrs.has('data-tab-chat-backdrop'), false, browserDir);
+    // A record that is not a picture is ignored.
+    const odd = fakeIdb({ record: () => ({ url: 'javascript:alert(1)' }) });
+    ({ attrs } = runChatBackdrop(browserDir, { stored: { v: 1, customId: 4 }, indexedDB: odd }));
+    for (let i = 0; i < 5; i += 1) await flush();
+    assert.equal(attrs.has('data-tab-chat-backdrop'), false, browserDir);
+  }
+});
+
+test('the chat backdrop script is loaded before first paint and matches the new tab', () => {
+  const read = (browserDir, ...p) => readFileSync(path.join(root, 'src', browserDir, ...p), 'utf8');
+  const script = read('chrome', 'src', 'ui', 'tab-chat-backdrop.js');
+  assert.equal(read('firefox', 'src', 'ui', 'tab-chat-backdrop.js'), script, 'Chrome and Firefox copies are identical');
+  assert.match(script, new RegExp(`var KEY = '${CHAT_BACKDROP_KEY}';`), 'the chat reads the key the new tab writes');
+  const effects = readFileSync(nt('features/background/options/optionTypes/backgroundImageEffects.js'), 'utf8');
+  const offered = [...effects.matchAll(/value: '([a-z-]+)'/g)].map((m) => m[1]).filter((v) => v !== 'none');
+  assert.deepEqual(JSON.parse(/var FILTERS = (\[[^\]]*\])/.exec(script)[1].replace(/'/g, '"')), offered, 'every new tab filter is understood');
+  for (const browserDir of ['chrome', 'firefox']) {
+    const html = read(browserDir, 'src', 'ui', 'sidepanel.html');
+    assert.match(html, /<script src="theme-bootstrap\.js"><\/script>[\s\S]*?<script src="tab-chat-backdrop\.js"><\/script>[\s\S]*?<link rel="stylesheet" href="\.\.\/\.\.\/styles\/sidepanel\.css">/, browserDir);
+    const css = read(browserDir, 'styles', 'sidepanel.css');
+    assert.match(css, /html\[data-tab-chat="true"\] body \{[^}]*max-width: 880px;[^}]*margin-inline: auto;/, browserDir);
+    assert.match(css, /html\[data-tab-chat-backdrop\]::before \{[^}]*position: fixed;[^}]*z-index: -1;[^}]*filter: var\(--tab-chat-backdrop-filter, none\);/, `${browserDir}: effects apply to every backdrop kind`);
+    // The surround needs its own background, or the column's would spread to the whole page.
+    assert.match(css, /html\[data-tab-chat="true"\] \{[^}]*background:/, browserDir);
+  }
 });
 
 function failingApi({ open, withSidePanel = true } = {}) {
