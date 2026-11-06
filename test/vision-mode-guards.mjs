@@ -503,6 +503,169 @@ for (const build of ['chrome', 'firefox']) {
     agent._endVisionRun(tab, null);
   });
 
+  // The page-action binding check (page-feedback.js) during an upload
+  // handoff. The page monitor is faked as GitHub's release form reads to it:
+  // the binary input is hidden behind its widget on a page too deep for the
+  // observation to certify, so every upload_file is target_uncovered, and the
+  // monitor says `inventoried` only for the very node an inventory with this
+  // token listed under this exact selector. A three-asset release used to
+  // spend a refusal, a get_interactive_elements and the same upload_file
+  // again on every file (trace steps 15-18 and 24-27).
+  const RELEASE_PAGE = 'https://owned.example/owned/repository/releases/new';
+  const GUESSED_SAME_INPUT = 'input[type="file"][multiple]:not([accept])';
+  function uploadBindingFixture({ strict = false, documentToken = 'content-1' } = {}) {
+    const agent = agentFor();
+    agent.visionMode = 'auto';
+    agent.strictGuards = strict;
+    const tab = 37;
+    agent._currentUrl = async () => RELEASE_PAGE;
+    agent._lastTabUrls = new Map([[tab, RELEASE_PAGE]]);
+    agent._uncertainTextMutationBlock = async () => null;
+    agent._finalizeToolResultOnce = async (_tab, _name, _args, result) => result;
+    const sent = [];
+    agent._executeToolImpl = async (_tab, name, args) => {
+      sent.push({ name, selector: args.selector });
+      return { success: true, dispatched: true, file: 'chrome.zip', attached: { name: 'chrome.zip', size: 4 }, attachmentState: 'input_attached' };
+    };
+    // Which node each selector names on the page right now.
+    const dom = new Map([['#releases-upload', 'binary'], [GUESSED_SAME_INPUT, 'binary'], ['#fc-release-body', 'markdown']]);
+    const monitor = { inventory: null, records: [], validations: [] };
+    const answer = message => {
+      const params = message.params || {};
+      if (message.action === 'page_monitor_record_upload_targets') {
+        monitor.records.push(params);
+        const pairs = (params.selectors || []).filter(selector => dom.has(selector)).map(selector => [dom.get(selector), selector]);
+        if (params.runToken !== 'pf-run' || !pairs.length) return { recorded: [], runToken: 'pf-run', documentToken };
+        monitor.inventory = { token: params.token, entries: new Map(pairs) };
+        return { recorded: pairs.map(([, selector]) => selector), runToken: 'pf-run', documentToken };
+      }
+      if (message.action === 'page_monitor_validate_model') {
+        monitor.validations.push(params);
+        const node = dom.get(params.selector);
+        const inventoried = !!node && params.tool === 'upload_file' && typeof params.fileInventoryToken === 'string'
+          && !!params.fileInventoryToken && monitor.inventory?.token === params.fileInventoryToken
+          && monitor.inventory.entries.get(node) === params.selector;
+        return { ready: false, reason: node ? 'target_uncovered' : 'target_unresolved', ...(node ? { certificationFailure: 'identity_unobserved' } : {}),
+          ...(inventoried ? { inventoried: true } : {}), runToken: params.runToken, documentToken: 'content-1', snapshotToken: params.snapshotToken };
+      }
+      return { ready: true };
+    };
+    const frame = { token: 'content-1', id: 'document-1' };
+    const state = { token: 'pf-run', url: RELEASE_PAGE, frames: new Map([[0, frame]]), steeringRevision: 0,
+      actionBinding: { snapshotToken: 'snapshot-1', runToken: 'pf-run', documentToken: 'content-1' } };
+    const run = { token: 'pf-run', url: RELEASE_PAGE, documents: new Map(), frames: new Map([[0, { ...frame }]]), revision: 0,
+      events: new Map(), modelState: state, gestures: new Set(), gestureLeases: new Map() };
+    agent._pageFeedbackRuns = new Map([[tab, run]]);
+    const blocked = (selector = '#releases-upload') => ({ success: false, dispatched: true, filePickerBlocked: true, selector, error: 'Blocked a native file chooser.' });
+    const upload = selector => agent.executeTool(tab, 'upload_file', { selector, downloadId: 2157 }, null, { guardAdvisories: [] });
+    return { agent, tab, run, dom, monitor, sent, blocked, upload, answer };
+  }
+  async function withFakeMonitor(answer, work) {
+    const saved = { chrome: globalThis.chrome, browser: globalThis.browser };
+    const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
+    const fake = {
+      storage: { local: area, session: area },
+      runtime: { getURL: value => `extension://test/${value}`, sendMessage: async () => ({}) },
+      tabs: { get: async id => ({ id, url: RELEASE_PAGE }), query: async () => [], sendMessage: async (_tab, message) => answer(message) },
+      webNavigation: { getAllFrames: async () => [{ frameId: 0, parentFrameId: -1, documentId: 'document-1', url: RELEASE_PAGE }] },
+    };
+    globalThis.chrome = globalThis.browser = fake;
+    try { return await work(); } finally {
+      for (const name of ['chrome', 'browser']) {
+        if (saved[name] === undefined) delete globalThis[name]; else globalThis[name] = saved[name];
+      }
+    }
+  }
+  const refusedAsUncovered = (result, sent, label) => {
+    assert.deepEqual(sent, [], `${label}: nothing was attached`);
+    assert.equal(result.errorCode, 'action_binding_unavailable', `${label}: ${JSON.stringify(result)}`);
+    assert.equal(result.bindingFailure, 'target_uncovered', label);
+    assert.equal(result.recoveryRequired, 'get_interactive_elements', label);
+  };
+
+  for (const [mode, strict] of [['default', false], ['strict', true]]) {
+    test(`${build}: ${mode} checks: the first upload_file of a handoff ${strict ? 'is refused like an inventory\'s' : 'attaches to the input the blocked click named'}; a guessed selector is refused`, async () => {
+      const f = uploadBindingFixture({ strict });
+      await withFakeMonitor(f.answer, async () => {
+        f.agent._beginVisionRun(f.tab);
+        assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'click', f.blocked(), { vision: { tool: 'click_at' } }).uploadHandoff, true);
+        // What the first upload_file met before: the input is not covered and
+        // no inventory named it.
+        refusedAsUncovered(await f.upload('#releases-upload'), f.sent, 'before the handoff starts');
+        await f.agent._visionUploadHandoffTick(f.tab, 1);
+        assert.equal(f.agent._visionRunState(f.tab, 'act').reason, 'file_upload_needs_element_inventory');
+        assert.equal(f.monitor.records.length, 1);
+        assert.deepEqual(f.monitor.records[0].selectors, ['#releases-upload']);
+        assert.deepEqual(f.run.uploadObservationScope, { documentToken: 'content-1', url: RELEASE_PAGE,
+          token: f.monitor.records[0].token, selectors: ['#releases-upload'], source: 'upload_handoff' });
+        // A guessed selector, for the same input or another one, keeps its refusal.
+        for (const guessed of [GUESSED_SAME_INPUT, '#fc-release-body']) refusedAsUncovered(await f.upload(guessed), f.sent, guessed);
+        const first = await f.upload('#releases-upload');
+        assert.equal(f.monitor.validations.at(-1).fileInventoryToken, f.monitor.records[0].token, 'the monitor is asked about the recorded node');
+        if (strict) refusedAsUncovered(first, f.sent, 'Strict checks');
+        else {
+          assert.deepEqual(f.sent, [{ name: 'upload_file', selector: '#releases-upload' }], JSON.stringify(first));
+          assert.equal(first.success, true);
+          assert.deepEqual(first.guardAdvisories.map(item => item.guard), ['page-feedback-target-binding']);
+          assert.match(first.guardAdvisories[0].note, /the exact input the blocked file-chooser click named/);
+          assert.doesNotMatch(first.guardAdvisories[0].note, /inventory/);
+          // The upload ends the handoff; the run is back on screenshots.
+          assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'upload_file', first, {}), first);
+          await f.agent._visionUploadHandoffTick(f.tab, 2);
+          assert.equal(f.agent._visionRunState(f.tab, 'act').active, true);
+          f.sent.length = 0;
+        }
+        // A node the page renders later under the same selector was never observed.
+        f.dom.set('#releases-upload', 'binary-remounted');
+        refusedAsUncovered(await f.upload('#releases-upload'), f.sent, 'a re-mounted input');
+        assert.equal(f.monitor.records.length, 1, 'only the start of a handoff observes its inputs');
+      });
+      f.agent._endVisionRun(f.tab, null);
+    });
+  }
+
+  test(`${build}: a handoff observes every input its batch blocked, on the page and run it starts in, never for the compact tier`, async () => {
+    // Another chooser in the batch that armed the handoff is covered by it.
+    const batch = uploadBindingFixture();
+    await withFakeMonitor(batch.answer, async () => {
+      batch.agent._beginVisionRun(batch.tab);
+      batch.agent._visionNoteUploadHandoff(batch.tab, 'click', batch.blocked(), { vision: { tool: 'click_at' } });
+      batch.agent._visionNoteUploadHandoff(batch.tab, 'click', batch.blocked('#fc-release-body'), { vision: { tool: 'click_at' } });
+      await batch.agent._visionUploadHandoffTick(batch.tab, 1);
+      assert.deepEqual(batch.monitor.records.map(record => record.selectors), [['#releases-upload', '#fc-release-body']]);
+      assert.deepEqual(batch.run.uploadObservationScope.selectors, ['#releases-upload', '#fc-release-body']);
+      await batch.agent._visionUploadHandoffTick(batch.tab, 2);
+      assert.equal(batch.monitor.records.length, 1, 'an active handoff does not observe again');
+    });
+    batch.agent._endVisionRun(batch.tab, null);
+    // The monitor answered for another document (the page was replaced while
+    // the click's update settled): nothing is observed.
+    const replaced = uploadBindingFixture({ documentToken: 'content-2' });
+    await withFakeMonitor(replaced.answer, async () => {
+      replaced.agent._beginVisionRun(replaced.tab);
+      replaced.agent._visionNoteUploadHandoff(replaced.tab, 'click', replaced.blocked(), { vision: { tool: 'click_at' } });
+      await replaced.agent._visionUploadHandoffTick(replaced.tab, 1);
+      assert.equal(replaced.monitor.records.length, 1);
+      assert.equal(replaced.run.uploadObservationScope, undefined);
+      refusedAsUncovered(await replaced.upload('#releases-upload'), replaced.sent, 'another document');
+    });
+    replaced.agent._endVisionRun(replaced.tab, null);
+    // The compact tier's upload_file finds its own target by discovery, and a
+    // chooser the guard could not name gives no selector: neither is observed.
+    for (const [label, result, promptTier] of [['compact', null, 'compact'], ['unnamed', { selector: undefined }, '']]) {
+      const f = uploadBindingFixture();
+      await withFakeMonitor(f.answer, async () => {
+        f.agent._userAttachmentHandles.set(f.tab, new Map([['attachment_t_1', { name: 'chrome.zip' }]]));
+        f.agent._beginVisionRun(f.tab);
+        assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'click', { ...f.blocked(), ...result }, { vision: { tool: 'click_at' }, promptTier }).uploadHandoff, true, label);
+        await f.agent._visionUploadHandoffTick(f.tab, 1);
+        assert.deepEqual(f.monitor.records, [], label);
+        assert.equal(f.run.uploadObservationScope, undefined, label);
+      });
+      f.agent._endVisionRun(f.tab, null);
+    }
+  });
+
   test(`${build}: back on vision, a failed capture leaves no frame to aim at and retires the old one in the history`, async () => {
     const agent = agentFor();
     agent.visionMode = 'auto';
