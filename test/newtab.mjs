@@ -9,7 +9,7 @@ const nt = (...p) => path.join(root, 'newtab', 'src', ...p);
 const load = (file) => import(pathToFileURL(file).href);
 
 const { createNamespacedStorage, NAMESPACE_PREFIX } = await load(nt('lib/storage-namespace.js'));
-const { buildHandoff, toNavigableUrl, submitTask, handoffKey, HANDOFF_PREFIX, isHandoffPending, whenClaimed, adoptPendingHandoff, pendingHandoffText } = await load(nt('features/agent/handoff.js'));
+const { buildHandoff, toNavigableUrl, submitTask, openAskChat, TAB_CHAT_PATH, handoffKey, HANDOFF_PREFIX, isHandoffPending, whenClaimed, adoptPendingHandoff, pendingHandoffText } = await load(nt('features/agent/handoff.js'));
 const { getTitleFromUrl } = await load(nt('utils/links/getTitleFromUrl.js'));
 const { normalizeLinkUrl } = await load(nt('utils/links/normalizeLinkUrl.js'));
 
@@ -79,6 +79,58 @@ test('submitTask stores the task, opens the panel from the same tick, then annou
   await p;
   assert.deepEqual(calls.at(-1)[1], { type: 'WB_NEWTAB_PANEL_OPENED', tabId: 42 });
   await assert.rejects(() => submitTask({ text: 'x', mode: 'ask' }, api, null));
+});
+
+test('Ask stores the task for this tab, then turns the tab into the full-page chat', async () => {
+  const calls = [];
+  const api = {
+    storage: { local: { set: async (v) => { calls.push(['set', v]); }, get: async () => ({}) } },
+    runtime: { getURL: (p) => `chrome-extension://wb/${p}` },
+  };
+  await openAskChat({ text: 'what is a murshid?' }, api, { id: 31 }, (url) => calls.push(['navigate', url]));
+  assert.deepEqual(calls.map((c) => c[0]), ['set', 'navigate'], 'the task is stored before the page is left');
+  const record = calls[0][1][handoffKey(31)];
+  assert.equal(record.mode, 'ask');
+  assert.equal(record.tabId, 31);
+  assert.equal(record.text, 'what is a murshid?');
+  assert.equal(calls[1][1], 'chrome-extension://wb/src/ui/sidepanel.html?mode=ask&standalone=true&tab=1');
+  // No side panel is involved: nothing asks to open one or announces one.
+  assert.equal(api.sidePanel, undefined);
+  await assert.rejects(() => openAskChat({ text: 'x' }, api, null, () => {}));
+});
+
+test('Ask that cannot store its task stays on the new tab and unlocks', async () => {
+  let navigated = false;
+  const api = {
+    storage: { local: { set: async () => { throw new Error('quota'); } } },
+    runtime: { getURL: (p) => p },
+  };
+  await assert.rejects(() => openAskChat({ text: 'x' }, api, { id: 32 }, () => { navigated = true; }), /quota/);
+  assert.equal(navigated, false);
+  assert.equal(isHandoffPending(32), false);
+});
+
+test('the full-page chat path is the one the side panel page treats as a tab chat', () => {
+  const params = new URL(`chrome-extension://wb/${TAB_CHAT_PATH}`).searchParams;
+  assert.equal(params.get('standalone'), 'true');
+  assert.equal(params.get('tab'), '1');
+  assert.equal(params.get('mode'), 'ask');
+  for (const browserDir of ['chrome', 'firefox']) {
+    const src = readFileSync(path.join(root, 'src', browserDir, 'src', 'ui', 'sidepanel.js'), 'utf8');
+    assert.match(src, /const isTabChat = isStandaloneWindow && _btwParams\.get\('tab'\) === '1';/, browserDir);
+    // Bound to its own tab, never retargeted by tab switches.
+    assert.match(src, /const ownTab = isTabChat \? await (chrome|browser)\.tabs\.getCurrent\(\)/, browserDir);
+    assert.match(src, /const windowScope = isBtwWindow \|\| isTabChat \? null : createSidePanelWindowScope\(/, browserDir);
+  }
+  // On Chrome it must not report itself as the window's side panel either.
+  const chromeSrc = readFileSync(path.join(root, 'src', 'chrome', 'src', 'ui', 'sidepanel.js'), 'utf8');
+  assert.match(chromeSrc, /const presenceReportedEarly = !isBtwWindow && !isTabChat && initialWindowId != null;/);
+  assert.match(chromeSrc, /if \(!isBtwWindow && !isTabChat && !presenceReportedEarly\)/);
+});
+
+test('the task box sends Ask to the full-page chat and Act to the side panel', () => {
+  const src = readFileSync(nt('features/agent/TaskBox.jsx'), 'utf8');
+  assert.match(src, /const handOver = mode === 'ask' \? openAskChat : submitTask;/);
 });
 
 function failingApi({ open, withSidePanel = true } = {}) {

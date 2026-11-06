@@ -4139,6 +4139,7 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           ...(msg.foreground ? { foreground: true } : {}),
           ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           ...(runProviderId ? { providerId: runProviderId } : {}),
           ...standaloneRagFilterOptions(msg),
           ...(normalizeSelectionSourceGrounding(msg.sourceGrounding)
@@ -4302,6 +4303,7 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           ...(msg.foreground ? { foreground: true } : {}),
           ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           ...(runProviderId ? { providerId: runProviderId } : {}),
           ...standaloneRagFilterOptions(msg),
           ...(normalizeSelectionSourceGrounding(msg.sourceGrounding)

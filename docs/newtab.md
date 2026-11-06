@@ -44,7 +44,7 @@ back to Firefox's page.
 
 | Mode | What happens |
 |------|--------------|
-| Ask | The text is handed to the side panel and **sent** (Ask is read-only). |
+| Ask | The tab turns into WebBrain's **full-page chat** (`src/ui/sidepanel.html?mode=ask&standalone=true&tab=1`) and the text is **sent** there (Ask is read-only). A new tab has no page for a side panel to sit beside, so the chat takes the whole tab; Back returns to the new tab. |
 | Act | The panel opens in Act and the text is **sent immediately**, like Ask. The box shows a warning that Act starts working right away. If **Plan before Act** is on in WebBrain, the plan is still shown for approval before anything is done. |
 | Search | A URL is opened (http/https only); anything else goes to the browser's default search engine via `chrome.search.query` / `browser.search.search`. Hidden if the API is missing. |
 
@@ -52,6 +52,19 @@ No search engine is hard-coded, and nothing typed into the box is sent to WebBra
 the page. The only request the page itself makes to WebBrain is the bulletin check below.
 
 ## Hand-off
+
+Act goes to the side panel as described below. Ask uses the same storage record but no panel:
+the page writes `wbNewtabHandoff:<tabId>` (awaited, since no user gesture is needed), then
+navigates its own tab to the full-page chat, which claims the record addressed to that tab
+exactly as a panel would (step 3). The full-page chat is the standalone (Ask-only) layout bound to
+the tab it was loaded in (`tab=1`): it reads its own tab with `tabs.getCurrent()`, does not follow
+tab switches, and does not report itself to the background as the window's side panel, so Act from
+another tab still opens the real panel there. Like the standalone window it sends no page or browser
+context, but its runs carry `standaloneWebTools`, so the model may read the web with Ask's read-only
+network tools (`fetch_url`, `research_url`, `calculate`; the permission gate still asks per host) and
+its own tool calls stay in the conversation it sees. Page tools are never offered, an in-browser
+(WebGPU) model stays tool-free, and the standalone window itself is unchanged. The first-open pin
+coachmark is left for the first real side panel, since it points at the panel's header.
 
 1. In the submit handler (no `await` before it, to keep the user gesture) the page
    writes `{id, tabId, text, mode, createdAt}` to extension storage key
