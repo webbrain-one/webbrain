@@ -12,6 +12,7 @@
 const { BrowserWindow, ipcMain, shell, webContents: allWebContents } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { mapInternal } = require('../url');
 
 const CHANNEL = 'murshid-crx';
@@ -42,6 +43,9 @@ class CrxBridge {
 
     // chrome.offscreen
     this.offscreen = new Map(); // extId -> BrowserWindow
+    this.offscreenIdentity = new Map(); // extId -> { win, generation, documentId, pending }
+    this.offscreenRequests = new Map();
+    this.requestEventAcks = new Map();
 
     // chrome.tabGroups (Murshid has no tab groups UI yet; ids are kept so callers work)
     this.groups = new Map(); // groupId -> { id, title, color, collapsed, windowId, tabIds:Set }
@@ -139,6 +143,64 @@ class CrxBridge {
       }
     }
     return null;
+  }
+
+  // Electron's session webRequest listener takes precedence over the native
+  // extension events. Relay only requests proven to belong to the current
+  // offscreen document; the worker acknowledges delivery before proceeding.
+  discardOffscreenRequest(id) {
+    const key = String(id);
+    const binding = this.offscreenRequests.get(key);
+    if (binding) clearTimeout(binding.timer);
+    this.offscreenRequests.delete(key);
+  }
+
+  async forwardOffscreenRequest(event, details) {
+    if (details.resourceType !== 'xhr' || !details.frame || !details.initiatorOrigin) return;
+    const extId = extIdFromUrl(`${details.initiatorOrigin}/`);
+    const state = extId && this.offscreenIdentity.get(extId);
+    const manifest = extId && this.ses.extensions.getExtension(extId)?.manifest;
+    if (!extId || !this.isWebBrain(extId) || !manifest?.permissions?.includes('webRequest')
+      || !manifest?.host_permissions?.includes('<all_urls>')) return;
+    if (!state?.documentId || state.win.isDestroyed() || state.win.webContents.id !== details.webContentsId
+      || details.initiatorOrigin !== `chrome-extension://${extId}`
+      || details.frame.frameToken !== state.win.webContents.mainFrame.frameToken
+      || details.frame.url !== state.win.webContents.getURL()) return;
+    const key = String(details.id);
+    if (event === 'onBeforeRequest') {
+      if (this.offscreenRequests.size >= 1024 && !this.offscreenRequests.has(key)) return;
+      const old = this.offscreenRequests.get(key);
+      if (old) clearTimeout(old.timer);
+      const binding = { extId, state, generation: state.generation, documentId: state.documentId, url: details.url };
+      binding.timer = setTimeout(() => this.offscreenRequests.delete(key), 24 * 60 * 60 * 1000);
+      binding.timer.unref();
+      this.offscreenRequests.set(key, binding);
+    } else {
+      const binding = this.offscreenRequests.get(key);
+      if (!binding || binding.state !== state || binding.generation !== state.generation
+        || binding.documentId !== state.documentId || binding.url !== details.url) return;
+      clearTimeout(binding.timer);
+      this.offscreenRequests.delete(key);
+    }
+    const worker = this.runningWorker(`chrome-extension://${extId}/`);
+    if (!worker || worker.isDestroyed() || this.requestEventAcks.size >= 512) return;
+    const payload = {
+      requestId: key, url: details.url, method: details.method, type: 'xmlhttprequest',
+      documentId: state.documentId, initiator: details.initiatorOrigin,
+      ...(event === 'onHeadersReceived' ? {
+        statusCode: details.statusCode,
+        // Redirect validation needs Location only; do not relay cookies or
+        // unrelated response headers through this supplemental path.
+        responseHeaders: Object.entries(details.responseHeaders || {}).filter(([name]) => name.toLowerCase() === 'location').flatMap(([name, values]) => [].concat(values).map((value) => ({ name, value }))),
+      } : {}),
+    };
+    const ticket = randomUUID();
+    await new Promise((resolve) => {
+      const timer = setTimeout(() => { this.requestEventAcks.delete(ticket); resolve(); }, 2000);
+      this.requestEventAcks.set(ticket, { extId, resolve: () => { clearTimeout(timer); resolve(); } });
+      try { worker.send(EVENT_CHANNEL, `murshid.webRequest.${event}`, [payload, ticket]); }
+      catch { clearTimeout(timer); this.requestEventAcks.delete(ticket); resolve(); }
+    });
   }
 
   // ------------------------------------------------------------ side panel
@@ -325,6 +387,26 @@ class CrxBridge {
 // ---------------------------------------------------------------- handlers
 
 CrxBridge.prototype.handlers = {
+  'murshid.ackOffscreenRequest'({ extId, worker }, ticket) {
+    const pending = this.requestEventAcks.get(ticket);
+    if (!worker || !pending || pending.extId !== extId) return;
+    this.requestEventAcks.delete(ticket);
+    pending.resolve();
+  },
+  'murshid.registerOffscreenIdentity'({ extId, worker }, identity = {}) {
+    const state = this.offscreenIdentity.get(extId);
+    const pending = state?.pending;
+    if (!worker || !pending || pending.nonce !== identity.nonce || pending.generation !== state.generation
+      || state.win.isDestroyed() || this.offscreen.get(extId) !== state.win
+      || identity.frameId !== 0 || identity.url !== pending.url || state.win.webContents.getURL() !== pending.url
+      || typeof identity.documentId !== 'string' || !/^(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.test(identity.documentId)) {
+      throw new Error('Offscreen document identity is unavailable or stale.');
+    }
+    state.documentId = identity.documentId;
+    state.pending = null;
+    pending.resolve();
+    return true;
+  },
   // Murshid first-run defaults ------------------------------------------------
   'murshid.defaults'({ extId }) {
     // The worker can ask before loadExtension() has resolved, so match by folder too.
@@ -512,15 +594,54 @@ CrxBridge.prototype.handlers = {
     });
     win.webContents.setAudioMuted(false);
     this.offscreen.set(extId, win);
-    win.on('closed', () => {
-      if (this.offscreen.get(extId) === win) this.offscreen.delete(extId);
+    const state = { win, generation: 0, documentId: null, pending: null, ready: Promise.resolve() };
+    this.offscreenIdentity.set(extId, state);
+    win.webContents.on('did-start-navigation', (details) => {
+      if (!details.isMainFrame || details.isSameDocument) return;
+      state.generation += 1;
+      state.documentId = null;
+      state.pending?.resolve();
+      state.pending = null;
+      for (const [id, binding] of this.offscreenRequests) if (binding.state === state) this.discardOffscreenRequest(id);
     });
-    await win.loadURL(url);
+    win.webContents.on('did-finish-load', () => {
+      const generation = state.generation;
+      const pageUrl = win.webContents.getURL();
+      if (!pageUrl.startsWith(`chrome-extension://${extId}/`)) return;
+      const nonce = randomUUID();
+      let settle;
+      const registered = new Promise((resolve) => { settle = resolve; });
+      state.pending = { nonce, generation, url: pageUrl, resolve: settle };
+      const code = `chrome.runtime.sendMessage(${JSON.stringify({ type: 'murshid-offscreen-document-identity', nonce })})`;
+      let timer;
+      state.ready = Promise.race([
+        registered,
+        new Promise((resolve) => { timer = setTimeout(resolve, 5000); }),
+      ]).finally(() => {
+        clearTimeout(timer);
+        if (state.pending?.nonce === nonce) state.pending = null;
+      });
+      win.webContents.executeJavaScript(code).catch(() => {});
+    });
+    win.on('closed', () => {
+      state.pending?.resolve();
+      for (const [id, binding] of this.offscreenRequests) if (binding.state === state) this.discardOffscreenRequest(id);
+      if (this.offscreen.get(extId) === win) this.offscreen.delete(extId);
+      if (this.offscreenIdentity.get(extId) === state) this.offscreenIdentity.delete(extId);
+    });
+    try {
+      await win.loadURL(url);
+      await state.ready;
+    } catch (error) {
+      if (!win.isDestroyed()) win.destroy();
+      throw error;
+    }
   },
   'offscreen.closeDocument'({ extId }) {
     const win = this.offscreen.get(extId);
     if (!win || win.isDestroyed()) throw new Error('No current offscreen document.');
     this.offscreen.delete(extId);
+    this.offscreenIdentity.delete(extId);
     win.destroy();
   },
   'offscreen.hasDocument'({ extId }) {
@@ -552,6 +673,8 @@ CrxBridge.prototype.handlers = {
         frameId: 0,
         documentUrl: url,
         documentOrigin: prefix.slice(0, -1),
+        ...(offscreen && this.offscreenIdentity.get(extId)?.win.webContents === wc && this.offscreenIdentity.get(extId)?.documentId
+          ? { documentId: this.offscreenIdentity.get(extId).documentId } : {}),
         incognito: false,
       });
     }

@@ -165,7 +165,7 @@ async function start() {
   const ses = session.fromPartition(PARTITION);
   ctx.ses = ses;
   ses.setUserAgent(app.userAgentFallback);
-  identity.install(ses, ctx.settings);
+  identity.install(ses, ctx.settings, ctx);
   handleProtocol(ses);
 
   // Order matters: Murshid's "pre" preload adds APIs before

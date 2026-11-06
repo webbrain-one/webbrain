@@ -33,6 +33,48 @@ function murshidPost() {
     try { runtime.getContexts = call('runtime.getContexts'); } catch {}
   }
 
+  if (typeof ServiceWorkerGlobalScope !== 'undefined' && globalThis instanceof ServiceWorkerGlobalScope) {
+    // Supplement native webRequest events for this extension's offscreen XHRs.
+    // Session-level handlers in Electron otherwise suppress those events.
+    const matches = (filter, details) => {
+      if (filter?.types && !filter.types.includes(details.type)) return false;
+      if (!Array.isArray(filter?.urls)) return false;
+      return filter.urls.some((pattern) => {
+        if (pattern === '<all_urls>') return /^(https?|wss?):/i.test(details.url);
+        const m = /^(\*|https?|wss?):\/\/([^/]+)(\/.*)$/.exec(pattern);
+        if (!m) return false;
+        try {
+          const url = new URL(details.url);
+          const scheme = m[1] === '*' ? /^(http|https):$/.test(url.protocol) : url.protocol === `${m[1]}:`;
+          const host = m[2] === '*' || (m[2].startsWith('*.')
+            ? url.hostname === m[2].slice(2) || url.hostname.endsWith(`.${m[2].slice(2)}`)
+            : url.hostname === m[2]);
+          const escaped = m[3].replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+          return scheme && host && new RegExp(`^${escaped}$`).test(`${url.pathname}${url.search}`);
+        } catch { return false; }
+      });
+    };
+    for (const name of ['onBeforeRequest', 'onHeadersReceived']) {
+      const native = chrome.webRequest?.[name];
+      if (!native) continue;
+      const listeners = new Map();
+      const add = native.addListener.bind(native), remove = native.removeListener.bind(native);
+      native.addListener = (fn, filter, extra) => { add(fn, filter, extra); listeners.set(fn, { filter, extra }); };
+      native.removeListener = (fn) => { listeners.delete(fn); return remove(fn); };
+      const event = new Event(`murshid.webRequest.${name}`);
+      event.addListener((details, ticket) => {
+        try {
+          for (const [fn, options] of listeners) {
+            if (!matches(options.filter, details)) continue;
+            const data = { ...details, tabId: -1, frameId: 0 };
+            if (!options.extra?.includes('responseHeaders')) delete data.responseHeaders;
+            try { fn(data); } catch (error) { console.error(error); }
+          }
+        } finally { call('murshid.ackOffscreenRequest')(ticket).catch(() => {}); }
+      });
+    }
+  }
+
   // chrome.downloads ------------------------------------------------------------
   if (chrome.downloads) {
     const d = chrome.downloads;

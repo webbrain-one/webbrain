@@ -8,7 +8,16 @@ const { pathToFileURL } = require('node:url');
 const { app } = require('electron');
 const file = path.join(process.env.MURSHID_PROFILE, 'test file.html');
 fs.writeFileSync(file, '<!doctype html><title>isolated fixture</title>');
-const server = http.createServer((_req, res) => res.end('<!doctype html><title>isolated fixture</title>'));
+const requestHeaders = new Map();
+const server = http.createServer((req, res) => {
+  requestHeaders.set(req.url, req.headers);
+  if (req.url === '/download-abort') { req.socket.destroy(); return; }
+  if (req.url === '/early') res.setHeader('Accept-CH', 'Sec-CH-UA-Arch');
+  if (req.url === '/download-redirect') { res.writeHead(302, { location: '/download-final', 'Set-Cookie': 'fixture-secret=value' }); res.end(); return; }
+  if (req.url === '/download-cross-origin') { res.writeHead(302, { location: 'http://example.invalid/other' }); res.end(); return; }
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.end(req.url === '/download-final' ? 'download fixture' : '<!doctype html><title>isolated fixture</title>');
+});
 server.listen(0, '127.0.0.1', () => {
 const base = `http://127.0.0.1:${server.address().port}`;
 const { ctx } = require('../app/main');
@@ -25,10 +34,112 @@ const waitFor = async (condition) => {
   try {
     const urls = () => ctx.windows.flatMap(w => w.tabs.map(t => t.url));
     await waitFor(() => urls().includes(`${base}/early`) && urls().includes(pathToFileURL(file).href));
+    await waitFor(() => requestHeaders.has('/early'));
+    assert.match(requestHeaders.get('/early')?.['sec-ch-ua'] || '', /Murshid/);
     const late = event(); app.emit('open-url', late, `${base}/late`);
     await waitFor(() => urls().includes(`${base}/late`));
     assert(late.prevented);
     console.log('Early and late macOS open events reached isolated tabs');
+    const bridge = ctx.crx, extId = ctx.webBrainId;
+    ctx.downloads.folder = () => process.env.MURSHID_PROFILE;
+    const ordinaryTab = ctx.windows[0].tabs.find(t => t.url === `${base}/late`);
+    await waitFor(() => ordinaryTab && !ordinaryTab.wc.isLoading());
+    await ordinaryTab.wc.executeJavaScript("fetch('/hints-check')");
+    assert(requestHeaders.get('/hints-check')?.['sec-ch-ua-arch'], 'Accept-CH should still enable high-entropy hints');
+    const privateExtensionUrl = `chrome-extension://${extId}/src/offscreen/skill-download.js`;
+    const access = await ordinaryTab.wc.executeJavaScript(`fetch(${JSON.stringify(privateExtensionUrl)}).then(r => r.ok).catch(() => false)`);
+    assert.equal(access, false, 'a website must not fetch a private extension resource');
+    await bridge.handlers['offscreen.createDocument'].call(bridge, { extId }, { url: 'src/offscreen/offscreen.html' });
+    const getOffscreen = () => bridge.handlers['runtime.getContexts'].call(bridge, { extId }, { contextTypes: ['OFFSCREEN_DOCUMENT'] })[0];
+    const offscreenWindow = bridge.offscreen.get(extId);
+    const firstIdentity = getOffscreen()?.documentId;
+    assert(firstIdentity, 'offscreen context should expose the native document identity');
+    await bridge.forwardOffscreenRequest('onBeforeRequest', {
+      id: 123456789, url: `${base}/download-redirect`, method: 'GET', resourceType: 'xhr',
+      initiatorOrigin: `chrome-extension://${extId}`, webContentsId: offscreenWindow.webContents.id,
+      frame: { frameToken: 'wrong-frame', url: offscreenWindow.webContents.getURL() },
+    });
+    assert.equal(bridge.offscreenRequests.has('123456789'), false, 'another frame must not be bound to the offscreen identity');
+    // Only a current worker response to the pending nonce may establish an identity.
+    assert.throws(() => bridge.handlers['murshid.registerOffscreenIdentity'].call(bridge,
+      { extId, worker: {} }, { nonce: 'wrong', documentId: firstIdentity, url: offscreenWindow.webContents.getURL(), frameId: 0 }));
+    assert.equal(getOffscreen().documentId, firstIdentity);
+    const identityState = bridge.offscreenIdentity.get(extId);
+    identityState.pending = { nonce: 'test-nonce', generation: identityState.generation,
+      url: offscreenWindow.webContents.getURL(), resolve() {} };
+    const nativeReply = await offscreenWindow.webContents.executeJavaScript("chrome.runtime.sendMessage({type:'murshid-offscreen-document-identity', nonce:'test-nonce'})");
+    assert.equal(nativeReply.documentId, firstIdentity, 'context identity must come from the native sender');
+    if (process.env.MURSHID_TEST_CDP_PORT) {
+      const list = await (await fetch(`http://127.0.0.1:${process.env.MURSHID_TEST_CDP_PORT}/json/list`)).json();
+      const target = list.find(t => t.type === 'service_worker' && t.url === `chrome-extension://${extId}/src/background.js`);
+      assert(target, 'WebBrain worker should expose its debugging target');
+      const socket = new WebSocket(target.webSocketDebuggerUrl);
+      await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
+      const evaluate = (expression) => new Promise((resolve, reject) => {
+        const id = Math.floor(Math.random() * 1e9);
+        const listener = e => { const data = JSON.parse(e.data); if (data.id !== id) return; socket.removeEventListener('message', listener); if (data.error || data.result.exceptionDetails) reject(new Error(JSON.stringify(data.error || data.result.exceptionDetails))); else resolve(data.result.result.value); };
+        socket.addEventListener('message', listener);
+        socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
+      });
+      const stagingSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/network/download-staging.js'), 'utf8').replace(/^export /gm, '');
+      const runDownload = (url) => evaluate(`(async () => {
+        ${stagingSource}
+        const observedEvents = [];
+        const b = d => observedEvents.push({event:'before', ...d});
+        const h = d => observedEvents.push({event:'headers', ...d});
+        chrome.webRequest.onBeforeRequest.addListener(b, {urls:['<all_urls>']});
+        chrome.webRequest.onHeadersReceived.addListener(h, {urls:['<all_urls>']}, ['responseHeaders']);
+        const contexts = await chrome.runtime.getContexts({contextTypes:['OFFSCREEN_DOCUMENT']});
+        const context = {documentId:contexts[0].documentId, origin:chrome.runtime.getURL('').replace(/\\/$/, ''), isCurrent:()=>true};
+        const send = message => chrome.runtime.sendMessage(message);
+        const transport = {start:(jobId,url)=>send({type:'authenticated-download-start',jobId,url}), status:jobId=>send({type:'authenticated-download-status',jobId}), cancel:jobId=>send({type:'authenticated-download-cancel',jobId}), forget:jobId=>send({type:'authenticated-download-forget',jobId})};
+        const result = await prepareAuthenticatedDownload(${JSON.stringify(url)}, {api:chrome, transport, context, validateUrl:()=>({ok:true})});
+        if (result.success) {
+          const id = await chrome.downloads.download({url:result.localUrl, filename:'staged-fixture.txt'});
+          for (let n=0; n<100; n++) {
+            const [item] = await chrome.downloads.search({id});
+            if (item?.state === 'complete' || item?.state === 'interrupted') { result.download = item; break; }
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+        if (result.releaseToken) await send({type:'authenticated-download-release',releaseToken:result.releaseToken});
+        chrome.webRequest.onBeforeRequest.removeListener(b); chrome.webRequest.onHeadersReceived.removeListener(h);
+        return {result, observedEvents};
+      })()`);
+      const attemptPromise = runDownload(`${base}/download-redirect`);
+      await ordinaryTab.wc.executeJavaScript(`fetch(${JSON.stringify(`${base}/download-redirect`)}).catch(() => {})`);
+      const attempt = await attemptPromise;
+      const redirected = attempt.result;
+      assert.equal(redirected.success, true, JSON.stringify(redirected));
+      assert.equal(redirected.finalUrl, `${base}/download-final`);
+      assert.equal(redirected.download?.state, 'complete', JSON.stringify(redirected.download));
+      assert.equal(fs.readFileSync(redirected.download.filename, 'utf8'), 'download fixture');
+      assert.match(requestHeaders.get('/download-final')?.cookie || '', /fixture-secret=value/);
+      const redirectHeaders = attempt.observedEvents.find(e => e.event === 'headers' && e.url.endsWith('/download-redirect'));
+      assert(redirectHeaders.responseHeaders.every(h => h.name.toLowerCase() === 'location'));
+      assert.equal(attempt.observedEvents.filter(e => e.event === 'before' && e.url.endsWith('/download-redirect')).length, 1,
+        'another tab requesting the same URL must not be attributed to the offscreen document');
+      const crossOrigin = (await runDownload(`${base}/download-cross-origin`)).result;
+      assert.equal(crossOrigin.redirectRequiresPermission, true, JSON.stringify(crossOrigin));
+      await offscreenWindow.webContents.executeJavaScript(`fetch(${JSON.stringify(`${base}/download-abort`)}).catch(() => {})`);
+      await waitFor(() => bridge.offscreenRequests.size === 0);
+      socket.close();
+      console.log('Authenticated download validates same-origin and cross-origin redirects');
+    }
+    let invalidated = false;
+    offscreenWindow.webContents.once('did-start-navigation', () => { invalidated = !getOffscreen()?.documentId; });
+    const reloaded = new Promise(resolve => offscreenWindow.webContents.once('did-finish-load', resolve));
+    offscreenWindow.webContents.reload();
+    await reloaded;
+    await bridge.offscreenIdentity.get(extId).ready;
+    assert(invalidated, 'navigation must invalidate the old document identity');
+    assert(getOffscreen()?.documentId && getOffscreen().documentId !== firstIdentity, 'reload must receive a new identity');
+    bridge.handlers['offscreen.closeDocument'].call(bridge, { extId });
+    assert.equal(getOffscreen(), undefined);
+    await assert.rejects(bridge.handlers['offscreen.createDocument'].call(bridge, { extId }, { url: 'missing-offscreen-fixture.html' }));
+    assert.equal(bridge.offscreen.has(extId), false, 'a failed offscreen load must not retain a window');
+    assert.equal(bridge.offscreenIdentity.has(extId), false);
+    console.log('Native offscreen identity changes on reload and rejects stale registrations');
     const w = ctx.windows[0];
     await waitFor(() => w.uiReady);
     const readAddress = () => w.ui.executeJavaScript("document.getElementById('address').value");

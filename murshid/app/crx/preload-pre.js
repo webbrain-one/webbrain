@@ -73,6 +73,19 @@ function murshidPre() {
   }
   slot.call = call;
 
+  // The native message sender contains Chromium's real documentId. Electron's
+  // runtime.getContexts omits extension pages, so the offscreen host asks its
+  // worker to pass that identity to the main process over the scoped bridge.
+  if (typeof ServiceWorkerGlobalScope !== 'undefined' && globalThis instanceof ServiceWorkerGlobalScope) {
+    slot.nativeRuntime.onMessage.addListener((message, sender, reply) => {
+      if (message?.type !== 'murshid-offscreen-document-identity' || sender?.id !== chrome.runtime.id) return false;
+      call('murshid.registerOffscreenIdentity')({
+        nonce: message.nonce, documentId: sender.documentId, url: sender.url, frameId: sender.frameId,
+      }).then(() => reply({ ok: true, documentId: sender.documentId }), () => reply({ ok: false }));
+      return true;
+    });
+  }
+
   bridge.onEvent((name, args) => {
     const event = slot.events.get(name);
     if (event) event.dispatch(Array.isArray(args) ? args : []);

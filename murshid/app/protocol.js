@@ -18,6 +18,8 @@ const PAGES = {
 
 function registerSchemes() {
   protocol.registerSchemesAsPrivileged([
+    // Electron's extension scheme needs standard storage privileges for OPFS.
+    { scheme: 'chrome-extension', privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } },
     { scheme: 'murshid', privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true } },
   ]);
 }

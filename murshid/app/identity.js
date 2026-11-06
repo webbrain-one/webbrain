@@ -126,7 +126,7 @@ const SECURE = { urls: ['https://*/*', 'wss://*/*', 'http://localhost/*', 'http:
  * Uses the session's onBeforeSendHeaders and onHeadersReceived, which Electron
  * allows one listener each for: anything else that needs them must go here.
  */
-function install(ses, settings) {
+function install(ses, settings, ctx) {
   readPlatformVersion();
   const current = () => identity(Boolean(settings.get('identifyAsChrome')));
   let id = current();
@@ -137,9 +137,15 @@ function install(ses, settings) {
   // Origin -> the high-entropy hints its last top-level page asked for (Accept-CH).
   const asked = new Map();
 
-  ses.webRequest.onHeadersReceived(SECURE, (details, callback) => {
-    callback({});
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    Promise.resolve(ctx.crx?.forwardOffscreenRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback({}));
+  });
+  ses.webRequest.onErrorOccurred((details) => ctx.crx?.discardOffscreenRequest(details.id));
+
+  ses.webRequest.onHeadersReceived((details, callback) => {
+    Promise.resolve(ctx.crx?.forwardOffscreenRequest('onHeadersReceived', details)).catch(() => {}).finally(() => callback({}));
     if (details.resourceType !== 'mainFrame') return;
+    if (!/^(https:|wss:|http:\/\/(?:localhost|127\.0\.0\.1)(?=[:/]|$))/i.test(details.url)) return;
     const header = Object.entries(details.responseHeaders || {}).find(([k]) => k.toLowerCase() === 'accept-ch');
     if (!header) return;
     const names = [].concat(header[1]).join(',').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
