@@ -78,15 +78,14 @@ app/
   companion.js     find and start WebBrain Companion
   permissions.js   site permission prompts
 assets/
-  art/             the portrait and the semazen (traced, see scripts/art)
   icons/           app icon, .ico, PNGs, macOS template images
 scripts/
-  art/trace.py     trace the portrait and the semazen from public-domain pictures
-  art/trace.mjs    run trace.py with a Python that has OpenCV
+  art/halftone.py  print the homepage pictures as gold halftone
+  art/halftone.mjs run halftone.py with a Python that has OpenCV
   art/sources/     those pictures, with where they came from
-  art/icon.mjs     draw the icon SVGs
+  art/icon.mjs     draw the icon SVGs (the fez)
   build-icons.mjs  rasterize the icon (PNG, ICO, template images, favicons)
-  copy-art.mjs     copy the artwork into web/
+  copy-art.mjs     copy the icon into web/
   copy-fonts.mjs   copy the self-hosted fonts into web/fonts
   serve.mjs        static server for web/ and assets/
 vendor/companion/  WebBrain Companion builds to bundle (not committed)
@@ -107,38 +106,31 @@ bundle the Companion, put its build for the target in
 
 ## The artwork
 
-The portrait in the hero arch and the whirling dervish in "The way" are line
-drawings traced from real pictures, both in the public domain:
+The homepage's pictures are gold halftone prints of public-domain paintings
+and photographs: Osman Hamdi Bey's *Islamic Theologian* (1902) in the hero, a
+Mevlevi dervish of the Vanmour series (Rijksmuseum) beside "The way", and
+details of Osman Hamdi Bey's *Public Scribe* and *The Tortoise Trainer* and of
+19th-century photographs of Mevlevi dervishes (Rijksmuseum) on the feature
+cards. `scripts/art/sources/` holds the parts of them that are used, with
+their sources and licence notes.
 
-- **The murshid**: Suleiman the Magnificent, from the portrait by Nakkaş Osman
-  in the *Şemailname* of 1579 (Topkapı Palace Museum, H.1563 fol. 47v),
-  [via Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Istanbul,_Topkapi_Palace_Museum_MS_Hazine_1563_fol._47v_Suleyman_I_by_Nakka%C5%9F_Osman.jpg).
-- **The semazen**: *A Mevlevee Dervish*, a hand-coloured lithograph of about
-  1830–60 (British Museum 1904,0929.59),
-  [via Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Derviche_Tourneur_(BM_1904,0929.59).jpg).
-
-`scripts/art/sources/` holds both pictures and their licence notes.
-`scripts/art/trace.py` turns them into SVG strokes: it flattens the paint,
-sorts the pixels into a few colour regions (turban, face, caftan…), draws each
-region's outline once, adds the artist's own fine lines (turban folds, eyes,
-pleats) as centre lines, and writes smooth Bézier paths ordered top to bottom.
-The homepage inlines the SVGs and draws the strokes in as they come into view;
-without JavaScript, or with reduced motion, they are shown still.
-
-To retrace (needs Python 3 with OpenCV, NumPy, SciPy and scikit-image):
+`scripts/art/halftone.py` raises the local contrast, pushes the backgrounds
+away, and prints each picture as a 45° dot screen whose dots grow with the
+light: gold in the mid tones, parchment in the lights. The ink is written as
+alpha, so the page's crimson and night grounds show between the dots. To
+reprint (needs Python 3 with OpenCV, NumPy and Pillow):
 
 ```sh
-pip install opencv-python-headless numpy scipy scikit-image
-npm run art:trace   # writes assets/art/*.svg and copies them into web/art
+pip install opencv-python-headless numpy pillow
+npm run art:pictures   # writes web/art/halftone/*.webp
 ```
 
-`python scripts/art/trace.py portrait --debug=<dir>` also writes the colour
-regions and line masks it used, which helps when tuning the sample points in
-its `CONFIG`.
+The app icon is a crimson fez with its black silk tassel on a parchment tile,
+drawn by `scripts/art/icon.mjs` so it reads from 1024 px down to 16 px. `npm
+run art:icons` rebuilds the icon files, and `npm run art` runs both steps.
 
-The app icon is still the geometric profile drawn by `scripts/art/icon.mjs`:
-the traced portrait does not survive being shrunk to 16–32 px. `npm run
-art:icons` rebuilds the icon files, and `npm run art` runs both steps.
+The screenshot in `web/art/screenshot/` is a real capture of Murshid on
+Windows, at 2x, on a fresh profile with no accounts.
 
 ## The homepage
 

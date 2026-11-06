@@ -5,22 +5,40 @@
   const ua = navigator.userAgent;
   const os = /Mac|iPhone|iPad/.test(ua) ? 'mac' : /Linux|Android|CrOS/.test(ua) ? 'linux' : 'win';
 
+  // The murshid branch lives on esokullu/webbrain until it is merged.
+  const REPO = 'https://github.com/esokullu/webbrain.git';
+  // "Exclude binaries": only the latest commit, and only the folders Murshid
+  // runs from (murshid/ and the WebBrain extension in src/chrome), so the
+  // history, release zips, videos and test fixtures are never downloaded.
+  const FAST_CLONE = `git clone --depth 1 --filter=blob:none --sparse -b murshid ${REPO}`;
   const COMMANDS = {
-    win: 'git clone -b murshid https://github.com/webbrain-one/webbrain.git\ncd webbrain\\murshid; npm install; npm start',
-    mac: 'git clone -b murshid https://github.com/webbrain-one/webbrain.git\ncd webbrain/murshid && npm install && npm start',
-    linux: 'git clone -b murshid https://github.com/webbrain-one/webbrain.git\ncd webbrain/murshid && npm install && npm start',
+    fast: {
+      win: `${FAST_CLONE}\ncd webbrain; git sparse-checkout set murshid src/chrome\ncd murshid; npm install; npm start`,
+      mac: `${FAST_CLONE}\ncd webbrain && git sparse-checkout set murshid src/chrome\ncd murshid && npm install && npm start`,
+      linux: `${FAST_CLONE}\ncd webbrain && git sparse-checkout set murshid src/chrome\ncd murshid && npm install && npm start`,
+    },
+    full: {
+      win: `git clone -b murshid ${REPO}\ncd webbrain\\murshid; npm install; npm start`,
+      mac: `git clone -b murshid ${REPO}\ncd webbrain/murshid && npm install && npm start`,
+      linux: `git clone -b murshid ${REPO}\ncd webbrain/murshid && npm install && npm start`,
+    },
   };
 
   const terminal = document.querySelector('[data-terminal]');
   if (terminal) {
     const code = terminal.querySelector('[data-cmd]');
     const tabs = [...terminal.querySelectorAll('[data-os]')];
-    const select = (which) => {
+    const fast = terminal.querySelector('[data-fast]');
+    const note = terminal.querySelector('[data-fast-note]');
+    let which = os;
+    const show = () => {
       tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.os === which)));
-      code.textContent = COMMANDS[which];
+      code.textContent = COMMANDS[fast.checked ? 'fast' : 'full'][which];
+      note.hidden = !fast.checked;
     };
-    tabs.forEach((tab) => tab.addEventListener('click', () => select(tab.dataset.os)));
-    select(os);
+    tabs.forEach((tab) => tab.addEventListener('click', () => { which = tab.dataset.os; show(); }));
+    fast.addEventListener('change', show);
+    show();
 
     const copy = terminal.querySelector('.copy');
     copy.addEventListener('click', async () => {
@@ -43,52 +61,6 @@
   }
 
   document.querySelector(`[data-platform="${os}"]`)?.classList.add('is-you');
-
-  // The traced drawings: swap each <img data-draw> for the SVG itself, so the
-  // page can colour its lines and draw them in, top to bottom, when it is seen.
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const drawOnSight = 'IntersectionObserver' in window && !still
-    ? new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          entry.target.classList.remove('undrawn');
-          drawOnSight.unobserve(entry.target);
-        }
-      }
-    }, { rootMargin: '0px 0px -12% 0px' })
-    : null;
-
-  document.querySelectorAll('img[data-draw]').forEach(async (img) => {
-    try {
-      const res = await fetch(img.src);
-      if (!res.ok) return;
-      const svg = new DOMParser().parseFromString(await res.text(), 'image/svg+xml').documentElement;
-      if (svg.nodeName !== 'svg') return;
-      svg.setAttribute('class', img.className);
-      if (img.alt) {
-        svg.setAttribute('role', 'img');
-        svg.setAttribute('aria-label', img.alt);
-      } else {
-        svg.setAttribute('aria-hidden', 'true');
-      }
-      img.replaceWith(svg);
-      if (!drawOnSight) return;
-      const height = svg.viewBox.baseVal.height || 1;
-      const paths = [...svg.querySelectorAll('path')];
-      for (const path of paths) {
-        const box = path.getBBox();
-        const fine = path.parentNode.classList.contains('ln-fine');
-        // the real length, in user units: pathLength="1" does not scale the
-        // dash pattern in every Chrome
-        path.style.setProperty('--len', `${(path.getTotalLength() + 1).toFixed(1)}px`);
-        path.style.animationDelay = `${(box.y / height * 1.5 + (fine ? 0.6 : 0)).toFixed(2)}s`;
-      }
-      svg.classList.add('drawing', 'undrawn');
-      drawOnSight.observe(svg);
-    } catch {
-      // keep the <img>
-    }
-  });
 
   const targets = document.querySelectorAll('.card, .steps li, .platform, .section-head, .tray-inner > *');
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
