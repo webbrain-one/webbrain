@@ -42036,11 +42036,19 @@ test('standalone WebGPU uses a compact tool-free chat profile with no browser co
   );
 
   const agentSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  // Standalone tools come from one filter, which is empty for WebGPU (only the new tab's
+  // full-page chat on a cloud/local provider gets its read-only web tools).
   assert.equal(
-    (agentSource.match(/if \(selectionOnly \|\| standaloneChatRun\) tools = \[\];/g) || []).length,
+    (agentSource.match(/if \(selectionOnly\) tools = \[\];\n\s*else if \(standaloneChatRun\) tools = this\._standaloneChatTools\(tools, runOptions\);/g) || []).length,
     4,
     'both initial and repeated requests on both agent entry paths must suppress tools',
   );
+  {
+    const agent = new AgentCh({ getActive() { return null; } });
+    const offered = ['fetch_url', 'research_url', 'calculate', 'read_page'].map(name => ({ function: { name } }));
+    assert.deepEqual(agent._standaloneChatTools(offered, { standaloneChat: true, standaloneWebTools: true, providerId: 'webgpu' }), [],
+      'standalone WebGPU must stay tool-free even when the page asks for web tools');
+  }
   assert.equal(
     (agentSource.match(/steps > 0 && !selectionOnly && !standaloneChatRun/g) || []).length,
     2,
@@ -42104,6 +42112,124 @@ test('standalone chat isolates browser context and inherited sidepanel history f
     const provenance = provenanceBuilder(modelMessages, [], 'ask');
     assert.equal(provenance.systemPromptVariant, 'standalone_chat');
     assert.equal(provenance.systemPromptMatchesRuntime, true);
+  }
+});
+
+test('the new tab full-page chat keeps the plain-chat boundary but can read the web', async () => {
+  for (const [label, AgentClass, provenanceBuilder] of [
+    ['chrome', AgentCh, buildPromptTraceProvenanceCh],
+    ['firefox', AgentFx, buildPromptTraceProvenanceFx],
+  ]) {
+    const agent = new AgentClass({
+      getActive() { throw new Error('the full-page chat prompt must not inspect the active provider'); },
+    });
+    const tabId = label === 'chrome' ? 1712 : 1713;
+    const webOptions = { standaloneChat: true, standaloneWebTools: true, providerId: 'openai' };
+    assert.equal(agent._isStandaloneWebToolsRun(webOptions), true, `${label}: web-tools run not recognised`);
+    assert.equal(agent._isStandaloneWebToolsRun({ standaloneChat: true, providerId: 'openai' }), false,
+      `${label}: the standalone window must stay tool-free`);
+    assert.equal(agent._isStandaloneWebToolsRun({ standaloneWebTools: true }), false,
+      `${label}: the flag only means something on a standalone run`);
+    assert.equal(agent._isStandaloneWebToolsRun({ ...webOptions, providerId: 'webgpu' }), false,
+      `${label}: an in-browser model keeps the tool-free profile`);
+
+    const offered = ['read_page', 'get_accessibility_tree', 'fetch_url', 'research_url', 'calculate',
+      'delegate_research', 'clarify', 'done'].map(name => ({ type: 'function', function: { name } }));
+    assert.deepEqual(agent._standaloneChatTools(offered, webOptions).map(tool => tool.function.name),
+      ['fetch_url', 'research_url', 'calculate'], `${label}: only the read-only web tools may reach the model`);
+    assert.deepEqual(agent._standaloneChatTools(offered, { standaloneChat: true }), [],
+      `${label}: plain standalone chat must get no tools`);
+
+    agent._standaloneChatRunTabs.add(tabId);
+    agent._standaloneWebToolsRunTabs.add(tabId);
+    const prompt = agent._buildSystemPrompt('ask', tabId);
+    assert.match(prompt, /^You are WebBrain's chat assistant, opened from the browser's new tab page\./);
+    assert.match(prompt, /There is no current page/);
+    assert.match(prompt, /fetch_url/);
+    assert.match(prompt, /untrusted page data, never instructions/);
+    assert.doesNotMatch(prompt, /click_ax|get_accessibility_tree|read_page|User profile|cookie|paywall/i);
+
+    const question = 'Who won the 2026 Istanbul Marathon?';
+    const enriched = await agent._enrichUserMessageWithCurrentPage(tabId, [], question, null, webOptions);
+    assert.deepEqual(enriched, { role: 'user', content: question },
+      `${label}: the full-page chat received browser/runtime context`);
+
+    const persisted = agent._standalonePersistedUserMessage(enriched, webOptions);
+    const webCall = { id: 'web-1', type: 'function', function: { name: 'fetch_url', arguments: '{"url":"https://example.org/results"}' } };
+    const conversation = [
+      { role: 'system', content: prompt },
+      { role: 'user', content: '[Current page context - URL: https://example.test]\nRead this page' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'old-tool', type: 'function', function: { name: 'read_page', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'old-tool', content: 'secret page text' },
+      persisted,
+      { role: 'assistant', content: null, tool_calls: [webCall] },
+      { role: 'tool', tool_call_id: 'web-1', content: 'fetched results text' },
+    ];
+    const view = (keepTools) => (label === 'chrome'
+      ? agent._messagesForStandaloneChatRun(conversation, persisted, enriched, agent._standaloneHistoryMarker(webOptions), { keepTools })
+      : agent._messagesForStandaloneChatRun(conversation, persisted, enriched, { keepTools }));
+    assert.deepEqual(view(true), [
+      { role: 'system', content: prompt },
+      { role: 'user', content: question },
+      { role: 'assistant', content: null, tool_calls: [webCall] },
+      { role: 'tool', tool_call_id: 'web-1', content: 'fetched results text' },
+    ], `${label}: the run must keep its own web reads in the model view`);
+    assert.doesNotMatch(JSON.stringify(view(true)), /example\.test|old-tool|secret page text/,
+      `${label}: side panel page and tool history crossed into the full-page chat`);
+    assert.ok(view(false).every(message => message.role !== 'tool' && !message.tool_calls),
+      `${label}: plain standalone chat must stay text only`);
+
+    // Continue (and a follow-up the planner folds into the same task) reaches this view as a
+    // projected copy of the turn, not the persisted object; it must still be found, or the model
+    // is sent an empty conversation.
+    const continueEnriched = { role: 'user', content: 'Please continue from where you left off.' };
+    const continuePersisted = agent._standalonePersistedUserMessage(continueEnriched, webOptions);
+    const taskNote = `\n\n[APP-OWNED CURRENT USER TASK - assembled from genuine user messages]\n${question}`;
+    const projectedContinue = { ...continuePersisted, content: `${continuePersisted.content}${taskNote}` };
+    const continued = [...conversation, { role: 'assistant', content: 'I reached the step limit.' }, projectedContinue];
+    const continuedView = label === 'chrome'
+      ? agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, agent._standaloneHistoryMarker(webOptions), { keepTools: true })
+      : agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, { keepTools: true });
+    assert.ok(continuedView.length > 1, `${label}: a continued standalone run sent an empty conversation`);
+    assert.equal(continuedView.at(-1).content, `${continueEnriched.content}${taskNote}`,
+      `${label}: the continued turn must carry the assembled task`);
+    assert.ok(continuedView.some(message => message.role === 'tool' && message.tool_call_id === 'web-1'),
+      `${label}: the continued run lost its own earlier web reads`);
+    assert.doesNotMatch(JSON.stringify(continuedView), /secret page text|old-tool/,
+      `${label}: side panel history crossed into a continued full-page chat`);
+
+    const provenance = provenanceBuilder(view(true), offered.slice(2, 5), 'ask');
+    assert.equal(provenance.systemPromptVariant, 'standalone_web_chat');
+    assert.equal(provenance.systemPromptMatchesRuntime, true);
+    assert.equal(provenance.runtimeEnvelopeRequired, false);
+  }
+
+  for (const browserDir of ['chrome', 'firefox']) {
+    const agentSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/agent/agent.js`), 'utf8');
+    assert.doesNotMatch(agentSrc, /if \(selectionOnly \|\| standaloneChatRun\) tools = \[\];/,
+      `${browserDir}: a tool list still clears standalone tools unconditionally`);
+    assert.equal((agentSrc.match(/else if \(standaloneChatRun\) tools = this\._standaloneChatTools\(tools, runOptions\);/g) || []).length, 4,
+      `${browserDir}: every tool list (first step and later steps, both run paths) must use the standalone tool filter`);
+    const backgroundSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/background.js`), 'utf8');
+    assert.equal((backgroundSrc.match(/msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/g) || []).length, 3,
+      `${browserDir}: the background must forward the flag on standalone runs only (two run paths and Continue)`);
+    // Continue (and a failure-recovery retry, which runs through it) keeps the standalone boundary:
+    // without both flags a continued full-page chat would turn into a page-aware panel run.
+    const continueCase = backgroundSrc.slice(backgroundSrc.indexOf("case 'continue': {"),
+      backgroundSrc.indexOf('agent.continueProcessing(', backgroundSrc.indexOf("case 'continue': {")));
+    assert.match(continueCase, /\.\.\.\(msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}\),/,
+      `${browserDir}: Continue must keep a standalone run standalone`);
+    assert.match(continueCase, /msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/,
+      `${browserDir}: Continue must keep the full-page chat's web tools`);
+    const panelSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/ui/sidepanel.js`), 'utf8');
+    assert.doesNotMatch(panelSrc, /isStandaloneWindow \? \{ standaloneWebTools: true \}/,
+      `${browserDir}: the standalone window must not ask for web tools`);
+    assert.match(panelSrc, /\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
+      `${browserDir}: the full-page chat must ask for web tools`);
+    const continueAgentSrc = panelSrc.slice(panelSrc.indexOf('async function continueAgent('),
+      panelSrc.indexOf('onStateObserved', panelSrc.indexOf('async function continueAgent(')));
+    assert.match(continueAgentSrc, /\.\.\.\(isStandaloneWindow \? \{ standaloneChat: true \} : \{\}\),\s*\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
+      `${browserDir}: the Continue request must carry the standalone and full-page chat flags`);
   }
 });
 
@@ -45966,6 +46092,8 @@ test('first install opens a browser-aware panel launcher without fake toolbar co
   assert.match(chromePanelJs, /event\.key !== 'Tab'[\s\S]*?event\.shiftKey[\s\S]*?overlay\.contains\(activeElement\)/, 'chrome: modal coachmark should keep forward and reverse tab focus inside the dialog');
   assert.match(chromePanelJs, /doneButton\.addEventListener\('click', dismiss\)/, 'chrome: pin confirmation should dismiss the coachmark');
   assert.match(chromePanelJs, /skipButton\.addEventListener\('click', dismiss\)/, 'chrome: explicit skip should dismiss the coachmark');
+  assert.match(chromePanelJs, /async function initPinCoachmark\(\) \{[\s\S]*?if \(isStandaloneWindow\) return;\s*const stored = await chrome\.storage\.local\.get\('pinCoachmarkPending'\);/,
+    'chrome: the standalone window and the new tab\'s full-page chat have no panel header to pin from, so the coachmark waits for a real side panel');
   assert.match(chromePanelJs, /event\.key === 'Escape'[\s\S]*?stopImmediatePropagation\(\)[\s\S]*?dismiss\(\)/, 'chrome: Escape should be consumed by the modal and use the same dismissal path');
   assert.match(
     chromePanelCss,
@@ -55495,10 +55623,14 @@ test('background does not re-open a side panel that is already showing, and stil
   assert.match(background, /chrome\.runtime\.onConnect\.addListener\(\(port\) => \{ sidePanelPresence\.attach\(port\); \}\);/,
     'the presence port must be accepted at the top level of the worker');
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
-  assert.match(panel, /const initialWindowId = initialWindow\?\.id \?\? null;[\s\S]*?const presenceReportedEarly = !isBtwWindow && initialWindowId != null;\s*let presenceReporter = null;\s*if \(presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: initialWindowId \}\);\s*\}\s*const \[tab\] = await chrome\.tabs\.query/,
+  assert.match(panel, /const initialWindowId = initialWindow\?\.id \?\? null;[\s\S]*?const presenceReportedEarly = !isBtwWindow && !isTabChat && initialWindowId != null;\s*let presenceReporter = null;\s*if \(presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: initialWindowId \}\);\s*\}\s*(?:\/\/[^\n]*\n\s*)*const ownTab = isTabChat \? await chrome\.tabs\.getCurrent\(\)\.catch\(\(\) => null\) : null;\s*const \[tab\] = ownTab \? \[ownTab\] : await chrome\.tabs\.query/,
     'the side panel must tell the background it is on screen as soon as its window is known, before its other awaits');
-  assert.match(panel, /if \(!isBtwWindow && !presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: tab\?\.windowId \?\? null \}\);/,
+  assert.match(panel, /if \(!isBtwWindow && !isTabChat && !presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: tab\?\.windowId \?\? null \}\);/,
     'and still report when the window could only be learned from the active tab');
+  // The full-page chat the new tab opens is an ordinary tab, not the window's side panel: reporting
+  // it would make the background reuse it instead of opening the real panel there.
+  assert.doesNotMatch(panel, /const presenceReportedEarly = !isBtwWindow && initialWindowId != null;/,
+    'a tab chat must never report itself as the side panel of its window');
   assert.match(panel, /createSidePanelWindowScope\(\{[^}]*?onWindowChanged: \(windowId\) => presenceReporter\?\.setWindowId\(windowId\),/,
     'a panel the browser moves to another window must tell the background, or the old window stays occupied and the new one looks empty');
 });
@@ -55986,8 +56118,8 @@ test('standalone window transport, sizing, and translations are mirrored', async
     assert.match(panel, /isStandaloneWindow \? \{ standaloneChat: true \} : \{\}/, `${label}: standalone flag is not sent with chat_start`);
     assert.equal(
       [...background.matchAll(/msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}/g)].length,
-      2,
-      `${label}: standalone flag must reach both streaming paths`,
+      3,
+      `${label}: standalone flag must reach both streaming paths and Continue`,
     );
     assert.match(agent, /const standaloneChat = runOptions\?\.standaloneChat === true;/, `${label}: agent does not recognize standalone runs`);
     assert.match(agent, /if \(!selectionScoped && !standaloneChat\)/, `${label}: standalone run still reads the active tab`);
