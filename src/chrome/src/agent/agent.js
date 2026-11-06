@@ -21630,6 +21630,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ...(hit?.target ? { target: hit.target } : {}),
       ...(vision?.imageId ? { image: vision.imageId } : {}),
       ...(redirected?.redirected ? { redirectedFromNewTab: true } : {}),
+      ...(preflight.note ? { note: preflight.note } : {}),
     };
     // Whether the click changed anything is the screen update's to say: a DOM
     // text and control snapshot cannot see a canvas, a map or a value it does
@@ -25698,9 +25699,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _socialPublicationChatOptions(provider, retry = false, portable = false, audit = false) {
+    // A reasoning model that ignores the thinking controls (or a provider
+    // that sends none, as WebBrain Compass) spent all 2048 tokens of the first
+    // attempt thinking and returned nothing, so the check failed before it
+    // started. The first attempt gets what the provider allows a normal step;
+    // the repair, which only runs after a failure, may go past it.
     const options = {
       temperature: 0,
-      maxTokens: Math.min(retry ? 4096 : 2048, this._providerMaxOutputTokens(provider)),
+      maxTokens: retry ? Math.min(8192, this._providerMaxOutputTokens(provider, 8192))
+        : Math.min(4096, this._providerMaxOutputTokens(provider)),
     };
     if (!portable) {
       const config = { ...(provider?.config || {}),

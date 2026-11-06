@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const AGENT_DIR = path.join(ROOT, 'src/chrome/src/agent');
@@ -1258,6 +1258,66 @@ test('the DOM probe behind the dispatch checks reads controls, text fields, focu
     await browser.close();
   }
 });
+
+// From a trace: ten clicks meant for a Bluesky composer's Post button landed
+// on the full-viewport dialog element around the composer card, and each came
+// back as a successful click on {div, dialog}. The probe now says when a point
+// is an open dialog's own background rather than anything in it.
+for (const [engineName, engine] of [['chromium', chromium], ['firefox', firefox]]) {
+  test(`the DOM probe tells an open dialog's backdrop and empty area from its controls (${engineName})`, async () => {
+    const browser = await engine.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1126, height: 745 } });
+      for (const build of ['chrome', 'firefox']) {
+        const { visionDomProbeExpression } = await import(`../src/${build}/src/agent/vision-dom-probe.js`);
+        const one = async (x, y) => (await page.evaluate(visionDomProbeExpression({ points: [{ x, y }] }))).points[0];
+        const label = `${engineName}/${build}`;
+        // The composer: a full-viewport dialog element that dims the feed,
+        // with the card (and its Post button) drawn inside it.
+        await page.setContent(`<!doctype html><style>body{margin:0;font:14px sans-serif}*{box-sizing:border-box}</style>
+          <div style="height:2000px">Feed</div>
+          <div role="dialog" aria-modal="true" style="position:fixed;inset:0;background:rgba(0,0,0,.5)">
+            <div id="card" style="position:absolute;left:263px;top:50px;width:600px;height:320px;background:#fff">
+              <button style="position:absolute;right:16px;top:12px;width:64px;height:32px">Post</button>
+              <div contenteditable="true" style="position:absolute;left:70px;top:60px;width:500px;height:150px"></div>
+            </div>
+          </div>`);
+        const backdrop = await one(1035, 80);
+        assert.equal(backdrop.dialogBackground, 'backdrop', `${label}: ${JSON.stringify(backdrop)}`);
+        assert.equal(backdrop.role, 'dialog');
+        assert.equal(backdrop.clickable, false);
+        const post = await one(815, 78);
+        assert.equal(post.control, 'button', `${label}: ${JSON.stringify(post)}`);
+        assert.equal(post.dialogBackground, undefined);
+        assert.equal((await one(400, 150)).dialogBackground, undefined, `${label}: the text field`);
+        assert.equal((await one(300, 330)).dialogBackground, undefined, `${label}: the card itself is not the dialog element`);
+        // A modal <dialog>: outside its box is its ::backdrop; its padding is an empty area.
+        await page.setContent(`<!doctype html><style>body{margin:0}dialog{padding:40px;width:300px;border:0}</style>
+          <p>Page</p><dialog id="d"><button>OK</button></dialog><script>document.getElementById('d').showModal()<\/script>`);
+        const rect = await page.evaluate(() => { const r = document.getElementById('d').getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; });
+        assert.equal((await one(20, 20)).dialogBackground, 'backdrop', `${label}: a modal dialog's ::backdrop`);
+        assert.equal((await one(rect.right - 10, rect.bottom - 10)).dialogBackground, 'empty', `${label}: the dialog's own padding`);
+        // A separate fixed overlay beside an aria-modal dialog.
+        await page.setContent(`<!doctype html><style>body{margin:0}</style>
+          <div id="shade" style="position:fixed;inset:0;background:#0008"></div>
+          <div role="dialog" aria-modal="true" style="position:fixed;left:300px;top:200px;width:300px;height:200px;background:#fff"><button>OK</button></div>`);
+        assert.equal((await one(50, 50)).dialogBackground, 'backdrop', `${label}: a modal's overlay`);
+        // No modal open: a full-viewport layer is just the page; an overlay
+        // drawn as clickable (it closes the dialog) is a control.
+        await page.setContent(`<!doctype html><style>body{margin:0}</style>
+          <div style="position:fixed;inset:0;background:#eee">App</div>`);
+        assert.equal((await one(50, 50)).dialogBackground, undefined, `${label}: no modal`);
+        await page.setContent(`<!doctype html><style>body{margin:0}</style>
+          <div role="dialog" aria-modal="true" style="position:fixed;inset:0;background:#0008;cursor:pointer"><div style="margin:200px auto;width:200px;height:100px;background:#fff;cursor:auto"></div></div>`);
+        const closer = await one(20, 20);
+        assert.equal(closer.clickable, true, `${label}: ${JSON.stringify(closer)}`);
+        assert.equal(closer.dialogBackground, undefined, `${label}: a clickable backdrop`);
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+}
 
 test('vision input (Firefox path) and the DOM probe place points inside scaled same-origin frames, and refuse frames they cannot enter', async () => {
   const browser = await chromium.launch({ channel: 'chromium' });
