@@ -90,12 +90,17 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       };
       // The recipient probe as the agent runs it right before a click: a
       // request that names its recipient says so (namedRecipientSelection).
-      const probe = async (selector, { named = false } = {}) => guardProbeWithReadings(
-        params => call('probe_message_recipient_guard', params), {
+      // Without readings no model reads the page's texts, as when the
+      // reading model is unavailable.
+      const probe = async (selector, { named = false, readings = true } = {}) => {
+        const params = {
           tool: 'click_ax', args: { ref_id: await refOf(selector) }, adapterName: 'generic-messaging', bindDispatch: true,
           _nativeChatOwner: owner,
           ...(named ? { expectedRecipients: [{ identity: 'Fixture Dad', role: 'to' }], namedRecipientSelection: true } : {}),
-        });
+        };
+        return readings ? guardProbeWithReadings(next => call('probe_message_recipient_guard', next), params)
+          : call('probe_message_recipient_guard', params);
+      };
       const click = async selector => call('click_ax', { ref_id: await refOf(selector), _nativeChatOwner: owner,
         _nativeChatPendingRestore: null });
       const confirmContact = async () => {
@@ -152,6 +157,44 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.notEqual(opened.retryable, false, 'the opened chat was refused its contact check');
       const send = await probe(SEND, { named: true });
       assert.deepEqual(send.nativeWhatsappRepairTarget, { phase: 'open_contact', ref_id: await refOf(HEADER) });
+      const bound = await confirmContact();
+      assert.equal(bound.success, true, JSON.stringify(bound));
+      assert.equal(bound.conversationIdentity, 'Fixture Dad');
+      assert.equal(bound.conversationId, phoneId(phones['Fixture Dad']));
+    });
+  });
+
+  // From the same trace: with no chat open (WhatsApp had just loaded), the
+  // row exemption above did not apply, since it lived with the open chat's
+  // composer. Every row then waited on a model to read its caption and, with
+  // that model unavailable, stayed blocked. A row opens its chat with no chat
+  // open too, with no reading, and that chat gets the run's contact check.
+  test(`${build}: with no chat open, a chat-list row opens its chat, whose contact is then confirmed`, async () => {
+    await fixture(async ({ page, observe, probe, click, confirmContact }) => {
+      await page.evaluate(() => {
+        const main = document.querySelector('#main');
+        document.querySelector('[data-testid="chat-list"] [aria-selected="true"]').setAttribute('aria-selected', 'false');
+        main.remove();
+        // Opening a chat mounts the conversation panel before the row's own
+        // handler selects and names it.
+        document.addEventListener('click', event => {
+          if (event.target.closest?.('[role="gridcell"]') && !main.isConnected) document.body.append(main);
+        }, true);
+      });
+      const row = await probe(DAD_ROW, { named: true, readings: false });
+      assert.equal(row.conversationSelection, true, JSON.stringify(row));
+      assert.equal(row.messageSend, false);
+      assert.equal(row.conclusive, true);
+      // The row's own menu is not a chat selection and still waits on its reading.
+      const menu = await probe(DAD_MENU, { named: true, readings: false });
+      assert.notEqual(menu.conversationSelection, true, JSON.stringify(menu));
+      assert.notEqual(menu.conclusive, true, JSON.stringify(menu));
+      assert.equal(await page.evaluate(() => fixtureMenuOpened), 0, 'a probe never clicks');
+      assert.equal((await click(DAD_ROW)).success, true);
+      assert.equal(await page.locator('[data-testid="conversation-info-header-chat-title-name"]').textContent(), 'Fixture Dad');
+      const opened = await observe();
+      assert.equal(opened.reason, 'native_whatsapp_contact_binding_required', JSON.stringify(opened));
+      assert.notEqual(opened.retryable, false, 'the opened chat was refused its contact check');
       const bound = await confirmContact();
       assert.equal(bound.success, true, JSON.stringify(bound));
       assert.equal(bound.conversationIdentity, 'Fixture Dad');
