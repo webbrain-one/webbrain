@@ -181,8 +181,6 @@ em { font-style: italic; }
 @keyframes turn { to { transform: rotate(360deg); } }
 
 .hero-copy { position: relative; max-width: 640px; container-type: inline-size; }
-.kicker { display: flex; align-items: baseline; gap: 14px; margin: 0 0 22px; font: 500 12.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-hi); }
-.kicker .arabic { font-size: 30px; letter-spacing: 0; text-transform: none; line-height: 1; }
 .hero h1 {
   margin: 0;
   font: 300 clamp(58px, 8.6vw, 120px)/.9 var(--display);
@@ -505,7 +503,6 @@ section { position: relative; }
   body { font-size: 16px; }
   .cards { grid-template-columns: 1fr; }
   .nav .button.small { display: none; }
-  .kicker { flex-wrap: wrap; gap: 6px 12px; }
   .terminal-body { padding-right: 48px; }
   .terminal pre { font-size: 12px; }
   .steps li { grid-template-columns: 44px 1fr; gap: 14px; }
