@@ -98,6 +98,7 @@ export class VisionSession {
     this.clickScreenVersion = 0;
     this.ambientRegions = [];
     this.lastChange = null;
+    this.lastChangeLookedOnly = false;
   }
 
   get hasKeyframe() {
@@ -247,15 +248,18 @@ export class VisionSession {
 
   /**
    * One screen update's change (keyframe px regions; null for another page,
-   * layout or scroll) for clickScreenVersion. An area that changed while
-   * nothing acted on the page, and had changed in the update before too,
-   * changes on its own: its later changes are not a new screen for a click.
+   * layout or scroll) for clickScreenVersion. An area that changed across
+   * two consecutive look-only updates changes on its own: its later changes
+   * are not a new screen for a click. An action followed by a look can show
+   * a loading state and then its result, so that pair is not enough evidence.
    * Any other change is (a click's effect can show up anywhere: a counter
    * beside its button, the next slide, a delayed result).
    */
   _noteChange(regions, lookedOnly) {
     const previous = this.lastChange;
+    const previousLookedOnly = this.lastChangeLookedOnly;
     this.lastChange = regions;
+    this.lastChangeLookedOnly = lookedOnly;
     if (!regions) {
       this.ambientRegions = [];
       this.clickScreenVersion += 1;
@@ -267,7 +271,7 @@ export class VisionSession {
     let changed = false;
     for (const region of regions) {
       if (ambient(region)) continue;
-      if (lookedOnly && recurring(region)) {
+      if (lookedOnly && previousLookedOnly && recurring(region)) {
         this.ambientRegions.push(region);
         if (this.ambientRegions.length > MAX_AMBIENT_REGIONS) this.ambientRegions.shift();
         continue;

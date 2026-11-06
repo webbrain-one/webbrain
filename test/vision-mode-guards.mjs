@@ -240,7 +240,7 @@ for (const build of ['chrome', 'firefox']) {
     const f = loopFixture();
     const video = { x: 8, y: 8, width: 24, height: 24 };
     const look = (regions = [video]) => f.session.registerPatches(regions, null, { lookedOnly: true });
-    f.click(1035, 80); f.changeScreen(video); look();
+    f.click(1035, 80); f.changeScreen(video); look(); look();
     const points = [[1035, 80], [1035, 80], [1030, 78], [1035, 80], [1038, 76], [1035, 80], [1040, 78], [1035, 80]];
     const checks = points.map(([x, y], i) => {
       const check = f.click(x, y);
@@ -259,8 +259,10 @@ for (const build of ['chrome', 'firefox']) {
     };
     const meta = { imageWidth: 64, imageHeight: 48, cssWidth: 64, cssHeight: 48, url: 'https://shop.example/invitations' };
     framed.session.registerKeyframe(meta, frame(0));
+    framed.session.registerKeyframe(meta, frame(1), { lookedOnly: true });
+    framed.session.registerKeyframe(meta, frame(2), { lookedOnly: true });
     const kinds = [];
-    for (let i = 1; i <= 9; i++) {
+    for (let i = 3; i <= 11; i++) {
       kinds.push(framed.click(1035, 80).coord.kind);
       framed.changeScreen(video);
       framed.session.registerKeyframe(meta, frame(i), { lookedOnly: true });
@@ -268,7 +270,7 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(kinds.at(-1), 'stop', JSON.stringify(kinds));
     // The button's effect beside it, with the video still playing: progress.
     const counter = loopFixture();
-    counter.click(1035, 80); counter.changeScreen(video); counter.session.registerPatches([video], null, { lookedOnly: true });
+    counter.click(1035, 80); counter.changeScreen(video); counter.session.registerPatches([video], null, { lookedOnly: true }); counter.session.registerPatches([video], null, { lookedOnly: true });
     const presses = [];
     for (let i = 0; i < 9; i++) {
       presses.push(counter.click(1035, 80).coord.kind);
@@ -285,6 +287,16 @@ for (const build of ['chrome', 'firefox']) {
       slow.session.registerPatches([{ x: 40, y: 30, width: 16, height: 16 }], null, { lookedOnly: true });
     }
     assert.deepEqual(tries, Array(9).fill('none'));
+    // A loading state and its delayed result overlap, but both follow an action.
+    const asyncPage = loopFixture();
+    const progress = [];
+    for (let i = 0; i < 10; i++) {
+      progress.push(asyncPage.click(1035, 80).coord.kind);
+      asyncPage.changeScreen(video);
+      asyncPage.session.registerPatches([video], null, { lookedOnly: true });
+    }
+    assert.deepEqual(progress, Array(10).fill('none'));
+    assert.deepEqual(asyncPage.session.ambientRegions, []);
     // Points further apart than a drift are different targets.
     const grid = loopFixture();
     const cells = [];
