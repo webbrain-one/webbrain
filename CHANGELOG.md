@@ -7,6 +7,9 @@ This changelog was generated from the repository Git history and release tags. V
 ## [Unreleased]
 
 ### Fixed
+- In vision mode, a click that lands on the backdrop around an open dialog, or on an empty area of it, now says so instead of reporting a plain success. A model aiming at a composer's Post button clicked the dialog's backdrop ten times without noticing. Chrome and Firefox.
+- In vision mode, repeated clicks that keep missing the same spot are caught even while a video or animation elsewhere on the page keeps changing the screen, and points a few pixels apart count as the same spot. Chrome and Firefox.
+- The check that pins the exact text of a social post gets the same output budget as a normal step. With a model that thinks before answering, it used to run out of tokens and fail before checking anything. Chrome and Firefox.
 - Replies cut off by the model's output limit retain their partial text, show a localized notice asking you to request the rest, and end as partial rather than successful. This applies to streaming and non-streaming answers in Chrome and Firefox, without automatically retrying the request or replaying browser actions.
 - WhatsApp contacts with an emoji in their name can be messaged. WhatsApp draws a name's emoji as an image, and WebBrain's contact check required a name with no images, so it never confirmed such a contact and blocked the Contact info panel's Close button, the step it asked the agent to take. Attach, Send and every other action in that chat stayed blocked. Chrome and Firefox.
 - On WhatsApp with no chat open, the agent can open a chat from the chat list. A row click used to wait for a model to read the row's text, and with that model slow or unavailable every row stayed blocked, so the agent could not reach the chat it was asked to message. Chrome and Firefox.

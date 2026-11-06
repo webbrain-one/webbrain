@@ -165,8 +165,8 @@ for (const build of ['chrome', 'firefox']) {
     const ok = { success: true, dispatched: true, method: 'cdp-vision-pointer' };
     return {
       agent, tab, session, provider,
-      // What a screen update showing a change records (a patch).
-      changeScreen() { session.registerPatches([{ x: 0, y: 0, width: 16, height: 16 }], null); },
+      // What a screen update showing a change records (a patch, frame px).
+      changeScreen(region = { x: 0, y: 0, width: 16, height: 16 }) { session.registerPatches([region], null); },
       click(x = 300, y = 200, result = ok) {
         const args = { x, y, coordinate_space: 'css' };
         return { loop: agent._checkLoop(tab, 'click', args, structuredClone(result)), coord: agent._checkCoordClickLoop(tab, x, y) };
@@ -226,6 +226,70 @@ for (const build of ['chrome', 'firefox']) {
     const treeChecks = [];
     for (let i = 0; i < 8; i++) { treeChecks.push(tree.click()); tree.changeScreen(); }
     assert.equal(treeChecks.at(-1).coord.kind, 'stop');
+  });
+
+  // From a trace: a Bluesky composer's Post button missed ten times, every
+  // click landing on the dialog's backdrop, while a video played in the feed
+  // behind it. Each screen update showed the video's new frame, so every
+  // click counted as made on a new screen, and the model's points drifted a
+  // few pixels (1035,80 / 1030,78 / 1038,76 / 1040,78): nothing added up.
+  // What changes while nothing acts on the page (an update after a look) and
+  // went on changing is the page's own; a click's effect anywhere else, or a
+  // first change seen after a look, is still progress.
+  test(`${build}: a vision click missing the same point adds up while a video elsewhere keeps changing`, () => {
+    const f = loopFixture();
+    const video = { x: 8, y: 8, width: 24, height: 24 };
+    const look = (regions = [video]) => f.session.registerPatches(regions, null, { lookedOnly: true });
+    f.click(1035, 80); f.changeScreen(video); look();
+    const points = [[1035, 80], [1035, 80], [1030, 78], [1035, 80], [1038, 76], [1035, 80], [1040, 78], [1035, 80]];
+    const checks = points.map(([x, y], i) => {
+      const check = f.click(x, y);
+      f.changeScreen(video);
+      if (i % 3 === 2) look();
+      return check;
+    });
+    assert.deepEqual(checks.map(check => check.coord.kind), ['none', 'none', 'none', 'none', 'nudge', 'nudge', 'nudge', 'stop']);
+    assert.equal(checks[1].loop.kind, 'none');
+    // The look may be a full frame (take_screenshot) whose only change is the video.
+    const framed = loopFixture();
+    const frame = seed => {
+      const pixels = new Uint8ClampedArray(64 * 48 * 4);
+      for (let y = 8; y < 32; y++) for (let x = 8; x < 32; x++) pixels[(y * 64 + x) * 4] = (seed * 97 + x * 5) % 256;
+      return pixels;
+    };
+    const meta = { imageWidth: 64, imageHeight: 48, cssWidth: 64, cssHeight: 48, url: 'https://shop.example/invitations' };
+    framed.session.registerKeyframe(meta, frame(0));
+    const kinds = [];
+    for (let i = 1; i <= 9; i++) {
+      kinds.push(framed.click(1035, 80).coord.kind);
+      framed.changeScreen(video);
+      framed.session.registerKeyframe(meta, frame(i), { lookedOnly: true });
+    }
+    assert.equal(kinds.at(-1), 'stop', JSON.stringify(kinds));
+    // The button's effect beside it, with the video still playing: progress.
+    const counter = loopFixture();
+    counter.click(1035, 80); counter.changeScreen(video); counter.session.registerPatches([video], null, { lookedOnly: true });
+    const presses = [];
+    for (let i = 0; i < 9; i++) {
+      presses.push(counter.click(1035, 80).coord.kind);
+      counter.changeScreen(video);
+      counter.changeScreen({ x: 40, y: 30, width: 16, height: 16 });
+    }
+    assert.deepEqual(presses, Array(9).fill('none'));
+    // A slow page: nothing visible after the click, its result after a look.
+    const slow = loopFixture();
+    const tries = [];
+    for (let i = 0; i < 9; i++) {
+      tries.push(slow.click(1035, 80).coord.kind);
+      slow.session.registerNoChange();
+      slow.session.registerPatches([{ x: 40, y: 30, width: 16, height: 16 }], null, { lookedOnly: true });
+    }
+    assert.deepEqual(tries, Array(9).fill('none'));
+    // Points further apart than a drift are different targets.
+    const grid = loopFixture();
+    const cells = [];
+    for (let i = 0; i < 8; i++) cells.push(grid.click(400 + (i % 4) * 24, 300).coord.kind);
+    assert.deepEqual(cells, Array(8).fill('none'));
   });
 
   test(`${build}: vision loop messages name click_at, the model's point and only tools the run has`, () => {
@@ -1002,6 +1066,64 @@ test('chrome: a vision click result is not judged by a DOM text snapshot', async
     if (savedTabs) globalThis.chrome.tabs = savedTabs;
   }
 });
+
+// From a trace: every click meant for a Bluesky composer's Post button came
+// back { success: true, target: { tag: 'div', role: 'dialog' } }, and the
+// model clicked the same backdrop ten times. The click still goes (clicking
+// outside a dialog may be how it closes), and its result now says the point
+// is on no control.
+for (const build of ['chrome', 'firefox']) {
+  test(`${build}: a vision click on an open dialog's background goes out and says it hit no control`, async () => {
+    const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+    const provider = { model: 'owned-vision-dialog-fixture', supportsVision: true, chat: async () => ({ content: '{}' }) };
+    const agent = new Agent({ getActive: () => provider });
+    const tab = 43;
+    let point = null;
+    agent._visionPlatformDomProbe = async () => ({ points: [point] });
+    agent._visionMutationBindingBlock = async () => null;
+    const sent = [];
+    const restore = [];
+    if (build === 'chrome') {
+      agent._redirectTargetBlankClick = async () => null;
+      agent._visionPlatformLateTab = async () => null;
+      agent._showAgentTarget = () => {};
+      const saved = { attach: cdpClient.attach, sendCommand: cdpClient.sendCommand, armFileInputClickGuard: cdpClient.armFileInputClickGuard, consumeFileInputClickGuard: cdpClient.consumeFileInputClickGuard };
+      const savedTabs = globalThis.chrome?.tabs;
+      globalThis.chrome = { ...(globalThis.chrome || {}), tabs: { ...(savedTabs || {}), query: async () => [{ id: tab }],
+        onCreated: { addListener() {}, removeListener() {} }, onUpdated: { addListener() {}, removeListener() {} } } };
+      cdpClient.attach = async () => {};
+      cdpClient.sendCommand = async (_tab, method, params) => { if (method === 'Input.dispatchMouseEvent') sent.push(params.type); return {}; };
+      cdpClient.armFileInputClickGuard = async () => {};
+      cdpClient.consumeFileInputClickGuard = async () => null;
+      restore.push(() => { Object.assign(cdpClient, saved); if (savedTabs) globalThis.chrome.tabs = savedTabs; });
+    } else {
+      agent._visionContentInput = async (_tab, params) => { sent.push(params.type); return { success: true, dispatched: true, method: 'synthetic-vision-pointer', clicks: 1, target: { tag: point.tag } }; };
+      agent._settleContentFilePickerGuard = async (_tab, response) => response;
+    }
+    const click = (button = 'left') => agent._visionDispatchClick(tab, { x: 1035, y: 80, coordinate_space: 'css' },
+      { vision: { tool: 'click_at', button, clickCount: 1 } });
+    try {
+      point = { found: true, tag: 'div', role: 'dialog', clickable: false, opaqueFrame: false, dialogBackground: 'backdrop' };
+      const backdrop = await click();
+      assert.equal(backdrop.success, true, JSON.stringify(backdrop));
+      assert.ok(sent.length > 0, 'the click went out');
+      assert.match(backdrop.note, /backdrop around an open dialog, outside the dialog's content, not on a button, link or field/);
+      assert.match(backdrop.note, /this click missed it/);
+      assert.match(backdrop.note, /clicking outside it, check the next screen/);
+      if (build === 'chrome') assert.deepEqual(backdrop.target, { tag: 'div', role: 'dialog', dialogBackground: 'backdrop' });
+      point = { ...point, role: undefined, dialogBackground: 'empty' };
+      assert.match((await click()).note, /an empty area of an open dialog/);
+      // A right click there opens a menu; it is not told it missed a control.
+      assert.equal((await click('right')).note, undefined);
+      point = { found: true, tag: 'button', clickable: true, control: 'button', opaqueFrame: false };
+      const onButton = await click();
+      assert.equal(onButton.success, true);
+      assert.equal(onButton.note, undefined);
+    } finally {
+      for (const undo of restore) undo();
+    }
+  });
+}
 
 test('chrome: on a protected Chrome Web Store page vision input and zooms stop with the protected-page result', () => {
   for (const name of ['hover_at', 'drag_at', 'scroll_at', 'zoom', 'click']) assert.equal(isChromeProtectedPageDomTool(name), true, name);

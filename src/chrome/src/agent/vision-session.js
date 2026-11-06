@@ -12,17 +12,31 @@
 // was shown, so a point read from an image whose area has since changed is
 // refused instead of clicking whatever moved there.
 
-import { copyRegions, pointTouchesRegions } from './vision-diff.js';
+import { copyRegions, diffFrames, pointTouchesRegions } from './vision-diff.js';
 
 export const VISION_COORDINATE_FORMATS = Object.freeze(['pixel', 'normalized']);
 export const NORMALIZED_COORDINATE_SCALE = 1000;
 // A point within this many keyframe pixels of a changed area is stale.
 const STALE_MARGIN_PX = 4;
+// A change this close to (keyframe px) inside an area known to change on its
+// own still counts as that area's own change.
+const AMBIENT_MARGIN_PX = 16;
+const MAX_AMBIENT_REGIONS = 8;
 const IMAGE_ID_RE = /^[fpz][1-9]\d{0,5}$/;
 
 function roundTo(value, digits = 1) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+function contains(area, region, margin = 0) {
+  return region.x >= area.x - margin && region.y >= area.y - margin
+    && region.x + region.width <= area.x + area.width + margin
+    && region.y + region.height <= area.y + area.height + margin;
+}
+
+function overlaps(a, b) {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
 function finite(value) {
@@ -75,6 +89,15 @@ export class VisionSession {
     // action repeated on an unchanged screen from the same action after the
     // screen moved on.
     this.screenVersion = 0;
+    // The same for clicks, without the changes the page makes on its own: a
+    // video or animation that went on changing while nothing acted on the
+    // page (an update after a batch that only looked, such as
+    // take_screenshot or wait) is left out from then on. With a video playing
+    // in a feed behind a dialog, every update was a new screen and a click
+    // missing the same button ten times never added up to a loop.
+    this.clickScreenVersion = 0;
+    this.ambientRegions = [];
+    this.lastChange = null;
   }
 
   get hasKeyframe() {
@@ -92,7 +115,7 @@ export class VisionSession {
    * `unchanged`: the frame shows the screen the model already saw (a
    * take_screenshot of an unchanged page), so the screen version stays.
    */
-  registerKeyframe(meta = {}, pixels = null, { unchanged = false } = {}) {
+  registerKeyframe(meta = {}, pixels = null, { unchanged = false, lookedOnly = false } = {}) {
     const imageWidth = Math.max(1, Math.round(finite(meta.imageWidth) || 1));
     const imageHeight = Math.max(1, Math.round(finite(meta.imageHeight) || 1));
     const cssWidth = Math.max(1, finite(meta.cssWidth) || imageWidth);
@@ -104,7 +127,12 @@ export class VisionSession {
     }
     this.epoch += 1;
     this.updateSeq += 1;
-    if (!unchanged || !this.keyframe) this.screenVersion += 1;
+    if (!unchanged || !this.keyframe) {
+      this.screenVersion += 1;
+      this._noteChange(this._keyframeChange({ imageWidth, imageHeight, cssWidth, cssHeight, meta }, pixels), lookedOnly);
+    } else {
+      this.lastChange = [];
+    }
     this.images = new Map();
     this.changes = [];
     this.patchChainLength = 0;
@@ -156,12 +184,18 @@ export class VisionSession {
     this.forceKeyframe = true;
   }
 
-  /** Record patches (keyframe px regions) the model is about to receive. */
-  registerPatches(regions = [], pixels = null) {
+  /**
+   * Record patches (keyframe px regions) the model is about to receive.
+   * `lookedOnly`: the update follows a batch that did not act on the page.
+   */
+  registerPatches(regions = [], pixels = null, { lookedOnly = false } = {}) {
     if (!this.keyframe) throw new Error('A keyframe is required before patches.');
     this.updateSeq += 1;
     this.observationFailed = false;
-    if (regions.length) this.screenVersion += 1;
+    if (regions.length) {
+      this.screenVersion += 1;
+      this._noteChange(regions.map(region => ({ x: region.x, y: region.y, width: region.width, height: region.height })), lookedOnly);
+    }
     const seq = this.updateSeq;
     const images = regions.map(region => {
       const id = this._nextId('p');
@@ -193,6 +227,54 @@ export class VisionSession {
     if (!this.keyframe) return;
     this.updateSeq += 1;
     this.observationFailed = false;
+    this.lastChange = [];
+  }
+
+  /**
+   * What a new keyframe changed against the screen the model saw before it:
+   * its changed regions when both show the same page, layout and scroll, or
+   * null (everything) when they cannot be compared.
+   */
+  _keyframeChange({ imageWidth, imageHeight, cssWidth, cssHeight, meta }, pixels) {
+    const previous = this.keyframe;
+    if (!previous || !this.seenPixels || !pixels || previous.width !== imageWidth || previous.height !== imageHeight
+        || previous.cssWidth !== cssWidth || previous.cssHeight !== cssHeight
+        || previous.scrollX !== (finite(meta.scrollX) || 0) || previous.scrollY !== (finite(meta.scrollY) || 0)
+        || previous.url !== String(meta.url || '')) return null;
+    const diff = diffFrames(this.seenPixels, pixels, imageWidth, imageHeight);
+    return diff.comparable ? diff.regions.map(region => ({ x: region.x, y: region.y, width: region.width, height: region.height })) : null;
+  }
+
+  /**
+   * One screen update's change (keyframe px regions; null for another page,
+   * layout or scroll) for clickScreenVersion. An area that changed while
+   * nothing acted on the page, and had changed in the update before too,
+   * changes on its own: its later changes are not a new screen for a click.
+   * Any other change is (a click's effect can show up anywhere: a counter
+   * beside its button, the next slide, a delayed result).
+   */
+  _noteChange(regions, lookedOnly) {
+    const previous = this.lastChange;
+    this.lastChange = regions;
+    if (!regions) {
+      this.ambientRegions = [];
+      this.clickScreenVersion += 1;
+      return;
+    }
+    if (!regions.length) return;
+    const ambient = region => this.ambientRegions.some(area => contains(area, region, AMBIENT_MARGIN_PX));
+    const recurring = region => Array.isArray(previous) && previous.some(earlier => overlaps(earlier, region));
+    let changed = false;
+    for (const region of regions) {
+      if (ambient(region)) continue;
+      if (lookedOnly && recurring(region)) {
+        this.ambientRegions.push(region);
+        if (this.ambientRegions.length > MAX_AMBIENT_REGIONS) this.ambientRegions.shift();
+        continue;
+      }
+      changed = true;
+    }
+    if (changed) this.clickScreenVersion += 1;
   }
 
   /** A patch or "no visible change" was read at this scroll position. */

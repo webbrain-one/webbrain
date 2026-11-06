@@ -17695,11 +17695,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // The content click ran inside the native file-chooser guard, as an
     // ordinary click does; settle it the same way (a deferred chooser too).
     response = visionFilePickerBlockedResult(await this._settleContentFilePickerGuard(tabId, response));
+    // A point on an open dialog's background is said so (vision-runtime.js
+    // _visionClickPreflight), after whatever the click itself reported.
+    const note = preflight.note && response?.success !== false
+      ? [response?.note, preflight.note].filter(Boolean).join(' ') : response?.note;
     return {
       ...response,
       x,
       y,
       ...(vision?.imageId ? { image: vision.imageId } : {}),
+      ...(note ? { note } : {}),
     };
   }
 
@@ -22403,9 +22408,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _socialPublicationChatOptions(provider, retry = false, portable = false, audit = false) {
+    // A reasoning model that ignores the thinking controls (or a provider
+    // that sends none, as WebBrain Compass) spent all 2048 tokens of the first
+    // attempt thinking and returned nothing, so the check failed before it
+    // started. The first attempt gets what the provider allows a normal step;
+    // the repair, which only runs after a failure, may go past it.
     const options = {
       temperature: 0,
-      maxTokens: Math.min(retry ? 4096 : 2048, this._providerMaxOutputTokens(provider)),
+      maxTokens: retry ? Math.min(8192, this._providerMaxOutputTokens(provider, 8192))
+        : Math.min(4096, this._providerMaxOutputTokens(provider)),
     };
     if (!portable) {
       const config = { ...(provider?.config || {}),

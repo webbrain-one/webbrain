@@ -1,7 +1,8 @@
 // What is under a viewport point, for vision-mode dispatch checks: a double
 // click that would repeat a button's action, a drag that is really a click,
 // a wheel over a focused number field, a native <select>, an embedded frame
-// whose content cannot be inspected. Shared verbatim by both builds.
+// whose content cannot be inspected, the background of an open dialog.
+// Shared verbatim by both builds.
 //
 // visionDomProbe runs inside the page (Chrome: an isolated world through CDP;
 // Firefox: tabs.executeScript in the content-script world, so page scripts
@@ -158,6 +159,45 @@ export function visionDomProbe(request) {
     }
     return false;
   };
+  // A point on an open dialog's own background rather than on anything in
+  // it: 'backdrop' for the layer that dims the page around the dialog (often
+  // the dialog element itself, its content box drawn inside it, or a modal's
+  // full-viewport overlay), 'empty' for an empty area of the dialog's own
+  // box. A click there reports success while the button the model aimed at
+  // is elsewhere (a composer's Post button missed ten times in a trace).
+  const DIALOG = 'dialog,[role="dialog"],[role="alertdialog"],[aria-modal="true"]';
+  const dialogBackgroundOf = (el, x, y) => {
+    if (!el || el.nodeType !== 1 || typeof el.matches !== 'function') return '';
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'HTML' || tag === 'BODY') return '';
+    const doc = el.ownerDocument;
+    const view = doc && doc.defaultView;
+    if (!view) return '';
+    let rect = null;
+    try { rect = el.getBoundingClientRect(); } catch (e) { return ''; }
+    const covers = rect.width >= view.innerWidth * 0.8 && rect.height >= view.innerHeight * 0.8;
+    let dialog = false;
+    try { dialog = el.matches(DIALOG); } catch (e) { dialog = false; }
+    if (dialog) {
+      // A modal <dialog>'s ::backdrop is hit as the dialog element itself,
+      // outside its own box.
+      const outside = doc === document && (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom);
+      return covers || outside ? 'backdrop' : 'empty';
+    }
+    // A fixed full-viewport layer outside an open modal: its overlay.
+    if (!covers) return '';
+    let fixed = false;
+    try { fixed = view.getComputedStyle(el).position === 'fixed'; } catch (e) { fixed = false; }
+    if (!fixed) return '';
+    let modals = [];
+    try { modals = Array.from(doc.querySelectorAll('[aria-modal="true"],dialog[open]')); } catch (e) { modals = []; }
+    const modal = modals.find(node => {
+      if (node === el || node.contains(el)) return false;
+      if (String(node.tagName || '').toUpperCase() !== 'DIALOG') return true;
+      try { return node.matches(':modal'); } catch (e) { return false; }
+    });
+    return modal ? 'backdrop' : '';
+  };
   const points = Array.isArray(req.points) ? req.points.slice(0, 2) : [];
   const found = points.map(point => hit(Number(point && point.x), Number(point && point.y)));
   const infos = found.map((item, index) => {
@@ -173,6 +213,11 @@ export function visionDomProbe(request) {
     const role = el.getAttribute ? el.getAttribute('role') : '';
     if (role) info.role = String(role).slice(0, 32);
     if (control) info.control = control.kind;
+    if (!control && !info.opaqueFrame) {
+      const point = points[index] || {};
+      const background = dialogBackgroundOf(el, Number(point.x), Number(point.y));
+      if (background) info.dialogBackground = background;
+    }
     if (typeof el.matches === 'function' && el.matches('input[type="number"]')) {
       const root = el.getRootNode ? el.getRootNode() : el.ownerDocument;
       info.focusedNumberInput = !!root && root.activeElement === el;
