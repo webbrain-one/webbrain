@@ -59,3 +59,31 @@ test('reload and hard reload retry failed destinations', () => {
   tab.errorFor = null; commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
   assert.deepEqual(calls, [['load','https://example.test/'],['load','https://example.test/'],['reload'],['hard']]);
 });
+
+test('address bar chooses HTTP for local hosts with or without ports', () => {
+  const { resolveInput } = require('../app/url');
+  const search = (q) => `search:${q}`;
+  for (const value of ['localhost:3000', 'localhost:3000?q=1', 'example.local:8080/path', 'example.test:456', '127.0.0.1:8080', '[::1]:1234']) {
+    assert.equal(resolveInput(value, search), `http://${value}`, value);
+  }
+  assert.equal(resolveInput('example.com:8080/path', search), 'https://example.com:8080/path');
+  assert.equal(resolveInput('localhost.example.com:3000', search), 'https://localhost.example.com:3000');
+  assert.equal(resolveInput('https://localhost:3000', search), 'https://localhost:3000/');
+});
+
+test('open arguments convert Windows paths, including spaces and hash signs', () => {
+  const original = Module._load;
+  const path = 'C:\\Users\\Alice\\a # page.html';
+  let converted;
+  Module._load = function (name, ...args) {
+    if (name === 'node:fs') return { statSync: (value) => { assert.equal(value, path); return { isFile: () => true }; } };
+    if (name === 'node:url') return { pathToFileURL: (value) => { converted = value; return { href: 'file:///C:/Users/Alice/a%20%23%20page.html' }; } };
+    return original.call(this, name, ...args);
+  };
+  let urlsFromArgs;
+  try { delete require.cache[require.resolve('../app/open-arguments')]; ({ urlsFromArgs } = require('../app/open-arguments')); }
+  finally { Module._load = original; }
+  assert.deepEqual(urlsFromArgs(['electron', path, 'https://example.com/']), ['file:///C:/Users/Alice/a%20%23%20page.html', 'https://example.com/']);
+  assert.equal(converted, path);
+  delete require.cache[require.resolve('../app/open-arguments')];
+});

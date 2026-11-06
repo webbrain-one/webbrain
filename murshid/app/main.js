@@ -22,6 +22,7 @@ const { Companion } = require('./companion');
 const { installPermissions } = require('./permissions');
 const { registerSchemes, handleProtocol } = require('./protocol');
 const { resolveInput } = require('./url');
+const { urlsFromArgs } = require('./open-arguments');
 const identity = require('./identity');
 
 const PARTITION = 'persist:murshid';
@@ -68,13 +69,6 @@ if (!app.requestSingleInstanceLock()) {
     console.error('[murshid] failed to start:', error);
     app.exit(1);
   });
-}
-
-function urlsFromArgs(argv) {
-  return argv.slice(1)
-    .filter((arg) => !arg.startsWith('--') && arg !== '.' && !arg.endsWith('.js') && !/electron(\.exe)?$/i.test(arg))
-    .filter((arg) => /^(https?|file|murshid):/i.test(arg) || (fs.existsSync(arg) && fs.statSync(arg).isFile() && /\.(html?|pdf|svg|txt|png|jpe?g|gif|webp)$/i.test(arg)))
-    .map((arg) => (/^[a-z]+:/i.test(arg) ? arg : `file:///${path.resolve(arg).replace(/\\/g, '/')}`));
 }
 
 const ctx = {
