@@ -29,15 +29,28 @@ async function listHtmlFiles(dir) {
   return files.sort();
 }
 
+// Guide navigation and footer per translated docs set. English pages live at
+// the /docs/ root; Chinese and Hindi mirror it under /docs/zh/ and /docs/hi/.
+const GUIDE_LANGUAGES = {
+  zh: { overview: '/docs/zh/', faq: '/docs/zh/faq/', faqLabel: '常见问题' },
+  hi: { overview: '/docs/hi/', faq: '/docs/hi/faq/', faqLabel: 'अक्सर पूछे जाने वाले सवाल' },
+  en: { overview: '/docs/', faq: '/docs/faq/', faqLabel: 'FAQ' },
+};
+
+function guideLanguageFor(normalizedPath) {
+  if (normalizedPath.includes('/web/docs/zh/')) return 'zh';
+  if (normalizedPath.includes('/web/docs/hi/')) return 'hi';
+  return 'en';
+}
+
 function withGuideNavigation(html, file) {
   const normalized = file.replace(/\\/g, '/');
   // FAQ pages have a page-specific topic rail instead of the guide index.
   if (normalized.endsWith('/faq/index.html')) return html;
 
-  const isChinese = normalized.includes('/web/docs/zh/');
-  const overviewHref = isChinese ? '/docs/zh/' : '/docs/';
-  const faqHref = isChinese ? '/docs/zh/faq/' : '/docs/faq/';
-  const faqLabel = isChinese ? '常见问题' : 'FAQ';
+  const lang = guideLanguageFor(normalized);
+  const isEnglish = lang === 'en';
+  const { overview: overviewHref, faq: faqHref, faqLabel } = GUIDE_LANGUAGES[lang];
   let generated = html;
   if (!generated.includes(`href="${faqHref}"`)) {
     const escapedOverview = overviewHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,7 +63,7 @@ function withGuideNavigation(html, file) {
   }
 
   const hasApocalypseModeNavigation = /<a href="\/docs\/apocalypse-mode\/"[^>]*>Apocalypse Mode<\/a>/.test(generated);
-  if (!isChinese && !hasApocalypseModeNavigation) {
+  if (isEnglish && !hasApocalypseModeNavigation) {
     const safetyLink = /(<a href="\/docs\/safety\/"[^>]*>[^<]*<\/a>)/;
     const withApocalypseMode = generated.replace(
       safetyLink,
@@ -70,9 +83,8 @@ function withGuideNavigation(html, file) {
     `<a href="${escapedCompanionHref}"[^>]*>${escapedCompanionLabel}<\\/a>`,
   ).test(generated);
   if (!hasCompanionNavigation) {
-    const providersLink = isChinese
-      ? /(<a href="\/docs\/zh\/providers\/"[^>]*>提供商与模型<\/a>)/
-      : /(<a href="\/docs\/providers\/"[^>]*>Providers &(?:amp;)? models<\/a>)/;
+    const providersHref = `${overviewHref}providers/`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const providersLink = new RegExp(`(<a href="${providersHref}"[^>]*>[^<]*<\\/a>)`);
     const withCompanion = generated.replace(
       providersLink,
       `$1<a href="${companionHref}">${companionLabel}</a>`,
@@ -86,7 +98,7 @@ function withGuideNavigation(html, file) {
   // The WebBrain for websites guide gets its own group after "Use WebBrain",
   // while the site shows that product (WEBSITES_LAUNCHED). English only.
   const websitesGroup = /<div class="sidebar-group"><div class="sidebar-label">On your website<\/div><nav><a href="\/docs\/websites\/"[^>]*>WebBrain for websites<\/a><\/nav><\/div>/;
-  if (!isChinese && WEBSITES_LAUNCHED && !websitesGroup.test(generated)) {
+  if (isEnglish && WEBSITES_LAUNCHED && !websitesGroup.test(generated)) {
     generated = generated.replace(
       /(<a href="\/docs\/ollama\/"[^>]*>Ollama<\/a><\/nav>\s*<\/div>)/,
       '$1<div class="sidebar-group"><div class="sidebar-label">On your website</div><nav><a href="/docs/websites/">WebBrain for websites</a></nav></div>',
@@ -103,12 +115,14 @@ function withDocsFooter(html, file, dictionaries) {
   // The FAQ pages are built from web/build/faq-template.html, which already
   // renders the footer in each FAQ's own language.
   if (normalized.endsWith('/faq/index.html')) return html;
-  if (normalized.includes('/web/docs/zh/')) {
-    return withSiteFooter(html, dictionaries.zh, {
-      browserPath: '/zh/',
-      companionPath: '/companion/zh/',
-      docsPath: '/docs/zh/',
-      faqPath: '/docs/zh/faq/',
+  const lang = guideLanguageFor(normalized);
+  if (lang !== 'en') {
+    const { overview, faq } = GUIDE_LANGUAGES[lang];
+    return withSiteFooter(html, dictionaries[lang], {
+      browserPath: `/${lang}/`,
+      companionPath: `/companion/${lang}/`,
+      docsPath: overview,
+      faqPath: faq,
     });
   }
   return withSiteFooter(html, dictionaries.en);
@@ -117,13 +131,14 @@ function withDocsFooter(html, file, dictionaries) {
 async function main() {
   const en = JSON.parse(await readFile(path.join(LOCALES_DIR, 'en.json'), 'utf8'));
   const zh = { ...en, ...JSON.parse(await readFile(path.join(LOCALES_DIR, 'zh.json'), 'utf8')) };
+  const hi = { ...en, ...JSON.parse(await readFile(path.join(LOCALES_DIR, 'hi.json'), 'utf8')) };
   const files = await listHtmlFiles(DOCS_DIR);
   for (const file of files) {
     const original = await readFile(file, 'utf8');
     const generated = withDocsFooter(
       withGuideNavigation(withPlausibleAnalytics(original), file),
       file,
-      { en, zh },
+      { en, zh, hi },
     );
     const occurrences = generated.split(PLAUSIBLE_SCRIPT_URL).length - 1;
     if (occurrences !== 1) {

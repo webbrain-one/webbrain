@@ -16,6 +16,7 @@ Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir
 
 <p align="center">
 <a href="README.md">İngilizce</a> ·
+<a href="README.hi.md">Hindçe</a> ·
 <a href="README.zh-CN.md">Çince</a> ·
 <a href="README.fr.md">Fransızca</a> ·
 <a href="README.ja.md">Japonca</a> ·

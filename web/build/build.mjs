@@ -298,12 +298,14 @@ function faqUrlFor(locale) {
   return `${SITE_ORIGIN}${faqPathFor(locale)}`;
 }
 
+const TRANSLATED_DOCS = { zh: '/docs/zh/', hi: '/docs/hi/' };
+
 function docsPathFor(locale) {
-  return locale.code === 'zh' ? '/docs/zh/' : '/docs/';
+  return TRANSLATED_DOCS[locale.code] || '/docs/';
 }
 
 // The footer's no-JavaScript language list, in the language picker's order.
-const FOOTER_LANGUAGE_ORDER = ['en', 'zh', 'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko', 'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi'];
+const FOOTER_LANGUAGE_ORDER = ['en', 'hi', 'zh', 'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'id', 'ja', 'ko', 'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi'];
 
 function validateFooterLanguageOrder() {
   const codes = LOCALES.map((l) => l.code);
@@ -646,7 +648,7 @@ function applyTemplate(template, dict, locale, page = 'home') {
     .replace(/\{\{sites_demo_site_id\}\}/g, SITES_DEMO_SITE_ID)
     .replace(/\{\{home_title_size\}\}/g, homeTitleSize(dict))
     .replace(/\{\{docs_url\}\}/g, docsUrl)
-    .replace(/\{\{docs_language_label\}\}/g, locale.code === 'zh' ? '中文' : 'EN')
+    .replace(/\{\{docs_language_label\}\}/g, locale.code === 'zh' ? '中文' : locale.code === 'hi' ? 'हिन्दी' : 'EN')
     .replace(/\{\{faq_url\}\}/g, faqPathFor(locale))
     .replace(/\{\{faq_canonical\}\}/g, faqUrlFor(locale))
     .replace(/\{\{plausible_analytics\}\}/g, PLAUSIBLE_ANALYTICS)
@@ -814,6 +816,21 @@ async function main() {
     { loc: `${SITE_ORIGIN}/docs/zh/providers/` },
     { loc: `${SITE_ORIGIN}/docs/zh/easy-cli-proxy/`, alternates: 'easy-cli-proxy' },
     { loc: `${SITE_ORIGIN}/docs/zh/safety/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/apocalypse-mode/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/formats/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/mcp/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/lm-studio/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/ollama/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/settings/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/providers/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/easy-cli-proxy/`, alternates: 'easy-cli-proxy' },
+    { loc: `${SITE_ORIGIN}/docs/hi/safety/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/apocalypse-mode/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/formats/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/mcp/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/lm-studio/` },
+    { loc: `${SITE_ORIGIN}/docs/hi/ollama/` },
   ];
   const sitemap = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -826,6 +843,7 @@ async function main() {
       const alts = u.alternates === 'easy-cli-proxy'
         ? [
             `    <xhtml:link rel="alternate" hreflang="en" href="${SITE_ORIGIN}/docs/easy-cli-proxy/"/>`,
+            `    <xhtml:link rel="alternate" hreflang="hi" href="${SITE_ORIGIN}/docs/hi/easy-cli-proxy/"/>`,
             `    <xhtml:link rel="alternate" hreflang="zh" href="${SITE_ORIGIN}/docs/zh/easy-cli-proxy/"/>`,
             `    <xhtml:link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/docs/easy-cli-proxy/"/>`,
           ].join('\n') + '\n'

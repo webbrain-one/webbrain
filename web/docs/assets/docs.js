@@ -85,7 +85,9 @@
   function initializeDocsSearch() {
     if (!sidebar) return;
 
-    const isChinese = document.documentElement.lang.toLowerCase().startsWith('zh');
+    const lang = document.documentElement.lang.toLowerCase();
+    const isChinese = lang.startsWith('zh');
+    const isHindi = lang.startsWith('hi');
     const copy = isChinese ? {
       label: '搜索文档',
       placeholder: '搜索文档…',
@@ -93,6 +95,13 @@
       loading: '正在建立索引…',
       empty: '没有匹配结果。请尝试其他关键词。',
       count: function (shown, total) { return shown < total ? `显示 ${shown} / ${total} 个结果` : `找到 ${total} 个结果`; },
+    } : isHindi ? {
+      label: 'दस्तावेज़ खोजें',
+      placeholder: 'दस्तावेज़ खोजें…',
+      clear: 'साफ़ करें',
+      loading: 'इंडेक्स तैयार हो रहा है…',
+      empty: 'कोई परिणाम नहीं मिला। कोई दूसरा शब्द आज़माएँ।',
+      count: function (shown, total) { return shown < total ? `${total} में से ${shown} परिणाम दिख रहे हैं` : `${total} परिणाम मिले`; },
     } : {
       label: 'Search docs',
       placeholder: 'Search docs…',
@@ -144,7 +153,7 @@
       const description = doc.querySelector('meta[name="description"]')?.content || '';
       const entries = [{
         title: pageName,
-        page: isChinese ? '文档' : 'Guide',
+        page: isChinese ? '文档' : isHindi ? 'गाइड' : 'Guide',
         detail: h1?.textContent.trim() || description,
         url: pagePath,
         text: `${pageName} ${description} ${main.textContent}`,
