@@ -88,8 +88,6 @@ em { font-style: italic; }
 .button.small { height: 38px; padding: 0 16px; font-size: 12px; }
 .button.crimson { background: var(--crimson); color: var(--parchment); border-color: var(--crimson); }
 .button.crimson:hover { background: var(--crimson-deep); border-color: var(--crimson-deep); }
-.button.ghost.dark { color: var(--crimson-deep); border-color: rgba(108, 15, 29, .35); }
-.button.ghost.dark:hover { background: rgba(158, 27, 43, .07); border-color: var(--crimson); }
 
 /* ---------------------------------------------------------------------- nav */
 
@@ -455,6 +453,8 @@ section { position: relative; }
 .platform h3 { margin: 0 0 6px; font: 500 34px/1 var(--display); color: var(--crimson-ink); }
 .platform p { margin: 0 0 18px; color: #5a4436; font-size: 15.5px; }
 .status { font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--crimson); }
+.platform .download { display: flex; justify-content: center; margin: 0 0 14px; }
+.platform .fine { margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: #6e5a4b; }
 .get-cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 44px; padding: 0 var(--gutter); }
 
 /* ------------------------------------------------------------------ footer */
@@ -498,7 +498,6 @@ section { position: relative; }
   body { font-size: 16px; }
   .cards { grid-template-columns: 1fr; }
   .nav .button.small { display: none; }
-  .preview-bar span { display: none; }
   .kicker { flex-wrap: wrap; gap: 6px 12px; }
   .terminal-body { padding-right: 48px; }
   .terminal pre { font-size: 12px; }

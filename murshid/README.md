@@ -104,6 +104,10 @@ bundle the Companion, put its build for the target in
 `vendor/companion/<platform>-<arch>/` first (see the README there); it lands in
 `resources/companion`. Builds are not code-signed yet.
 
+The Windows installer offered on murshid.one is built with
+`npx electron-builder --win nsis --x64` and copied into `web/download/`, which
+is git-ignored and deployed with the site.
+
 ## The artwork
 
 The homepage's pictures are gold halftone prints of public-domain paintings

@@ -62,6 +62,15 @@
 
   document.querySelector(`[data-platform="${os}"]`)?.classList.add('is-you');
 
+  // Windows visitors get the installer straight from the hero.
+  const get = document.querySelector('[data-get]');
+  const installer = document.querySelector('[data-platform="win"] .download');
+  if (os === 'win' && get && installer) {
+    get.href = installer.getAttribute('href');
+    get.setAttribute('download', '');
+    get.firstChild.textContent = 'Download for Windows ';
+  }
+
   const targets = document.querySelectorAll('.card, .steps li, .platform, .section-head, .tray-inner > *');
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const io = new IntersectionObserver((entries) => {

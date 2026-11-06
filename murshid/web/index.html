@@ -35,7 +35,7 @@
 
 <a class="skip" href="#main">Skip to content</a>
 
-<p class="preview-bar" role="note"><strong>Development Preview</strong><span>Murshid is early and changes every day. It runs from source; installers come later.</span></p>
+<p class="preview-bar" role="note"><strong>Development Preview</strong></p>
 
 <header class="nav" id="top">
   <a class="brand" href="#top" aria-label="Murshid home">
@@ -67,7 +67,7 @@
     <h1 id="hero-title">The browser<br>that knows<br><em>the way.</em></h1>
     <p class="lede">Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.</p>
     <div class="cta">
-      <a class="button" href="#get">Get Murshid <svg><use href="#i-arrow"/></svg></a>
+      <a class="button" href="#get" data-get>Get Murshid <svg><use href="#i-arrow"/></svg></a>
       <a class="button ghost" href="https://webbrain.one">Meet WebBrain</a>
     </div>
 
@@ -238,13 +238,15 @@ cd murshid && npm install && npm start</code></pre>
   <header class="section-head center">
     <p class="eyebrow">Get Murshid</p>
     <h2 id="get-title">Take the guide <em>with you.</em></h2>
-    <p>Murshid is a development preview. Installers come next; today it runs from source on all three systems, with WebBrain and its new tab page preinstalled.</p>
+    <p>Murshid is a development preview. Windows has an installer; on macOS and Linux it runs from source for now. WebBrain and its new tab page come preinstalled.</p>
   </header>
   <div class="platforms">
     <article class="platform" data-platform="win">
       <h3>Windows</h3>
-      <p>10 and 11, x64 and Arm64.</p>
-      <span class="status">Installer soon · source today</span>
+      <p>10 and 11, x64. Arm64 runs from source.</p>
+      <a class="button crimson download" href="download/Murshid-0.1.0-windows-x64-setup.exe" download>Download installer</a>
+      <span class="status">0.1.0 · x64 · 137 MB</span>
+      <p class="fine">Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.</p>
     </article>
     <article class="platform" data-platform="mac">
       <h3>macOS</h3>
@@ -259,7 +261,6 @@ cd murshid && npm install && npm start</code></pre>
   </div>
   <div class="get-cta">
     <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> Source on GitHub</a>
-    <a class="button ghost dark" href="https://webbrain.one/companion/">WebBrain Companion</a>
   </div>
 </section>
 
