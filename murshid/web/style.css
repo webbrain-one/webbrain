@@ -37,7 +37,6 @@
   --arabic: "Ruqaa", "Aref Ruqaa", "Noto Naskh Arabic", serif;
   --gutter: clamp(16px, 4vw, 56px);
   --max: 1280px;
-  --bar: 34px;
   color-scheme: light;
 }
 
@@ -93,7 +92,7 @@ em { font-style: italic; }
 
 .nav {
   position: absolute;
-  inset: var(--bar) 0 auto;
+  inset: 0 0 auto;
   z-index: 10;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -108,27 +107,6 @@ em { font-style: italic; }
 .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px rgba(244,234,214,.25); }
 .brand span { font: 500 14px/1 var(--mono); letter-spacing: .32em; text-transform: uppercase; }
 .brand .badge { padding: 5px 9px 5px 10px; border: 1px solid var(--gold); border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: .16em; color: var(--gold-hi); background: rgba(40, 6, 12, .35); white-space: nowrap; }
-
-/* ------------------------------------------------------ development preview */
-
-.preview-bar {
-  position: relative;
-  z-index: 11;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 4px 14px;
-  min-height: var(--bar);
-  margin: 0;
-  padding: 7px var(--gutter);
-  background: var(--gold);
-  color: var(--crimson-ink);
-  font: 500 12px/1.35 var(--mono);
-  letter-spacing: .04em;
-  text-align: center;
-}
-.preview-bar strong { font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
 
 .links { display: flex; gap: clamp(18px, 3vw, 44px); }
 .links a { font: 500 12.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; text-decoration: none; opacity: .86; padding: 8px 0; border-bottom: 1px solid transparent; }

@@ -102,7 +102,7 @@ npm run dist   # installers: NSIS (Windows), DMG (macOS), AppImage + deb (Linux)
 The WebBrain extension is copied into `resources/extensions/webbrain`. To
 bundle the Companion, put its build for the target in
 `vendor/companion/<platform>-<arch>/` first (see the README there); it lands in
-`resources/companion`. Builds are not code-signed yet.
+`resources/companion`. Signing depends on the available build identity.
 
 The installers offered on murshid.one bundle WebBrain Companion 0.1.2 from the
 `systray-v0.1.2` release: the x64 `WebBrainCompanion.exe` from its Windows
@@ -111,6 +111,7 @@ setup (it holds an x64 and an Arm64 build) and the binary from its
 `npx electron-builder --win nsis --x64` on Windows and
 `npx electron-builder --linux AppImage deb --x64` in WSL (Ubuntu 24.04), and
 copied into `web/download/`, which is git-ignored and deployed with the site.
+For macOS, put the universal Companion app in both `darwin-x64` and `darwin-arm64`, then run `npx electron-builder --mac dmg --universal --publish never`.
 
 ## The artwork
 
