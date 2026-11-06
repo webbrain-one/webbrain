@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murshid — the browser that knows the way</title>
+<meta name="description" content="Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.">
+<meta name="theme-color" content="#9e1b2b">
+<meta property="og:title" content="Murshid — the browser that knows the way">
+<meta property="og:description" content="A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.">
+<meta property="og:image" content="art/murshid-icon.svg">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/cormorant-garamond-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- the Ottoman ogee arch, in the units of whatever it frames -->
+    <clipPath id="arch-clip" clipPathUnits="objectBoundingBox">
+      <path d="M0 1 L0 .40 C0 .23 .16 .13 .34 .07 C.43 .04 .47 .03 .5 0 C.53 .03 .57 .04 .66 .07 C.84 .13 1 .23 1 .40 L1 1 Z"/>
+    </clipPath>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 .55 0"/>
+    </filter>
+    <symbol id="tulip" viewBox="0 0 40 64">
+      <path d="M20 4 C17 14 14 18 9 20 C8 30 12 38 20 40 C28 38 32 30 31 20 C26 18 23 14 20 4 Z M20 40 L20 62 M20 52 C14 50 8 44 6 36 C12 38 17 44 20 52 M20 56 C26 52 32 48 34 40 C28 42 23 48 20 56"/>
+      <path d="M20 12 C19 22 19 30 20 40 M13 22 C14 30 16 35 20 40 M27 22 C26 30 24 35 20 40"/>
+    </symbol>
+    <symbol id="carnation" viewBox="0 0 48 64">
+      <path d="M24 30 C14 30 6 24 4 14 C10 16 12 12 14 6 C18 10 20 8 24 2 C28 8 30 10 34 6 C36 12 38 16 44 14 C42 24 34 30 24 30 Z M24 30 L24 62 M24 46 C18 44 12 40 10 34 M24 52 C30 50 36 46 38 40"/>
+      <path d="M14 14 C18 20 21 24 24 30 M34 14 C30 20 27 24 24 30 M24 8 L24 30"/>
+    </symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top">
+  <a class="brand" href="#top" aria-label="Murshid home">
+    <img src="art/murshid-icon.svg" alt="" width="34" height="34">
+    <span>Murshid</span>
+  </a>
+  <nav class="links" aria-label="Sections">
+    <a href="#carries">Browser</a>
+    <a href="#way">The way</a>
+    <a href="#tray">Companion</a>
+    <a href="#get">Get it</a>
+  </nav>
+  <div class="nav-end">
+    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid on GitHub"><svg><use href="#i-github"/></svg></a>
+    <a class="button small" href="#get">Get Murshid</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================================================ HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-grain" aria-hidden="true"><svg width="100%" height="100%"><rect width="100%" height="100%" filter="url(#grain)"/></svg></div>
+  <div class="hero-rays" aria-hidden="true"></div>
+
+  <div class="hero-copy">
+    <p class="kicker"><span class="arabic" lang="ar">مُرشِد</span> <span>mürşid · n. one who shows the way</span></p>
+    <h1 id="hero-title">The browser<br>that knows<br><em>the way.</em></h1>
+    <p class="lede">Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.</p>
+    <div class="cta">
+      <a class="button" href="#get">Get Murshid <svg><use href="#i-arrow"/></svg></a>
+      <a class="button ghost" href="https://webbrain.one">Meet WebBrain</a>
+    </div>
+
+    <div class="terminal" data-terminal>
+      <div class="terminal-tabs" role="tablist" aria-label="Your system">
+        <button role="tab" aria-selected="false" data-os="mac">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win">Windows</button>
+      </div>
+      <div class="terminal-body">
+        <span class="terminal-label">Run from source</span>
+        <pre><code data-cmd>git clone -b murshid https://github.com/webbrain-one/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
+        <button class="copy" type="button" aria-label="Copy commands"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <figure class="hero-art">
+    <div class="arch">
+      <img src="art/murshid-portrait.svg" alt="An Ottoman murshid in profile beneath a great white turban with a jewelled plume, his beard long and pointed, set against a gold halo and rays of light.">
+    </div>
+    <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 128 L0 51.2 C0 29.4 16 16.6 34 9 C43 5.1 47 3.8 50 0 C53 3.8 57 5.1 66 9 C84 16.6 100 29.4 100 51.2 L100 128"/>
+      <path class="inner" d="M3 128 L3 52 C3 31.6 18 19.5 35 12.4 C43.4 8.9 47 7.6 50 4.6 C53 7.6 56.6 8.9 65 12.4 C82 19.5 97 31.6 97 52 L97 128"/>
+    </svg>
+    <span class="finial" aria-hidden="true"></span>
+    <figcaption><span class="arabic" lang="ar">مرشد</span><span>Mürşid · the guide</span></figcaption>
+  </figure>
+</section>
+
+<div class="border-band" aria-hidden="true"></div>
+
+<!-- ============================================================= CARRIES -->
+<section class="carries" id="carries" aria-labelledby="carries-title">
+  <header class="section-head">
+    <p class="eyebrow">What the guide carries</p>
+    <h2 id="carries-title">A whole browser,<br><em>and a mind for it.</em></h2>
+    <p>Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.</p>
+  </header>
+
+  <div class="cards">
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <path d="M20 150V78c0-20 14-30 30-36 8-3 11-5 14-10 3 5 6 7 14 10 16 6 30 16 30 36v72"/>
+          <path d="M132 150V78c0-20 14-30 30-36 8-3 11-5 14-10 3 5 6 7 14 10 16 6 30 16 30 36v72"/>
+          <path class="lit" d="M76 150V60c0-24 16-36 34-43 6-2 8-4 10-9 2 5 4 7 10 9 18 7 34 19 34 43v90Z"/>
+          <path d="M8 150h224M30 150V84M98 150V84M142 150V84M210 150V84"/>
+          <circle cx="120" cy="88" r="10"/><path d="M120 98v28M108 112h24"/>
+        </g></svg>
+      </div>
+      <p class="num">#1 Browse</p>
+      <h3>Chromium, with tabs</h3>
+      <p>Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <path d="M120 0v26M108 0l12 26 12-26"/>
+          <path d="M92 40h56l-6 10H98Z"/>
+          <path class="lit" d="M96 50c-14 6-22 18-22 32 0 22 20 36 46 36s46-14 46-36c0-14-8-26-22-32Z"/>
+          <path d="M86 70h68M80 88h80M90 106h60"/>
+          <path d="M106 118l-6 14h40l-6-14M100 132h40"/>
+          <path class="flame" d="M120 60c-6 8-8 14-4 20 2 3 6 3 8 0 4-6 2-12-4-20Z"/>
+          <path class="ray" d="M40 84H18M222 84h-22M56 44 40 30M184 44l16-14M56 124l-16 14M184 124l16 14"/>
+        </g></svg>
+      </div>
+      <p class="num">#2 Ask &amp; act</p>
+      <h3>WebBrain in the side panel</h3>
+      <p>Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <ellipse cx="120" cy="112" rx="104" ry="26"/>
+          <ellipse cx="120" cy="108" rx="92" ry="20"/>
+          <path d="M28 108c30 16 154 16 184 0" class="dash"/>
+          <path class="lit" d="M78 46h28c0 10-6 16-6 24s8 14 8 24H76c0-10 8-16 8-24s-6-14-6-24Z"/>
+          <path d="M70 104c4 6 38 6 42 0M78 60h28"/>
+          <path class="lit" d="M136 52h26c0 9-5 14-5 22s7 12 7 20h-30c0-8 7-12 7-20s-5-13-5-22Z"/>
+          <path d="M128 102c4 6 38 6 42 0M137 64h24"/>
+          <path class="ray" d="M92 36c-4-8 4-12 0-20M150 42c-4-8 4-12 0-20"/>
+        </g></svg>
+      </div>
+      <p class="num">#3 Tray</p>
+      <h3>Your AI plans, from the tray</h3>
+      <p>WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <use href="#tulip" x="96" y="18" width="48" height="76" class="lit-use"/>
+          <use href="#carnation" x="36" y="44" width="40" height="54"/>
+          <use href="#carnation" x="164" y="44" width="40" height="54"/>
+          <rect x="44" y="112" width="152" height="24" rx="12"/>
+          <path d="M58 124h70" class="dash"/><circle cx="180" cy="124" r="6"/>
+        </g></svg>
+      </div>
+      <p class="num">#4 New tab</p>
+      <h3>A new tab that listens</h3>
+      <p>Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <circle cx="120" cy="78" r="62"/><circle cx="120" cy="78" r="50"/>
+          <path class="ticks" d="M120 16v8M120 132v8M58 78h8M174 78h8M76 34l6 6M164 34l-6 6M76 122l6-6M164 122l-6-6"/>
+          <path class="lit" d="M120 38 132 66l30 0-24 18 10 30-28-18-28 18 10-30-24-18h30Z"/>
+          <path d="M66 112 174 44"/><circle cx="120" cy="78" r="5"/>
+          <path d="M112 8h16l-8 8Z"/>
+        </g></svg>
+      </div>
+      <p class="num">#5 Local</p>
+      <h3>Models on your own machine</h3>
+      <p>The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <svg viewBox="0 0 240 150"><g class="lines">
+          <path d="M70 150V70c0-24 18-38 38-46 6-2 9-5 12-10 3 5 6 8 12 10 20 8 38 22 38 46v80"/>
+          <path class="lit" d="M84 150V74c0-18 14-30 28-36l8-4v116Z"/>
+          <path class="lit" d="M156 150V74c0-18-14-30-28-36l-8-4v116Z" opacity=".55"/>
+          <path d="M56 150 84 140M184 150l-28-10M30 150h180"/>
+          <circle cx="112" cy="100" r="2.5"/><circle cx="128" cy="100" r="2.5"/>
+        </g></svg>
+      </div>
+      <p class="num">#6 Open</p>
+      <h3>Open, all the way down</h3>
+      <p>GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ================================================================ WAY -->
+<section class="way" id="way" aria-labelledby="way-title">
+  <div class="way-art" aria-hidden="true">
+    <img src="art/semazen.svg" alt="">
+  </div>
+  <div class="way-copy">
+    <p class="eyebrow gold">The way</p>
+    <h2 id="way-title">The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em></h2>
+    <ol class="steps">
+      <li>
+        <span class="step-num">I</span>
+        <div>
+          <h3>Ask</h3>
+          <p>Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">II</span>
+        <div>
+          <h3>See the plan</h3>
+          <p>For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">III</span>
+        <div>
+          <h3>Walk</h3>
+          <p>Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- =============================================================== TRAY -->
+<section class="tray" id="tray" aria-labelledby="tray-title">
+  <div class="tray-inner">
+    <div>
+      <p class="eyebrow">In the system tray</p>
+      <h2 id="tray-title">The plans you already pay for,<br><em>poured for WebBrain.</em></h2>
+      <p>Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.</p>
+    </div>
+    <ul class="providers" aria-label="Subscriptions the Companion serves">
+      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local">Bonsai 2 27B · local</li><li class="local">d1 · local</li>
+    </ul>
+    <pre class="endpoint" aria-label="Companion endpoint"><code>http://127.0.0.1:8327/v1</code></pre>
+  </div>
+</section>
+
+<!-- ================================================================ GET -->
+<section class="get" id="get" aria-labelledby="get-title">
+  <header class="section-head center">
+    <p class="eyebrow">Get Murshid</p>
+    <h2 id="get-title">Take the guide <em>with you.</em></h2>
+    <p>Murshid is an early preview. Installers come next; today it runs from source on all three systems, with WebBrain and its new tab page preinstalled.</p>
+  </header>
+  <div class="platforms">
+    <article class="platform" data-platform="win">
+      <h3>Windows</h3>
+      <p>10 and 11, x64 and Arm64.</p>
+      <span class="status">Installer soon · source today</span>
+    </article>
+    <article class="platform" data-platform="mac">
+      <h3>macOS</h3>
+      <p>12 Monterey and later, Apple Silicon and Intel.</p>
+      <span class="status">Installer soon · source today</span>
+    </article>
+    <article class="platform" data-platform="linux">
+      <h3>Linux</h3>
+      <p>x64 and Arm64, AppImage and .deb planned.</p>
+      <span class="status">Installer soon · source today</span>
+    </article>
+  </div>
+  <div class="get-cta">
+    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> Source on GitHub</a>
+    <a class="button ghost dark" href="https://webbrain.one/companion/">WebBrain Companion</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-mark" aria-hidden="true"><span class="arabic" lang="ar">مرشد</span></div>
+  <div class="footer-row">
+    <a class="brand" href="#top"><img src="art/murshid-icon.svg" alt="" width="28" height="28"><span>Murshid</span></a>
+    <nav aria-label="Footer">
+      <a href="https://webbrain.one">WebBrain</a>
+      <a href="https://webbrain.one/companion/">Companion</a>
+      <a href="https://github.com/webbrain-one/webbrain">GitHub</a>
+      <a href="https://webbrain.one/privacy">Privacy</a>
+    </nav>
+    <p>GPL-3.0-or-later · Fonts under the SIL Open Font License · Artwork made for Murshid.</p>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

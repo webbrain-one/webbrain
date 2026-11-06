@@ -1,0 +1,94 @@
+/* Murshid's own pages (murshid://newtab, settings, about, error). */
+
+:root {
+  --bg: #f4ead6;
+  --panel: #fbf6ea;
+  --text: #2a1d16;
+  --muted: #6e5a4b;
+  --line: #dccdb4;
+  --crimson: #9e1b2b;
+  --crimson-deep: #6c0f1d;
+  --gold: #a87a22;
+  --gold-soft: rgba(168, 122, 34, .16);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #140f0d;
+    --panel: #1d1714;
+    --text: #f1e6d0;
+    --muted: #a8977f;
+    --line: #3a2c24;
+    --crimson: #c8283a;
+    --crimson-deep: #e2a2a8;
+    --gold: #d4a64a;
+    --gold-soft: rgba(212, 166, 74, .18);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "SF Pro Text", Ubuntu, sans-serif;
+}
+h1, h2 { font-family: "Cormorant Garamond", "Cormorant", Garamond, "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-weight: 400; letter-spacing: -.01em; }
+a { color: var(--crimson); }
+button, select, input { font: inherit; color: inherit; }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 64px; }
+.mark { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.mark img { width: 44px; height: 44px; border-radius: 11px; }
+.mark span { font: 600 13px/1 ui-monospace, "Cascadia Code", Consolas, monospace; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 46px; line-height: 1; margin: 0 0 10px; }
+h1 em { color: var(--crimson); }
+.lede { color: var(--muted); margin: 0 0 32px; max-width: 560px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px 20px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 0; }
+.row + .row { border-top: 1px solid var(--line); }
+.row label, .row .k { font-weight: 600; }
+.row small { display: block; color: var(--muted); font-weight: 400; }
+.row .v { color: var(--muted); text-align: right; word-break: break-all; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
+select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 180px; }
+input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--crimson); }
+
+.button {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 18px;
+  border-radius: 20px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); cursor: pointer; text-decoration: none; font-weight: 600;
+}
+.button:hover { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
+.button.primary { background: var(--crimson); border-color: var(--crimson); color: #fbf3e4; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.ok { color: #2a8a5f; }
+.warn { color: var(--crimson); }
+
+/* new tab fallback */
+.start {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(60% 50% at 50% 38%, var(--gold-soft), transparent 70%),
+    var(--bg);
+}
+.start-inner { width: min(640px, 100%); text-align: center; }
+.start img { width: 92px; height: 92px; border-radius: 22px; margin: 0 auto 18px; box-shadow: 0 18px 40px -20px rgba(108, 15, 29, .6); }
+.start h1 { font-size: 54px; margin-bottom: 26px; }
+.search {
+  display: flex; align-items: center; gap: 10px;
+  height: 54px; padding: 0 8px 0 20px;
+  border-radius: 27px; border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 14px 40px -28px rgba(42, 29, 22, .5);
+}
+.search:focus-within { border-color: var(--gold); box-shadow: 0 0 0 4px var(--gold-soft); }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 16px; }
+.search button { height: 40px; padding: 0 18px; border-radius: 20px; border: 0; background: var(--crimson); color: #fbf3e4; font-weight: 600; cursor: pointer; }
+.start .actions { justify-content: center; }
+.hint { color: var(--muted); font-size: 13px; margin-top: 18px; }

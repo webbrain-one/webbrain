@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
+<title>Page didn't load</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-page="error">
+<main class="wrap">
+  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span>Murshid</span></div>
+  <h1>This road is <em>closed.</em></h1>
+  <p class="lede"><strong id="host">The page</strong> didn't load. <span id="why"></span></p>
+  <div class="panel">
+    <div class="row"><span class="k">Address</span><span class="v" id="url"></span></div>
+    <div class="row"><span class="k">Error</span><span class="v" id="code"></span></div>
+  </div>
+  <div class="actions">
+    <button class="button primary" id="retry" type="button">Try again</button>
+    <a class="button" href="murshid://newtab">New tab</a>
+  </div>
+</main>
+<script src="pages.js"></script>
+</body>
+</html>

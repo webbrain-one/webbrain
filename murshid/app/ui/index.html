@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' file: https: http: data:; font-src 'self'">
+<title>Murshid</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <defs>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
+      <symbol id="i-forward" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="18.5" r="1.3"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.7 2.6 14.3 0 17M12 3.5c-2.6 2.7-2.6 14.3 0 17"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/></symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/></symbol>
+      <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M17 10l4 4M21 10l-4 4"/></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+      <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+      <symbol id="i-max" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11"/></symbol>
+    </defs>
+  </svg>
+
+  <header id="chrome">
+    <div id="strip">
+      <div id="strip-lead">
+        <img id="brand" src="../../assets/icons/murshid.svg" alt="" draggable="false">
+      </div>
+      <div id="tabs" role="tablist" aria-label="Tabs"></div>
+      <button id="new-tab" class="icon-button" title="New tab (Ctrl+T)" aria-label="New tab"><svg><use href="#i-plus"/></svg></button>
+      <div id="strip-fill"></div>
+      <div id="caption" hidden>
+        <button data-control="minimize" aria-label="Minimize"><svg><use href="#i-min"/></svg></button>
+        <button data-control="maximize" aria-label="Maximize"><svg><use href="#i-max"/></svg></button>
+        <button data-control="close" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <button id="back" class="icon-button" title="Back (Alt+Left)" aria-label="Back"><svg><use href="#i-back"/></svg></button>
+      <button id="forward" class="icon-button" title="Forward (Alt+Right)" aria-label="Forward"><svg><use href="#i-forward"/></svg></button>
+      <button id="reload" class="icon-button" title="Reload (Ctrl+R)" aria-label="Reload"><svg><use href="#i-reload"/></svg></button>
+
+      <form id="omnibox" autocomplete="off">
+        <span id="site" aria-hidden="true"><svg><use href="#i-search"/></svg></span>
+        <input id="address" type="text" spellcheck="false" placeholder="Search or type a web address" aria-label="Address and search bar">
+        <span id="zoom-chip" hidden></span>
+      </form>
+
+      <button id="webbrain" class="toolbar-pill" title="WebBrain (Alt+Shift+W)" aria-label="Open WebBrain">
+        <img id="webbrain-icon" src="../../assets/icons/webbrain-mark.svg" alt="" draggable="false">
+        <span>WebBrain</span>
+      </button>
+      <button id="downloads" class="icon-button" title="Downloads" aria-label="Downloads" hidden>
+        <svg><use href="#i-download"/></svg>
+        <i id="download-ring"></i>
+      </button>
+      <button id="menu" class="icon-button" title="Customize and control Murshid" aria-label="Menu"><svg><use href="#i-more"/></svg></button>
+    </div>
+
+    <div id="findbar" hidden>
+      <svg class="find-glyph"><use href="#i-search"/></svg>
+      <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" aria-label="Find in page">
+      <span id="find-count"></span>
+      <button id="find-prev" class="icon-button" aria-label="Previous match"><svg><use href="#i-up"/></svg></button>
+      <button id="find-next" class="icon-button" aria-label="Next match"><svg><use href="#i-down"/></svg></button>
+      <button id="find-close" class="icon-button" aria-label="Close find bar"><svg><use href="#i-close"/></svg></button>
+    </div>
+  </header>
+
+  <aside id="panel-header" hidden>
+    <img src="../../assets/icons/webbrain-mark.svg" alt="" draggable="false">
+    <span id="panel-title">WebBrain</span>
+    <button id="panel-close" class="icon-button" title="Close side panel" aria-label="Close side panel"><svg><use href="#i-close"/></svg></button>
+  </aside>
+  <div id="splitter" hidden></div>
+
+  <main id="backdrop">
+    <img src="../../assets/icons/murshid.svg" alt="" draggable="false">
+  </main>
+
+  <script src="ui.js"></script>
+</body>
+</html>

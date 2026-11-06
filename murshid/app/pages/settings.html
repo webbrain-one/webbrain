@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
+<title>Settings</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-page="settings">
+<main class="wrap">
+  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span>Murshid</span></div>
+  <h1>Settings</h1>
+  <p class="lede">WebBrain keeps its own settings in its side panel (model, providers, permissions). These are Murshid's.</p>
+  <div class="panel">
+    <div class="row">
+      <label for="engine">Search engine<small>Used by the address bar and WebBrain's Search.</small></label>
+      <select id="engine"></select>
+    </div>
+    <div class="row">
+      <label for="companion">Start WebBrain Companion with Murshid<small>Starts the tray app in the background if it is installed and not already running.</small></label>
+      <input id="companion" type="checkbox">
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" id="webbrain" type="button">Open WebBrain</button>
+    <button class="button" id="open-companion" type="button">WebBrain Companion</button>
+    <a class="button" href="murshid://about">About Murshid</a>
+  </div>
+</main>
+<script src="pages.js"></script>
+</body>
+</html>
