@@ -104,9 +104,13 @@ bundle the Companion, put its build for the target in
 `vendor/companion/<platform>-<arch>/` first (see the README there); it lands in
 `resources/companion`. Builds are not code-signed yet.
 
-The Windows installer offered on murshid.one is built with
-`npx electron-builder --win nsis --x64` and copied into `web/download/`, which
-is git-ignored and deployed with the site.
+The installers offered on murshid.one bundle WebBrain Companion 0.1.2 from the
+`systray-v0.1.2` release: the x64 `WebBrainCompanion.exe` from its Windows
+setup (it holds an x64 and an Arm64 build) and the binary from its
+`linux-x64` archive. They are built with
+`npx electron-builder --win nsis --x64` on Windows and
+`npx electron-builder --linux AppImage deb --x64` in WSL (Ubuntu 24.04), and
+copied into `web/download/`, which is git-ignored and deployed with the site.
 
 ## The artwork
 

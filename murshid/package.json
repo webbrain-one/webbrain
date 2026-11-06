@@ -79,6 +79,7 @@
     },
     "linux": {
       "icon": "assets/icons/murshid-512.png",
+      "maintainer": "Emre Sokullu <emre@webbrain.one>",
       "category": "Network;WebBrowser",
       "target": ["AppImage", "deb"],
       "artifactName": "Murshid-${version}-linux-${arch}.${ext}",

@@ -62,13 +62,14 @@
 
   document.querySelector(`[data-platform="${os}"]`)?.classList.add('is-you');
 
-  // Windows visitors get the installer straight from the hero.
+  // Windows and Linux visitors get their installer straight from the hero
+  // (on Linux, the AppImage, which runs on any distribution).
   const get = document.querySelector('[data-get]');
-  const installer = document.querySelector('[data-platform="win"] .download');
-  if (os === 'win' && get && installer) {
+  const installer = document.querySelector(`[data-platform="${os}"] .download`);
+  if (get && installer && os !== 'mac') {
     get.href = installer.getAttribute('href');
     get.setAttribute('download', '');
-    get.firstChild.textContent = 'Download for Windows ';
+    get.firstChild.textContent = `Download for ${os === 'win' ? 'Windows' : 'Linux'} `;
   }
 
   const targets = document.querySelectorAll('.card, .steps li, .platform, .section-head, .tray-inner > *');

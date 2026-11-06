@@ -180,12 +180,15 @@ em { font-style: italic; }
 }
 @keyframes turn { to { transform: rotate(360deg); } }
 
-.hero-copy { position: relative; max-width: 640px; }
+.hero-copy { position: relative; max-width: 640px; container-type: inline-size; }
 .kicker { display: flex; align-items: baseline; gap: 14px; margin: 0 0 22px; font: 500 12.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-hi); }
 .kicker .arabic { font-size: 30px; letter-spacing: 0; text-transform: none; line-height: 1; }
 .hero h1 {
   margin: 0;
-  font: 300 clamp(58px, 8.6vw, 132px)/.9 var(--display);
+  font: 300 clamp(58px, 8.6vw, 120px)/.9 var(--display);
+  /* "The browser" is about 4.6 em wide: size it from the column it sits in,
+     so it stays on one line however wide the window gets */
+  font-size: clamp(58px, min(8.6vw, 20.5cqi), 132px);
   letter-spacing: -.025em;
   text-wrap: balance;
 }
@@ -453,7 +456,11 @@ section { position: relative; }
 .platform h3 { margin: 0 0 6px; font: 500 34px/1 var(--display); color: var(--crimson-ink); }
 .platform p { margin: 0 0 18px; color: #5a4436; font-size: 15.5px; }
 .status { font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--crimson); }
-.platform .download { display: flex; justify-content: center; margin: 0 0 14px; }
+.platform .downloads { display: flex; gap: 10px; margin: 0 0 14px; }
+.platform .downloads .button { flex: 1; justify-content: center; }
+.platform .fine code { font: 500 11.5px/1.5 var(--mono); color: var(--crimson-ink); word-break: break-word; }
+.checksums { margin: 18px 0 0; text-align: center; font: 500 12px/1 var(--mono); letter-spacing: .06em; }
+.checksums a { color: var(--crimson); }
 .platform .fine { margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: #6e5a4b; }
 .get-cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 44px; padding: 0 var(--gutter); }
 

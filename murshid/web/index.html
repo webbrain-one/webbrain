@@ -238,14 +238,16 @@ cd murshid && npm install && npm start</code></pre>
   <header class="section-head center">
     <p class="eyebrow">Get Murshid</p>
     <h2 id="get-title">Take the guide <em>with you.</em></h2>
-    <p>Murshid is a development preview. Windows has an installer; on macOS and Linux it runs from source for now. WebBrain and its new tab page come preinstalled.</p>
+    <p>Murshid is a development preview. Windows and Linux have installers, with WebBrain Companion included; on macOS it runs from source for now. WebBrain and its new tab page come preinstalled.</p>
   </header>
   <div class="platforms">
     <article class="platform" data-platform="win">
       <h3>Windows</h3>
       <p>10 and 11, x64. Arm64 runs from source.</p>
-      <a class="button crimson download" href="download/Murshid-0.1.0-windows-x64-setup.exe" download>Download installer</a>
-      <span class="status">0.1.0 · x64 · 137 MB</span>
+      <div class="downloads">
+        <a class="button crimson download" href="download/Murshid-0.1.0-windows-x64-setup.exe" download>Download installer</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 150 MB</span>
       <p class="fine">Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.</p>
     </article>
     <article class="platform" data-platform="mac">
@@ -255,13 +257,19 @@ cd murshid && npm install && npm start</code></pre>
     </article>
     <article class="platform" data-platform="linux">
       <h3>Linux</h3>
-      <p>x64 and Arm64, AppImage and .deb planned.</p>
-      <span class="status">Installer soon · source today</span>
+      <p>x64. Arm64 runs from source.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="download/Murshid-0.1.0-linux-x86_64.AppImage" download>AppImage</a>
+        <a class="button crimson" href="download/Murshid-0.1.0-linux-amd64.deb" download>.deb</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 171 MB · 135 MB</span>
+      <p class="fine">AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
     </article>
   </div>
   <div class="get-cta">
     <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> Source on GitHub</a>
   </div>
+  <p class="checksums"><a href="download/SHA256SUMS.txt">SHA-256 checksums</a></p>
 </section>
 
 </main>
