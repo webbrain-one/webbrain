@@ -89,7 +89,28 @@ class MurshidWindow {
       if (this.activeTab) this.ctx.extensions.selectTab(this.activeTab.wc);
       this.ctx.onWindowFocused?.(this);
     });
-    this.win.on('close', () => this.rememberBounds());
+    this.win.on('close', (event) => {
+      this.rememberBounds();
+      if (!this.tabs.length) return;
+      event.preventDefault();
+      if (this.closingWindow) return;
+      this.closingWindow = true;
+      (async () => {
+        while (this.tabs.length) {
+          if (!await this.closeTab(this.tabs[0])) {
+            this.closingWindow = false;
+            this.ctx.quitting = false;
+            return;
+          }
+        }
+        this.closingWindow = false;
+        if (!this.win.isDestroyed()) this.win.close();
+      })().catch((error) => {
+        this.closingWindow = false;
+        this.ctx.quitting = false;
+        console.error('[murshid] could not close window:', error);
+      });
+    });
     this.win.on('closed', () => this.onClosed());
 
     this.onTheme = () => {
@@ -114,7 +135,16 @@ class MurshidWindow {
     else if (after && this.tabs.includes(after)) at = this.tabs.indexOf(after) + 1;
     this.tabs.splice(at, 0, tab);
     this.ctx.extensions.addTab(tab.wc, this.win);
-    tab.wc.once('destroyed', () => this.forgetTab(tab));
+    tab.wc.once('destroyed', () => {
+      const entry = tab.pendingClose;
+      if (entry && entry.url) {
+        this.closedTabs.push({ url: entry.url, index: entry.index });
+        if (this.closedTabs.length > 25) this.closedTabs.shift();
+      }
+      this.forgetTab(tab);
+      entry?.resolve(true);
+      if (entry && !this.tabs.length && !this.closingWindow && !this.win.isDestroyed()) this.win.close();
+    });
     if (active || !this.activeTab) this.selectTab(tab);
     else this.scheduleState();
     return tab;
@@ -141,26 +171,14 @@ class MurshidWindow {
   }
 
   closeTab(tab) {
-    if (!tab || !this.tabs.includes(tab)) return;
-    const url = tab.url;
-    if (url && !tab.isNewTabPage()) {
-      this.closedTabs.push({ url, index: this.tabs.indexOf(tab) });
-      if (this.closedTabs.length > 25) this.closedTabs.shift();
-    }
-    if (this.tabs.length === 1) {
-      // Closing the last tab closes the window, like Chrome.
-      this.forgetTab(tab);
-      tab.destroy();
-      this.win.close();
-      return;
-    }
-    const idx = this.tabs.indexOf(tab);
-    if (tab === this.activeTab) {
-      const next = this.tabs[idx + 1] || this.tabs[idx - 1];
-      this.selectTab(next);
-    }
-    this.forgetTab(tab);
-    tab.destroy();
+    if (!tab || !this.tabs.includes(tab) || tab.wc.isDestroyed()) return Promise.resolve(false);
+    if (tab.pendingClose) return tab.pendingClose.promise;
+    let resolve;
+    const promise = new Promise((done) => { resolve = done; });
+    tab.pendingClose = { url: tab.isNewTabPage() ? '' : tab.url, index: this.tabs.indexOf(tab), promise, resolve };
+    try { tab.wc.close({ waitForBeforeUnload: true }); }
+    catch (error) { tab.pendingClose = null; resolve(false); }
+    return promise;
   }
 
   forgetTab(tab) {

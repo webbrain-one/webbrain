@@ -29,6 +29,44 @@ const waitFor = async (condition) => {
     await waitFor(() => urls().includes(`${base}/late`));
     assert(late.prevented);
     console.log('Early and late macOS open events reached isolated tabs');
+    const w = ctx.windows[0];
+    const originalFocus = w.focusOmnibox;
+    let focused = 0;
+    w.focusOmnibox = () => { focused++; };
+    const newTab = w.addTab({});
+    w.focusOmnibox = originalFocus;
+    assert(focused > 0, 'new tab should focus the address bar before navigation commits');
+    const guarded = w.addTab({ url: `${base}/guarded` });
+    await waitFor(() => guarded.wc.getURL() === `${base}/guarded` && !guarded.wc.isLoading());
+    await guarded.wc.executeJavaScript("window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; }; document.body.click();", true);
+    const { dialog } = require('electron');
+    const originalDialog = dialog.showMessageBoxSync;
+    let prompts = 0;
+    try {
+      dialog.showMessageBoxSync = () => { prompts++; return 1; };
+      w.closeTab(guarded);
+      await new Promise(r => setTimeout(r, 500));
+      assert.equal(prompts, 1, 'beforeunload should prompt');
+      assert(w.tabs.includes(guarded) && !guarded.wc.isDestroyed(), 'Stay should retain the tab');
+      dialog.showMessageBoxSync = () => { prompts++; return 0; };
+      w.closeTab(guarded);
+      await waitFor(() => !w.tabs.includes(guarded));
+      assert.equal(prompts, 2, 'retry should prompt again');
+      assert(w.closedTabs.some(entry => entry.url === `${base}/guarded`));
+      console.log('Beforeunload Stay retains the tab; Leave closes it');
+      const other = ctx.createWindow({ url: `${base}/window-guarded` });
+      const windowTab = other.activeTab;
+      await waitFor(() => windowTab.wc.getURL() === `${base}/window-guarded` && !windowTab.wc.isLoading());
+      await windowTab.wc.executeJavaScript("window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; }; document.body.click();", true);
+      dialog.showMessageBoxSync = () => 1;
+      other.win.close();
+      await new Promise(r => setTimeout(r, 500));
+      assert(!other.win.isDestroyed() && other.tabs.includes(windowTab), 'Stay should retain the window and tab');
+      dialog.showMessageBoxSync = () => 0;
+      other.win.close();
+      await waitFor(() => other.win.isDestroyed());
+      console.log('Window close honors beforeunload');
+    } finally { dialog.showMessageBoxSync = originalDialog; }
     // Exercise the last-window decision with an offscreen window still alive.
     const { BrowserWindow } = require('electron');
     const offscreen = new BrowserWindow({ show: false });
@@ -50,6 +88,6 @@ const waitFor = async (condition) => {
       offscreen.destroy();
     }
   } catch (error) { console.error(error); process.exitCode = 1; }
-  finally { server.close(); app.quit(); }
+  finally { server.close(); app.exit(process.exitCode || 0); }
 })();
 });

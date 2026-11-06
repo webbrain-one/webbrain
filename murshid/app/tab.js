@@ -3,7 +3,7 @@
 // One browser tab: a WebContentsView in the browsing session, plus the bits of
 // state the tab strip and address bar draw from it.
 
-const { WebContentsView } = require('electron');
+const { WebContentsView, dialog } = require('electron');
 const { mapInternal } = require('./url');
 
 const ERROR_ABORTED = -3;
@@ -44,6 +44,7 @@ class Tab {
     this.audible = false;
     this.crashed = false;
     this.errorFor = null; // URL whose load failed; the address bar keeps showing it.
+    this.initialUrl = url ? (mapInternal(url) === 'murshid://newtab' ? this.ctx.newTabUrl() : mapInternal(url)) : '';
     this.zoomShown = false;
     this.wire();
     if (url) this.load(url);
@@ -62,7 +63,7 @@ class Tab {
   get url() {
     if (this.errorFor) return this.errorFor;
     try {
-      return this.wc.getURL();
+      return this.wc.getURL() || this.initialUrl;
     } catch {
       return '';
     }
@@ -122,7 +123,7 @@ class Tab {
         this.favicon = null;
       }
     });
-    wc.on('did-navigate', () => this.changed());
+    wc.on('did-navigate', () => { this.initialUrl = ''; this.changed(); });
     wc.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
       if (isMainFrame) this.changed();
     });
@@ -155,6 +156,18 @@ class Tab {
     wc.on('leave-html-full-screen', () => this.owner.setHtmlFullscreen(false));
     wc.on('found-in-page', (_event, result) => this.owner.sendFindResult(this, result));
     wc.on('context-menu', (_event, params) => this.ctx.contextMenu(this, params));
+    wc.on('will-prevent-unload', (event) => {
+      const response = dialog.showMessageBoxSync(this.owner.win, {
+        type: 'question', buttons: ['Leave', 'Stay'], defaultId: 1, cancelId: 1,
+        title: 'Leave this page?', message: 'Changes you made may not be saved.', noLink: true,
+      });
+      if (response === 0) event.preventDefault();
+      else if (this.pendingClose) {
+        const pending = this.pendingClose;
+        this.pendingClose = null;
+        pending.resolve(false);
+      }
+    });
     wc.on('before-input-event', (event, input) => this.ctx.commands.handleInput(event, input, this.owner));
     wc.on('will-navigate', (event) => {
       if (/^chrome:\/\//i.test(event.url)) {
