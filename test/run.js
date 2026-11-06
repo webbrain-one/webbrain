@@ -15920,7 +15920,8 @@ test('agent trace instrumentation: turn/step boundaries, retries-before-wait, an
     assert.match(streamingBody, /recordStepStart\(runId, steps, \{\}\)/, `${browser}: streaming step_start missing`);
     assert.match(agentSource, /modelOutputDiagnostics\(result,[\s\S]*?requestedMaxTokens: chatOpts\.maxTokens/, `${browser}: non-streaming responses omit output diagnostics`);
     assert.match(streamingBody, /recordLLMResponse\(runId, steps,[\s\S]*?\.\.\.outputDiagnostics/, `${browser}: streaming responses omit output diagnostics`);
-    assert.match(streamingBody, /finishReason = String\(/, `${browser}: streaming terminal reason is discarded`);
+    assert.match(streamingBody, /finishReason = modelOutputDiagnostics\(chunk\)\.finishReason/, `${browser}: streaming terminal reason is discarded`);
+    assert.match(streamingBody, /outputTruncated = chunk\.outputTruncated === true/, `${browser}: streaming worker output-limit flag is discarded`);
     assert.doesNotMatch(agentSource, /raise the step limit in settings/, `${browser}: empty response guidance still blames the unrelated agent step limit`);
     assert.match(nonStreamingBody, /_traceStepEndForResult\(result\)/, `${browser}: non-streaming output is not validated before step_end`);
     assert.match(streamingBody, /const closeTraceStep = \(payload\) => \{[\s\S]*?traceStepClosed = true/, `${browser}: streaming step_end is not single-shot`);

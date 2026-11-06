@@ -31,7 +31,7 @@
     "test:attachment-drop": "node test/attachment-drop.mjs",
     "test:workflow-editor": "node --test test/workflow-editor.mjs",
     "test:security": "node test/security/injection-corpus.mjs",
-    "test:cloud-bridge-approval": "node --test test/cloud-bridge-approval.mjs test/cloud-handoff.mjs test/bot-memory.mjs test/bot-memory-click-guard.mjs test/bot-memory-registries.mjs test/bot-memory-cloud-controller.mjs test/cloud-conversation-isolation.mjs test/cloud-run-outcomes.mjs test/cloud-act-completion.mjs test/cloud-model-recovery.mjs test/private-results.mjs",
+    "test:cloud-bridge-approval": "node --test test/ask-output-limit.mjs test/cloud-bridge-approval.mjs test/cloud-handoff.mjs test/bot-memory.mjs test/bot-memory-click-guard.mjs test/bot-memory-registries.mjs test/bot-memory-cloud-controller.mjs test/cloud-conversation-isolation.mjs test/cloud-run-outcomes.mjs test/cloud-act-completion.mjs test/cloud-model-recovery.mjs test/private-results.mjs",
     "test:discord": "node --test test/discord-guard.mjs",
     "test:toolbar-guard": "node test/rich-text-toolbar-guard.mjs",
     "test:pdf-read": "node test/pdf-read.mjs",

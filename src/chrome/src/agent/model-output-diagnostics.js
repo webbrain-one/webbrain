@@ -1,3 +1,6 @@
+import { outputLimitNotice } from '../ui/locales/output-limit-copy.mjs';
+export { outputLimitNotice };
+
 const OUTPUT_LIMIT_RE = /(?:^|[_\s-])(?:length|max(?:imum)?(?:[_\s-]*(?:output|completion))?[_\s-]*tokens?|output[_\s-]*limit|token[_\s-]*limit)(?:$|[_\s-])/i;
 const CONTENT_FILTER_RE = /content[_\s-]*filter|safety|blocked|refusal/i;
 
@@ -127,6 +130,12 @@ export function modelOutputDiagnostics(result, { requestedMaxTokens = null, reco
 const CUT_OFF_FINISH_RE = /^(?:length|max_tokens|max_output_tokens|max_completion_tokens|output_limit)$/i;
 
 export const RESPONSE_CUT_OFF_NOTICE = '\n\n[This reply reached the model\'s output limit and was cut off. Ask WebBrain to continue to get the rest.]';
+
+// A prefix stays visible even when the partial Markdown ends in an open fence.
+export function outputLimitedAnswer(content, locale = 'en') {
+  const text = String(content ?? '');
+  return text.trim() ? `[${outputLimitNotice(locale)}]\n\n${text}` : text;
+}
 
 // True when the provider says the reply was stopped by its output limit. In-browser
 // WebGPU models have no finish reason, so they report `outputTruncated` instead.
