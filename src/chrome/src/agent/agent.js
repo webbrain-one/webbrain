@@ -13512,10 +13512,43 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return { ...enriched, content, [marker]: true };
   }
 
+  // A projected copy of a turn (_modelVisibleConversationMessages adds the task assembled from the
+  // genuine user messages) carried onto another copy of the same turn: what the projection appended
+  // to the persisted content is appended to `target`. Falls back to the projected copy itself when
+  // the two do not line up.
+  _withProjectedTurnAdditions(target, persisted, projected) {
+    const base = persisted?.content;
+    const projectedContent = projected?.content;
+    if (typeof base === 'string' && typeof projectedContent === 'string' && projectedContent.startsWith(base)) {
+      const added = projectedContent.slice(base.length);
+      if (!added) return target;
+      if (typeof target?.content === 'string') return { ...target, content: target.content + added };
+      if (Array.isArray(target?.content)) return { ...target, content: [...target.content, { type: 'text', text: added.replace(/^\n+/, '') }] };
+    }
+    if (Array.isArray(base) && Array.isArray(projectedContent) && projectedContent.length >= base.length) {
+      const added = projectedContent.slice(base.length);
+      if (!added.length) return target;
+      if (Array.isArray(target?.content)) return { ...target, content: [...target.content, ...added] };
+      if (typeof target?.content === 'string') return { ...target, content: [{ type: 'text', text: target.content }, ...added] };
+    }
+    return projected || target;
+  }
+
   _messagesForStandaloneChatRun(messages, persistedUserMessage, enrichedUserMessage, marker = 'webbrainStandaloneChat', { keepTools = false } = {}) {
     if (!Array.isArray(messages) || !persistedUserMessage) return [];
-    const currentIndex = messages.indexOf(persistedUserMessage);
+    // The view may hold a projected copy of the current turn rather than the persisted object (a
+    // continuation or a follow-up carries the assembled task). The copy keeps the standalone
+    // marker, so the latest marked user turn is then the current one.
+    let currentIndex = messages.indexOf(persistedUserMessage);
+    let projectedCurrent = null;
+    if (currentIndex < 0) {
+      currentIndex = messages.findLastIndex(message => message?.role === 'user' && message[marker] === true);
+      projectedCurrent = currentIndex >= 0 ? messages[currentIndex] : null;
+    }
     if (currentIndex < 0) return [];
+    const currentTurn = projectedCurrent
+      ? this._withProjectedTurnAdditions(enrichedUserMessage, persistedUserMessage, projectedCurrent)
+      : enrichedUserMessage;
 
     // A conversation can be opened in the sidepanel and then expanded into
     // standalone chat. Find the contiguous standalone segment containing the
@@ -13550,7 +13583,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .filter(message => message?.role === 'user' || message?.role === 'assistant'
         || (keepTools && message?.role === 'tool'))
       .map(message => {
-        const source = message === persistedUserMessage ? enrichedUserMessage : message;
+        const source = message === persistedUserMessage || message === projectedCurrent ? currentTurn : message;
         const {
           webbrainStandaloneChat: _standalone,
           webbrainTinyAsk: _tinyAsk,

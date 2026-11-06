@@ -14276,6 +14276,8 @@ async function continueAgent(options = {}) {
       mode: modeForSend,
       foreground: foregroundForSend,
       ...(options.failureRecoveryId ? { recoveryId: options.failureRecoveryId, choice: 'retry' } : {}),
+      ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
     }, {
       onStateObserved: state => {
         if (!runAccepted && (state?.runUi?.requestId === requestId || state?.startingRequestId === requestId)) {

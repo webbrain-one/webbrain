@@ -3779,6 +3779,10 @@ async function handleMessage(msg, sender) {
         };
         const runOptions = {
           ...(msg.foreground ? { foreground: true } : {}),
+          // Continue keeps the standalone boundary (and the new tab full-page chat's web tools);
+          // without these a continued standalone run would become a page-aware side panel run.
+          ...(msg.standaloneChat === true ? { standaloneChat: true } : {}),
+          ...(msg.standaloneChat === true && msg.standaloneWebTools === true ? { standaloneWebTools: true } : {}),
           detachedRequestId: runUi.requestId,
           isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
           beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),

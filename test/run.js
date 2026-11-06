@@ -42179,6 +42179,25 @@ test('the new tab full-page chat keeps the plain-chat boundary but can read the 
     assert.ok(view(false).every(message => message.role !== 'tool' && !message.tool_calls),
       `${label}: plain standalone chat must stay text only`);
 
+    // Continue (and a follow-up the planner folds into the same task) reaches this view as a
+    // projected copy of the turn, not the persisted object; it must still be found, or the model
+    // is sent an empty conversation.
+    const continueEnriched = { role: 'user', content: 'Please continue from where you left off.' };
+    const continuePersisted = agent._standalonePersistedUserMessage(continueEnriched, webOptions);
+    const taskNote = `\n\n[APP-OWNED CURRENT USER TASK - assembled from genuine user messages]\n${question}`;
+    const projectedContinue = { ...continuePersisted, content: `${continuePersisted.content}${taskNote}` };
+    const continued = [...conversation, { role: 'assistant', content: 'I reached the step limit.' }, projectedContinue];
+    const continuedView = label === 'chrome'
+      ? agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, agent._standaloneHistoryMarker(webOptions), { keepTools: true })
+      : agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, { keepTools: true });
+    assert.ok(continuedView.length > 1, `${label}: a continued standalone run sent an empty conversation`);
+    assert.equal(continuedView.at(-1).content, `${continueEnriched.content}${taskNote}`,
+      `${label}: the continued turn must carry the assembled task`);
+    assert.ok(continuedView.some(message => message.role === 'tool' && message.tool_call_id === 'web-1'),
+      `${label}: the continued run lost its own earlier web reads`);
+    assert.doesNotMatch(JSON.stringify(continuedView), /secret page text|old-tool/,
+      `${label}: side panel history crossed into a continued full-page chat`);
+
     const provenance = provenanceBuilder(view(true), offered.slice(2, 5), 'ask');
     assert.equal(provenance.systemPromptVariant, 'standalone_web_chat');
     assert.equal(provenance.systemPromptMatchesRuntime, true);
@@ -42192,13 +42211,25 @@ test('the new tab full-page chat keeps the plain-chat boundary but can read the 
     assert.equal((agentSrc.match(/else if \(standaloneChatRun\) tools = this\._standaloneChatTools\(tools, runOptions\);/g) || []).length, 4,
       `${browserDir}: every tool list (first step and later steps, both run paths) must use the standalone tool filter`);
     const backgroundSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/background.js`), 'utf8');
-    assert.equal((backgroundSrc.match(/msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/g) || []).length, 2,
-      `${browserDir}: the background must forward the flag on standalone runs only`);
+    assert.equal((backgroundSrc.match(/msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/g) || []).length, 3,
+      `${browserDir}: the background must forward the flag on standalone runs only (two run paths and Continue)`);
+    // Continue (and a failure-recovery retry, which runs through it) keeps the standalone boundary:
+    // without both flags a continued full-page chat would turn into a page-aware panel run.
+    const continueCase = backgroundSrc.slice(backgroundSrc.indexOf("case 'continue': {"),
+      backgroundSrc.indexOf('agent.continueProcessing(', backgroundSrc.indexOf("case 'continue': {")));
+    assert.match(continueCase, /\.\.\.\(msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}\),/,
+      `${browserDir}: Continue must keep a standalone run standalone`);
+    assert.match(continueCase, /msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/,
+      `${browserDir}: Continue must keep the full-page chat's web tools`);
     const panelSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/ui/sidepanel.js`), 'utf8');
     assert.doesNotMatch(panelSrc, /isStandaloneWindow \? \{ standaloneWebTools: true \}/,
       `${browserDir}: the standalone window must not ask for web tools`);
     assert.match(panelSrc, /\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
       `${browserDir}: the full-page chat must ask for web tools`);
+    const continueAgentSrc = panelSrc.slice(panelSrc.indexOf('async function continueAgent('),
+      panelSrc.indexOf('onStateObserved', panelSrc.indexOf('async function continueAgent(')));
+    assert.match(continueAgentSrc, /\.\.\.\(isStandaloneWindow \? \{ standaloneChat: true \} : \{\}\),\s*\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
+      `${browserDir}: the Continue request must carry the standalone and full-page chat flags`);
   }
 });
 
@@ -56087,8 +56118,8 @@ test('standalone window transport, sizing, and translations are mirrored', async
     assert.match(panel, /isStandaloneWindow \? \{ standaloneChat: true \} : \{\}/, `${label}: standalone flag is not sent with chat_start`);
     assert.equal(
       [...background.matchAll(/msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}/g)].length,
-      2,
-      `${label}: standalone flag must reach both streaming paths`,
+      3,
+      `${label}: standalone flag must reach both streaming paths and Continue`,
     );
     assert.match(agent, /const standaloneChat = runOptions\?\.standaloneChat === true;/, `${label}: agent does not recognize standalone runs`);
     assert.match(agent, /if \(!selectionScoped && !standaloneChat\)/, `${label}: standalone run still reads the active tab`);
