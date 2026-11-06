@@ -46,11 +46,11 @@ class Downloads extends EventEmitter {
   }
 
   /** chrome.downloads.download */
-  start(options = {}) {
+  start(options = {}, source = null) {
     const url = String(options.url || '');
     if (!/^(https?|data|blob|file):/i.test(url)) return Promise.reject(new Error('Invalid URL'));
     return new Promise((resolve, reject) => {
-      const entry = { url, options, resolve, reject };
+      const entry = { url, options, source, resolve, reject };
       entry.timer = setTimeout(() => {
         this.pending = this.pending.filter((p) => p !== entry);
         reject(new Error('The download did not start.'));
@@ -61,7 +61,8 @@ class Downloads extends EventEmitter {
         if (header && header.name) headers[header.name] = header.value;
       }
       try {
-        this.ctx.ses.downloadURL(url, Object.keys(headers).length ? { headers } : undefined);
+        if (source) source.downloadURL(url);
+        else this.ctx.ses.downloadURL(url, Object.keys(headers).length ? { headers } : undefined);
       } catch (error) {
         clearTimeout(entry.timer);
         this.pending = this.pending.filter((p) => p !== entry);
@@ -70,10 +71,12 @@ class Downloads extends EventEmitter {
     });
   }
 
-  onWillDownload(item) {
+  onWillDownload(item, webContents) {
     const chain = item.getURLChain();
     const original = chain[0] || item.getURL();
-    const pendingIndex = this.pending.findIndex((p) => p.url === original || p.url === item.getURL());
+    const matchesUrl = (p) => p.url === original || p.url === item.getURL();
+    let pendingIndex = this.pending.findIndex((p) => p.source && p.source === webContents && matchesUrl(p));
+    if (pendingIndex < 0) pendingIndex = this.pending.findIndex((p) => !p.source && matchesUrl(p));
     const request = pendingIndex >= 0 ? this.pending.splice(pendingIndex, 1)[0] : null;
     if (request) clearTimeout(request.timer);
 
@@ -102,7 +105,7 @@ class Downloads extends EventEmitter {
       totalBytes: item.getTotalBytes() || -1,
       bytesReceived: 0,
       exists: true,
-      byExtensionId: request ? this.ctx.webBrainId || undefined : undefined,
+      byExtensionId: request && !request.source ? this.ctx.webBrainId || undefined : undefined,
     };
     this.records.set(id, record);
 

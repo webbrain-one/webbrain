@@ -112,3 +112,33 @@ test('interrupted download returns to active when progress resumes', () => {
     assert(events.some(e => e[1] === 'downloads.onChanged' && e[2][0].state?.current === 'in_progress'));
   } finally { fs.rmSync(folder, {recursive:true, force:true}); }
 });
+
+test('save image as routes the source download to a save dialog', async () => {
+  const { EventEmitter } = require('node:events');
+  const os = require('node:os'); const fs = require('node:fs'); const path = require('node:path');
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'murshid-save-as-'));
+  try {
+    const electron = {
+      app: { getPath: () => folder }, shell: {}, clipboard: {},
+      Menu: class { constructor() { this.items = []; } append(item) { this.items.push(item); } popup() {} },
+      MenuItem: class { constructor(options) { Object.assign(this, options); } },
+    };
+    const { Downloads } = loadWithElectron('../app/downloads', electron);
+    const { showContextMenu } = loadWithElectron('../app/context-menu', electron);
+    let opened;
+    electron.Menu.prototype.popup = function () { opened = this; };
+    const ses = new EventEmitter();
+    const ctx = {ses, webBrainId: 'extension', extensions: {getContextMenuItems: () => []}, crx: {emit() {}}, lastFocusedWindow: () => null};
+    ctx.downloads = new Downloads(ctx);
+    const wc = {downloadURL(url) { assert.equal(url, 'blob:https://example.com/image'); }};
+    showContextMenu(ctx, {wc, owner: {win: {}}}, {mediaType:'image', srcURL:'blob:https://example.com/image'}, wc);
+    opened.items.find(item => item.label === 'Save image as…').click();
+    assert.equal(ctx.downloads.pending.length, 1);
+    const item = new EventEmitter(); let dialogOptions; let saved = false;
+    Object.assign(item, {getURLChain:()=>['blob:https://example.com/image'], getURL:()=> 'blob:https://example.com/image', getFilename:()=> 'image.png', getMimeType:()=> 'image/png', getStartTime:()=> 0, getTotalBytes:()=> 1, getReceivedBytes:()=> 0, getSavePath:()=> '', setSavePath:()=> { saved = true; }, setSaveDialogOptions:opts=>{dialogOptions=opts;}, isPaused:()=> false, canResume:()=> true});
+    ses.emit('will-download', {}, item, wc);
+    assert.equal(saved, false);
+    assert.equal(dialogOptions.defaultPath, path.join(folder, 'image.png'));
+    assert.equal(ctx.downloads.search({id:1})[0].byExtensionId, undefined);
+  } finally { fs.rmSync(folder, {recursive:true, force:true}); }
+});

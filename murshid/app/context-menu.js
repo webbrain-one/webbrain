@@ -20,7 +20,10 @@ function buildContextMenu(ctx, tab, params, contents) {
   }
   if (params.mediaType === 'image' && params.srcURL) {
     add({ label: 'Open image in new tab', click: () => w?.addTab({ url: params.srcURL, active: false, after: tab || undefined }) });
-    add({ label: 'Save image as…', click: () => wc.downloadURL(params.srcURL) });
+    add({ label: 'Save image as…', click: () => {
+      ctx.downloads.start({ url: params.srcURL, saveAs: true }, wc)
+        .catch((error) => console.error('[murshid] could not save image:', error));
+    } });
     add({ label: 'Copy image', click: () => wc.copyImageAt(params.x, params.y) });
     add({ label: 'Copy image address', click: () => clipboard.writeText(params.srcURL) });
     sep();
