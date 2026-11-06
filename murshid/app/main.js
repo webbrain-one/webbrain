@@ -37,21 +37,32 @@ registerSchemes();
 // Google Chrome) are added in app/identity.js.
 app.userAgentFallback = identity.userAgent(app.userAgentFallback);
 
+let startupComplete = false;
+const pendingUrls = [];
+function openDestinations(urls) {
+  if (!startupComplete) { pendingUrls.push(...urls); return; }
+  if (!urls.length) return;
+  const w = ctx.lastFocusedWindow() || ctx.createWindow({ empty: true });
+  if (w.win.isMinimized()) w.win.restore();
+  w.win.focus();
+  urls.forEach((url) => w.addTab({ url }));
+}
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (/^https?:/i.test(url)) openDestinations([url]);
+});
+app.on('open-file', (event, file) => {
+  event.preventDefault();
+  if (/\.html?$/i.test(file)) openDestinations([pathToFileURL(path.resolve(file)).href]);
+});
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
     const urls = urlsFromArgs(argv);
-    const w = ctx.lastFocusedWindow();
-    if (!w) {
-      ctx.createWindow({ url: urls[0] });
-      urls.slice(1).forEach((url) => ctx.lastFocusedWindow()?.addTab({ url }));
-      return;
-    }
-    if (w.win.isMinimized()) w.win.restore();
-    w.win.focus();
-    if (urls.length) urls.forEach((url) => w.addTab({ url }));
-    else w.addTab({});
+    if (urls.length) openDestinations(urls);
+    else if (startupComplete) (ctx.lastFocusedWindow() || ctx.createWindow({ empty: true })).addTab({});
   });
   app.whenReady().then(start).catch((error) => {
     console.error('[murshid] failed to start:', error);
@@ -119,6 +130,7 @@ const ctx = {
   onWindowClosed(w) {
     this.windows = this.windows.filter((x) => x !== w);
     this.focusOrder = this.focusOrder.filter((x) => x !== w);
+    if (!this.windows.length && process.platform !== 'darwin') app.quit();
   },
   windowForTab(tabId) {
     return this.windows.find((w) => w.tabs.some((t) => t.id === tabId)) || null;
@@ -193,7 +205,7 @@ async function start() {
       return w.win;
     },
     removeWindow: (browserWindow) => {
-      browserWindow.close();
+      if (!browserWindow.isDestroyed()) browserWindow.close();
     },
     assignTabDetails: (details, wc) => {
       if (!ctx.crx) return;
@@ -221,7 +233,7 @@ async function start() {
   await loadWebBrain(ses);
   if (ctx.webBrainId) await Promise.race([ctx.crx.defaultsReady, new Promise((r) => setTimeout(r, 2500))]);
 
-  const urls = urlsFromArgs(process.argv);
+  const urls = [...urlsFromArgs(process.argv), ...pendingUrls.splice(0)];
   if (!ctx.windows.length) {
     const w = ctx.createWindow({ url: urls[0] });
     urls.slice(1).forEach((url) => w.addTab({ url, active: false }));
@@ -230,6 +242,8 @@ async function start() {
     const w = ctx.windows[0];
     urls.forEach((url) => w.addTab({ url }));
   }
+  startupComplete = true;
+  openDestinations(pendingUrls.splice(0));
 
   ctx.companion.ensureRunning().catch(() => {});
 

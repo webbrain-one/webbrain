@@ -1,0 +1,61 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+
+function loadWithElectron(file, mock) {
+  const original = Module._load;
+  Module._load = function (name, ...args) { return name === 'electron' ? mock : original.call(this, name, ...args); };
+  try { delete require.cache[require.resolve(file)]; return require(file); } finally { Module._load = original; }
+}
+
+test('permissions isolate opaque origins and microphone and camera decisions', async () => {
+  let check, request, display;
+  const prompts = [];
+  const responses = [];
+  const ctx = { webBrainId: 'a'.repeat(32), ses: {
+    setPermissionCheckHandler(fn) { check = fn; }, setPermissionRequestHandler(fn) { request = fn; },
+    setDisplayMediaRequestHandler(fn) { display = fn; },
+  }, windowForContents() {}, lastFocusedWindow() {} };
+  const electron = { dialog: { showMessageBox(_parent, opts) { prompts.push(opts); return Promise.resolve({ response: responses.shift() }); } },
+    desktopCapturer: { getSources: async () => [{ id: 'screen:1:0', name: 'Screen 1' }, { id: 'window:2:0', name: 'Window' }] },
+    webContents: { fromFrame: () => ({}) } };
+  const { installPermissions } = loadWithElectron('../app/permissions', electron);
+  installPermissions(ctx);
+  const ask = (url, permission, types) => new Promise(resolve => request({getURL: () => url}, permission, resolve, {requestingUrl:url, mediaTypes: types}));
+  responses.push(0);
+  assert.equal(await ask('https://example.com/a', 'media', ['audio']), true);
+  assert.equal(check(null, 'media', 'https://example.com', {mediaType:'audio'}), true);
+  assert.equal(check(null, 'media', 'https://example.com', {mediaType:'video'}), false);
+  assert.equal(check(null, 'media', 'https://example.com', {}), false);
+  responses.push(1);
+  assert.equal(await ask('https://example.com/a', 'media', ['video']), false);
+  assert.match(prompts[1].message, /camera/);
+  assert.equal(check(null, 'media', 'https://example.com', {mediaType:'audio'}), true);
+  assert.equal(await ask(`chrome-extension://${'a'.repeat(32)}/page.html`, 'media', ['audio']), true);
+  assert.equal(check(null, 'media', `chrome-extension://${'a'.repeat(32)}`, {mediaType:'audio'}), true);
+  responses.push(0, 1);
+  assert.equal(await ask('file:///one.html', 'media', ['audio']), true);
+  assert.equal(check(null, 'media', 'null', {mediaType:'audio'}), false);
+  assert.equal(await ask('file:///two.html', 'media', ['audio']), false);
+  assert.match(prompts.at(-1).message, /local file/);
+  assert.equal(await ask('https://example.org', 'media', []), false);
+  const frame = {url:'https://example.com/a', isDestroyed: () => false};
+  responses.push(2);
+  const selected = await new Promise(resolve => display({frame, securityOrigin:'https://example.com', videoRequested:true}, resolve));
+  assert.equal(selected.video.id, 'window:2:0');
+  responses.push(0);
+  assert.equal(await new Promise(resolve => display({frame, securityOrigin:'https://example.com', videoRequested:true}, resolve)), null);
+  electron.dialog.showMessageBox = async () => { frame.url = 'https://other.test/'; return { response: 1 }; };
+  assert.equal(await new Promise(resolve => display({frame, securityOrigin:'https://example.com', videoRequested:true}, resolve)), null);
+});
+
+test('reload and hard reload retry failed destinations', () => {
+  const { createCommands } = require('../app/commands');
+  const calls = [];
+  const tab = {errorFor:'https://example.test/', load: u => calls.push(['load',u]), wc:{reload:()=>calls.push(['reload']),reloadIgnoringCache:()=>calls.push(['hard'])}};
+  const commands = createCommands({});
+  commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
+  tab.errorFor = null; commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
+  assert.deepEqual(calls, [['load','https://example.test/'],['load','https://example.test/'],['reload'],['hard']]);
+});

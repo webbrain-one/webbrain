@@ -9,6 +9,13 @@ const isMac = process.platform === 'darwin';
 
 function createCommands(ctx) {
   const tabOf = (w) => w?.activeTab || null;
+  const reload = (w, hard = false) => {
+    const tab = tabOf(w);
+    if (!tab) return;
+    if (tab.errorFor) tab.load(tab.errorFor);
+    else if (hard) tab.wc.reloadIgnoringCache();
+    else tab.wc.reload();
+  };
   const zoom = (w, delta) => {
     const tab = tabOf(w);
     if (!tab) return;
@@ -28,8 +35,8 @@ function createCommands(ctx) {
     prevTab: (w) => w?.cycleTab(-1),
     selectIndex: (w, n) => w?.selectTabIndex(n),
     focusOmnibox: (w) => w?.focusOmnibox(),
-    reload: (w) => tabOf(w)?.wc.reload(),
-    hardReload: (w) => tabOf(w)?.wc.reloadIgnoringCache(),
+    reload: (w) => reload(w),
+    hardReload: (w) => reload(w, true),
     stop: (w) => tabOf(w)?.wc.stop(),
     back: (w) => { const h = tabOf(w)?.wc.navigationHistory; if (h?.canGoBack()) h.goBack(); },
     forward: (w) => { const h = tabOf(w)?.wc.navigationHistory; if (h?.canGoForward()) h.goForward(); },

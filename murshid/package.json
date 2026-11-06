@@ -9,6 +9,7 @@
   "author": "Emre Sokullu",
   "homepage": "https://github.com/webbrain-one/webbrain/tree/main/murshid",
   "scripts": {
+    "test": "node --test test/review-fixes.test.cjs",
     "start": "electron .",
     "dev": "electron . --murshid-devtools",
     "art": "npm run art:pictures && npm run art:icons",
