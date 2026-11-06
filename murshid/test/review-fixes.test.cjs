@@ -106,9 +106,11 @@ test('interrupted download returns to active when progress resumes', () => {
     item.emit('updated', {}, 'interrupted');
     assert.equal(downloads.search({id:1})[0].state, 'interrupted');
     assert.equal(downloads.summary().active, 0);
+    assert.equal(downloads.summary().recent[0].canResume, true);
     item.emit('updated', {}, 'progressing');
     assert.equal(downloads.search({id:1})[0].state, 'in_progress');
     assert.equal(downloads.summary().active, 1);
+    assert.equal(downloads.summary().recent[0].canResume, false);
     assert(events.some(e => e[1] === 'downloads.onChanged' && e[2][0].state?.current === 'in_progress'));
   } finally { fs.rmSync(folder, {recursive:true, force:true}); }
 });

@@ -290,6 +290,7 @@ class Downloads extends EventEmitter {
         name: path.basename(r.filename || r.item.getFilename() || 'download'),
         state: r.state,
         paused: r.paused,
+        canResume: r.state === 'interrupted' && !r.endTime && r.item.canResume(),
         progress: r.totalBytes > 0 ? Math.min(1, r.bytesReceived / r.totalBytes) : null,
       })),
     };

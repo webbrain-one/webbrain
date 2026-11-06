@@ -429,16 +429,17 @@ function popupDownloadsMenu(w, { x, y }) {
   const { Menu, shell } = require('electron');
   const summary = ctx.downloads.summary();
   const items = summary.recent.map((d) => {
+    const resumable = d.state === 'interrupted' && d.canResume;
     const status = d.state === 'in_progress'
       ? (d.progress !== null ? `${Math.round(d.progress * 100)}%` : 'downloading…')
-      : d.state === 'complete' ? '' : 'failed';
+      : d.state === 'complete' ? '' : resumable ? 'interrupted' : 'failed';
     return {
       label: status ? `${d.name} — ${status}` : d.name,
       submenu: [
         { label: 'Open', enabled: d.state === 'complete', click: () => ctx.downloads.open(d.id).catch(() => {}) },
         { label: 'Show in folder', enabled: d.state !== 'in_progress', click: () => ctx.downloads.show(d.id) },
-        { label: d.paused ? 'Resume' : 'Pause', visible: d.state === 'in_progress', click: () => ctx.downloads.control(d.id, d.paused ? 'resume' : 'pause') },
-        { label: 'Cancel', visible: d.state === 'in_progress', click: () => ctx.downloads.control(d.id, 'cancel') },
+        { label: d.paused || resumable ? 'Resume' : 'Pause', visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, d.paused || resumable ? 'resume' : 'pause') },
+        { label: 'Cancel', visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, 'cancel') },
       ],
     };
   });
