@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="hi" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>मोड, सुरक्षा और गोपनीयता — WebBrain यूज़र गाइड</title><meta name="description" content="WebBrain के Ask, Act और Dev मोड, वेबसाइट अनुमतियाँ, गोपनीयता की सीमाएँ, मेमोरी और एडवांस्ड ओवरराइड्स को समझें।"><link rel="canonical" href="https://webbrain.one/docs/hi/safety/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/safety/">
+<link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/safety/">
+<link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/safety/">
+<link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/safety/"><link rel="icon" href="/favicon.png"><script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script><link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body class="doc-page">
+  <a class="skip-link" href="#main">मुख्य सामग्री पर जाएं</a><header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">यूज़र गाइड</span></a><nav class="top-nav" aria-label="मुख्य नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">दस्तावेज़</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/safety/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/safety/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/safety/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="दस्तावेज़ मेनू खोलें">☰</button></div></div></header>
+  <div class="docs-shell"><aside class="docs-sidebar" aria-label="दस्तावेज़ अनुक्रमणिका"><div class="sidebar-group"><div class="sidebar-label">यहाँ से शुरू करें</div><nav><a href="/docs/hi/">अवलोकन</a><a href="/docs/hi/faq/">अक्सर पूछे जाने वाले सवाल</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग</div><nav><a href="/docs/hi/settings/">सेटिंग्स की व्याख्या</a><a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/safety/" aria-current="page">मोड, सुरक्षा और गोपनीयता</a><a href="/docs/hi/apocalypse-mode/">एपोकैलिप्स मोड</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/mcp/">MCP सर्वर</a><a href="/docs/hi/lm-studio/">LM Studio प्लगइन</a><a href="/docs/hi/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">कम्युनिटी</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
+    <main class="doc-main" id="main"><div class="breadcrumb"><a href="/docs/hi/">दस्तावेज़</a> / मोड, सुरक्षा और गोपनीयता</div><section class="doc-hero"><div class="eyebrow">लूप में मानव</div><h1>WebBrain आपके लॉग-इन किए ब्राउज़र सत्र में काम करता है, इसलिए उसकी पहुँच का ध्यान रखें।</h1><p class="lede">एजेंट उन्हीं वेबसाइटों को देख और इस्तेमाल कर सकता है जिन तक आपकी पहुँच है। मोड, प्लान समीक्षा और साइट-वार अनुमतियाँ जोखिम कम करती हैं, पर प्रॉम्प्ट, मंज़िल और अंतिम नतीज़े की ज़िम्मेदारी आपकी रहती है।</p></section>
+      <section class="doc-section" id="modes"><h2>मोड तय करते हैं कि काम किस किस्म का होगा</h2><div class="mode-strip"><div class="mode ask"><strong>Ask</strong><span>सेमांटिक रीडिंग और रिसर्च टूल्स; क्लिक नहीं, टाइप नहीं, नेविगेट नहीं, अपलोड नहीं, पेज बदलना नहीं।</span></div><div class="mode act"><strong>Act</strong><span>आपके साफ़ तौर पर माँगे गए कामों के लिए आम ब्राउज़र ऑपरेशन; अहम ऑपरेशन फिर भी अनुमति गेट से गुज़रते हैं।</span></div><div class="mode dev"><strong>Dev</strong><span>Act के ऊपर सोर्स कोड, स्टाइल, DOM, फ्रेमवर्क और डीबगिंग टूल्स; Mid या Full प्रोवाइडर चाहिए।</span></div></div><p>जो काम पढ़ने से पूरे हो जाएँ उनके लिए Ask रखें; पेज बदलना ज़रूरी हो तभी Act पर जाएँ; Dev वेब डेवलपमेंट और दिक्कतें सुलझाने के लिए है, कमज़ोर मॉडल को स्मार्ट बनाने का तरीका नहीं।</p></section>
+      <section class="doc-section" id="permissions"><h2>अनुमतियाँ खास-खास कैपेबिलिटी के लिए होती हैं</h2><p>किसी अहम ऑपरेशन से पहले WebBrain आपसे पूछ सकता है: एक बार अनुमति दें, उस साइट पर यह कैपेबिलिटी हमेशा के लिए दें, या अनुमति न दें। याद रखा जाने वाला रिकॉर्ड एक साफ़ जोड़ा है: <strong>साइट + कैपेबिलिटी</strong>।</p><figure class="shot"><a href="/docs/assets/screenshots/settings-permissions.jpg"><img src="/docs/assets/screenshots/settings-permissions.jpg" alt="अंग्रेज़ी में WebBrain की अनुमति सेटिंग्स, जिसमें एक कुल स्विच और अलग-अलग कैपेबिलिटी के लिए अलग-अलग अनुमतियाँ दिख रही हैं"></a><figcaption>टाइप करने की अनुमति देने से डाउनलोड, अपलोड, JavaScript चलाना या टास्क शेड्यूल अपने-आप अनुमति नहीं पा जाते।</figcaption></figure><div class="table-wrap"><table><thead><tr><th>विकल्प</th><th>कब चुनें</th><th>आगे क्या होता है</th></tr></thead><tbody><tr><td>एक बार अनुमति दें</td><td>यह ऑपरेशन ठीक है, पर आप स्थायी अनुमति नहीं देना चाहते।</td><td>अगली बार यही कैपेबिलिटी चाहिए तो फिर पूछा जाएगा।</td></tr><tr><td>हमेशा के लिए दें</td><td>आप उस साइट पर भरोसा करते हैं और ऐसा काम बार-बार दोहराएँगे।</td><td>“साइट + कैपेबिलिटी” का रिकॉर्ड अनुमतियाँ पेज पर दिखता है।</td></tr><tr><td>अनुमति न दें</td><td>ऑपरेशन, मंज़िल या समय गलत है।</td><td>ऑपरेशन रुक जाता है, और रन पर आपका काबू रहता है।</td></tr></tbody></table></div></section>
+      <section class="doc-section" id="untrusted"><h2>पेजों का कंटेंट अविश्वसनीय है, भले साइट जानी-पहली लगे</h2><p>किसी पेज में AI एजेंट को बहकाने के लिए लिखा गया टेक्स्ट हो सकता है। WebBrain पेज से आए कंटेंट को अविश्वसनीय डेटा के रूप में लपेटता है और मोड व अनुमतियों से कार्रवाई की सीमा तय करता है; ये बचाव जोखिम कम करते हैं, पर हर मॉडल और हर पेज को सुरक्षित नहीं बना सकते।</p><ul><li>जब एजेंट आपके न दिए हुए निर्देश मानने लगे तो तुरंत रोकें।</li><li>हेल्थ, फ़ाइनेंस, डेटिंग, निजी अकाउंट और आंतरिक काम के पेजों पर खास सावधानी बरतें।</li><li>सबमिट करने से पहले मंज़िल का पता और फ़ॉर्म की वैल्यूज़ जाँचें।</li><li>ऐसे पेजों पर Act मोड को बिना निगरानी के न चलने दें जिनका कंटेंट कोई अजनबी बदल सकता है।</li></ul><div class="callout danger"><strong class="callout-title">आपका LLM प्रोवाइडर भरोसे की सीमा के अंदर है</strong><p>चालू प्रोवाइडर को वही बातचीत और पेज कंटेंट मिलता है जो काम के लिए ज़रूरी है। ऐसा प्रोवाइडर चुनें जिसकी प्राइवेसी शर्तें और तरीका आपको मंज़ूर हो।</p></div></section>
+      <section class="doc-section" id="overrides"><h2>दो ओवरराइड जिनकी आसानी से गलती होती है</h2><div class="table-wrap"><table><thead><tr><th>ओवरराइड</th><th>दायरा</th><th>क्या बदलता है</th></tr></thead><tbody><tr><td><code>/allow-api</code></td><td>मौजूदा बातचीत</td><td>राइट-मेथड नेटवर्क रिक्वेस्ट (POST, PUT, PATCH, DELETE) की अनुमति देता है; रीसेट पर साफ़ हो जाती है और बाकी सारी अनुमतियाँ ख़त्म नहीं करती।</td></tr><tr><td><code>/dangerously-skip-permissions</code></td><td>ग्लोबल, जब तक दोबारा ऑन न करें</td><td>हर साइट और हर कैपेबिलिटी के लिए “अहम ऑपरेशन से पहले पूछो” बंद कर देता है।</td></tr></tbody></table></div><div class="callout warning"><strong class="callout-title">हमेशा सबसे तंग अनुमति को प्राथमिकता दें</strong><p>अगर सिर्फ़ एक साइट के एक किस्म के काम पर भरोसा है, तो आम अनुमति-पॉम्प्ट में वही कैपेबिलिटी ग्रांट करें; एक कन्फ़र्मेशन बचाने के लिए ग्लोबल गेट बंद न करें।</p></div></section>
+      <section class="doc-section" id="data"><h2>कौन-सा डेटा ब्राउज़र में रहता है और कौन-सा बाहर जा सकता है</h2><div class="table-wrap"><table><thead><tr><th>डेटा</th><th>कहाँ स्टोर होता है</th><th>कब भेजा जाता है</th></tr></thead><tbody><tr><td>चैट हिस्ट्री</td><td>ब्राउज़र लोकल स्टोरेज / IndexedDB</td><td>टर्न के दौरान प्रासंगिक बातचीत का कॉन्टेक्स्ट चालू LLM प्रोवाइडर को जाता है।</td></tr><tr><td>प्रोवाइडर सेटिंग्स और API कीज़</td><td>ब्राउज़र लोकल स्टोरेज, प्लेनटेक्स्ट</td><td>कीज़ ऑथेंटिकेशन के लिए अपने-अपने प्रोवाइडर को भेजी जाती हैं।</td></tr><tr><td>प्रोफ़ाइल ऑटो-फ़िल</td><td>ब्राउज़र लोकल स्टोरेज, प्लेनटेक्स्ट</td><td>ऑन होने पर सिस्टम-प्रॉम्प्ट कॉन्टेक्स्ट के रूप में चालू प्रोवाइडर को जाता है।</td></tr><tr><td>यूज़र मेमोरी</td><td>ब्राउज़र लोकल स्टोरेज, प्लेनटेक्स्ट</td><td>एक्टिव रिकॉर्ड सिस्टम-प्रॉम्प्ट कॉन्टेक्स्ट के रूप में भेजे जाते हैं।</td></tr><tr><td>ट्रेस और स्क्रीनशॉट</td><td>ट्रेसिंग ऑन होने पर लोकल IndexedDB में</td><td>ट्रेस रिकॉर्डर अपलोड नहीं करता; एक्सपोर्ट लोकल फ़ाइल बनाता है।</td></tr><tr><td>एन्क्रिप्टेड क्लाउड सिंक</td><td>क्लाउड में एन्क्रिप्टेड अपारदर्शी कॉपी + लोकल डेटा</td><td>समर्थित कीज़, प्रोफ़ाइल और मेमोरी अपलोड से पहले एन्क्रिप्ट होती हैं; सिंक पासवर्ड कभी नहीं भेजा या स्टोर किया जाता।</td></tr></tbody></table></div></section>
+      <section class="doc-section" id="scheduled"><h2>शेड्यूल किए टास्क के लिए सख़्त डिफ़ॉल्ट ज़रूरी हैं</h2><p>शेड्यूल किया टास्क तब चल सकता है जब आप देख नहीं रहे होते। “शेड्यूल किए अहम ऑपरेशन की पुष्टि करें” ऑन रखें। प्रॉम्प्ट में टारगेट URL, समय, अपेक्षित नतीजा और रुकने की शर्तें साफ़ हों।</p><div class="callout tip"><strong class="callout-title">ज़्यादा सुरक्षित शेड्यूल-टास्क प्रॉम्प्ट</strong><p>“सुबह 9 बजे यह डैशबोर्ड खोलो, नई स्थिति पढ़ो और उसका सारांश दो। कुछ भी सबमिट, स्वीकार या एडिट मत करना।” हद भी काम के बराबर मायने रखती है।</p></div></section>
+      <section class="doc-section" id="checklist"><h2>अहम Act रन से पहले</h2><ol><li>चालू प्रोवाइडर और मॉडल पक्का करें।</li><li>साफ़ हदों वाले काम के लिए नई बातचीत इस्तेमाल करें।</li><li>प्लान समीक्षा और अनुमति गेट ऑन रखें।</li><li>वे ऑपरेशन लिख दें जो एजेंट को नहीं करने हैं।</li><li>अनुमति और क्लैरिफ़िकेशन पॉम्प्ट के लिए तैयार रहें।</li><li>अनपेक्षित नेविगेशन, क्रेडेंशियल हैंडलिंग या दोहराव पर रोकें।</li><li>असली नतीजे जाँचें, सिर्फ़ आख़िरी सारांश पर भरोसा न करें।</li></ol></section>
+      <nav class="next-links" aria-label="आगे की गाइड"><a href="/docs/hi/providers/"><span>पिछला</span>← प्रोवाइडर और मॉडल</a><a href="/docs/hi/"><span>शुरुआत में लौटें</span>गाइड अवलोकन →</a></nav>
+    </main><aside class="on-this-page" aria-label="इस पेज पर"><h2>इस पेज पर</h2><a href="#modes">मोड</a><a href="#permissions">अनुमतियाँ</a><a href="#untrusted">अविश्वसनीय पेज</a><a href="#overrides">ओवरराइड</a><a href="#data">डेटा और मेमोरी</a><a href="#scheduled">शेड्यूल टास्क</a><a href="#checklist">चेकलिस्ट</a></aside>
+  </div><!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">हमारा मिशन: वेब को और स्मार्ट बनाना।</p>
+      <p class="wb-footer-copy">© 2026 WebBrain. <a href="https://emresokullu.com" target="_blank">एमरे सोकुल्लू</a> और <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">योगदानकर्ताओं</a> द्वारा निर्मित.</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/hi/">ब्राउज़र एक्सटेंशन</a>
+        <a href="/websites/">वेबसाइटों के लिए</a>
+        <a href="/companion/hi/">डेस्कटॉप Companion</a>
+        <a href="/research/">शोध</a>
+        <a href="/docs/hi/">दस्तावेज़</a>
+        <a href="/docs/hi/faq/">अक्सर पूछे जाने वाले प्रश्न</a>
+        <a href="/blog/">ब्लॉग</a>
+        <a href="/privacy">गोपनीयता नीति</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">बग की रिपोर्ट करें</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 लाइसेंस</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">प्रेस</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass सदस्यता</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="Mastodon पर WebBrain" title="Mastodon पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="Bluesky पर WebBrain" title="Bluesky पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="Discord पर WebBrain" title="Discord पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="Hugging Face पर WebBrain" title="Hugging Face पर WebBrain" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261106"></script>
+</body></html>

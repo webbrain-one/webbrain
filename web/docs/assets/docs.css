@@ -166,6 +166,8 @@ kbd {
   font-size: 12px;
   font-weight: 750;
 }
+.lang-switch a { color: inherit; text-decoration: none; }
+.lang-switch a:hover span:not(.active) { color: var(--ink); }
 .lang-switch .active { background: var(--brand); color: #fff; }
 .icon-button, .sidebar-toggle {
   width: 34px;
