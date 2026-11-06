@@ -2036,6 +2036,22 @@
     fileInventory = { token, runToken, entries };
     return true;
   }
+  // A vision run's upload handoff (agent vision-runtime.js): the result of a
+  // click_at the file-chooser guard stopped names the blocked input by
+  // selector, and that result is how the model observed it. The node each
+  // selector names now, before the model decides, is kept as an inventory
+  // under the agent's token. A selector naming no single file input is left
+  // out; the answer lists the selectors that were kept.
+  function recordUploadTargets(params = {}) {
+    if (!active || params.runToken !== runToken || !Array.isArray(params.selectors)) return [];
+    const pairs = [];
+    for (const selector of params.selectors.slice(0, 8)) {
+      if (typeof selector !== 'string' || !selector || selector.length > 4096) continue;
+      const target = modelTarget({ tool: 'upload_file', selector });
+      if (target instanceof HTMLInputElement && target.type === 'file') pairs.push([target, selector]);
+    }
+    return pairs.length && recordFileInventory(params.token, pairs) ? pairs.map(([, selector]) => selector) : [];
+  }
   // Whether an upload's target is the very node that inventory named with
   // this selector. A node the page renders later under the same selector, as
   // a reopened composer does, was never observed.
@@ -4022,6 +4038,9 @@
         ...(result.certificationFailure ? { certificationFailure: result.certificationFailure } : {}),
         ...(result.inventoried ? { inventoried: true } : {}),
         ...(result.reason ? { reason: result.reason } : {}), runToken, documentToken, snapshotToken: params.snapshotToken });
+    }
+    else if (msg.action === 'page_monitor_record_upload_targets') {
+      respond({ recorded: recordUploadTargets(msg.params || {}), runToken, documentToken });
     }
     else if (msg.action === 'page_monitor_traversal') {
       // Value-free: the background names the URL it already observed; only
