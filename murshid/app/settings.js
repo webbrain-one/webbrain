@@ -20,6 +20,9 @@ const SEARCH_ENGINES = {
 const DEFAULTS = {
   searchEngine: 'google',
   startCompanion: true,
+  // Off: sites see Murshid in the client hints, as Brave shows Brave. On: they
+  // see Google Chrome, as Vivaldi does. See app/identity.js.
+  identifyAsChrome: false,
   sidePanelWidth: 420,
   restoreLastSession: false,
   lastSession: [],

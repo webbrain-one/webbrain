@@ -31,6 +31,9 @@
       const companion = $('companion');
       companion.checked = Boolean(values.startCompanion);
       companion.addEventListener('change', () => api.setSetting('startCompanion', companion.checked));
+      const asChrome = $('as-chrome');
+      asChrome.checked = Boolean(values.identifyAsChrome);
+      asChrome.addEventListener('change', () => api.setSetting('identifyAsChrome', asChrome.checked));
     });
     $('open-companion').addEventListener('click', () => api.companion());
   }

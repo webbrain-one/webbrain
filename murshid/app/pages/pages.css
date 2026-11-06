@@ -53,7 +53,7 @@ h1 em { color: var(--crimson); }
 .row small { display: block; color: var(--muted); font-weight: 400; }
 .row .v { color: var(--muted); text-align: right; word-break: break-all; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 180px; }
-input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--crimson); }
+input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: var(--crimson); }
 
 .button {
   display: inline-flex; align-items: center; gap: 8px;

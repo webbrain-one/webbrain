@@ -22,6 +22,7 @@ const { Companion } = require('./companion');
 const { installPermissions } = require('./permissions');
 const { registerSchemes, handleProtocol } = require('./protocol');
 const { resolveInput } = require('./url');
+const identity = require('./identity');
 
 const PARTITION = 'persist:murshid';
 const DEBUG = process.argv.includes('--murshid-devtools') || process.env.MURSHID_DEBUG === '1';
@@ -31,12 +32,10 @@ if (process.env.MURSHID_PROFILE) app.setPath('userData', path.resolve(process.en
 if (process.platform === 'win32') app.setAppUserModelId('one.webbrain.murshid');
 registerSchemes();
 
-// Sites see a plain Chrome user agent; "Electron" in it gets some sign-in pages
-// to refuse the browser.
-app.userAgentFallback = app.userAgentFallback
-  .replace(/\sElectron\/\S+/, '')
-  .replace(/\smurshid\/\S+/i, '')
-  .replace(/\sMurshid\/\S+/, '');
+// Sites see Chrome's reduced user agent string; "Electron" in it gets some
+// sign-in pages to refuse the browser. The client hints that name Murshid (or
+// Google Chrome) are added in app/identity.js.
+app.userAgentFallback = identity.userAgent(app.userAgentFallback);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -160,6 +159,7 @@ async function start() {
   const ses = session.fromPartition(PARTITION);
   ctx.ses = ses;
   ses.setUserAgent(app.userAgentFallback);
+  identity.install(ses, ctx.settings);
   handleProtocol(ses);
 
   // Order matters: Murshid's "pre" preload adds APIs before
@@ -467,6 +467,7 @@ function installPageIpc() {
           values: {
             searchEngine: ctx.settings.get('searchEngine'),
             startCompanion: ctx.settings.get('startCompanion'),
+            identifyAsChrome: ctx.settings.get('identifyAsChrome'),
           },
           searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
         };
@@ -474,6 +475,7 @@ function installPageIpc() {
         const [key, value] = args;
         if (key === 'searchEngine' && SEARCH_ENGINES[value]) ctx.settings.set(key, value);
         if (key === 'startCompanion') ctx.settings.set(key, Boolean(value));
+        if (key === 'identifyAsChrome') ctx.settings.set(key, Boolean(value));
         return true;
       }
       case 'navigate': {
