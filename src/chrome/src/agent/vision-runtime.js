@@ -174,6 +174,18 @@ function uploadAttached(result) {
     && result.noDispatch !== true && ['input_attached', 'page_consumed'].includes(result.attachmentState);
 }
 
+// The selector a blocked chooser's result tells the model to pass to
+// upload_file, kept with the handoff that covers it until the handoff starts
+// (_visionUploadHandoffTick). The compact tier's upload_file names its target
+// by its own discovery, never by selector.
+function noteHandoffUploadSelector(handoff, result, compact) {
+  const selector = typeof result?.selector === 'string' ? result.selector : '';
+  const selectors = handoff.selectors ??= [];
+  if (compact || handoff.active || !selector || selector.length > 4096 || selectors.includes(selector)
+      || selectors.length >= 8) return;
+  selectors.push(selector);
+}
+
 function regionLabel(region) {
   return { x: Math.round(region.x), y: Math.round(region.y), width: Math.round(region.width), height: Math.round(region.height) };
 }
@@ -381,14 +393,18 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       // Another chooser in the batch that armed a handoff: that handoff gives
       // the next steps upload_file for this input too, so the model is told
       // so, not that uploads are unavailable.
-      if (!reason && snapshot.uploadHandoff) return visionFilePickerBlockedResult(result, { handoff: true, compact });
+      if (!reason && snapshot.uploadHandoff) {
+        noteHandoffUploadSelector(snapshot.uploadHandoff, result, compact);
+        return visionFilePickerBlockedResult(result, { handoff: true, compact });
+      }
       if (!reason && snapshot.unsuccessfulUploadHandoffs >= UNSUCCESSFUL_UPLOAD_HANDOFFS_PER_RUN) reason = 'exhausted';
       if (reason) {
         this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'refused', reason });
         return visionFilePickerBlockedResult(result, { compact, reason });
       }
       snapshot.uploadHandoffs += 1;
-      snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '' };
+      snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '', selectors: [] };
+      noteHandoffUploadSelector(snapshot.uploadHandoff, result, compact);
       this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'armed', count: snapshot.uploadHandoffs });
       return visionFilePickerBlockedResult(result, { handoff: true, compact });
     }
@@ -404,7 +420,9 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * after its upload, when that page is left, or after
    * UPLOAD_HANDOFF_DECISIONS decisions without an upload; the last two count
    * as unsuccessful. `step` is the loop's count of model calls, which grows
-   * only when the model decides.
+   * only when the model decides. Starting runs before the step's page
+   * capture, so the blocked inputs the click's result named are observed for
+   * the first upload_file (page-feedback.js _pageFeedbackObserveUploadTargets).
    */
   proto._visionUploadHandoffTick = async function _visionUploadHandoffTick(tabId, step) {
     const snapshot = this._visionRunSnapshots?.get(tabId);
@@ -414,6 +432,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       handoff.active = true;
       handoff.since = step;
       handoff.url = pageKey(await this._currentUrl?.(tabId));
+      if (handoff.selectors?.length) await this._pageFeedbackObserveUploadTargets?.(tabId, handoff.selectors);
       return;
     }
     let end = handoff.done ? 'uploaded' : '';
