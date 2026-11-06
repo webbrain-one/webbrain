@@ -9,7 +9,7 @@ const nt = (...p) => path.join(root, 'newtab', 'src', ...p);
 const load = (file) => import(pathToFileURL(file).href);
 
 const { createNamespacedStorage, NAMESPACE_PREFIX } = await load(nt('lib/storage-namespace.js'));
-const { buildHandoff, toNavigableUrl, submitTask, openAskChat, TAB_CHAT_PATH, handoffKey, HANDOFF_PREFIX, isHandoffPending, whenClaimed, adoptPendingHandoff, pendingHandoffText } = await load(nt('features/agent/handoff.js'));
+const { buildHandoff, toNavigableUrl, submitTask, openAskChat, TAB_CHAT_PATH, HANDOFF_TARGET_PANEL, HANDOFF_TARGET_TAB_CHAT, handoffKey, HANDOFF_PREFIX, isHandoffPending, whenClaimed, adoptPendingHandoff, pendingHandoffText } = await load(nt('features/agent/handoff.js'));
 const { getTitleFromUrl } = await load(nt('utils/links/getTitleFromUrl.js'));
 const { normalizeLinkUrl } = await load(nt('utils/links/normalizeLinkUrl.js'));
 
@@ -372,7 +372,7 @@ for (const browser of ['chrome', 'firefox']) {
 
   async function harness({
     tabId = 3, processing = false, blocked = false, records, record, visible = true,
-    start = true, sendResult, clock,
+    start = true, sendResult, clock, receiver,
   }) {
     const seed = records ?? (record ? { [newtabHandoffKey(record.tabId)]: record } : {});
     const store = start ? {} : { ...seed };
@@ -401,6 +401,7 @@ for (const browser of ['chrome', 'firefox']) {
         return undefined;
       },
       now: () => state.time,
+      ...(receiver ? { receiver } : {}),
     });
     // A started panel with nothing waiting; the record then "arrives".
     if (start) {
@@ -1287,6 +1288,68 @@ for (const browser of ['chrome', 'firefox']) {
     assert.equal(h.log.sent.length, 1);
   });
 
+  test(`${browser}: a side panel open beside the new tab leaves the full-page chat's Ask alone`, async () => {
+    const forChat = rec({ text: 'what is a murshid', target: 'tab-chat' });
+    // The panel (default receiver) sees the record arrive for its tab but must not take it.
+    const panel = await harness({ record: forChat });
+    assert.equal(await panel.handoff.consume(), false);
+    assert.deepEqual(panel.log.sent, []);
+    assert.equal(panel.input.value, '', 'the panel composer must stay untouched');
+    assert.deepEqual(panel.store[KEY], forChat, 'the record must be left exactly as written');
+    // The full-page chat that loads in the tab then claims and sends it.
+    const chat = await harness({ record: forChat, receiver: 'tab-chat' });
+    assert.equal(await chat.handoff.consume(), true);
+    assert.deepEqual(chat.log.sent, [{ __mode: 'ask' }]);
+    assert.equal(chat.log.value, 'what is a murshid');
+    assert.equal(KEY in chat.store, false);
+  });
+
+  test(`${browser}: the full-page chat never takes a side panel record`, async () => {
+    for (const record of [rec({ mode: 'act', text: 'book a table' }), rec({ target: 'panel' }), rec({ target: 'something-else' })]) {
+      const chat = await harness({ record, receiver: 'tab-chat' });
+      assert.equal(await chat.handoff.consume(), false, `took ${JSON.stringify(record)}`);
+      assert.deepEqual(chat.log.sent, []);
+      assert.equal(KEY in chat.store, true);
+    }
+    // A record from an older new tab has no target and is the panel's.
+    const legacy = await harness({ record: rec() });
+    assert.equal(await legacy.handoff.consume(), true);
+  });
+
+  test(`${browser}: a receiver takes its own task from the retry slot and skips the other's`, async () => {
+    const retryKey = newtabHandoffRetryKey(3);
+    const theirs = rec({ id: 'chat-1', text: 'for the chat', target: 'tab-chat' });
+    const mine = rec({ id: 'panel-1', text: 'for the panel' });
+    const store = { [retryKey]: [theirs, mine] };
+    const input = { value: '', dispatchEvent() {}, focus() {} };
+    const sent = [];
+    const handoff = createNewtabHandoff({
+      storage: {
+        get: async (k) => (k in store ? { [k]: store[k] } : {}),
+        set: async (v) => { Object.assign(store, v); },
+        remove: async (k) => { delete store[k]; },
+      },
+      getCurrentTabId: () => 3,
+      getIsProcessing: () => false,
+      getInputEl: () => input,
+      autoResizeInput() {},
+      setMode() {},
+      sendMessage: async () => { sent.push(input.value); input.value = ''; },
+      now: () => 100_000,
+    });
+    assert.equal(await handoff.start(), true);
+    assert.deepEqual(sent, ['for the panel']);
+    assert.deepEqual(store[retryKey], [theirs], 'the full-page chat task must stay queued for it');
+  });
+
+  test(`${browser}: normalised records keep their receiver`, () => {
+    const now = 1_000_000;
+    const ok = { id: 'a', tabId: 3, text: 'hi', mode: 'ask', createdAt: now - 1000 };
+    assert.equal(normalizeNewtabHandoff(ok, now).target, 'panel');
+    assert.equal(normalizeNewtabHandoff({ ...ok, target: 'tab-chat' }, now).target, 'tab-chat');
+    assert.equal(normalizeNewtabHandoff({ ...ok, target: 'elsewhere' }, now).target, 'panel');
+  });
+
   test(`${browser}: Act is sent immediately, in Act mode, like Ask`, async () => {
     const h = await harness({ record: rec({ mode: 'act', text: 'book a table' }) });
     assert.equal(await h.handoff.consume(), true);
@@ -1552,6 +1615,29 @@ test('new tab and side panel agree on the hand-off key', async () => {
   for (const b of ['chrome', 'firefox']) {
     const bg = readFileSync(path.join(root, 'src', b, 'src/background.js'), 'utf8');
     assert.ok(bg.includes(`'${panelPrefix}'`), `${b} background sweeps ${panelPrefix}*`);
+  }
+});
+
+test('new tab and receivers agree on who each record is for', async () => {
+  const { NEWTAB_HANDOFF_TARGET_PANEL, NEWTAB_HANDOFF_TARGET_TAB_CHAT } =
+    await load(path.join(root, 'src/chrome/src/ui/newtab-handoff.js'));
+  assert.equal(HANDOFF_TARGET_PANEL, NEWTAB_HANDOFF_TARGET_PANEL);
+  assert.equal(HANDOFF_TARGET_TAB_CHAT, NEWTAB_HANDOFF_TARGET_TAB_CHAT);
+  assert.equal(buildHandoff({ text: 'a', mode: 'act', tabId: 1 }).target, NEWTAB_HANDOFF_TARGET_PANEL);
+  // Ask is addressed to the full-page chat; Act (submitTask) to the panel.
+  const writes = [];
+  const api = {
+    storage: { local: { set: async (v) => { writes.push(Object.values(v)[0]); }, get: async () => ({}) } },
+    runtime: { getURL: (p) => p, sendMessage: async () => {} },
+    sidePanel: { setOptions: async () => {}, open: async () => {} },
+  };
+  await openAskChat({ text: 'ask' }, api, { id: 51 }, () => {});
+  await submitTask({ text: 'act', mode: 'act' }, api, { id: 52 });
+  assert.deepEqual(writes.map((w) => w.target), [NEWTAB_HANDOFF_TARGET_TAB_CHAT, NEWTAB_HANDOFF_TARGET_PANEL]);
+  // Each side panel page names its role.
+  for (const b of ['chrome', 'firefox']) {
+    const panel = readFileSync(path.join(root, 'src', b, 'src/ui/sidepanel.js'), 'utf8');
+    assert.match(panel, /receiver: isTabChat \? NEWTAB_HANDOFF_TARGET_TAB_CHAT : NEWTAB_HANDOFF_TARGET_PANEL,/, b);
   }
 });
 

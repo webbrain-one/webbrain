@@ -51,13 +51,20 @@ export async function primeCurrentTab() {
   return currentTab;
 }
 
-export function buildHandoff({ text, mode, tabId, now = Date.now() }) {
+// Which page may claim the record. A side panel already open beside this tab listens for the same
+// key, so Ask's record says it is for the full-page chat and the panel leaves it alone. Mirrors
+// NEWTAB_HANDOFF_TARGET_* in src/*/src/ui/newtab-handoff.js (checked in test/newtab.mjs).
+export const HANDOFF_TARGET_PANEL = 'panel';
+export const HANDOFF_TARGET_TAB_CHAT = 'tab-chat';
+
+export function buildHandoff({ text, mode, tabId, now = Date.now(), target = HANDOFF_TARGET_PANEL }) {
   return {
     id: `nt-${now}-${Math.random().toString(36).slice(2, 8)}`,
     tabId,
     text: String(text).slice(0, MAX_TASK_LENGTH),
     mode: mode === 'act' ? 'act' : 'ask',
     createdAt: now,
+    target: target === HANDOFF_TARGET_TAB_CHAT ? HANDOFF_TARGET_TAB_CHAT : HANDOFF_TARGET_PANEL,
   };
 }
 
@@ -200,7 +207,7 @@ export function openAskChat({ text }, api = extApi(), tab = currentTab, navigate
   if (inFlight.has(tab.id)) return Promise.reject(new Error('Previous task is still being handed over'));
 
   const release = lockTab(tab.id, String(text ?? ''));
-  const handoff = buildHandoff({ text, mode: 'ask', tabId: tab.id });
+  const handoff = buildHandoff({ text, mode: 'ask', tabId: tab.id, target: HANDOFF_TARGET_TAB_CHAT });
   let stored;
   try {
     stored = Promise.resolve(api.storage.local.set({ [handoffKey(tab.id)]: handoff }));

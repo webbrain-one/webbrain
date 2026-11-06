@@ -1,10 +1,12 @@
 /**
  * Receives a task typed into the WebBrain new tab (newtab/src/features/agent).
  *
- * The new tab stores { id, tabId, text, mode, createdAt } under a per-tab key
+ * The new tab stores { id, tabId, text, mode, createdAt, target } under a per-tab key
  * (`wbNewtabHandoff:<tabId>`, so two submissions can never overwrite each other)
- * and opens this panel from its own click handler. The panel claims the record
- * only if it is fresh and addressed to the tab it is showing:
+ * and opens this panel from its own click handler (Act), or turns its own tab into the
+ * full-page chat, which runs this same receiver with `receiver: 'tab-chat'` (Ask). A receiver
+ * claims the record only if it is fresh, addressed to the tab it is showing, and meant for it
+ * (`target`; none means the panel):
  *   - Ask and Act: the task is filled in and sent straight away, pinned to the mode the
  *     user chose in the new tab (`__mode`), so automatic mode selection cannot change it.
  *     Act therefore starts acting without a further Enter (the new tab warns about this).
@@ -31,6 +33,15 @@
 
 export const NEWTAB_HANDOFF_PREFIX = 'wbNewtabHandoff:';
 export const newtabHandoffKey = (tabId) => `${NEWTAB_HANDOFF_PREFIX}${tabId}`;
+// Which page may claim a record. Act (and anything from an older new tab, which wrote no
+// target) goes to the side panel; Ask goes to the full-page chat the new tab turns into. Both can
+// be listening for the same tab at once (a panel already open beside the new tab), so each only
+// takes its own and leaves the other's where it is.
+export const NEWTAB_HANDOFF_TARGET_PANEL = 'panel';
+export const NEWTAB_HANDOFF_TARGET_TAB_CHAT = 'tab-chat';
+export const newtabHandoffTarget = (raw) => (raw?.target === NEWTAB_HANDOFF_TARGET_TAB_CHAT
+  ? NEWTAB_HANDOFF_TARGET_TAB_CHAT
+  : NEWTAB_HANDOFF_TARGET_PANEL);
 // A task the panel has to hand back (its tab lost focus mid-send, ...) goes to a key only the
 // panel writes. Reusing the new tab's key could overwrite a newer task stored there meanwhile,
 // and chrome.storage has no compare-and-set to guard that.
@@ -58,7 +69,7 @@ export function normalizeNewtabHandoff(raw, now = Date.now(), maxAgeMs = NEWTAB_
   if (now - createdAt > maxAgeMs || createdAt - now > 5_000) return null;
   const id = String(raw.id ?? '');
   if (!id) return null;
-  return { id, tabId, text, mode, createdAt };
+  return { id, tabId, text, mode, createdAt, target: newtabHandoffTarget(raw) };
 }
 
 export function createNewtabHandoff({
@@ -77,7 +88,10 @@ export function createNewtabHandoff({
   autoResizeInput,
   sendMessage,
   now = Date.now,
+  // NEWTAB_HANDOFF_TARGET_TAB_CHAT for the full-page chat; the side panel keeps the default.
+  receiver = NEWTAB_HANDOFF_TARGET_PANEL,
 }) {
+  const ownRecord = (raw) => newtabHandoffTarget(raw) === receiver;
   const handled = new Set();
   const startedAt = now();
   let ready = false;
@@ -198,7 +212,7 @@ export function createNewtabHandoff({
     const stashForLater = stashRecord;
     const retryWaiting = async () => {
       try {
-        return asList((await storage.get(retryKey))?.[retryKey]).length > 0;
+        return asList((await storage.get(retryKey))?.[retryKey]).some(ownRecord);
       } catch {
         return false;
       }
@@ -221,12 +235,15 @@ export function createNewtabHandoff({
         return normalizeNewtabHandoff(record, now(), NEWTAB_HANDOFF_MAX_AGE_MS + delayedByStartup + heldAllowance);
       };
       let stored = (await storage.get(primaryKey))?.[primaryKey];
+      // A record meant for the other receiver of this tab (Ask's full-page chat, while a side panel
+      // is open beside the new tab, or the reverse) is not ours: leave it exactly as it is.
+      if (stored != null && !ownRecord(stored)) stored = null;
       let handoff = stored == null ? null : accept(stored);
       // A stale or malformed primary record is left where it is: the new tab replaces it once
       // its own lock has run out, and deleting the key from an earlier read could take a task
       // written in between (storage has no compare-and-delete). Look in the retry slot instead.
       if (!handoff && sameTab()) {
-        stored = asList((await storage.get(retryKey))?.[retryKey])[0];
+        stored = asList((await storage.get(retryKey))?.[retryKey]).find(ownRecord);
         key = retryKey;
         handoff = stored == null ? null : accept(stored);
       }

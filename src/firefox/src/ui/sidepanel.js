@@ -30,7 +30,7 @@ import {
 } from './ui-scale.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
-import { createNewtabHandoff } from './newtab-handoff.js';
+import { createNewtabHandoff, NEWTAB_HANDOFF_TARGET_PANEL, NEWTAB_HANDOFF_TARGET_TAB_CHAT } from './newtab-handoff.js';
 import {
   formatSelectionPromptForDisplay,
   normalizeSelectionAction,
@@ -1528,6 +1528,8 @@ const newtabHandoff = createNewtabHandoff({
   storage: browser.storage.local,
   onChanged: browser.storage.onChanged,
   getCurrentTabId: () => currentTabId,
+  // Ask from the new tab is for the full-page chat; a panel open beside that tab must leave it.
+  receiver: isTabChat ? NEWTAB_HANDOFF_TARGET_TAB_CHAT : NEWTAB_HANDOFF_TARGET_PANEL,
   getIsProcessing: () => isProcessing,
   getIsBlocked: () => isConversationClearInProgress(),
   getIsDocumentVisible: () => document.visibilityState !== 'hidden',

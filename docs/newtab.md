@@ -56,7 +56,9 @@ the page. The only request the page itself makes to WebBrain is the bulletin che
 Act goes to the side panel as described below. Ask uses the same storage record but no panel:
 the page writes `wbNewtabHandoff:<tabId>` (awaited, since no user gesture is needed), then
 navigates its own tab to the full-page chat, which claims the record addressed to that tab
-exactly as a panel would (step 3). The full-page chat is the standalone (Ask-only) layout bound to
+exactly as a panel would (step 3). Records say who they are for (`target`: `tab-chat` for Ask,
+`panel` for Act; none, from an older new tab, means the panel), and each receiver claims only its
+own, so a side panel already open beside the new tab leaves Ask's record for the chat. The full-page chat is the standalone (Ask-only) layout bound to
 the tab it was loaded in (`tab=1`): it reads its own tab with `tabs.getCurrent()`, does not follow
 tab switches, and does not report itself to the background as the window's side panel, so Act from
 another tab still opens the real panel there. Like the standalone window it sends no page or browser
