@@ -44,6 +44,50 @@
 
   document.querySelector(`[data-platform="${os}"]`)?.classList.add('is-you');
 
+  // The traced drawings: swap each <img data-draw> for the SVG itself, so the
+  // page can colour its lines and draw them in, top to bottom, when it is seen.
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const drawOnSight = 'IntersectionObserver' in window && !still
+    ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.remove('undrawn');
+          drawOnSight.unobserve(entry.target);
+        }
+      }
+    }, { rootMargin: '0px 0px -12% 0px' })
+    : null;
+
+  document.querySelectorAll('img[data-draw]').forEach(async (img) => {
+    try {
+      const res = await fetch(img.src);
+      if (!res.ok) return;
+      const svg = new DOMParser().parseFromString(await res.text(), 'image/svg+xml').documentElement;
+      if (svg.nodeName !== 'svg') return;
+      svg.setAttribute('class', img.className);
+      if (img.alt) {
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', img.alt);
+      } else {
+        svg.setAttribute('aria-hidden', 'true');
+      }
+      img.replaceWith(svg);
+      if (!drawOnSight) return;
+      const height = svg.viewBox.baseVal.height || 1;
+      const paths = [...svg.querySelectorAll('path')];
+      for (const path of paths) {
+        const box = path.getBBox();
+        const fine = path.parentNode.classList.contains('ln-fine');
+        path.setAttribute('pathLength', '1');
+        path.style.animationDelay = `${(box.y / height * 1.5 + (fine ? 0.6 : 0)).toFixed(2)}s`;
+      }
+      svg.classList.add('drawing', 'undrawn');
+      drawOnSight.observe(svg);
+    } catch {
+      // keep the <img>
+    }
+  });
+
   const targets = document.querySelectorAll('.card, .steps li, .platform, .section-head, .tray-inner > *');
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const io = new IntersectionObserver((entries) => {

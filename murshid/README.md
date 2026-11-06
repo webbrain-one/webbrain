@@ -78,10 +78,13 @@ app/
   companion.js     find and start WebBrain Companion
   permissions.js   site permission prompts
 assets/
-  art/             the portrait and the semazen (generated, see scripts/art)
+  art/             the portrait and the semazen (traced, see scripts/art)
   icons/           app icon, .ico, PNGs, macOS template images
 scripts/
-  art/*.mjs        generate the artwork and icon SVGs
+  art/trace.py     trace the portrait and the semazen from public-domain pictures
+  art/trace.mjs    run trace.py with a Python that has OpenCV
+  art/sources/     those pictures, with where they came from
+  art/icon.mjs     draw the icon SVGs
   build-icons.mjs  rasterize the icon (PNG, ICO, template images, favicons)
   copy-art.mjs     copy the artwork into web/
   copy-fonts.mjs   copy the self-hosted fonts into web/fonts
@@ -104,11 +107,38 @@ bundle the Companion, put its build for the target in
 
 ## The artwork
 
-The portrait of the murshid, the semazen and the icon are original SVGs drawn
-for Murshid by the scripts in `scripts/art/` (engraving-style linework:
-hatching, wrapped-turban bands, a sunburst and a Seljuk eight-pointed star).
-Change a script and run `npm run art` to regenerate everything, including the
-icon files and the copies in `web/art`.
+The portrait in the hero arch and the whirling dervish in "The way" are line
+drawings traced from real pictures, both in the public domain:
+
+- **The murshid**: Suleiman the Magnificent, from the portrait by Nakkaş Osman
+  in the *Şemailname* of 1579 (Topkapı Palace Museum, H.1563 fol. 47v),
+  [via Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Istanbul,_Topkapi_Palace_Museum_MS_Hazine_1563_fol._47v_Suleyman_I_by_Nakka%C5%9F_Osman.jpg).
+- **The semazen**: *A Mevlevee Dervish*, a hand-coloured lithograph of about
+  1830–60 (British Museum 1904,0929.59),
+  [via Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Derviche_Tourneur_(BM_1904,0929.59).jpg).
+
+`scripts/art/sources/` holds both pictures and their licence notes.
+`scripts/art/trace.py` turns them into SVG strokes: it flattens the paint,
+sorts the pixels into a few colour regions (turban, face, caftan…), draws each
+region's outline once, adds the artist's own fine lines (turban folds, eyes,
+pleats) as centre lines, and writes smooth Bézier paths ordered top to bottom.
+The homepage inlines the SVGs and draws the strokes in as they come into view;
+without JavaScript, or with reduced motion, they are shown still.
+
+To retrace (needs Python 3 with OpenCV, NumPy, SciPy and scikit-image):
+
+```sh
+pip install opencv-python-headless numpy scipy scikit-image
+npm run art:trace   # writes assets/art/*.svg and copies them into web/art
+```
+
+`python scripts/art/trace.py portrait --debug=<dir>` also writes the colour
+regions and line masks it used, which helps when tuning the sample points in
+its `CONFIG`.
+
+The app icon is still the geometric profile drawn by `scripts/art/icon.mjs`:
+the traced portrait does not survive being shrunk to 16–32 px. `npm run
+art:icons` rebuilds the icon files, and `npm run art` runs both steps.
 
 ## The homepage
 

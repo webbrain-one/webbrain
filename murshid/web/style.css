@@ -216,17 +216,24 @@ em { font-style: italic; }
   inset: 0;
   clip-path: url(#arch-clip);
   background:
-    radial-gradient(70% 55% at 54% 40%, rgba(255, 214, 140, .28), transparent 70%),
+    radial-gradient(62% 40% at 52% 27%, rgba(255, 214, 140, .26), transparent 70%),
     linear-gradient(180deg, var(--crimson-hi), var(--crimson-deep));
   box-shadow: inset 0 0 0 1px rgba(244,234,214,.2);
 }
-.arch img {
+/* the traced portrait: gold line on crimson, fading out below the knee */
+.arch .art {
   position: absolute;
   left: 50%;
-  bottom: -2%;
-  width: 104%;
-  transform: translateX(-50%);
+  top: 7%;
+  width: 108%;
+  height: auto;
   max-width: none;
+  transform: translateX(-50%);
+  --line: var(--gold-hi);
+  --line-fine: #f6dfa6;
+  --line-ground: var(--parchment);
+  -webkit-mask-image: linear-gradient(180deg, #000 66%, transparent 92%);
+  mask-image: linear-gradient(180deg, #000 66%, transparent 92%);
 }
 .arch-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .arch-line path { fill: none; stroke: var(--gold); stroke-width: 2.2; vector-effect: non-scaling-stroke; }
@@ -363,7 +370,7 @@ section { position: relative; }
   mask-image: radial-gradient(circle at 50% 70%, #000 0 20%, transparent 62%);
   animation: turn 300s linear infinite reverse;
 }
-.way-art img { position: relative; width: 100%; max-width: 520px; margin: 0 auto; animation: sway 9s ease-in-out infinite; transform-origin: 50% 80%; }
+.way-art .art { position: relative; display: block; width: 100%; height: auto; max-width: 540px; margin: 0 auto; animation: sway 9s ease-in-out infinite; transform-origin: 50% 80%; --line: var(--parchment); --line-fine: var(--gold); }
 @keyframes sway { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
 .way h2 { color: var(--parchment); }
 .way h2 em { color: var(--gold); }
@@ -419,6 +426,17 @@ section { position: relative; }
 
 /* ----------------------------------------------------------------- reveal */
 
+/* traced drawings, inlined by site.js, draw themselves in when seen */
+svg.art { overflow: visible; stroke-width: initial; }
+svg.art.drawing path { stroke-dasharray: 1 2; }
+svg.art.drawing.undrawn path { stroke-dashoffset: 1; opacity: 0; }
+svg.art.drawing:not(.undrawn) path { animation: draw 2.6s cubic-bezier(.5, .05, .3, 1) both; }
+@keyframes draw {
+  from { stroke-dashoffset: 1; opacity: 0; }
+  1% { opacity: 1; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
 .reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
 .reveal.in { opacity: 1; transform: none; }
 
@@ -436,7 +454,7 @@ section { position: relative; }
   .hero-art { width: min(86%, 460px); margin-top: 40px; order: 2; }
   .hero-rays { right: calc(50% - 750px); top: auto; bottom: -560px; }
   .way { grid-template-columns: 1fr; }
-  .way-art img { max-width: 360px; }
+  .way-art .art { max-width: 340px; }
   .tray-inner { grid-template-columns: 1fr; }
   .platforms { grid-template-columns: 1fr; max-width: 520px; }
   .footer-row { grid-template-columns: 1fr; }
@@ -456,7 +474,7 @@ section { position: relative; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .hero-rays, .way-art::before, .way-art img { animation: none; }
+  .hero-rays, .way-art::before, .way-art .art { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .button, .plate svg { transition: none; }
 }

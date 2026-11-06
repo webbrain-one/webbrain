@@ -11,7 +11,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --murshid-devtools",
-    "art": "node scripts/art/portrait.mjs && node scripts/art/portrait.mjs --bg=1 --out=assets/art/murshid-portrait-crimson.svg && node scripts/art/semazen.mjs && node scripts/art/icon.mjs && node scripts/build-icons.mjs && node scripts/copy-art.mjs",
+    "art": "npm run art:trace && npm run art:icons",
+    "art:trace": "node scripts/art/trace.mjs && node scripts/copy-art.mjs",
+    "art:icons": "node scripts/art/icon.mjs && node scripts/build-icons.mjs && node scripts/copy-art.mjs",
     "fonts": "node scripts/copy-fonts.mjs",
     "web": "node scripts/serve.mjs",
     "pack": "electron-builder --dir",
