@@ -113,6 +113,7 @@ class Downloads extends EventEmitter {
       record.paused = item.isPaused();
       if (!record.filename && item.getSavePath()) record.filename = item.getSavePath();
       if (state === 'interrupted') record.state = 'interrupted';
+      else if (state === 'progressing') record.state = 'in_progress';
       this.changed(record, before);
     });
     item.once('done', (_event, state) => {

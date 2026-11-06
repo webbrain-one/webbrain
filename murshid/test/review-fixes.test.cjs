@@ -87,3 +87,28 @@ test('open arguments convert Windows paths, including spaces and hash signs', ()
   assert.equal(converted, path);
   delete require.cache[require.resolve('../app/open-arguments')];
 });
+
+test('interrupted download returns to active when progress resumes', () => {
+  const { EventEmitter } = require('node:events');
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'murshid-download-test-'));
+  try {
+    const electron = { app: { getPath: () => folder }, shell: {} };
+    const { Downloads } = loadWithElectron('../app/downloads', electron);
+    const events = [];
+    const ctx = {ses: new EventEmitter(), webBrainId: 'extension', crx: {emit: (...args) => events.push(args)}};
+    const downloads = new Downloads(ctx);
+    const item = new EventEmitter();
+    Object.assign(item, {getURLChain:()=>['https://example.com/file'], getURL:()=> 'https://example.com/file', getFilename:()=> 'file', getMimeType:()=> 'text/plain', getStartTime:()=> 0, getTotalBytes:()=> 100, getReceivedBytes:()=> 42, getSavePath:()=> path.join(folder, 'file'), setSavePath:()=> {}, isPaused:()=> false, canResume:()=> true});
+    downloads.onWillDownload(item);
+    item.emit('updated', {}, 'interrupted');
+    assert.equal(downloads.search({id:1})[0].state, 'interrupted');
+    assert.equal(downloads.summary().active, 0);
+    item.emit('updated', {}, 'progressing');
+    assert.equal(downloads.search({id:1})[0].state, 'in_progress');
+    assert.equal(downloads.summary().active, 1);
+    assert(events.some(e => e[1] === 'downloads.onChanged' && e[2][0].state?.current === 'in_progress'));
+  } finally { fs.rmSync(folder, {recursive:true, force:true}); }
+});

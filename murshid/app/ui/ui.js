@@ -353,6 +353,7 @@ api.on('murshid:state', (next) => {
   state = next;
   if (switched) {
     editing = false;
+    els.address.value = activeTab()?.displayUrl || '';
     if (!els.findbar.hidden) closeFind();
   }
   render();

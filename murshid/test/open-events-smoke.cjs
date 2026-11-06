@@ -18,7 +18,7 @@ app.emit('open-url', earlyUrl, `${base}/early`);
 app.emit('open-file', earlyFile, file);
 assert(earlyUrl.prevented && earlyFile.prevented);
 const waitFor = async (condition) => {
-  for (let i = 0; i < 150; i++) { if (condition()) return; await new Promise(r => setTimeout(r, 100)); }
+  for (let i = 0; i < 150; i++) { if (await condition()) return; await new Promise(r => setTimeout(r, 100)); }
   throw new Error('Timed out waiting for browser state');
 };
 (async () => {
@@ -30,12 +30,14 @@ const waitFor = async (condition) => {
     assert(late.prevented);
     console.log('Early and late macOS open events reached isolated tabs');
     const w = ctx.windows[0];
-    const originalFocus = w.focusOmnibox;
-    let focused = 0;
-    w.focusOmnibox = () => { focused++; };
+    await waitFor(() => w.uiReady);
+    const readAddress = () => w.ui.executeJavaScript("document.getElementById('address').value");
+    await waitFor(async () => (await readAddress()).includes('/late'));
+    w.focusOmnibox();
     const newTab = w.addTab({});
-    w.focusOmnibox = originalFocus;
-    assert(focused > 0, 'new tab should focus the address bar before navigation commits');
+    await waitFor(async () => await readAddress() === '');
+    assert.equal(await w.ui.executeJavaScript("document.activeElement.id"), 'address');
+    console.log('New tab focuses an empty address bar after a previous page');
     const guarded = w.addTab({ url: `${base}/guarded` });
     await waitFor(() => guarded.wc.getURL() === `${base}/guarded` && !guarded.wc.isLoading());
     await guarded.wc.executeJavaScript("window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; }; document.body.click();", true);

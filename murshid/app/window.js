@@ -165,7 +165,7 @@ class MurshidWindow {
     this.ctx.extensions.selectTab(tab.wc);
     this.syncPanel();
     this.layout();
-    this.scheduleState();
+    this.pushState();
     if (tab.isNewTabPage()) this.focusOmnibox();
     else tab.wc.focus();
   }
