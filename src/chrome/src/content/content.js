@@ -8881,6 +8881,21 @@
               : 'Native WhatsApp contact identity needs a fresh guarded header click, its contact drawer phone, and closing that same drawer. No message or editor write was authorized.' };
         }
       }
+      // The same holds with no chat open (WhatsApp just loaded, or another
+      // view replaced the chat): opening one from the list sends nothing, and
+      // there is no contact to check yet. Left to the generic check, every
+      // row waited on a model to read its caption (name, time and last
+      // message, so new for each row); with that model slow or unavailable
+      // every row stayed blocked and the agent could not reach the chat it
+      // was asked to message. The opened chat's contact is checked as above.
+      if (!nativeWhatsappComposer && location.hostname === 'web.whatsapp.com' && !observationOnly
+          && ['click', 'click_ax'].includes(tool) && targetResolved && nativeWhatsappChatListRow(target)) {
+        if (params.bindDispatch === true && params.namedRecipientSelection === true) {
+          window.__wb_native_whatsapp_follow_selection?.();
+        }
+        return { success: true, messageSend: false, conclusive: true, conversationSelection: true,
+          identityCandidates: [] };
+      }
       const layoutComposer = layoutCandidate
         && (gmailScopedComposer || nativeLayoutContext?.service === 'telegram' || layoutInComposeDialog
           || !viewportHeight
