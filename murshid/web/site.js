@@ -78,7 +78,9 @@
       for (const path of paths) {
         const box = path.getBBox();
         const fine = path.parentNode.classList.contains('ln-fine');
-        path.setAttribute('pathLength', '1');
+        // the real length, in user units: pathLength="1" does not scale the
+        // dash pattern in every Chrome
+        path.style.setProperty('--len', `${(path.getTotalLength() + 1).toFixed(1)}px`);
         path.style.animationDelay = `${(box.y / height * 1.5 + (fine ? 0.6 : 0)).toFixed(2)}s`;
       }
       svg.classList.add('drawing', 'undrawn');

@@ -428,11 +428,11 @@ section { position: relative; }
 
 /* traced drawings, inlined by site.js, draw themselves in when seen */
 svg.art { overflow: visible; stroke-width: initial; }
-svg.art.drawing path { stroke-dasharray: 1 2; }
-svg.art.drawing.undrawn path { stroke-dashoffset: 1; opacity: 0; }
+svg.art.drawing path { stroke-dasharray: var(--len) calc(var(--len) * 2); }
+svg.art.drawing.undrawn path { stroke-dashoffset: var(--len); opacity: 0; }
 svg.art.drawing:not(.undrawn) path { animation: draw 2.6s cubic-bezier(.5, .05, .3, 1) both; }
 @keyframes draw {
-  from { stroke-dashoffset: 1; opacity: 0; }
+  from { stroke-dashoffset: var(--len); opacity: 0; }
   1% { opacity: 1; }
   to { stroke-dashoffset: 0; opacity: 1; }
 }
