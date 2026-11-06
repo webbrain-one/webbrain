@@ -5,6 +5,9 @@ import { useBackgroundState } from './hooks/useBackgroundState';
 import { useBackgroundLoader } from './hooks/useBackgroundLoader';
 import { useBackgroundRenderer, useBackgroundFilters, useBackgroundOverlayFilters } from './hooks/useBackgroundRenderer';
 import { useBackgroundEvents } from './hooks/useBackgroundEvents';
+import { setShownBackground } from './api/chatBackdrop';
+
+import { useEffect } from 'react';
 
 import './scss/index.scss';
 
@@ -23,6 +26,8 @@ export default function Background() {
     if (failedUrl === backgroundData.url && !backgroundData.video) updateBackground({ video: true });
   });
   useBackgroundEvents(backgroundData, refreshBackground);
+  // Remembered for the full-page chat Ask opens in this tab, which keeps the same background.
+  useEffect(() => setShownBackground(backgroundData), [backgroundData]);
 
   return (
     <>

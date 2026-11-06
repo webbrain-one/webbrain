@@ -17,7 +17,12 @@
  *     still applies when it is on, and the box warns about it before the user submits);
  *     if Act is not allowed for the panel's current provider or scope, the text is left
  *     in the composer, unsent.
+ *
+ * Ask also leaves the background this new tab is showing for the chat to open on
+ * (features/background/api/chatBackdrop.js).
  */
+import { saveChatBackdrop } from '../background/api/chatBackdrop.js';
+
 // One key per tab, so concurrent submissions from several new tab pages can never
 // overwrite each other. Mirrors src/*/src/ui/newtab-handoff.js (checked in test/newtab.mjs).
 export const HANDOFF_PREFIX = 'wbNewtabHandoff:';
@@ -198,9 +203,16 @@ export const TAB_CHAT_PATH = 'src/ui/sidepanel.html?mode=ask&standalone=true&tab
  * Ask: store the task for this tab, then load the full-page chat in it. The chat page
  * claims the record addressed to its own tab, as the side panel would. No user gesture is
  * needed (it is a navigation, not sidePanel.open), so the write is awaited first: leaving
- * the page before it lands could lose the task.
+ * the page before it lands could lose the task. The background on screen is left for the
+ * chat (`rememberBackdrop`) right before leaving.
  */
-export function openAskChat({ text }, api = extApi(), tab = currentTab, navigate = (url) => window.location.assign(url)) {
+export function openAskChat(
+  { text },
+  api = extApi(),
+  tab = currentTab,
+  navigate = (url) => window.location.assign(url),
+  rememberBackdrop = saveChatBackdrop,
+) {
   if (!api?.storage?.local?.set || !api?.runtime?.getURL || tab?.id == null) {
     return Promise.reject(new Error('Extension API unavailable'));
   }
@@ -216,6 +228,11 @@ export function openAskChat({ text }, api = extApi(), tab = currentTab, navigate
   }
   return stored.then(
     async () => {
+      try {
+        rememberBackdrop();
+      } catch {
+        // cosmetic only: the chat then opens on its plain surround
+      }
       try {
         navigate(api.runtime.getURL(TAB_CHAT_PATH));
       } catch (error) {
