@@ -130,11 +130,12 @@ html[data-tab-chat-backdrop]::before {
   inset: var(--tab-chat-backdrop-bleed, 0px);
   z-index: -1;
   pointer-events: none;
+  /* The new tab's effects, for pictures and colours alike. */
+  filter: var(--tab-chat-backdrop-filter, none);
 }
 
 html[data-tab-chat-backdrop="image"]::before {
   background: var(--tab-chat-backdrop-colour, #000) var(--tab-chat-backdrop-image) center / cover no-repeat;
-  filter: var(--tab-chat-backdrop-filter, none);
 }
 
 html[data-tab-chat-backdrop="colour"]::before {

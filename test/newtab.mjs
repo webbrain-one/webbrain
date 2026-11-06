@@ -157,10 +157,11 @@ test('the chat backdrop describes the background on screen and never copies an u
   assert.deepEqual(upload, { v: 1, customId: 7, blur: 0, brightness: 100 });
   assert.equal(snap({ url: 'data:image/png;base64,AAAA', photoInfo: {} }), null, 'an inline picture without an id is not copied');
   assert.equal(snap({ url: 'blob:chrome-extension://wb/1', photoInfo: {} }), null, 'a blob address dies with the new tab');
-  // Colours and gradients go as their CSS value, never anything that loads something.
-  assert.deepEqual(snap({ url: '', style: 'background: rgb(10, 120, 90)' }), { v: 1, background: 'rgb(10, 120, 90)' });
-  assert.deepEqual(snap({ url: '', style: 'background:linear-gradient(to right, #abcdef, #123456);' }),
-    { v: 1, background: 'linear-gradient(to right, #abcdef, #123456)' });
+  // Colours and gradients go as their CSS value, never anything that loads something. The new
+  // tab's effect overlay covers them too, so their effects go along.
+  assert.deepEqual(snap({ url: '', style: 'background: rgb(10, 120, 90)' }), { v: 1, background: 'rgb(10, 120, 90)', blur: 0, brightness: 100 });
+  assert.deepEqual(snap({ url: '', style: 'background:linear-gradient(to right, #abcdef, #123456);' }, { brightness: '30', backgroundFilter: 'invert', backgroundFilterAmount: '100' }),
+    { v: 1, background: 'linear-gradient(to right, #abcdef, #123456)', blur: 0, brightness: 30, filter: 'invert', filterAmount: 100 });
   assert.equal(snap({ url: '', style: 'background: url(https://example.com/x.png)' }), null);
   // Nothing to carry over.
   assert.equal(snap({ url: 'https://example.com/v.mp4', video: true, photoInfo: {} }), null, 'videos are not carried over');
@@ -265,8 +266,12 @@ test('the full-page chat paints the new tab background it is given, and checks i
     assert.equal(attrs.get('data-tab-chat-backdrop'), 'image', browserDir);
     assert.equal(props.get('--tab-chat-backdrop-image'), `url("${bundled}")`, browserDir);
     assert.equal(props.get('--tab-chat-backdrop-colour'), '#123456', browserDir);
-    assert.equal(props.get('--tab-chat-backdrop-filter'), 'blur(6px) brightness(70%) sepia(40%)', browserDir);
+    // The new tab's order: blur and the effect first, then darkened (brightness last). With
+    // brightness 0 and invert the new tab is black, and so must the chat be.
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'blur(6px) sepia(40%) brightness(70%)', browserDir);
     assert.equal(props.get('--tab-chat-backdrop-bleed'), '-12px', browserDir);
+    ({ props } = runChatBackdrop(browserDir, { stored: { v: 1, image: bundled, brightness: 0, filter: 'invert', filterAmount: 100 } }));
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'invert(100%) brightness(0%)', browserDir);
 
     ({ props } = runChatBackdrop(browserDir, { stored: { v: 1, image: 'https://example.com/a.jpg', blur: 999, brightness: -5, filter: 'url(x)' } }));
     assert.equal(props.get('--tab-chat-backdrop-filter'), 'blur(100px) brightness(0%)', `${browserDir}: numbers are bounded, unknown filters dropped`);
@@ -276,6 +281,10 @@ test('the full-page chat paints the new tab background it is given, and checks i
     ({ attrs, props } = runChatBackdrop(browserDir, { stored: { v: 1, background: 'linear-gradient(to right, #abcdef, #123456)' } }));
     assert.equal(attrs.get('data-tab-chat-backdrop'), 'colour', browserDir);
     assert.equal(props.get('--tab-chat-backdrop-background'), 'linear-gradient(to right, #abcdef, #123456)', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'none', browserDir);
+    ({ attrs, props } = runChatBackdrop(browserDir, { stored: { v: 1, background: 'rgb(10, 120, 90)', brightness: 30, filter: 'grayscale', filterAmount: 50 } }));
+    assert.equal(attrs.get('data-tab-chat-backdrop'), 'colour', browserDir);
+    assert.equal(props.get('--tab-chat-backdrop-filter'), 'grayscale(50%) brightness(30%)', `${browserDir}: colours keep their effects`);
 
     // Anything else leaves the column on its plain surround.
     for (const stored of [
@@ -335,7 +344,7 @@ test('the chat backdrop script is loaded before first paint and matches the new 
     assert.match(html, /<script src="theme-bootstrap\.js"><\/script>[\s\S]*?<script src="tab-chat-backdrop\.js"><\/script>[\s\S]*?<link rel="stylesheet" href="\.\.\/\.\.\/styles\/sidepanel\.css">/, browserDir);
     const css = read(browserDir, 'styles', 'sidepanel.css');
     assert.match(css, /html\[data-tab-chat="true"\] body \{[^}]*max-width: 880px;[^}]*margin-inline: auto;/, browserDir);
-    assert.match(css, /html\[data-tab-chat-backdrop\]::before \{[^}]*position: fixed;[^}]*z-index: -1;/, browserDir);
+    assert.match(css, /html\[data-tab-chat-backdrop\]::before \{[^}]*position: fixed;[^}]*z-index: -1;[^}]*filter: var\(--tab-chat-backdrop-filter, none\);/, `${browserDir}: effects apply to every backdrop kind`);
     // The surround needs its own background, or the column's would spread to the whole page.
     assert.match(css, /html\[data-tab-chat="true"\] \{[^}]*background:/, browserDir);
   }

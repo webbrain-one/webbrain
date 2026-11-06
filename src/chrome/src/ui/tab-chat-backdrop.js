@@ -56,27 +56,28 @@
     return null;
   }
 
-  function filterValue(backdrop) {
+  // In the new tab's order: its overlay blurs and applies the effect (backdrop-filter), then
+  // darkens the result with black, so brightness comes last. It covers colours and pictures alike.
+  function applyEffects(backdrop) {
     var blur = bounded(backdrop.blur, 0, 100, 0);
     var brightness = bounded(backdrop.brightness, 0, 100, 100);
     var parts = [];
     if (blur > 0) parts.push('blur(' + blur + 'px)');
-    if (brightness !== 100) parts.push('brightness(' + brightness + '%)');
     if (FILTERS.indexOf(backdrop.filter) !== -1) {
       parts.push(backdrop.filter + '(' + bounded(backdrop.filterAmount, 0, 100, 100) + '%)');
     }
-    return { filter: parts.join(' ') || 'none', blur: blur };
+    if (brightness !== 100) parts.push('brightness(' + brightness + '%)');
+    root.style.setProperty('--tab-chat-backdrop-filter', parts.join(' ') || 'none');
+    // A blurred edge fades to transparent; drawing the backdrop a little larger hides that.
+    root.style.setProperty('--tab-chat-backdrop-bleed', (blur * -2) + 'px');
   }
 
   function paintImage(href, backdrop) {
-    var effects = filterValue(backdrop);
     root.style.setProperty('--tab-chat-backdrop-image', cssUrl(href));
     if (typeof backdrop.colour === 'string' && backdrop.colour.length <= 64 && supports('color', backdrop.colour)) {
       root.style.setProperty('--tab-chat-backdrop-colour', backdrop.colour);
     }
-    root.style.setProperty('--tab-chat-backdrop-filter', effects.filter);
-    // A blurred edge fades to transparent; drawing the picture a little larger hides that.
-    root.style.setProperty('--tab-chat-backdrop-bleed', (effects.blur * -2) + 'px');
+    applyEffects(backdrop);
     root.setAttribute('data-tab-chat-backdrop', 'image');
   }
 
@@ -154,6 +155,7 @@
       && supports('background', backdrop.background)
     ) {
       root.style.setProperty('--tab-chat-backdrop-background', backdrop.background);
+      applyEffects(backdrop);
       root.setAttribute('data-tab-chat-backdrop', 'colour');
     }
   } catch (_) {

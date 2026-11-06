@@ -82,7 +82,9 @@ in the page's `<head>` like the theme bootstrap) reads and checks it before firs
   reads only if it already exists, so a multi-MB upload is never copied.
 - A colour or gradient goes as its CSS value. The browser must accept it and it may not contain
   `url()`.
-- Blur, brightness and the effect filter carry over, with bounded numbers.
+- Blur, brightness and the effect filter carry over, with bounded numbers, for pictures and
+  colours alike. They're applied in the new tab's order: blur and the effect first, then the
+  darkening.
 - Videos are not carried over. Neither is anything when backgrounds are turned off, or when the
   chat was opened some other way. The column then sits on a plain, slightly darker surround.
 

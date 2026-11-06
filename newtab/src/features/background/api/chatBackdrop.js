@@ -89,8 +89,9 @@ export function chatBackdropSnapshot(
     return { v: CHAT_BACKDROP_VERSION, image: href, ...colour, ...effects(storage) };
   }
 
+  // The new tab's effect overlay covers colours too, so their effects go along as well.
   const background = backgroundValue(data.style);
-  return background ? { v: CHAT_BACKDROP_VERSION, background } : null;
+  return background ? { v: CHAT_BACKDROP_VERSION, background, ...effects(storage) } : null;
 }
 
 /** Writes (or clears) this tab's snapshot. Never throws: the chat simply opens without it. */
