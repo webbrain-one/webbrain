@@ -168,3 +168,62 @@ func TestORTRuntimeNeedsCompletedExtraction(t *testing.T) {
 		t.Fatal("truncated runtime was accepted")
 	}
 }
+
+// The active model is the user's choice, else the default, else d1 while
+// only d1 is installed.
+func TestActiveModelFallsBackToInstalledD1(t *testing.T) {
+	t.Setenv("WBC_HOME", t.TempDir())
+	store, err := settings.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(store, nil)
+	tiny := func(s *modelSpec) {
+		data := []byte(s.id + " weights")
+		sum := sha256.Sum256(data)
+		f := file{"model.bin", int64(len(data)), hex.EncodeToString(sum[:])}
+		old := s.files
+		s.files = []file{f}
+		t.Cleanup(func() { s.files = old })
+	}
+	install := func(s *modelSpec) {
+		p := s.path(s.files[0])
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(s.id+" weights"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tiny(compassSpec)
+	tiny(d1Spec)
+	if got := m.active(); got.id != DefaultModel {
+		t.Fatalf("nothing installed: active %s, want the default", got.id)
+	}
+	install(d1Spec)
+	if got := m.active(); got != d1Spec {
+		t.Fatalf("only d1 installed: active %s, want d1", got.id)
+	}
+	install(compassSpec)
+	if got := m.active(); got != compassSpec {
+		t.Fatalf("both installed: active %s, want compass", got.id)
+	}
+	if err := m.SetModel(ModelD1); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.active(); got != d1Spec {
+		t.Fatalf("d1 chosen: active %s", got.id)
+	}
+	if err := m.SetModel("bonsai"); err == nil {
+		t.Fatal("an unknown model was accepted")
+	}
+	if err := m.RemoveModel(ModelCompass); err != nil {
+		t.Fatal(err)
+	}
+	if m.modelInstalled(compassSpec) || !m.modelInstalled(d1Spec) {
+		t.Fatal("removing the other model removed the wrong files")
+	}
+	if store.Get().Decision.Model != ModelD1 {
+		t.Fatal("removing the other model changed the choice")
+	}
+}

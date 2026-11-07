@@ -1,8 +1,9 @@
 package d1
 
 // Byte-level BPE matching Hugging Face tokenizers / Transformers.js for the
-// d1 (LFM2.5) tokenizer.json: added-token splitting, the Llama-3 style split
-// regex, GPT-2 byte mapping and rank-ordered merges.
+// d1 (LFM2.5) and Compass VLD v6 (LFM3) tokenizer.json files: added-token
+// splitting, the Llama-3 style split regex, GPT-2 byte mapping, rank-ordered
+// merges and ignore_merges (a word already in the vocabulary is one token).
 
 import (
 	"container/heap"
@@ -24,16 +25,20 @@ type addedToken struct {
 }
 
 type Tokenizer struct {
-	vocab   map[string]int
-	ranks   map[string]int
-	added   []addedToken // longest first
-	addedBy map[string]int
-	split   *regexp2.Regexp
-	byteEnc [256]string
-	cacheMu sync.Mutex
-	cache   map[string][]int
-	BosID   int
-	PadID   int
+	vocab      map[string]int
+	ranks      map[string]int
+	added      []addedToken // longest first
+	addedOrder []addedToken // tokenizer.json order
+	addedBy    map[string]int
+	split      *regexp2.Regexp
+	byteEnc    [256]string
+	// ignoreMerges emits a pre-tokenized word that is itself in the
+	// vocabulary as that token, before any merge (BPE ignore_merges).
+	ignoreMerges bool
+	cacheMu      sync.Mutex
+	cache        map[string][]int
+	BosID        int
+	PadID        int
 }
 
 // JavaScript's \s (what Transformers.js' RegExp uses), spelled out so the
@@ -107,19 +112,21 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 			} `json:"pretokenizers"`
 		} `json:"pre_tokenizer"`
 		Model struct {
-			Type   string            `json:"type"`
-			Vocab  map[string]int    `json:"vocab"`
-			Merges []json.RawMessage `json:"merges"`
+			Type         string            `json:"type"`
+			Vocab        map[string]int    `json:"vocab"`
+			Merges       []json.RawMessage `json:"merges"`
+			IgnoreMerges bool              `json:"ignore_merges"`
+			ByteFallback bool              `json:"byte_fallback"`
 		} `json:"model"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("tokenizer.json: %w", err)
 	}
-	if raw.Model.Type != "BPE" {
+	if raw.Model.Type != "BPE" || raw.Model.ByteFallback {
 		return nil, fmt.Errorf("unsupported tokenizer model %q", raw.Model.Type)
 	}
 	t := &Tokenizer{vocab: raw.Model.Vocab, ranks: make(map[string]int, len(raw.Model.Merges)),
-		addedBy: map[string]int{}, cache: map[string][]int{}, byteEnc: bytesToUnicode()}
+		addedBy: map[string]int{}, cache: map[string][]int{}, byteEnc: bytesToUnicode(), ignoreMerges: raw.Model.IgnoreMerges}
 	for i, m := range raw.Model.Merges {
 		var pair []string
 		if err := json.Unmarshal(m, &pair); err != nil {
@@ -141,10 +148,13 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 		t.added = append(t.added, a)
 		t.addedBy[a.Content] = a.ID
 	}
+	t.addedOrder = append([]addedToken(nil), t.added...)
 	sort.SliceStable(t.added, func(i, j int) bool { return len(t.added[i].Content) > len(t.added[j].Content) })
 	pattern := `(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\p{L}\p{N}` + jsSpace + `]+[\r\n]*|[` + jsSpace + `]*[\r\n]+|[` + jsSpace + `]+(?![^` + jsSpace + `])|[` + jsSpace + `]+`
+	// The pattern above is this one with JavaScript's \s spelled out.
+	const split = `(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+`
 	for _, p := range raw.PreTok.Pretokenizers {
-		if p.Type == "Split" && p.Pattern.Regex != "" && !strings.Contains(p.Pattern.Regex, `(?i:'s|'t|'re|'ve|'m|'ll|'d)`) {
+		if p.Type == "Split" && p.Pattern.Regex != split {
 			return nil, errors.New("unexpected pre-tokenizer pattern")
 		}
 	}
@@ -152,10 +162,28 @@ func LoadTokenizer(path string) (*Tokenizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.split.MatchTimeout = 0
+	// No match timeout. regexp2 only turns timeouts off for this value; 0 is a
+	// deadline of now, so matches failed whenever its coarse clock ticked
+	// (more often under load) and the rest of the text became one BPE word.
+	// Timeouts are the only errors FindRunesMatch/FindNextMatch return.
+	t.split.MatchTimeout = regexp2.DefaultMatchTimeout
 	t.BosID = t.ID("<|startoftext|>")
 	t.PadID = t.ID("<|pad|>")
 	return t, nil
+}
+
+// AddedTokens lists the contents of every added token, special or not, in
+// tokenizer.json order (Transformers.js splits text on all of them).
+func (t *Tokenizer) AddedTokens() []string {
+	out := make([]string, 0, len(t.added))
+	seen := map[int]bool{}
+	for _, a := range t.addedOrder {
+		if !seen[a.ID] {
+			seen[a.ID] = true
+			out = append(out, a.Content)
+		}
+	}
+	return out
 }
 
 // ID returns a token's id (added tokens first), or -1.
@@ -260,6 +288,11 @@ func (t *Tokenizer) bpeWord(piece string) []int {
 	syms := make([]string, 0, len(piece))
 	for i := 0; i < len(piece); i++ {
 		syms = append(syms, t.byteEnc[piece[i]])
+	}
+	if t.ignoreMerges {
+		if id, ok := t.vocab[strings.Join(syms, "")]; ok {
+			return []int{id}
+		}
 	}
 	// Linked list over symbol slots.
 	n := len(syms)
