@@ -34,10 +34,11 @@ function murshidPost() {
   }
 
   if (typeof ServiceWorkerGlobalScope !== 'undefined' && globalThis instanceof ServiceWorkerGlobalScope) {
-    // Supplement native webRequest events for this extension's offscreen XHRs.
+    // Supplement native webRequest events for browser tabs and offscreen XHRs.
     // Session-level handlers in Electron otherwise suppress those events.
     const matches = (filter, details) => {
       if (filter?.types && !filter.types.includes(details.type)) return false;
+      if (filter?.tabId !== undefined && filter.tabId !== details.tabId) return false;
       if (!Array.isArray(filter?.urls)) return false;
       return filter.urls.some((pattern) => {
         if (pattern === '<all_urls>') return /^(https?|wss?):/i.test(details.url);
@@ -54,7 +55,7 @@ function murshidPost() {
         } catch { return false; }
       });
     };
-    for (const name of ['onBeforeRequest', 'onHeadersReceived']) {
+    for (const name of ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived']) {
       const native = chrome.webRequest?.[name];
       if (!native) continue;
       const listeners = new Map();
@@ -66,11 +67,17 @@ function murshidPost() {
         try {
           for (const [fn, options] of listeners) {
             if (!matches(options.filter, details)) continue;
-            const data = { ...details, tabId: -1, frameId: 0 };
+            const data = { ...details };
+            if (!options.extra?.includes('requestBody')) delete data.requestBody;
+            if (!options.extra?.includes('requestHeaders')) delete data.requestHeaders;
             if (!options.extra?.includes('responseHeaders')) delete data.responseHeaders;
+            if (!options.extra?.includes('extraHeaders')) {
+              if (data.requestHeaders) data.requestHeaders = data.requestHeaders.filter(h => !/^(cookie|origin|referer|accept-language|accept-encoding)$/i.test(h.name));
+              if (data.responseHeaders) data.responseHeaders = data.responseHeaders.filter(h => h.name.toLowerCase() !== 'set-cookie');
+            }
             try { fn(data); } catch (error) { console.error(error); }
           }
-        } finally { call('murshid.ackOffscreenRequest')(ticket).catch(() => {}); }
+        } finally { call('murshid.ackWebRequest')(ticket).catch(() => {}); }
       });
     }
   }

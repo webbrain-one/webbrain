@@ -13,6 +13,7 @@ const server = http.createServer((req, res) => {
   requestHeaders.set(req.url, req.headers);
   if (req.url === '/download-abort') { req.socket.destroy(); return; }
   if (req.url === '/early') res.setHeader('Accept-CH', 'Sec-CH-UA-Arch');
+  if (req.url.startsWith('/tab-')) res.setHeader('X-Murshid-Fixture', 'ordinary-tab');
   if (req.url === '/download-redirect') { res.writeHead(302, { location: '/download-final', 'Set-Cookie': 'fixture-secret=value; HttpOnly; Secure; SameSite=Lax' }); res.end(); return; }
   if (req.url === '/download-cross-origin') { res.writeHead(302, { location: 'http://example.invalid/other' }); res.end(); return; }
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -82,6 +83,64 @@ const waitFor = async (condition) => {
         socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
       });
       const stagingSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/network/download-staging.js'), 'utf8').replace(/^export /gm, '');
+      await evaluate(`(() => {
+        globalThis.tabRequestEvents = [];
+        globalThis.tabRequestListeners = ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived'].map(name => {
+          const fn = details => {
+            if (!details.url.startsWith(${JSON.stringify(base + '/tab-')})) return;
+            const body = details.requestBody?.raw?.map(part => part.bytes ? new TextDecoder().decode(part.bytes) : '').join('');
+            tabRequestEvents.push({event:name, ...details, body});
+          };
+          chrome.webRequest[name].addListener(fn, {urls:['<all_urls>']}, name === 'onBeforeRequest' ? ['requestBody'] : name === 'onBeforeSendHeaders' ? ['requestHeaders'] : ['responseHeaders']);
+          return [name, fn];
+        });
+        globalThis.tabRequestPlain = [];
+        globalThis.tabRequestPlainListener = d => { if (d.url.includes('/tab-event')) tabRequestPlain.push(d); };
+        chrome.webRequest.onBeforeRequest.addListener(tabRequestPlainListener, {urls:['<all_urls>'], tabId:${ordinaryTab.id}, types:['xmlhttprequest']});
+      })()`);
+      await evaluate("chrome.storage.local.set({apiMutationObserverEnabled:true})");
+      await ordinaryTab.wc.executeJavaScript(`fetch('/tab-event', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':'fixture-csrf'}, body:JSON.stringify({fixture:'body'})}).then(r => r.text())`);
+      const tabEvents = await evaluate('tabRequestEvents');
+      for (const event of ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived']) {
+        const entries = tabEvents.filter(d => d.event === event);
+        assert.equal(entries.length, 1, `${event} should reach the extension once for the ordinary tab`);
+        assert.equal(entries[0].tabId, ordinaryTab.id);
+        assert.equal(entries[0].frameId, 0);
+        assert.equal(entries[0].type, 'xmlhttprequest');
+        assert.equal(entries[0].requestId, tabEvents[0].requestId);
+      }
+      assert.equal(tabEvents[0].body, JSON.stringify({fixture:'body'}));
+      assert(tabEvents.find(d => d.event === 'onBeforeSendHeaders').requestHeaders.some(h => h.name.toLowerCase() === 'x-csrf-token' && h.value === 'fixture-csrf'));
+      assert(tabEvents.find(d => d.event === 'onHeadersReceived').responseHeaders.some(h => h.name.toLowerCase() === 'x-murshid-fixture'));
+      const plainEvents = await evaluate('tabRequestPlain');
+      assert.equal(plainEvents.length, 1);
+      assert.equal(plainEvents[0].requestBody, undefined, 'listeners without requestBody must not receive the body');
+      const apiReplay = await evaluate(`(() => {
+        const entry = globalThis.__webbrainApiRequests.get(${ordinaryTab.id})?.find(d => d.url.endsWith('/tab-event'));
+        return entry && {entry, replay:globalThis.__webbrainApiRequestReplay.get(entry.replayRequestId)};
+      })()`);
+      assert.equal(apiReplay?.replay.body, JSON.stringify({fixture:'body'}));
+      assert.equal(apiReplay?.replay.headers['x-csrf-token'], 'fixture-csrf');
+      const otherRequestTab = ctx.windows[0].addTab({url:`${base}/other-request-tab`});
+      await waitFor(() => !otherRequestTab.wc.isLoading());
+      await otherRequestTab.wc.executeJavaScript("fetch('/tab-event').then(r => r.text())");
+      assert.equal((await evaluate('tabRequestPlain')).length, 1, 'tabId filters must exclude requests from other tabs');
+      await ordinaryTab.wc.executeJavaScript("new Promise(resolve => { const f = document.createElement('iframe'); f.src = '/child-frame'; f.onload = resolve; document.body.append(f); })");
+      await ordinaryTab.wc.mainFrame.frames[0].executeJavaScript("fetch('/tab-frame', {method:'POST',body:new Blob(['frame-body'])}).then(r => r.text())");
+      const frameEvents = await evaluate("tabRequestEvents.filter(d => d.url.endsWith('/tab-frame'))");
+      assert.equal(frameEvents.length, 3);
+      assert(frameEvents.every(d => d.tabId === ordinaryTab.id && d.frameId > 0 && d.parentFrameId === 0));
+      assert.equal(frameEvents[0].body, 'frame-body');
+      await ordinaryTab.wc.loadURL(`${base}/tab-page`);
+      const mainEvents = await evaluate("tabRequestEvents.filter(d => d.url.endsWith('/tab-page'))");
+      assert(mainEvents.some(d => d.event === 'onHeadersReceived' && d.type === 'main_frame' && d.tabId === ordinaryTab.id));
+      await evaluate(`(() => {
+        for (const [name, fn] of tabRequestListeners) chrome.webRequest[name].removeListener(fn);
+        chrome.webRequest.onBeforeRequest.removeListener(tabRequestPlainListener);
+      })()`);
+      await ordinaryTab.wc.loadURL(`${base}/late`);
+      ctx.windows[0].closeTab(otherRequestTab);
+      console.log('Ordinary-tab webRequest events preserve tab identity, request bodies, headers and API replay');
       const runDownload = (url) => evaluate(`(async () => {
         ${stagingSource}
         const observedEvents = [];
@@ -119,9 +178,9 @@ const waitFor = async (condition) => {
         'the download fixture cookie must not be exposed to page scripts');
       const [fixtureCookie] = await ctx.ses.cookies.get({ url: base, name: 'fixture-secret' });
       assert.equal(fixtureCookie?.secure, true, 'Chromium should retain the Secure cookie flag');
-      const redirectHeaders = attempt.observedEvents.find(e => e.event === 'headers' && e.url.endsWith('/download-redirect'));
+      const redirectHeaders = attempt.observedEvents.find(e => e.event === 'headers' && e.tabId === -1 && e.url.endsWith('/download-redirect'));
       assert(redirectHeaders.responseHeaders.every(h => h.name.toLowerCase() === 'location'));
-      assert.equal(attempt.observedEvents.filter(e => e.event === 'before' && e.url.endsWith('/download-redirect')).length, 1,
+      assert.equal(attempt.observedEvents.filter(e => e.event === 'before' && e.tabId === -1 && e.url.endsWith('/download-redirect')).length, 1,
         'another tab requesting the same URL must not be attributed to the offscreen document');
       const crossOrigin = (await runDownload(`${base}/download-cross-origin`)).result;
       assert.equal(crossOrigin.redirectRequiresPermission, true, JSON.stringify(crossOrigin));

@@ -146,8 +146,43 @@ class CrxBridge {
   }
 
   // Electron's session webRequest listener takes precedence over the native
-  // extension events. Relay only requests proven to belong to the current
-  // offscreen document; the worker acknowledges delivery before proceeding.
+  // extension events. Bridge browser-tab events and separately validate the
+  // current offscreen document; the worker acknowledges delivery before proceeding.
+  async forwardWebRequest(event, details) {
+    const tab = this.ctx.windows.flatMap((win) => win.tabs).find((tab) => tab.wc.id === details.webContentsId);
+    if (!tab) return this.forwardOffscreenRequest(event, details);
+    const extId = this.ctx.webBrainId;
+    const manifest = extId && this.ses.extensions.getExtension(extId)?.manifest;
+    if (tab.wc.isDestroyed() || tab.wc.session !== this.ses || !/^https?:/i.test(details.url)
+      || !manifest?.permissions?.includes('webRequest') || !manifest?.host_permissions?.includes('<all_urls>')) return;
+    const frame = details.frame;
+    const frameId = !frame ? -1 : frame === tab.wc.mainFrame ? 0 : frame.frameTreeNodeId;
+    const types = { mainFrame: 'main_frame', subFrame: 'sub_frame', xhr: 'xmlhttprequest', webSocket: 'websocket', cspReport: 'csp_report' };
+    const payload = {
+      requestId: String(details.id), tabId: tab.id, frameId,
+      parentFrameId: frameId <= 0 ? -1 : frame.parent === tab.wc.mainFrame ? 0 : (frame.parent?.frameTreeNodeId ?? -1),
+      url: details.url, method: details.method, type: types[details.resourceType] || details.resourceType,
+      timeStamp: details.timestamp, initiator: details.initiatorOrigin,
+    };
+    if (event === 'onBeforeRequest' && details.uploadData?.length) {
+      payload.requestBody = { raw: (await Promise.all(details.uploadData.map(async (part) => {
+        const bytes = part.bytes || (part.blobUUID ? await this.ses.getBlobData(part.blobUUID) : null);
+        if (bytes) return [{ bytes: Uint8Array.from(bytes).buffer }];
+        if (part.file) return [{ file: part.file }];
+        return [];
+      }))).flat() };
+    }
+    if (event === 'onBeforeSendHeaders') {
+      payload.requestHeaders = Object.entries(details.requestHeaders || {}).map(([name, value]) => ({ name, value }));
+    }
+    if (event === 'onHeadersReceived') {
+      payload.statusCode = details.statusCode;
+      payload.statusLine = details.statusLine;
+      payload.responseHeaders = Object.entries(details.responseHeaders || {}).flatMap(([name, values]) => [].concat(values).map((value) => ({ name, value })));
+    }
+    return this.deliverWebRequest(extId, event, payload);
+  }
+
   discardOffscreenRequest(id) {
     const key = String(id);
     const binding = this.offscreenRequests.get(key);
@@ -156,6 +191,7 @@ class CrxBridge {
   }
 
   async forwardOffscreenRequest(event, details) {
+    if (event !== 'onBeforeRequest' && event !== 'onHeadersReceived') return;
     if (details.resourceType !== 'xhr' || !details.frame || !details.initiatorOrigin) return;
     const extId = extIdFromUrl(`${details.initiatorOrigin}/`);
     const state = extId && this.offscreenIdentity.get(extId);
@@ -182,10 +218,9 @@ class CrxBridge {
       clearTimeout(binding.timer);
       this.offscreenRequests.delete(key);
     }
-    const worker = this.runningWorker(`chrome-extension://${extId}/`);
-    if (!worker || worker.isDestroyed() || this.requestEventAcks.size >= 512) return;
     const payload = {
       requestId: key, url: details.url, method: details.method, type: 'xmlhttprequest',
+      tabId: -1, frameId: 0, parentFrameId: -1, timeStamp: details.timestamp,
       documentId: state.documentId, initiator: details.initiatorOrigin,
       ...(event === 'onHeadersReceived' ? {
         statusCode: details.statusCode,
@@ -194,6 +229,12 @@ class CrxBridge {
         responseHeaders: Object.entries(details.responseHeaders || {}).filter(([name]) => name.toLowerCase() === 'location').flatMap(([name, values]) => [].concat(values).map((value) => ({ name, value }))),
       } : {}),
     };
+    return this.deliverWebRequest(extId, event, payload);
+  }
+
+  async deliverWebRequest(extId, event, payload) {
+    const worker = this.runningWorker(`chrome-extension://${extId}/`);
+    if (!worker || worker.isDestroyed() || this.requestEventAcks.size >= 512) return;
     const ticket = randomUUID();
     await new Promise((resolve) => {
       const timer = setTimeout(() => { this.requestEventAcks.delete(ticket); resolve(); }, 2000);
@@ -387,7 +428,7 @@ class CrxBridge {
 // ---------------------------------------------------------------- handlers
 
 CrxBridge.prototype.handlers = {
-  'murshid.ackOffscreenRequest'({ extId, worker }, ticket) {
+  'murshid.ackWebRequest'({ extId, worker }, ticket) {
     const pending = this.requestEventAcks.get(ticket);
     if (!worker || !pending || pending.extId !== extId) return;
     this.requestEventAcks.delete(ticket);

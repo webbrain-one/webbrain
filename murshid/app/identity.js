@@ -119,7 +119,7 @@ function hintHeaders(id, asked) {
 }
 
 // Chrome sends client hints only over secure connections (and to localhost).
-const SECURE = { urls: ['https://*/*', 'wss://*/*', 'http://localhost/*', 'http://127.0.0.1/*'] };
+const secureHintUrl = (url) => /^(https:|wss:|http:\/\/(?:localhost|127\.0\.0\.1)(?=[:/]|$))/i.test(url);
 
 /**
  * Make `ses` identify itself as the setting says, now and whenever it changes.
@@ -138,29 +138,30 @@ function install(ses, settings, ctx) {
   const asked = new Map();
 
   ses.webRequest.onBeforeRequest((details, callback) => {
-    Promise.resolve(ctx.crx?.forwardOffscreenRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback({}));
+    Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback({}));
   });
   ses.webRequest.onErrorOccurred((details) => ctx.crx?.discardOffscreenRequest(details.id));
 
   ses.webRequest.onHeadersReceived((details, callback) => {
-    Promise.resolve(ctx.crx?.forwardOffscreenRequest('onHeadersReceived', details)).catch(() => {}).finally(() => callback({}));
+    Promise.resolve(ctx.crx?.forwardWebRequest('onHeadersReceived', details)).catch(() => {}).finally(() => callback({}));
     if (details.resourceType !== 'mainFrame') return;
-    if (!/^(https:|wss:|http:\/\/(?:localhost|127\.0\.0\.1)(?=[:/]|$))/i.test(details.url)) return;
+    if (!secureHintUrl(details.url)) return;
     const header = Object.entries(details.responseHeaders || {}).find(([k]) => k.toLowerCase() === 'accept-ch');
     if (!header) return;
     const names = [].concat(header[1]).join(',').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     try { asked.set(new URL(details.url).origin, new Set(names)); } catch {}
   });
 
-  ses.webRequest.onBeforeSendHeaders(SECURE, (details, callback) => {
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
     let origin = '';
     try { origin = new URL(details.url).origin; } catch {}
     const requestHeaders = {};
     for (const [name, value] of Object.entries(details.requestHeaders)) {
-      if (!/^sec-ch-ua/i.test(name)) requestHeaders[name] = value;
+      if (!secureHintUrl(details.url) || !/^sec-ch-ua/i.test(name)) requestHeaders[name] = value;
     }
-    Object.assign(requestHeaders, hintHeaders(id, asked.get(origin)));
-    callback({ requestHeaders });
+    if (secureHintUrl(details.url)) Object.assign(requestHeaders, hintHeaders(id, asked.get(origin)));
+    Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeSendHeaders', { ...details, requestHeaders }))
+      .catch(() => {}).finally(() => callback({ requestHeaders }));
   });
 
   ipcMain.on('murshid-identity', (event) => {
