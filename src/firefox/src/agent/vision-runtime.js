@@ -1197,8 +1197,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
           const at = name === 'hover_at' ? { x: args.x, y: args.y, image: args.image }
             : name === 'drag_at' ? { x: args.start_x, y: args.start_y, image: args.image } : null;
           const point = at ? session.resolvePoint(at) : null;
+          // A wheel binds no element, but its point (where scroll_at will
+          // send it) finds the embedded frame it goes to, which is prepared
+          // with the top document (page-feedback.js prepareReceiverFrame).
+          const wheel = name !== 'scroll_at' ? null : args.x != null && args.y != null
+            ? session.resolvePoint({ x: args.x, y: args.y, image: args.image })
+            : session.keyframe ? { ok: true, cssX: session.keyframe.cssWidth / 2, cssY: session.keyframe.cssHeight / 2 } : null;
           translated = { ...call, _vision: { tool: name, needsStabilityCheck: recheck,
-            ...(point?.ok ? { monitorPoint: { x: point.cssX, y: point.cssY } } : {}) } };
+            ...(point?.ok ? { monitorPoint: { x: point.cssX, y: point.cssY } } : {}),
+            ...(wheel?.ok ? { wheelPoint: { x: wheel.cssX, y: wheel.cssY } } : {}) } };
         }
       } else if (VISION_TYPING_TOOLS.has(name) && clickedAt) {
         translated = { ...call, _vision: { tool: name, focusFollowUp: { ...clickedAt } } };

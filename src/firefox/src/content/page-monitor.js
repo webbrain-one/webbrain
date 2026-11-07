@@ -2710,21 +2710,42 @@
       || ['x', 'y', 'width', 'height'].some(key => Math.abs(previousRect[key] - currentRect[key]) > 2)));
   }
   // The same for a point of the top document whose native input the browser
-  // routes into this frame (agent page-feedback.js beforePageAgentDispatch).
-  // That point is not one of this document's, so each command's own mark
-  // (nativeTarget, the node the browser's hit test found under it) must name
-  // the node first hit here, or one inside it, and that node must not have
-  // moved.
+  // routes into this frame (agent page-feedback.js prepareReceiverFrame).
+  // That point is not one of this document's: the node the browser's hit
+  // test found under it at preparation must still be there and not have
+  // moved, and a command at that point must reach it (its own mark,
+  // nativeTarget, names that node or one inside it). A command elsewhere (a
+  // hover's approach, a drag's later moves) is held by the node alone.
   function frameReceiverUnchanged(op, params = {}) {
     const initialHit = op.frameReceiverHit;
+    const previousRect = op.frameReceiverRect, currentRect = rectFor(initialHit);
+    if (!initialHit?.isConnected || !previousRect || !currentRect
+      || ['x', 'y', 'width', 'height'].some(key => Math.abs(previousRect[key] - currentRect[key]) > 2)) return false;
+    if (!atFrameReceiverPoint(op, params)) return true;
     const currentHit = typeof params.nativeTarget === 'string' && params.nativeTarget
       ? resolveTarget({ nativeTarget: params.nativeTarget }) : null;
-    if (!initialHit?.isConnected || !currentHit) return false;
-    if (initialHit !== currentHit && (initialHit === document.body || initialHit === document.documentElement
-      || !initialHit.contains(currentHit))) return false;
-    const previousRect = op.frameReceiverRect, currentRect = rectFor(initialHit);
-    return !!previousRect && !!currentRect
-      && ['x', 'y', 'width', 'height'].every(key => Math.abs(previousRect[key] - currentRect[key]) <= 2);
+    return !!currentHit && (initialHit === currentHit || (initialHit !== document.body
+      && initialHit !== document.documentElement && initialHit.contains(currentHit)));
+  }
+  function atFrameReceiverPoint(op, params = {}) {
+    const point = op.frameReceiverPoint;
+    return !point || !Number.isFinite(params.x) || !Number.isFinite(params.y)
+      || (Math.abs(params.x - point.x) < 0.5 && Math.abs(params.y - point.y) < 0.5);
+  }
+  // Its counterpart of coordinatePreparationShifted. Until a command at the
+  // point was checked, a change with no revision of this document (the frame
+  // moved in its parent, a scroll) is a layout change as well.
+  function frameReceiverShifted(op, params = {}) {
+    if (op.frameReceiverPointChecked || op.layoutInvalidated || op.preparedRevision !== revision) return false;
+    if (frameReceiverUnchanged(op, params)) {
+      if (atFrameReceiverPoint(op, params)) op.frameReceiverPointChecked = true;
+      return false;
+    }
+    op.layoutInvalidated = true;
+    revision++; publishRevision();
+    const target = op.frameReceiverHit?.isConnected ? op.frameReceiverHit : document.body;
+    send({ kind: 'dom', source: layoutAgentUserAt(target) !== undefined ? 'agent' : 'page', target: target ? targetName(target) : '' });
+    return true;
   }
   function rebaseVisionPreparation(op, params = {}) {
     // Like a certified target or a scroll, only a person's intervention is an
@@ -3658,15 +3679,28 @@
       coordinateSensitive, coordinateTarget, coordinateHit, coordinateTargetAtPoint,
       coordinatePoint: coordinateSensitive ? { x: params.x, y: params.y } : null,
       coordinateRect: rectFor(coordinateTarget),
-      // A vision point in the top document whose input reaches this frame
-      // (frameReceiverUnchanged): the node the browser hit when it first did.
+      // A vision point of the top document whose input reaches this frame
+      // (frameReceiverUnchanged): the node the browser's hit test found
+      // there when the operation was prepared, and that point.
       ...(params.frameReceiver === true && params.visionPoint === true
-        ? { frameReceiverHit: target, frameReceiverRect: rectFor(target) } : {}),
+        ? { frameReceiverHit: target, frameReceiverRect: rectFor(target), frameReceiverPoint: finitePoint(params.receiverPoint) } : {}),
       until: Date.now() + 30000, dispatched: false, pointerPreparationOnly: false, selectorPreparationOnly: false, consequentialInputPending: false, userAt: lastUserAt, preparedRevision: revision });
-    return proofRequired ? { modelBindingValid: !!certified,
+    const result = proofRequired ? { modelBindingValid: !!certified,
       ...(certified?.relaxed ? { relaxed: true, bindingKind: 'relaxed_target' } : {}),
       ...(bindingResult?.reason ? { reason: bindingResult.reason } : {}),
       ...(bindingResult?.certificationFailure ? { certificationFailure: bindingResult.certificationFailure } : {}) } : {};
+    // A vision operation's native input reaches the embedded frame at its
+    // point (or holding focus); the agent then prepares that frame as well
+    // (page-feedback.js prepareReceiverFrame).
+    if (params.frameReceiver !== true && visionOperation(params)) {
+      const point = finitePoint(params.receiverPoint);
+      const receiver = params.visionFocusFollowUp === true ? deepActiveElement() : point ? deepElementFromPoint(point.x, point.y) : null;
+      if (/^(IFRAME|FRAME)$/.test(receiver?.tagName || '')) result.receiverFrame = true;
+    }
+    return result;
+  }
+  function finitePoint(point) {
+    return Number.isFinite(point?.x) && Number.isFinite(point?.y) ? { x: point.x, y: point.y } : null;
   }
   // The second argument is private producer provenance, never message/model params.
   function dispatch(params, selectorPreparationOnly = false, typingPreparationOnly = false) {
@@ -4093,7 +4127,8 @@
       }
       const prepared = operations.get(params.operationId);
       if (!params.release) { flushPendingMutations(prepared); sampleFormControls(prepared?.target); }
-      const layoutChanged = !params.release && active && coordinatePreparationShifted(prepared);
+      const layoutChanged = !params.release && active && (prepared?.frameReceiver === true && prepared.visionPoint === true
+        ? frameReceiverShifted(prepared, params) : coordinatePreparationShifted(prepared));
       const bindingChanged = !params.release && preparedBindingChanged(prepared);
       const receiverPredicate = !params.release ? nativeReceiverPredicate(prepared, params) : '';
       const rebased = !params.release && !layoutChanged && !receiverPredicate && rebasePassivePreparation(prepared, params);

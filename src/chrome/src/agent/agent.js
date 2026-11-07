@@ -38655,6 +38655,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  // page-feedback.js prepareReceiverFrame: the node a vision action's native
+  // input would reach now (under its CSS point, or with `focused` the focused
+  // one), marked for its document's page monitor by the walk each input
+  // command takes, so the embedded frame it is in can be prepared with the
+  // top document.
+  async _pageFeedbackInputReceiver(tabId, target) {
+    return cdpClient.markPageAgentInputReceiver(tabId, target);
+  }
+
   _skillPermissionArgsForCapability(skillTool, capability, args) {
     if (
       isTrustedChromeWebStoreSkillTool(skillTool)

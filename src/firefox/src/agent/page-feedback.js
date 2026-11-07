@@ -299,8 +299,42 @@ function preparationVetoError(cause, monitorVeto = null, ownerPendingAfter = fal
 }
 
 // The embedded frames each operation was prepared in as the receiver of its
-// native input (beforePageAgentDispatch), by the operation's frame set.
+// native input (prepareReceiverFrame), by the operation's frame set.
 const receiverPreparations = new WeakMap();
+
+/**
+ * A vision operation is prepared in the top document at its point. When the
+ * top document finds an embedded frame there (or focus in one), Chrome will
+ * deliver the operation's native input into that frame's document, and its
+ * monitor fences each command (beforePageAgentDispatch). Prepare it there
+ * too, now: bound to the node the browser's own hit test (or focus) finds
+ * there (agent._pageFeedbackInputReceiver marks it, as each command does),
+ * never to the top document's coordinates. A change in that frame between
+ * now and the first command then refuses the input as the same change in
+ * the top document would. Firefox defines no receiver hook and never routes
+ * vision input to a frame's monitor.
+ */
+async function prepareReceiverFrame(agent, api, tabId, owner, { runToken, operationId, binding, point, allowPassiveRebase }) {
+  if (typeof agent._pageFeedbackInputReceiver !== 'function') return;
+  let receiver = null;
+  try { receiver = await agent._pageFeedbackInputReceiver(tabId, binding.visionFocusFollowUp ? { focused: true } : point); }
+  catch { /* Unresolved: input that reaches a frame is refused there. */ }
+  const frames = owner.operationFrames.get(operationId);
+  const frameId = typeof receiver?.documentToken === 'string' ? owner.frameForDocument(receiver.documentToken) : undefined;
+  if (!Number.isSafeInteger(frameId) || frameId <= 0 || typeof receiver.nativeTarget !== 'string' || !receiver.nativeTarget
+      || !frames || dispatchOwners.get(tabId) !== owner || owner.operationId !== operationId) return;
+  frames.add(frameId);
+  let prepared;
+  try {
+    prepared = await api.tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare', params: {
+      ...binding, frameReceiver: true, runToken, operationId, allowPassiveRebase: allowPassiveRebase === true,
+      nativeTarget: receiver.nativeTarget, ...(point ? { receiverPoint: { x: point.x, y: point.y } } : {}),
+    } }, { frameId });
+  } catch { /* No monitor answered: its input is refused. */ }
+  if (prepared?.ready !== true || owner.operationFrames.get(operationId) !== frames) return;
+  if (!receiverPreparations.has(frames)) receiverPreparations.set(frames, new Set());
+  receiverPreparations.get(frames).add(frameId);
+}
 
 /** Called at the transport boundary, not while a selector/permission is being prepared. */
 export async function beforePageAgentDispatch(api, tabId, details = {}) {
@@ -339,35 +373,18 @@ export async function beforePageAgentDispatch(api, tabId, details = {}) {
       error.code = 'page_feedback_pending'; error.pagePreparationVeto = { cause: 'receiver_frame_changed' }; throw error;
     }
   }
-  // A vision operation is prepared in the top document, at its point. Chrome
-  // delivers trusted input at that point into the document under it, an
-  // embedded frame's included, whose monitor then fences every command but
-  // never saw the preparation: it let the first command through unfenced and
-  // refused the next one as a change (QA B2). Prepare the operation there
-  // before its first command, bound to the node the browser's hit test marked
-  // (nativeTarget), not to the top document's coordinates.
+  // Chrome delivers a vision operation's trusted input at its point (or into
+  // the focused field) to the document there, an embedded frame's included,
+  // whose monitor then fences every command. That frame was prepared with
+  // the top document (prepareReceiverFrame). Input reaching a frame that was
+  // not, say one moved under the point or focused since, is refused: its
+  // monitor holds no preparation to judge it by (QA B2).
   const receiverFrameId = Number(details.frameId) || 0;
-  const operationFrames = operationId === owner.operationId ? owner.operationFrames.get(operationId) : null;
-  const frameReceiver = !details.release && details.nativeInput === true && receiverFrameId > 0 && operationFrames
-    && !receiverPreparations.get(operationFrames)?.has(receiverFrameId) ? owner.frameReceiver?.() : null;
-  if (frameReceiver) {
-    let prepared;
-    try {
-      prepared = await api.tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare', params: {
-        ...frameReceiver, frameReceiver: true, runToken: owner.runToken, operationId,
-        allowPassiveRebase: owner.allowPassiveRebase?.() === true,
-        ...(typeof details.nativeTarget === 'string' ? { nativeTarget: details.nativeTarget } : {}),
-      } }, { frameId: receiverFrameId });
-    } catch { /* A frame without a monitor answers no dispatch fence either. */ }
-    if (dispatchOwners.get(tabId) !== owner) {
-      const error = new Error('Browser run ended before dispatch'); error.name = 'AbortError';
-      error.pagePreparationVeto = { cause: 'owner_ended' }; throw error;
-    }
-    // Once only: preparing again between two commands would reset the fence.
-    if (prepared?.ready === true) {
-      if (!receiverPreparations.has(operationFrames)) receiverPreparations.set(operationFrames, new Set());
-      receiverPreparations.get(operationFrames).add(receiverFrameId);
-    }
+  if (!details.release && details.nativeInput === true && receiverFrameId > 0 && operationId === owner.operationId
+      && owner.frameReceiver?.()
+      && !receiverPreparations.get(owner.operationFrames.get(operationId))?.has(receiverFrameId)) {
+    const error = new Error(pageFeedbackPendingResult().error);
+    error.code = 'page_feedback_pending'; error.pagePreparationVeto = { cause: 'receiver_frame_changed' }; throw error;
   }
   owner.operationFrames.get(owner.operationId)?.add(receiverFrameId);
   const monitorParams = { ...dispatchDetails, runToken: owner.runToken, operationId };
@@ -531,7 +548,8 @@ export const pageFeedbackMethods = {
       // The current call acts on a certified node of the top document.
       modelBound: () => !!run.dispatchCall?.expectedModelSnapshot,
       // The current call's vision binding (a point, the field its click
-      // focused, or a wheel), for a frame its native input reaches.
+      // focused, or a wheel): its native input may reach only an embedded
+      // frame prepared with it (prepareReceiverFrame).
       frameReceiver: () => run.dispatchCall?.frameReceiver || null,
       pending: () => this._pageFeedbackBlocksCall(tabId, run.dispatchCall?.policyName || run.dispatchCall?.name,
         run.dispatchCall?.args, run.dispatchCall?.blockOptions),
@@ -2054,9 +2072,10 @@ export function installPageFeedback(Agent) {
     const visionBinding = { ...(visionPoint ? { visionPoint: true } : {}), ...(focusFollowUp ? { visionFocusFollowUp: true } : {}),
       ...(name === 'scroll_at' ? { visionWheel: true } : {}) };
     // The top document holds that point. Native input at it can reach an
-    // embedded frame's document, whose monitor gets the same binding when
-    // the input first arrives there (beforePageAgentDispatch).
+    // embedded frame's document, whose monitor is prepared with the same
+    // binding (prepareReceiverFrame). A wheel's point only finds that frame.
     const frameReceiver = Object.keys(visionBinding).length ? { tool: name, ...visionBinding } : null;
+    const receiverPoint = visionPoint || (name === 'scroll_at' ? vision?.wheelPoint || null : null);
     if (run) run.dispatchCall = { name, args, allowPassiveRebase: false, dispatchState, expectedModelSnapshot, modelState, mutation, batchId,
       ...(policyName !== name ? { policyName } : {}), ...(focusFollowUp ? { blockOptions } : {}),
       ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}), ...(frameReceiver ? { frameReceiver } : {}) };
@@ -2070,11 +2089,16 @@ export function installPageFeedback(Agent) {
         prepared = await apiFor().tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare',
           params: { ...safeAction(name, args), runToken: run.token, operationId, allowPassiveRebase: allowPassiveRebase === true,
             ...visionBinding, ...(visionPoint ? { x: visionPoint.x, y: visionPoint.y } : {}),
+            ...(receiverPoint ? { receiverPoint: { x: receiverPoint.x, y: receiverPoint.y } } : {}),
             ...(batchId ? { batchId } : {}),
             ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}),
             ...(expectedModelSnapshot ? { expectedModelSnapshot } : {}),
             ...(modelHeldMs > 0 ? { modelHeldMs } : {}) } }, { frameId: 0 });
       } catch {}
+      if (frameReceiver && prepared?.receiverFrame === true && (receiverPoint || focusFollowUp)) {
+        await prepareReceiverFrame(this, apiFor(), tabId, owner, { runToken: run.token, operationId, binding: frameReceiver,
+          point: focusFollowUp ? null : receiverPoint, allowPassiveRebase });
+      }
       // Certified targets keep their pre-inference footprint across passive
       // updates during preparation; legacy preparation retains its revision fence.
       if ((modelBound ? prepared?.ready === true && prepared.modelBindingValid === true
