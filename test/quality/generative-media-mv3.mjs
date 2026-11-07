@@ -197,6 +197,7 @@ try {
   const pageA = await context.newPage(); await pageA.goto(`${base}/fixture-a`);
   tabA = await harness.evaluate(async url => (await chrome.tabs.query({})).find(tab => tab.url === url)?.id, pageA.url()); assert.ok(tabA);
   await openNativePanel(tabA);
+  const panelA = panel;
   console.log(JSON.stringify({ phase: 'native-panel-ready' }));
 
   await start('hosted');
@@ -262,7 +263,9 @@ try {
   await panel.locator('.generated-media img').waitFor(); assert.equal((await imageHash('.generated-media img')).sha256, sha(assets.newer));
   assert.equal(await panel.locator('.generated-media').count(), 1); assert.equal(await panel.locator('#user-input').inputValue(), 'Newer unsent draft B: preserve after completion.');
   assert.ok(lateHistoryResponded); assert.ok(!views.includes('cancelled')); assert.equal(jobs.filter(job => job.kind === 'cancelled').length, 1); assert.equal(jobs.filter(job => job.kind === 'newer').length, 1);
-  await harness.evaluate(tabId => chrome.tabs.update(tabId, { active: true }), tabA); panel = await visibleNativePanel(); await until(() => panel.locator('.generated-media').count().then(count => count === 2), 'original tab retains only its two finished assets');
+  // Headless Chromium can render animation frames for both tab-specific panel
+  // documents. Reuse tab A's actual panel instead of selecting the first one.
+  await harness.evaluate(tabId => chrome.tabs.update(tabId, { active: true }), tabA); panel = panelA; await until(() => panel.locator('.generated-media').count().then(count => count === 2), 'original tab retains only its two finished assets');
   assert.equal(await panel.locator('#user-input').inputValue(), 'Unsent draft A: keep this literal text.');
   const allEvents = await currentEvents();
   assert.ok(!allEvents.some(event => event.tabId === tabA && event.type === 'tool_result' && event.data?.name === 'generate_image' && event.data?.result?.url?.includes('cancelled.png')));
