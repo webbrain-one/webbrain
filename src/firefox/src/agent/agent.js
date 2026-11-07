@@ -43222,9 +43222,28 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Memory acknowledgement adds a prerequisite. The current permission,
       // original target, feedback, cancellation and completion guards still run.
       this._throwIfAborted(linked.signal);
+      const guardAtDispatch = this._planExecutionGuards.get(tabId);
+      if (prepared.reservation && guardAtDispatch?.enabled && guardAtDispatch.taskKey
+          && this._progressTaskKeyHash(tabId) === guardAtDispatch.taskKey) {
+        prepared.executionTaskKey = guardAtDispatch.taskKey;
+        prepared.executionGuard = guardAtDispatch;
+      }
       const result = await this._executeToolWithLifecycle(tabId, name, args, onUpdate, executionContext);
-      try { await memory.afterTool(tabId, name, args || {}, result, prepared); }
-      catch { if (result && typeof result === 'object') result.botMemoryWarning = 'Action history could not be reconciled; its outcome remains uncertain.'; }
+      try {
+        const reconciled = await memory.afterTool(tabId, name, args || {}, result, prepared);
+        const guard = this._planExecutionGuards.get(tabId);
+        for (const action of reconciled || []) {
+          if (!guard?.enabled || guard !== action.guard || guard.taskDrifted || !guard.taskKey || action.taskKey !== guard.taskKey
+              || this._progressTaskKeyHash(tabId) !== guard.taskKey) continue;
+          const counted = guard.successfulConsequentialActionKeys instanceof Set ? guard.successfulConsequentialActionKeys : new Set();
+          const key = `bot-memory:${action.attemptId}`;
+          if (counted.has(key)) continue;
+          counted.add(key);
+          guard.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
+          guard.successfulConsequentialToolCalls = Number(guard.successfulConsequentialToolCalls || 0) + 1;
+          guard.evidenceTaskKey = guard.taskKey;
+        }
+      } catch { if (result && typeof result === 'object') result.botMemoryWarning = 'Action history could not be reconciled; its outcome remains uncertain.'; }
       if (prepared.reservation && result && typeof result === 'object') result.memoryAttemptId = prepared.reservation.attemptId;
       return result;
     } finally { linked.dispose(); }

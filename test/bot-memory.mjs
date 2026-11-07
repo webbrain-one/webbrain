@@ -68,6 +68,38 @@ for (const browser of ['chrome', 'firefox']) {
     assert.match(evidence.facts.readResult, /Reminder sent/);
     assert.equal(h.session.pending.size, 0);
   });
+  test(`${browser}: reconciles only the current acknowledged and independently verified native navigation`, async () => {
+    for (const scenario of ['verified', 'missing-ack', 'wrong-page', 'different-task', 'new-run', 'unverified', 'wrong-attempt']) {
+      const h = harness(); let taskKey = 'task-1'; let navigated = false;
+      const guard = { enabled: true, taskKey, successfulConsequentialToolCalls: 0,
+        successfulConsequentialActionKeys: new Set(), requiresSubmission: true, verifiedSubmissionEvidence: false };
+      h.agent._planExecutionGuards.set(7, guard);
+      h.agent._progressTaskKeyHash = () => taskKey;
+      h.session.observe = async (_tab, args) => ({ ...observed(args.memoryReadResult),
+        url: navigated ? (scenario === 'wrong-page' ? 'https://example.test/other' : 'https://example.test/receipt') : target.url });
+      const originalFetch = h.session.fetchImpl;
+      h.session.fetchImpl = async (url, options) => {
+        const request = JSON.parse(options.body);
+        if (request.operation === 'verify' && scenario === 'unverified') return Response.json({ status: 'dispatched' });
+        if (request.operation === 'verify' && scenario === 'wrong-attempt') return Response.json({ attempt: { id: 'other-attempt', status: 'verified' } });
+        return originalFetch(url, options);
+      };
+      h.agent._executeToolWithLifecycle = async (_tab, name) => name === 'read_page'
+        ? { success: true, text: 'Receipt for invoice 103.' }
+        : { success: false, dispatched: true, nativeInputAcknowledged: scenario !== 'missing-ack',
+            observationInterrupted: true, outcomeUnknown: true };
+      const action = await h.agent.executeTool(7, 'click_ax', { ref_id: 'ref_5' });
+      // The outer agent records the observed navigation after executeTool returns.
+      Object.assign(action, { pageUrlChanged: true, previousUrl: target.url, currentUrl: 'https://example.test/receipt' });
+      navigated = true;
+      if (scenario === 'different-task') taskKey = 'task-2';
+      if (scenario === 'new-run') h.agent._planExecutionGuards.set(7, { ...guard, successfulConsequentialActionKeys: new Set() });
+      await h.agent.executeTool(7, 'read_page', {});
+      assert.equal(h.agent._planExecutionGuards.get(7).successfulConsequentialToolCalls, scenario === 'verified' ? 1 : 0, scenario);
+      assert.equal(guard.verifiedSubmissionEvidence, false, 'memory reconciliation cannot satisfy a separate submission contract');
+      await h.session.close();
+    }
+  });
   test(`${browser}: callback fetch keeps the browser global receiver`, async () => {
     const session = new BotMemorySession(config(), { fetchImpl: async function (_url, options) {
       assert.equal(this, globalThis, 'Native browser fetch rejects a session object receiver');
