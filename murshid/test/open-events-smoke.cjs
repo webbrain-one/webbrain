@@ -112,15 +112,17 @@ const waitFor = async (condition) => {
       await evaluate('addressListeners.forEach(([name, fn]) => chrome.webRequest[name].removeListener(fn))');
       await evaluate("chrome.storage.local.set({agentAllowLocalNetwork:false})");
       const publicLookingUrl = `http://public.example:${server.address().port}/address-final`;
+      const fixturePort = Number(server.address().port);
+      await evaluate(`globalThis.testAddressUrl = 'http://public.example:' + ${fixturePort} + '/address-final'`);
       const networkSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/network/network-tools.js'), 'utf8');
       const guardSource = networkSource.slice(networkSource.indexOf('export function validateFetchUrl('), networkSource.indexOf('// ─── Same-eTLD+1 cookie policy'))
         .replace(/^export /gm, '');
       await evaluate(`(() => { ${guardSource}\n globalThis.testWatchFetchAddresses = watchFetchAddresses; globalThis.testWatchResponseAddresses = watchResponseAddresses; globalThis.testValidateFetchUrl = validateFetchUrl; globalThis.testValidateResolvedAddress = validateResolvedAddress; })()`);
-      assert.equal((await evaluate(`testValidateFetchUrl(${JSON.stringify(publicLookingUrl)}, {allowLocalNetwork:false})`)).ok, true);
+      assert.equal((await evaluate('testValidateFetchUrl(testAddressUrl, {allowLocalNetwork:false})')).ok, true);
       assert.equal((await evaluate("testValidateResolvedAddress('unavailable', {allowLocalNetwork:true})")).ok, false);
-      const blockedAddress = await evaluate(`(async () => { const watcher = testWatchFetchAddresses(${JSON.stringify(publicLookingUrl)}, false); try { await fetch(${JSON.stringify(publicLookingUrl)}); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()`);
+      const blockedAddress = await evaluate("(async () => { const watcher = testWatchFetchAddresses(testAddressUrl, false); try { await fetch(testAddressUrl); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()");
       assert.match(blockedAddress, /blocked address/i, String(blockedAddress));
-      const allowedAddress = await evaluate(`(async () => { const watcher = testWatchFetchAddresses(${JSON.stringify(publicLookingUrl)}, true); try { await fetch(${JSON.stringify(publicLookingUrl)}); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()`);
+      const allowedAddress = await evaluate("(async () => { const watcher = testWatchFetchAddresses(testAddressUrl, true); try { await fetch(testAddressUrl); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()");
       assert.equal(allowedAddress, null);
       await evaluate("globalThis.testResearchWatcher = testWatchResponseAddresses({types:['main_frame']}, d => d.tabId, false)");
       const researchTab = ctx.windows[0].addTab({ url: publicLookingUrl, active: false });
