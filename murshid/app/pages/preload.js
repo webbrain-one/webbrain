@@ -7,7 +7,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 if (typeof location !== 'undefined' && location.protocol === 'murshid:' && window.top === window) {
+  // The page itself arrives translated; these strings are for what pages.js fills in.
+  let i18n = { locale: 'en', dir: 'ltr', strings: {} };
+  try { i18n = ipcRenderer.sendSync('murshid-i18n') || i18n; } catch {}
   contextBridge.exposeInMainWorld('murshid', {
+    i18n,
     info: () => ipcRenderer.invoke('murshid-page', 'info'),
     settings: () => ipcRenderer.invoke('murshid-page', 'settings'),
     setSetting: (key, value) => ipcRenderer.invoke('murshid-page', 'setSetting', key, value),

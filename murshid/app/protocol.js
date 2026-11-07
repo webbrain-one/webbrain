@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const paths = require('./paths');
+const i18n = require('./i18n');
 
 const PAGES = {
   newtab: 'newtab.html',
@@ -47,6 +48,11 @@ function handleProtocol(ses) {
     }
     if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
       return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain' } });
+    }
+    // Pages are templates: they arrive in the interface language (app/i18n.js).
+    if (file.startsWith(pagesDir) && file.endsWith('.html')) {
+      const html = i18n.renderTemplate(fs.readFileSync(file, 'utf8'));
+      return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
     return net.fetch(pathToFileURL(file).href);
   });

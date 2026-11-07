@@ -51,7 +51,7 @@ h1 em { color: var(--crimson); }
 .row + .row { border-top: 1px solid var(--line); }
 .row label, .row .k { font-weight: 600; }
 .row small { display: block; color: var(--muted); font-weight: 400; }
-.row .v { color: var(--muted); text-align: right; word-break: break-all; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
+.row .v { color: var(--muted); text-align: end; word-break: break-all; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 180px; }
 input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: var(--crimson); }
 
@@ -82,7 +82,7 @@ input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: va
 .start h1 { font-size: 54px; margin-bottom: 26px; }
 .search {
   display: flex; align-items: center; gap: 10px;
-  height: 54px; padding: 0 8px 0 20px;
+  height: 54px; padding-block: 0; padding-inline: 20px 8px;
   border-radius: 27px; border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 14px 40px -28px rgba(42, 29, 22, .5);
@@ -92,3 +92,17 @@ input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: va
 .search button { height: 40px; padding: 0 18px; border-radius: 20px; border: 0; background: var(--crimson); color: #fbf3e4; font-weight: 600; cursor: pointer; }
 .start .actions { justify-content: center; }
 .hint { color: var(--muted); font-size: 13px; margin-top: 18px; }
+
+/* Arabic and Persian: Arabic-script faces, and no letter spacing or italics,
+   which break the joined letters. */
+:lang(ar), :lang(fa) { --arabic-text: "Segoe UI", "Noto Sans Arabic", "Vazirmatn", Tahoma, system-ui, sans-serif; }
+:lang(ar) body, :lang(fa) body { font-family: var(--arabic-text); line-height: 1.7; }
+:lang(ar) h1, :lang(fa) h1 {
+  font-family: "Noto Naskh Arabic", "Amiri", "Traditional Arabic", var(--arabic-text);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+:lang(ar) h1 em, :lang(fa) h1 em { font-style: normal; }
+:lang(ar) .start h1, :lang(fa) .start h1 { font-size: 46px; }
+[dir="rtl"] .row .v[dir="ltr"] { text-align: left; }

@@ -1,38 +1,42 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
-<title>Settings</title>
+<title>{{t:page.settings.title}}</title>
 <link rel="stylesheet" href="pages.css">
 </head>
 <body data-page="settings">
 <main class="wrap">
-  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span>Murshid</span></div>
-  <h1>Settings</h1>
-  <p class="lede">WebBrain keeps its own settings in its side panel (model, providers, permissions). These are Murshid's.</p>
+  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span lang="en" dir="ltr">Murshid</span></div>
+  <h1>{{rich:page.settings.heading}}</h1>
+  <p class="lede">{{t:page.settings.lede}}</p>
   <div class="panel">
     <div class="row">
-      <label for="engine">Search engine<small>Used by the address bar and WebBrain's Search.</small></label>
+      <label for="language">{{t:page.settings.language}}<small>{{t:page.settings.languageHelp}}</small></label>
+      <select id="language"></select>
+    </div>
+    <div class="row">
+      <label for="engine">{{t:page.settings.engine}}<small>{{t:page.settings.engineHelp}}</small></label>
       <select id="engine"></select>
     </div>
     <div class="row">
-      <label for="companion">Start WebBrain Companion with Murshid<small>Starts the tray app in the background if it is installed and not already running.</small></label>
+      <label for="companion">{{t:page.settings.companion}}<small>{{t:page.settings.companionHelp}}</small></label>
       <input id="companion" type="checkbox">
     </div>
     <div class="row">
-      <label for="as-chrome">Identify as Google Chrome<small>Sites see Murshid as a Chromium browser, the way they see Brave. Turn this on to present it as Google Chrome instead, as Vivaldi does, if a site refuses or limits Murshid. Pages you load after the change see it.</small></label>
+      <label for="as-chrome">{{t:page.settings.asChrome}}<small>{{t:page.settings.asChromeHelp}}</small></label>
       <input id="as-chrome" type="checkbox">
     </div>
     <div class="row">
-      <label for="persist-session">Keep browser data between sessions<small>When off, cookies and site storage are temporary, and WebBrain is unavailable. Restart Murshid to apply. Previously saved data remains available if you turn this back on.</small></label>
+      <label for="persist-session">{{t:page.settings.persist}}<small>{{t:page.settings.persistHelp}}</small></label>
       <input id="persist-session" type="checkbox">
     </div>
   </div>
   <div class="actions">
-    <button class="button" id="webbrain" type="button">Open WebBrain</button>
-    <button class="button" id="open-companion" type="button">WebBrain Companion</button>
-    <a class="button" href="murshid://about">About Murshid</a>
+    <button class="button" id="webbrain" type="button">{{t:page.openWebBrain}}</button>
+    <button class="button" id="open-companion" type="button">{{t:page.companion}}</button>
+    <a class="button" href="murshid://about">{{t:page.aboutMurshid}}</a>
   </div>
 </main>
 <script src="pages.js"></script>

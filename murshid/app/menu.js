@@ -1,6 +1,7 @@
 'use strict';
 
 const { Menu, clipboard, shell } = require('electron');
+const { t, number, percent } = require('./i18n');
 
 const isMac = process.platform === 'darwin';
 
@@ -12,83 +13,98 @@ function installAppMenu(ctx) {
   }
   const c = ctx.commands.run;
   const w = () => ctx.lastFocusedWindow();
-  const item = (label, accelerator, fn) => ({ label, accelerator, click: () => fn(w()) });
+  const item = (key, accelerator, fn) => ({ label: t(key), accelerator, click: () => fn(w()) });
+  const role = (name, key) => ({ role: name, label: t(key) });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
       label: 'Murshid',
       submenu: [
-        item('About Murshid', undefined, c.about),
+        item('mac.about', undefined, c.about),
         { type: 'separator' },
-        item('Settings…', 'Cmd+,', c.settings),
+        item('mac.settings', 'Cmd+,', c.settings),
         { type: 'separator' },
-        { role: 'services' },
+        role('services', 'mac.services'),
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        role('hide', 'mac.hide'),
+        role('hideOthers', 'mac.hideOthers'),
+        role('unhide', 'mac.unhide'),
         { type: 'separator' },
-        { label: 'Quit Murshid', accelerator: 'Cmd+Q', click: () => ctx.quit() },
+        { label: t('mac.quit'), accelerator: 'Cmd+Q', click: () => ctx.quit() },
       ],
     },
     {
-      label: 'File',
+      label: t('mac.file'),
       submenu: [
-        item('New Tab', 'Cmd+T', c.newTab),
-        item('New Window', 'Cmd+N', c.newWindow),
-        item('Reopen Closed Tab', 'Cmd+Shift+T', c.reopenTab),
-        item('Open Location…', 'Cmd+L', c.focusOmnibox),
+        item('mac.newTab', 'Cmd+T', c.newTab),
+        item('mac.newWindow', 'Cmd+N', c.newWindow),
+        item('mac.reopenTab', 'Cmd+Shift+T', c.reopenTab),
+        item('mac.openLocation', 'Cmd+L', c.focusOmnibox),
         { type: 'separator' },
-        item('Close Tab', 'Cmd+W', c.closeTab),
-        item('Close Window', 'Cmd+Shift+W', c.closeWindow),
+        item('mac.closeTab', 'Cmd+W', c.closeTab),
+        item('mac.closeWindow', 'Cmd+Shift+W', c.closeWindow),
         { type: 'separator' },
-        item('Print…', 'Cmd+P', c.print),
+        item('mac.print', 'Cmd+P', c.print),
       ],
     },
     {
-      label: 'Edit',
+      label: t('mac.edit'),
       submenu: [
-        { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
-        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'pasteAndMatchStyle' },
-        { role: 'delete' }, { role: 'selectAll' }, { type: 'separator' },
-        item('Find…', 'Cmd+F', c.find),
-        item('Find Next', 'Cmd+G', c.findNext),
-        item('Find Previous', 'Cmd+Shift+G', c.findPrev),
+        role('undo', 'mac.undo'), role('redo', 'mac.redo'), { type: 'separator' },
+        role('cut', 'mac.cut'), role('copy', 'mac.copy'), role('paste', 'mac.paste'),
+        role('pasteAndMatchStyle', 'mac.pasteAndMatchStyle'),
+        role('delete', 'mac.delete'), role('selectAll', 'mac.selectAll'), { type: 'separator' },
+        item('mac.find', 'Cmd+F', c.find),
+        item('mac.findNext', 'Cmd+G', c.findNext),
+        item('mac.findPrev', 'Cmd+Shift+G', c.findPrev),
       ],
     },
     {
-      label: 'View',
+      label: t('mac.view'),
       submenu: [
-        item('Reload', 'Cmd+R', c.reload),
-        item('Hard Reload', 'Cmd+Shift+R', c.hardReload),
+        item('mac.reload', 'Cmd+R', c.reload),
+        item('mac.hardReload', 'Cmd+Shift+R', c.hardReload),
         { type: 'separator' },
-        item('Actual Size', 'Cmd+0', c.zoomReset),
-        item('Zoom In', 'Cmd+=', c.zoomIn),
-        item('Zoom Out', 'Cmd+-', c.zoomOut),
+        item('mac.actualSize', 'Cmd+0', c.zoomReset),
+        item('mac.zoomIn', 'Cmd+=', c.zoomIn),
+        item('mac.zoomOut', 'Cmd+-', c.zoomOut),
         { type: 'separator' },
-        item('WebBrain Panel', 'Alt+Shift+W', c.webBrain),
+        item('mac.webBrainPanel', 'Alt+Shift+W', c.webBrain),
         { type: 'separator' },
-        item('Enter Full Screen', 'Ctrl+Cmd+F', c.fullscreen),
-        item('View Source', 'Cmd+Alt+U', c.viewSource),
-        item('Developer Tools', 'Cmd+Alt+I', c.devTools),
+        item('mac.fullscreen', 'Ctrl+Cmd+F', c.fullscreen),
+        item('mac.viewSource', 'Cmd+Alt+U', c.viewSource),
+        item('mac.devTools', 'Cmd+Alt+I', c.devTools),
       ],
     },
     {
-      label: 'History',
+      label: t('mac.history'),
       submenu: [
-        item('Back', 'Cmd+[', c.back),
-        item('Forward', 'Cmd+]', c.forward),
-        item('Home', 'Cmd+Shift+H', c.home),
+        item('mac.back', 'Cmd+[', c.back),
+        item('mac.forward', 'Cmd+]', c.forward),
+        item('mac.home', 'Cmd+Shift+H', c.home),
       ],
     },
     {
-      label: 'Tab',
+      label: t('mac.tab'),
       submenu: [
-        item('Next Tab', 'Cmd+Alt+Right', c.nextTab),
-        item('Previous Tab', 'Cmd+Alt+Left', c.prevTab),
-        ...Array.from({ length: 9 }, (_, i) => item(i === 8 ? 'Last Tab' : `Tab ${i + 1}`, `Cmd+${i + 1}`, (win) => c.selectIndex(win, i + 1))),
+        item('mac.nextTab', 'Cmd+Alt+Right', c.nextTab),
+        item('mac.prevTab', 'Cmd+Alt+Left', c.prevTab),
+        ...Array.from({ length: 9 }, (_, i) => ({
+          label: i === 8 ? t('mac.lastTab') : t('mac.tabN', { n: number(i + 1) }),
+          accelerator: `Cmd+${i + 1}`,
+          click: () => c.selectIndex(w(), i + 1),
+        })),
       ],
     },
-    { role: 'windowMenu' },
+    {
+      label: t('mac.window'),
+      role: 'windowMenu',
+      submenu: [
+        role('minimize', 'mac.minimize'),
+        role('zoom', 'mac.zoom'),
+        { type: 'separator' },
+        role('front', 'mac.front'),
+      ],
+    },
   ]));
 }
 
@@ -100,70 +116,70 @@ function popupMainMenu(ctx, w, { x, y }) {
   const mod = isMac ? 'Cmd' : 'Ctrl';
   const companion = ctx.companion.status();
   const menu = Menu.buildFromTemplate([
-    { label: 'New tab', accelerator: `${mod}+T`, click: () => c.newTab(w) },
-    { label: 'New window', accelerator: `${mod}+N`, click: () => c.newWindow() },
-    { label: 'Reopen closed tab', accelerator: `${mod}+Shift+T`, click: () => c.reopenTab(w) },
+    { label: t('menu.newTab'), accelerator: `${mod}+T`, click: () => c.newTab(w) },
+    { label: t('menu.newWindow'), accelerator: `${mod}+N`, click: () => c.newWindow() },
+    { label: t('menu.reopenTab'), accelerator: `${mod}+Shift+T`, click: () => c.reopenTab(w) },
     { type: 'separator' },
-    { label: 'WebBrain panel', accelerator: 'Alt+Shift+W', click: () => c.webBrain(w) },
+    { label: t('menu.webBrainPanel'), accelerator: 'Alt+Shift+W', click: () => c.webBrain(w) },
     {
-      label: companion.running ? 'WebBrain Companion — running' : companion.found ? 'Start WebBrain Companion' : 'Get WebBrain Companion',
+      label: t(companion.running ? 'menu.companionRunning' : companion.found ? 'menu.companionStart' : 'menu.companionGet'),
       click: () => ctx.companion.openPanel(w),
     },
     { type: 'separator' },
     {
-      label: `Zoom  ${zoom}%`,
+      label: t('menu.zoom', { zoom: percent(zoom) }),
       submenu: [
-        { label: 'Zoom in', accelerator: `${mod}+=`, click: () => c.zoomIn(w) },
-        { label: 'Zoom out', accelerator: `${mod}+-`, click: () => c.zoomOut(w) },
-        { label: 'Reset', accelerator: `${mod}+0`, click: () => c.zoomReset(w) },
+        { label: t('menu.zoomIn'), accelerator: `${mod}+=`, click: () => c.zoomIn(w) },
+        { label: t('menu.zoomOut'), accelerator: `${mod}+-`, click: () => c.zoomOut(w) },
+        { label: t('menu.zoomReset'), accelerator: `${mod}+0`, click: () => c.zoomReset(w) },
       ],
     },
-    { label: 'Find…', accelerator: `${mod}+F`, click: () => c.find(w) },
-    { label: 'Print…', accelerator: `${mod}+P`, click: () => c.print(w) },
-    { label: 'Downloads folder', click: () => shell.openPath(ctx.downloads.folder()) },
+    { label: t('menu.find'), accelerator: `${mod}+F`, click: () => c.find(w) },
+    { label: t('menu.print'), accelerator: `${mod}+P`, click: () => c.print(w) },
+    { label: t('menu.downloadsFolder'), click: () => shell.openPath(ctx.downloads.folder()) },
     { type: 'separator' },
     {
-      label: 'More tools',
+      label: t('menu.moreTools'),
       submenu: [
-        { label: 'Developer tools', accelerator: 'F12', click: () => c.devTools(w) },
-        { label: 'View source', accelerator: `${mod}+U`, click: () => c.viewSource(w) },
-        { label: 'Inspect WebBrain panel', enabled: Boolean(w.panelContents()), click: () => c.panelDevTools(w) },
-        { label: 'Inspect browser UI', click: () => c.uiDevTools(w) },
+        { label: t('menu.devTools'), accelerator: 'F12', click: () => c.devTools(w) },
+        { label: t('menu.viewSource'), accelerator: `${mod}+U`, click: () => c.viewSource(w) },
+        { label: t('menu.inspectPanel'), enabled: Boolean(w.panelContents()), click: () => c.panelDevTools(w) },
+        { label: t('menu.inspectUI'), click: () => c.uiDevTools(w) },
         { type: 'separator' },
-        { label: 'Copy page address', enabled: Boolean(tab?.url), click: () => clipboard.writeText(tab.url) },
+        { label: t('menu.copyAddress'), enabled: Boolean(tab?.url), click: () => clipboard.writeText(tab.url) },
       ],
     },
     { type: 'separator' },
-    { label: 'Settings', click: () => c.settings(w) },
-    { label: 'About Murshid', click: () => c.about(w) },
+    { label: t('menu.settings'), click: () => c.settings(w) },
+    { label: t('menu.about'), click: () => c.about(w) },
     { type: 'separator' },
-    { label: 'Exit', accelerator: isMac ? 'Cmd+Q' : `${mod}+Shift+Q`, click: () => ctx.quit() },
+    { label: t('menu.exit'), accelerator: isMac ? 'Cmd+Q' : `${mod}+Shift+Q`, click: () => ctx.quit() },
   ]);
   menu.popup({ window: w.win, x: Math.round(x), y: Math.round(y) });
 }
 
 function popupTabMenu(ctx, w, tab, { x, y }) {
   const menu = Menu.buildFromTemplate([
-    { label: 'New tab to the right', click: () => w.addTab({ after: tab }) },
+    { label: t('tabMenu.newTabRight'), click: () => w.addTab({ after: tab }) },
     { type: 'separator' },
-    { label: 'Reload', click: () => tab.wc.reload() },
-    { label: 'Duplicate', click: () => w.addTab({ url: tab.url, after: tab }) },
-    { label: tab.wc.isAudioMuted() ? 'Unmute site' : 'Mute site', click: () => { tab.wc.setAudioMuted(!tab.wc.isAudioMuted()); w.scheduleState(); } },
-    { label: 'Open WebBrain for this tab', click: () => { w.selectTab(tab); ctx.crx.clickAction(w); } },
+    { label: t('tabMenu.reload'), click: () => tab.wc.reload() },
+    { label: t('tabMenu.duplicate'), click: () => w.addTab({ url: tab.url, after: tab }) },
+    { label: t(tab.wc.isAudioMuted() ? 'tabMenu.unmute' : 'tabMenu.mute'), click: () => { tab.wc.setAudioMuted(!tab.wc.isAudioMuted()); w.scheduleState(); } },
+    { label: t('tabMenu.openWebBrain'), click: () => { w.selectTab(tab); ctx.crx.clickAction(w); } },
     { type: 'separator' },
-    { label: 'Close tab', click: () => w.closeTab(tab) },
+    { label: t('tabMenu.close'), click: () => w.closeTab(tab) },
     {
-      label: 'Close other tabs',
+      label: t('tabMenu.closeOthers'),
       enabled: w.tabs.length > 1,
-      click: () => w.tabs.filter((t) => t !== tab).forEach((t) => w.closeTab(t)),
+      click: () => w.tabs.filter((other) => other !== tab).forEach((other) => w.closeTab(other)),
     },
     {
-      label: 'Close tabs to the right',
+      label: t('tabMenu.closeRight'),
       enabled: w.tabs.indexOf(tab) < w.tabs.length - 1,
-      click: () => w.tabs.slice(w.tabs.indexOf(tab) + 1).forEach((t) => w.closeTab(t)),
+      click: () => w.tabs.slice(w.tabs.indexOf(tab) + 1).forEach((other) => w.closeTab(other)),
     },
     { type: 'separator' },
-    { label: 'Reopen closed tab', enabled: w.closedTabs.length > 0, click: () => w.reopenClosedTab() },
+    { label: t('tabMenu.reopen'), enabled: w.closedTabs.length > 0, click: () => w.reopenClosedTab() },
   ]);
   menu.popup({ window: w.win, x: Math.round(x), y: Math.round(y) });
 }

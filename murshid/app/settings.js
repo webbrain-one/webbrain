@@ -7,6 +7,9 @@ const { app } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
+const { SUPPORTED, SETTINGS_FILE } = require('./i18n');
+
+const LANGUAGES = ['auto', ...SUPPORTED];
 
 const SEARCH_ENGINES = {
   google: { name: 'Google', url: 'https://www.google.com/search?q=%s' },
@@ -18,6 +21,9 @@ const SEARCH_ENGINES = {
 };
 
 const DEFAULTS = {
+  // 'auto' follows the system; otherwise one of i18n.SUPPORTED. Applied at
+  // startup (app/main.js), so a change needs a restart.
+  language: 'auto',
   searchEngine: 'google',
   startCompanion: true,
   // Off: sites see Murshid in the client hints, as Brave shows Brave. On: they
@@ -33,7 +39,7 @@ const DEFAULTS = {
 class Settings extends EventEmitter {
   constructor() {
     super();
-    this.file = path.join(app.getPath('userData'), 'murshid-settings.json');
+    this.file = path.join(app.getPath('userData'), SETTINGS_FILE);
     this.data = { ...DEFAULTS };
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
@@ -42,6 +48,7 @@ class Settings extends EventEmitter {
       // First run, or an unreadable file: start from the defaults.
     }
     if (!SEARCH_ENGINES[this.data.searchEngine]) this.data.searchEngine = DEFAULTS.searchEngine;
+    if (!LANGUAGES.includes(this.data.language)) this.data.language = DEFAULTS.language;
     this.timer = null;
   }
 
@@ -80,4 +87,4 @@ class Settings extends EventEmitter {
   }
 }
 
-module.exports = { Settings, SEARCH_ENGINES };
+module.exports = { Settings, SEARCH_ENGINES, LANGUAGES };

@@ -5,24 +5,37 @@
 // location, notifications and the like. Answers last until Murshid quits.
 
 const { dialog, desktopCapturer, webContents } = require('electron');
+const { t } = require('./i18n');
 
 const ALWAYS = new Set(['fullscreen', 'clipboard-sanitized-write', 'window-management', 'pointerLock', 'keyboardLock', 'speaker-selection']);
+// The prompt for each permission, as a key in app/locales (whole sentences, so
+// each language can put the site where its grammar wants it).
 const DESCRIBE = {
-  media: 'use your camera or microphone',
-  geolocation: 'know your location',
-  notifications: 'show notifications',
-  midi: 'use your MIDI devices',
-  midiSysex: 'use your MIDI devices',
-  'clipboard-read': 'see text and images copied to the clipboard',
-  'display-capture': 'share your screen',
-  openExternal: 'open an app on this computer',
-  'idle-detection': 'know when you are using this device',
-  hid: 'connect to HID devices',
-  serial: 'connect to serial ports',
-  usb: 'connect to USB devices',
-  'storage-access': 'use cookies and site data in this context',
-  'top-level-storage-access': 'use cookies and site data in this context',
+  media: 'permission.media',
+  geolocation: 'permission.geolocation',
+  notifications: 'permission.notifications',
+  midi: 'permission.midi',
+  midiSysex: 'permission.midi',
+  'clipboard-read': 'permission.clipboardRead',
+  'display-capture': 'permission.displayCapture',
+  openExternal: 'permission.openExternal',
+  'idle-detection': 'permission.idleDetection',
+  hid: 'permission.hid',
+  serial: 'permission.serial',
+  usb: 'permission.usb',
+  'storage-access': 'permission.storageAccess',
+  'top-level-storage-access': 'permission.storageAccess',
 };
+
+function describeRequest(host, permission, mediaTypes) {
+  if (mediaTypes.length) {
+    const camera = mediaTypes.includes('video');
+    const microphone = mediaTypes.includes('audio');
+    const key = camera && microphone ? 'permission.cameraAndMicrophone' : camera ? 'permission.camera' : 'permission.microphone';
+    return t(key, { host });
+  }
+  return DESCRIBE[permission] ? t(DESCRIBE[permission], { host }) : t('permission.other', { host, permission });
+}
 
 function originOf(value) {
   try {
@@ -59,15 +72,12 @@ function installPermissions(ctx) {
     const missing = origin ? keys.filter((key) => !answers.has(key)) : keys;
     if (!missing.length) { callback(true); return; }
     const types = permission === 'media' ? mediaTypes(details.mediaTypes).filter((type) => missing.includes(`${origin} media:${type}`)) : [];
-    const what = types.length
-      ? `use your ${types.map((t) => (t === 'video' ? 'camera' : 'microphone')).join(' and ')}`
-      : DESCRIBE[permission] || `use “${permission}”`;
-    const host = origin ? origin.replace(/^https?:\/\//, '') : (url?.startsWith('file:') ? 'A local file' : 'This page');
+    const host = origin ? origin.replace(/^https?:\/\//, '') : t(url?.startsWith('file:') ? 'permission.localFile' : 'permission.thisPage');
     const parent = ctx.windowForContents(wc)?.win || ctx.lastFocusedWindow()?.win;
     dialog.showMessageBox(parent, {
-      type: 'question', buttons: ['Allow', 'Block'], defaultId: 1, cancelId: 1,
-      title: 'Murshid', message: `${host} wants to ${what}`,
-      detail: origin ? 'Your choice is remembered until you quit Murshid.' : 'This choice applies only to this request.',
+      type: 'question', buttons: [t('permission.allow'), t('permission.block')], defaultId: 1, cancelId: 1,
+      title: 'Murshid', message: describeRequest(host, permission, types),
+      detail: t(origin ? 'permission.remembered' : 'permission.once'),
       noLink: true,
     }).then(({ response }) => {
       const allowed = response === 0;
@@ -85,12 +95,12 @@ function installPermissions(ctx) {
       if (!sources.length || frame.isDestroyed() || frame.url !== originalUrl) { callback(null); return; }
       const wc = webContents.fromFrame(frame);
       const parent = ctx.windowForContents(wc)?.win || ctx.lastFocusedWindow()?.win;
-      const requester = originOf(request.securityOrigin) || 'This page';
+      const requester = originOf(request.securityOrigin) || t('permission.thisPage');
       const { response } = await dialog.showMessageBox(parent, {
-        type: 'question', title: 'Share your screen',
-        message: `${requester} wants to share a screen or window`,
-        detail: 'Choose what to share. Audio is not shared.',
-        buttons: ['Cancel', ...sources.map((source, i) => `${i + 1}. ${source.name}`)],
+        type: 'question', title: t('screen.title'),
+        message: t('screen.message', { host: requester }),
+        detail: t('screen.detail'),
+        buttons: [t('screen.cancel'), ...sources.map((source, i) => `${i + 1}. ${source.name}`)],
         defaultId: 0, cancelId: 0, noLink: true,
       });
       if (frame.isDestroyed() || frame.url !== originalUrl || response < 1 || response > sources.length) { callback(null); return; }

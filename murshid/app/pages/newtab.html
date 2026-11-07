@@ -1,25 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
-<title>New Tab</title>
+<title>{{t:page.newtab.title}}</title>
 <link rel="stylesheet" href="pages.css">
 </head>
 <body>
 <main class="start">
   <div class="start-inner">
     <img src="murshid://assets/icons/murshid.svg" alt="">
-    <h1>Where to, <em>seeker?</em></h1>
+    <h1>{{rich:page.newtab.heading}}</h1>
     <form class="search" id="search" autocomplete="off">
-      <input id="q" type="text" placeholder="Search or type a web address" aria-label="Search or type a web address" autofocus>
-      <button type="submit">Go</button>
+      <input id="q" type="text" dir="auto" placeholder="{{t:page.newtab.placeholder}}" aria-label="{{t:page.newtab.placeholder}}" autofocus>
+      <button type="submit">{{t:page.newtab.go}}</button>
     </form>
     <div class="actions">
-      <button class="button" id="webbrain" type="button">Open WebBrain</button>
-      <a class="button" href="murshid://settings">Settings</a>
+      <button class="button" id="webbrain" type="button">{{t:page.openWebBrain}}</button>
+      <a class="button" href="murshid://settings">{{t:page.settingsLink}}</a>
     </div>
-    <p class="hint">WebBrain's new tab page is switched off. Turn it back on in WebBrain → Settings → General.</p>
+    <p class="hint">{{t:page.newtab.hint}}</p>
   </div>
 </main>
 <script src="pages.js"></script>

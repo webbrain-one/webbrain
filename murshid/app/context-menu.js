@@ -4,6 +4,7 @@
 // whatever WebBrain registered with chrome.contextMenus.
 
 const { Menu, MenuItem, clipboard } = require('electron');
+const { t } = require('./i18n');
 
 function buildContextMenu(ctx, tab, params, contents) {
   const wc = contents || tab.wc;
@@ -13,19 +14,19 @@ function buildContextMenu(ctx, tab, params, contents) {
   const sep = () => { if (items.length && items[items.length - 1].type !== 'separator') add({ type: 'separator' }); };
 
   if (params.linkURL) {
-    add({ label: 'Open link in new tab', click: () => w?.addTab({ url: params.linkURL, active: false, after: tab || undefined }) });
-    add({ label: 'Open link in new window', click: () => ctx.createWindow({ url: params.linkURL }) });
-    add({ label: 'Copy link address', click: () => clipboard.writeText(params.linkURL) });
+    add({ label: t('context.openLinkTab'), click: () => w?.addTab({ url: params.linkURL, active: false, after: tab || undefined }) });
+    add({ label: t('context.openLinkWindow'), click: () => ctx.createWindow({ url: params.linkURL }) });
+    add({ label: t('context.copyLink'), click: () => clipboard.writeText(params.linkURL) });
     sep();
   }
   if (params.mediaType === 'image' && params.srcURL) {
-    add({ label: 'Open image in new tab', click: () => w?.addTab({ url: params.srcURL, active: false, after: tab || undefined }) });
-    add({ label: 'Save image as…', click: () => {
+    add({ label: t('context.openImageTab'), click: () => w?.addTab({ url: params.srcURL, active: false, after: tab || undefined }) });
+    add({ label: t('context.saveImage'), click: () => {
       ctx.downloads.start({ url: params.srcURL, saveAs: true }, wc)
         .catch((error) => console.error('[murshid] could not save image:', error));
     } });
-    add({ label: 'Copy image', click: () => wc.copyImageAt(params.x, params.y) });
-    add({ label: 'Copy image address', click: () => clipboard.writeText(params.srcURL) });
+    add({ label: t('context.copyImage'), click: () => wc.copyImageAt(params.x, params.y) });
+    add({ label: t('context.copyImageAddress'), click: () => clipboard.writeText(params.srcURL) });
     sep();
   }
   if (params.isEditable) {
@@ -33,35 +34,35 @@ function buildContextMenu(ctx, tab, params, contents) {
       for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
         add({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) });
       }
-      add({ label: 'Add to dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) });
+      add({ label: t('context.addToDictionary'), click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) });
       sep();
     }
-    add({ role: 'undo', enabled: params.editFlags.canUndo });
-    add({ role: 'redo', enabled: params.editFlags.canRedo });
+    add({ role: 'undo', label: t('context.undo'), enabled: params.editFlags.canUndo });
+    add({ role: 'redo', label: t('context.redo'), enabled: params.editFlags.canRedo });
     sep();
-    add({ role: 'cut', enabled: params.editFlags.canCut });
-    add({ role: 'copy', enabled: params.editFlags.canCopy });
-    add({ role: 'paste', enabled: params.editFlags.canPaste });
-    add({ role: 'pasteAndMatchStyle', enabled: params.editFlags.canPaste });
-    add({ role: 'selectAll' });
+    add({ role: 'cut', label: t('context.cut'), enabled: params.editFlags.canCut });
+    add({ role: 'copy', label: t('context.copy'), enabled: params.editFlags.canCopy });
+    add({ role: 'paste', label: t('context.paste'), enabled: params.editFlags.canPaste });
+    add({ role: 'pasteAndMatchStyle', label: t('context.pasteAndMatchStyle'), enabled: params.editFlags.canPaste });
+    add({ role: 'selectAll', label: t('context.selectAll') });
     sep();
   } else if (params.selectionText) {
     const text = params.selectionText.trim();
-    add({ role: 'copy' });
+    add({ role: 'copy', label: t('context.copy') });
     if (text && tab) {
       const shown = text.length > 28 ? `${text.slice(0, 28)}…` : text;
-      add({ label: `Search for “${shown}”`, click: () => w?.addTab({ url: ctx.settings.searchUrl(text), after: tab }) });
+      add({ label: t('context.searchFor', { text: shown }), click: () => w?.addTab({ url: ctx.settings.searchUrl(text), after: tab }) });
     }
     sep();
   }
   if (tab && !params.linkURL && !params.isEditable && !params.selectionText && params.mediaType === 'none') {
     const history = wc.navigationHistory;
-    add({ label: 'Back', enabled: history.canGoBack(), click: () => history.goBack() });
-    add({ label: 'Forward', enabled: history.canGoForward(), click: () => history.goForward() });
-    add({ label: 'Reload', click: () => wc.reload() });
+    add({ label: t('context.back'), enabled: history.canGoBack(), click: () => history.goBack() });
+    add({ label: t('context.forward'), enabled: history.canGoForward(), click: () => history.goForward() });
+    add({ label: t('context.reload'), click: () => wc.reload() });
     sep();
-    add({ label: 'Print…', click: () => wc.print() });
-    add({ label: 'View page source', enabled: /^https?:/i.test(tab.url), click: () => w?.addTab({ url: `view-source:${tab.url}`, after: tab }) });
+    add({ label: t('context.print'), click: () => wc.print() });
+    add({ label: t('context.viewSource'), enabled: /^https?:/i.test(tab.url), click: () => w?.addTab({ url: `view-source:${tab.url}`, after: tab }) });
     sep();
   }
 
@@ -78,7 +79,7 @@ function buildContextMenu(ctx, tab, params, contents) {
   }
 
   sep();
-  add({ label: 'Inspect', click: () => {
+  add({ label: t('context.inspect'), click: () => {
     if (!wc.isDevToolsOpened()) wc.openDevTools({ mode: 'detach' });
     wc.inspectElement(params.x, params.y);
   } });

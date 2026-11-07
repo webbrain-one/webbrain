@@ -8,6 +8,36 @@ const $ = (id) => document.getElementById(id);
 const platform = new URLSearchParams(location.search).get('platform') || 'win32';
 document.body.classList.add(platform === 'darwin' ? 'mac' : platform === 'linux' ? 'linux' : 'win');
 
+// Language (app/i18n.js) ----------------------------------------------------------
+
+const i18n = api.i18n || { locale: 'en', dir: 'ltr', strings: {} };
+document.documentElement.lang = i18n.locale;
+document.documentElement.dir = i18n.dir;
+const rtl = i18n.dir === 'rtl';
+// Where the window's own buttons are: the caption buttons are on the right on
+// Windows and Linux, the traffic lights on the left on macOS, and both swap
+// sides when Chromium mirrors the frame. "start" and "end" are along the line
+// of this interface, which may read the other way.
+const frameRtl = i18n.frameDir === 'rtl';
+const controlsOnLeft = platform === 'darwin' ? !frameRtl : frameRtl;
+document.body.classList.add(controlsOnLeft === !rtl ? 'controls-start' : 'controls-end');
+
+function t(key, vars) {
+  const text = i18n.strings[key] ?? key;
+  return vars ? text.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole)) : text;
+}
+const numberFormat = new Intl.NumberFormat(i18n.locale);
+const percentFormat = new Intl.NumberFormat(i18n.locale, { style: 'percent', maximumFractionDigits: 0 });
+
+// data-t-title / data-t-aria-label / data-t-placeholder name a string; data-t-key
+// is the keyboard shortcut it mentions.
+for (const el of document.querySelectorAll('[data-t-title], [data-t-aria-label], [data-t-placeholder]')) {
+  const vars = { key: el.dataset.tKey || '' };
+  if (el.dataset.tTitle) el.title = t(el.dataset.tTitle, vars);
+  if (el.dataset.tAriaLabel) el.setAttribute('aria-label', t(el.dataset.tAriaLabel, vars));
+  if (el.dataset.tPlaceholder) el.placeholder = t(el.dataset.tPlaceholder, vars);
+}
+
 const els = {
   chrome: $('chrome'),
   tabs: $('tabs'),
@@ -84,9 +114,10 @@ function createTabEl(tab) {
   el.dataset.id = String(tab.id);
   el.innerHTML = `
     <span class="favicon"></span>
-    <span class="title"></span>
+    <span class="title" dir="auto"></span>
     <button class="audio" hidden tabindex="-1"></button>
-    <button class="close" tabindex="-1" aria-label="Close tab"><svg><use href="#i-close"/></svg></button>`;
+    <button class="close" tabindex="-1"><svg><use href="#i-close"/></svg></button>`;
+  el.querySelector('.close').setAttribute('aria-label', t('ui.closeTab'));
   el.querySelector('.close').addEventListener('click', (event) => {
     event.stopPropagation();
     api.invoke('closeTab', tab.id);
@@ -170,9 +201,11 @@ window.addEventListener('pointerup', (event) => {
   const rect = el.getBoundingClientRect();
   const center = event.clientX - (rect.width / 2) + (rect.width / 2);
   const children = [...els.tabs.children].filter((c) => c !== el);
+  // Tabs run right to left in Arabic and Persian.
   let index = children.findIndex((c) => {
     const r = c.getBoundingClientRect();
-    return center < r.left + r.width / 2;
+    const middle = r.left + r.width / 2;
+    return rtl ? center > middle : center < middle;
   });
   if (index === -1) index = children.length;
   api.invoke('moveTab', id, index);
@@ -191,8 +224,8 @@ function renderToolbar() {
   els.forward.disabled = !tab?.canGoForward;
   const loading = Boolean(tab?.loading);
   els.reload.querySelector('use').setAttribute('href', loading ? '#i-stop' : '#i-reload');
-  els.reload.title = loading ? 'Stop loading' : 'Reload (Ctrl+R)';
-  els.reload.setAttribute('aria-label', loading ? 'Stop' : 'Reload');
+  els.reload.title = loading ? t('ui.stopTip') : t('ui.reloadTip', { key: 'Ctrl+R' });
+  els.reload.setAttribute('aria-label', loading ? t('ui.stop') : t('ui.reload'));
 
   if (!editing && document.activeElement !== els.address) {
     els.address.value = tab ? prettyUrl(tab.displayUrl) : '';
@@ -202,11 +235,11 @@ function renderToolbar() {
   els.site.querySelector('use')?.setAttribute('href', !isWeb ? '#i-search' : tab.secure ? '#i-lock' : '#i-globe');
   if (!els.site.querySelector('use')) els.site.innerHTML = '<svg><use href="#i-search"/></svg>';
   els.zoom.hidden = !tab || tab.zoom === 100;
-  if (tab) els.zoom.textContent = `${tab.zoom}%`;
+  if (tab) els.zoom.textContent = percentFormat.format(tab.zoom / 100);
 
   const webBrainLoaded = state.webBrain?.loaded;
   els.webbrain.disabled = !webBrainLoaded;
-  els.webbrain.title = webBrainLoaded ? 'WebBrain (Alt+Shift+W)' : 'WebBrain is not installed in this build';
+  els.webbrain.title = webBrainLoaded ? t('ui.webBrainTip', { key: 'Alt+Shift+W' }) : t('ui.webBrainMissing');
   if (state.webBrain?.icon && els.webbrainIcon.dataset.src !== state.webBrain.icon) {
     els.webbrainIcon.dataset.src = state.webBrain.icon;
     els.webbrainIcon.src = state.webBrain.icon;
@@ -233,7 +266,8 @@ function renderPanel() {
   els.panelHeader.style.width = `${p.width}px`;
   els.panelTitle.textContent = p.title || 'WebBrain';
   els.splitter.style.top = `${top}px`;
-  els.splitter.style.right = `${p.width}px`;
+  // The panel is at the end of the line (the left in right-to-left languages).
+  els.splitter.style.insetInlineEnd = `${p.width}px`;
   els.splitter.style.width = `${p.splitter}px`;
 }
 
@@ -368,7 +402,9 @@ api.on('murshid:find-step', stepFind);
 api.on('murshid:find-result', (result) => {
   if (!result.finalUpdate && result.matches === undefined) return;
   const n = result.matches || 0;
-  els.findCount.textContent = els.findInput.value ? `${n ? result.activeMatchOrdinal : 0}/${n}` : '';
+  els.findCount.textContent = els.findInput.value
+    ? t('ui.findCount', { current: numberFormat.format(n ? result.activeMatchOrdinal : 0), total: numberFormat.format(n) })
+    : '';
   els.findInput.classList.toggle('miss', Boolean(els.findInput.value) && n === 0);
 });
 

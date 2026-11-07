@@ -102,10 +102,15 @@ svg rect { fill: none; }
   align-items: flex-end;
   background: var(--strip);
   -webkit-app-region: drag;
-  padding-right: 140px; /* Windows/Linux caption buttons (title bar overlay). */
+  padding-inline-end: 140px; /* Windows/Linux caption buttons (title bar overlay). */
 }
-body.mac #strip { padding-right: 8px; }
-body.fullscreen #strip { padding-right: 8px; }
+body.mac #strip { padding-inline-end: 8px; }
+body.fullscreen #strip { padding-inline-end: 8px; }
+/* The window's buttons can be at the start of the line instead (ui.js sets
+   controls-start / controls-end): a mirrored frame under a left-to-right
+   interface, or the other way round. */
+body.controls-start:not(.mac) #strip { padding-inline: 140px 8px; }
+body.controls-start.fullscreen:not(.mac) #strip { padding-inline-start: 0; }
 
 #strip-lead {
   flex: none;
@@ -114,7 +119,10 @@ body.fullscreen #strip { padding-right: 8px; }
   display: grid;
   place-items: center;
 }
-body.mac #strip-lead { width: 80px; }
+body.mac #strip-lead { width: 80px; } /* room for the traffic lights */
+body.mac.controls-end #strip-lead { width: 8px; }
+body.mac.controls-end #strip { padding-inline-end: 80px; }
+body.mac.controls-end.fullscreen #strip { padding-inline-end: 8px; }
 body.mac #brand { display: none; }
 #brand { width: 22px; height: 22px; border-radius: 6px; }
 
@@ -139,7 +147,8 @@ body.mac #brand { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px 0 12px;
+  padding-block: 0;
+  padding-inline: 12px 8px;
   border-radius: var(--radius) var(--radius) 0 0;
   color: var(--muted);
   cursor: default;
@@ -149,7 +158,7 @@ body.mac #brand { display: none; }
   /* separator between inactive tabs */
   content: "";
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   top: 9px;
   bottom: 8px;
   width: 1px;
@@ -203,6 +212,7 @@ body.mac #brand { display: none; }
   white-space: nowrap;
   mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
 }
+html[dir="rtl"] .tab .title { mask-image: linear-gradient(270deg, #000 calc(100% - 18px), transparent); }
 .tab .audio { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--muted); }
 .tab .audio:hover { background: var(--hover); color: var(--text); }
 .tab .audio svg { width: 14px; height: 14px; }
@@ -252,7 +262,8 @@ body.mac #brand { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px 0 11px;
+  padding-block: 0;
+  padding-inline: 11px 12px;
   border-radius: 16px;
   background: var(--omni);
   border: 1px solid transparent;
@@ -295,7 +306,8 @@ body.mac #brand { display: none; }
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 0 12px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 12px;
   border-radius: 16px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -325,7 +337,8 @@ body.mac #brand { display: none; }
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 10px 0 14px;
+  padding-block: 0;
+  padding-inline: 14px 10px;
   background: var(--toolbar);
   border-top: 1px solid var(--border);
 }
@@ -352,15 +365,16 @@ body.mac #brand { display: none; }
 
 #panel-header {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0; /* the panel is on the left in right-to-left languages */
   height: 40px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 6px 0 12px;
+  padding-block: 0;
+  padding-inline: 12px 6px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   font-weight: 600;
 }
 #panel-header[hidden], #splitter[hidden] { display: none; }
@@ -374,7 +388,7 @@ body.mac #brand { display: none; }
   width: 5px;
   cursor: col-resize;
   background: var(--strip);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 #splitter:hover, #splitter.dragging { background: var(--gold-soft); }
 
@@ -389,3 +403,9 @@ body.mac #brand { display: none; }
 #backdrop img { width: 96px; opacity: 0.08; }
 
 body.hide-chrome #chrome, body.hide-chrome #panel-header, body.hide-chrome #splitter { display: none; }
+
+/* Back and forward point the way the line reads. */
+html[dir="rtl"] #back svg, html[dir="rtl"] #forward svg { transform: scaleX(-1); }
+/* Addresses and the find text set their own direction (dir="auto"); keep them
+   aligned with the interface rather than jumping between sides. */
+html[dir="rtl"] #address, html[dir="rtl"] #find-input { text-align: right; }

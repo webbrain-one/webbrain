@@ -35,52 +35,52 @@
       <div id="strip-lead">
         <img id="brand" src="../../assets/icons/murshid.svg" alt="" draggable="false">
       </div>
-      <div id="tabs" role="tablist" aria-label="Tabs"></div>
-      <button id="new-tab" class="icon-button" title="New tab (Ctrl+T)" aria-label="New tab"><svg><use href="#i-plus"/></svg></button>
+      <div id="tabs" role="tablist" aria-label="Tabs" data-t-aria-label="ui.tabs"></div>
+      <button id="new-tab" class="icon-button" title="New tab (Ctrl+T)" aria-label="New tab" data-t-title="ui.newTabTip" data-t-key="Ctrl+T" data-t-aria-label="ui.newTab"><svg><use href="#i-plus"/></svg></button>
       <div id="strip-fill"></div>
       <div id="caption" hidden>
-        <button data-control="minimize" aria-label="Minimize"><svg><use href="#i-min"/></svg></button>
-        <button data-control="maximize" aria-label="Maximize"><svg><use href="#i-max"/></svg></button>
-        <button data-control="close" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+        <button data-control="minimize" aria-label="Minimize" data-t-aria-label="ui.minimize"><svg><use href="#i-min"/></svg></button>
+        <button data-control="maximize" aria-label="Maximize" data-t-aria-label="ui.maximize"><svg><use href="#i-max"/></svg></button>
+        <button data-control="close" aria-label="Close" data-t-aria-label="ui.close"><svg><use href="#i-close"/></svg></button>
       </div>
     </div>
 
     <div id="toolbar">
-      <button id="back" class="icon-button" title="Back (Alt+Left)" aria-label="Back"><svg><use href="#i-back"/></svg></button>
-      <button id="forward" class="icon-button" title="Forward (Alt+Right)" aria-label="Forward"><svg><use href="#i-forward"/></svg></button>
-      <button id="reload" class="icon-button" title="Reload (Ctrl+R)" aria-label="Reload"><svg><use href="#i-reload"/></svg></button>
+      <button id="back" class="icon-button" title="Back (Alt+Left)" aria-label="Back" data-t-title="ui.backTip" data-t-key="Alt+Left" data-t-aria-label="ui.back"><svg><use href="#i-back"/></svg></button>
+      <button id="forward" class="icon-button" title="Forward (Alt+Right)" aria-label="Forward" data-t-title="ui.forwardTip" data-t-key="Alt+Right" data-t-aria-label="ui.forward"><svg><use href="#i-forward"/></svg></button>
+      <button id="reload" class="icon-button" title="Reload (Ctrl+R)" aria-label="Reload" data-t-title="ui.reloadTip" data-t-key="Ctrl+R" data-t-aria-label="ui.reload"><svg><use href="#i-reload"/></svg></button>
 
       <form id="omnibox" autocomplete="off">
         <span id="site" aria-hidden="true"><svg><use href="#i-search"/></svg></span>
-        <input id="address" type="text" spellcheck="false" placeholder="Search or type a web address" aria-label="Address and search bar">
+        <input id="address" type="text" dir="auto" spellcheck="false" placeholder="Search or type a web address" aria-label="Address and search bar" data-t-placeholder="ui.addressPlaceholder" data-t-aria-label="ui.addressLabel">
         <span id="zoom-chip" hidden></span>
       </form>
 
-      <button id="webbrain" class="toolbar-pill" title="WebBrain (Alt+Shift+W)" aria-label="Open WebBrain">
+      <button id="webbrain" class="toolbar-pill" title="WebBrain (Alt+Shift+W)" aria-label="Open WebBrain" data-t-title="ui.webBrainTip" data-t-key="Alt+Shift+W" data-t-aria-label="ui.openWebBrain">
         <img id="webbrain-icon" src="../../assets/icons/webbrain-mark.svg" alt="" draggable="false">
         <span>WebBrain</span>
       </button>
-      <button id="downloads" class="icon-button" title="Downloads" aria-label="Downloads" hidden>
+      <button id="downloads" class="icon-button" title="Downloads" aria-label="Downloads" data-t-title="ui.downloads" data-t-aria-label="ui.downloads" hidden>
         <svg><use href="#i-download"/></svg>
         <i id="download-ring"></i>
       </button>
-      <button id="menu" class="icon-button" title="Customize and control Murshid" aria-label="Menu"><svg><use href="#i-more"/></svg></button>
+      <button id="menu" class="icon-button" title="Customize and control Murshid" aria-label="Menu" data-t-title="ui.menuTip" data-t-aria-label="ui.menu"><svg><use href="#i-more"/></svg></button>
     </div>
 
     <div id="findbar" hidden>
       <svg class="find-glyph"><use href="#i-search"/></svg>
-      <input id="find-input" type="text" spellcheck="false" placeholder="Find in page" aria-label="Find in page">
+      <input id="find-input" type="text" dir="auto" spellcheck="false" placeholder="Find in page" aria-label="Find in page" data-t-placeholder="ui.findPlaceholder" data-t-aria-label="ui.findPlaceholder">
       <span id="find-count"></span>
-      <button id="find-prev" class="icon-button" aria-label="Previous match"><svg><use href="#i-up"/></svg></button>
-      <button id="find-next" class="icon-button" aria-label="Next match"><svg><use href="#i-down"/></svg></button>
-      <button id="find-close" class="icon-button" aria-label="Close find bar"><svg><use href="#i-close"/></svg></button>
+      <button id="find-prev" class="icon-button" aria-label="Previous match" data-t-aria-label="ui.findPrev"><svg><use href="#i-up"/></svg></button>
+      <button id="find-next" class="icon-button" aria-label="Next match" data-t-aria-label="ui.findNext"><svg><use href="#i-down"/></svg></button>
+      <button id="find-close" class="icon-button" aria-label="Close find bar" data-t-aria-label="ui.findClose"><svg><use href="#i-close"/></svg></button>
     </div>
   </header>
 
   <aside id="panel-header" hidden>
     <img src="../../assets/icons/webbrain-mark.svg" alt="" draggable="false">
     <span id="panel-title">WebBrain</span>
-    <button id="panel-close" class="icon-button" title="Close side panel" aria-label="Close side panel"><svg><use href="#i-close"/></svg></button>
+    <button id="panel-close" class="icon-button" title="Close side panel" aria-label="Close side panel" data-t-title="ui.closePanel" data-t-aria-label="ui.closePanel"><svg><use href="#i-close"/></svg></button>
   </aside>
   <div id="splitter" hidden></div>
 

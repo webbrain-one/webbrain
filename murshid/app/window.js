@@ -8,6 +8,7 @@ const { BrowserWindow, WebContentsView, nativeTheme, screen } = require('electro
 const path = require('node:path');
 const { Tab } = require('./tab');
 const { displayUrl } = require('./url');
+const i18n = require('./i18n');
 
 const DEFAULT_CHROME_HEIGHT = 80;
 const PANEL_HEADER_HEIGHT = 40;
@@ -254,11 +255,18 @@ class MurshidWindow {
     const top = this.chromeHeight;
     const panelW = panel ? this.panelWidth(width) : 0;
     const contentW = panel ? width - panelW - SPLITTER_WIDTH : width;
-    this.activeTab?.view.setBounds({ x: 0, y: top, width: Math.max(0, contentW), height: Math.max(0, height - top) });
+    // The side panel sits at the end of the line: on the right, or on the left
+    // when the interface reads right to left (Arabic, Persian). Positions below
+    // are where things appear on screen; when Chromium's own locale is right to
+    // left it mirrors child views, so they are flipped back first.
+    const rtl = i18n.dir() === 'rtl';
+    const onScreen = (x, w) => (i18n.frameDir() === 'rtl' ? width - x - w : x);
+    const contentX = panel && rtl ? panelW + SPLITTER_WIDTH : 0;
+    this.activeTab?.view.setBounds({ x: onScreen(contentX, Math.max(0, contentW)), y: top, width: Math.max(0, contentW), height: Math.max(0, height - top) });
     if (panel) {
       panel.view.setVisible(true);
       panel.view.setBounds({
-        x: width - panelW,
+        x: onScreen(rtl ? 0 : width - panelW, panelW),
         y: top + PANEL_HEADER_HEIGHT,
         width: panelW,
         height: Math.max(0, height - top - PANEL_HEADER_HEIGHT),
@@ -339,7 +347,7 @@ class MurshidWindow {
 
   resizePanel(clientX) {
     const { width } = this.win.getContentBounds();
-    const next = Math.round(width - clientX - SPLITTER_WIDTH / 2);
+    const next = Math.round(i18n.dir() === 'rtl' ? clientX - SPLITTER_WIDTH / 2 : width - clientX - SPLITTER_WIDTH / 2);
     const max = Math.max(PANEL_MIN, Math.floor(width * PANEL_MAX_FRACTION));
     this.ctx.settings.set('sidePanelWidth', Math.max(PANEL_MIN, Math.min(max, next)));
     this.layout();

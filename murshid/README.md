@@ -77,6 +77,8 @@ app/
   downloads.js     download tracking shared by the toolbar and chrome.downloads
   companion.js     find and start WebBrain Companion
   permissions.js   site permission prompts
+  i18n.js          interface language, strings, right-to-left layout
+  locales/         en, tr, ar, fa: Murshid's own strings
 assets/
   icons/           app icon, .ico, PNGs, macOS template images
 scripts/
@@ -91,6 +93,33 @@ scripts/
 vendor/companion/  WebBrain Companion builds to bundle (not committed)
 web/               the Murshid homepage
 ```
+
+## Languages
+
+Murshid's own interface (menus, dialogs, tab strip, toolbar and the
+`murshid://` pages) is in English, Turkish, Arabic and Persian. WebBrain and its
+new tab page have their own translations and their own language setting.
+
+- **Which language:** Settings → Language. "Automatic" uses the language
+  Chromium picked from the system, or English if Murshid doesn't have it. A
+  language picked there is also passed to Chromium as `--lang` at startup, so
+  native menus and dialogs follow it. Changing it needs a restart.
+- **Right to left:** Arabic and Persian mirror the tab strip and toolbar, and put
+  the WebBrain side panel on the left. Chromium mirrors the window frame itself
+  when its own locale reads right to left (caption buttons move left, and child
+  view positions flip). `app/window.js` and `app/ui` allow for that, because the
+  frame and the interface can read in different directions: "Automatic" on a
+  Hebrew system, for example, or macOS, where the system language decides the frame.
+- **Strings:** `app/locales/<code>.js`, one flat object per language, with
+  `{name}` placeholders. `en.js` is the reference: every language has exactly
+  its keys and placeholders. Menus and dialogs call `t()` in the main process.
+  The browser chrome gets its strings from its preload (`data-t-*` attributes in
+  `ui/index.html`). Pages are templates (`{{t:key}}`, and `{{rich:key}}` for
+  *emphasis*), filled in by `app/protocol.js` before they are served.
+- **Adding a language:** copy `en.js`, translate it, add it to `DICTIONARIES`
+  and `NATIVE_NAMES` in `app/i18n.js`, and to `RTL` if it reads right to left.
+  `npm test` checks the keys, the placeholders and, for Persian, the Persian
+  ی/ک and half spaces.
 
 ## Package it
 

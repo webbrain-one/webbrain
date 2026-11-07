@@ -11,7 +11,8 @@ const { pathToFileURL } = require('node:url');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 
 const paths = require('./paths');
-const { Settings, SEARCH_ENGINES } = require('./settings');
+const { Settings, SEARCH_ENGINES, LANGUAGES } = require('./settings');
+const i18n = require('./i18n');
 const { MurshidWindow } = require('./window');
 const { CrxBridge, extIdFromUrl } = require('./crx/bridge');
 const { Downloads } = require('./downloads');
@@ -32,6 +33,11 @@ const DEBUG = process.argv.includes('--murshid-devtools') || process.env.MURSHID
 app.setName('Murshid');
 if (process.env.MURSHID_PROFILE) app.setPath('userData', path.resolve(process.env.MURSHID_PROFILE));
 if (process.platform === 'win32') app.setAppUserModelId('one.webbrain.murshid');
+// A language picked in Settings also becomes Chromium's locale, so native menus
+// and dialogs lay out right to left for Arabic and Persian. (On macOS the system
+// language still decides those.) "Automatic" leaves Chromium on the system's.
+const pickedLanguage = i18n.savedLanguage(app.getPath('userData'));
+if (pickedLanguage) app.commandLine.appendSwitch('lang', pickedLanguage);
 registerSchemes();
 
 // Sites see Chrome's reduced user agent string; "Electron" in it gets some
@@ -160,6 +166,11 @@ const ctx = {
 async function start() {
   ctx.userData = app.getPath('userData');
   ctx.settings = new Settings();
+  i18n.setLocale(i18n.resolve(ctx.settings.get('language'), app.getLocale(), app.getPreferredSystemLanguages()));
+  i18n.setFrameLocale(app.getLocale());
+  // The browser chrome and murshid:// pages ask for their strings from their
+  // preloads, before anything is drawn.
+  ipcMain.on('murshid-i18n', (event) => { event.returnValue = i18n.bundle(); });
   ctx.icon = nativeImage.createFromPath(paths.appIcon());
   if (ctx.icon.isEmpty()) ctx.icon = undefined;
 
@@ -434,20 +445,20 @@ function popupDownloadsMenu(w, { x, y }) {
   const items = summary.recent.map((d) => {
     const resumable = d.state === 'interrupted' && d.canResume;
     const status = d.state === 'in_progress'
-      ? (d.progress !== null ? `${Math.round(d.progress * 100)}%` : 'downloading…')
-      : d.state === 'complete' ? '' : resumable ? 'interrupted' : 'failed';
+      ? (d.progress !== null ? i18n.percent(Math.round(d.progress * 100)) : i18n.t('downloads.downloading'))
+      : d.state === 'complete' ? '' : resumable ? i18n.t('downloads.interrupted') : i18n.t('downloads.failed');
     return {
-      label: status ? `${d.name} — ${status}` : d.name,
+      label: status ? i18n.t('downloads.status', { name: d.name, status }) : d.name,
       submenu: [
-        { label: 'Open', enabled: d.state === 'complete', click: () => ctx.downloads.open(d.id).catch(() => {}) },
-        { label: 'Show in folder', enabled: d.state !== 'in_progress', click: () => ctx.downloads.show(d.id) },
-        { label: d.paused || resumable ? 'Resume' : 'Pause', visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, d.paused || resumable ? 'resume' : 'pause') },
-        { label: 'Cancel', visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, 'cancel') },
+        { label: i18n.t('downloads.open'), enabled: d.state === 'complete', click: () => ctx.downloads.open(d.id).catch(() => {}) },
+        { label: i18n.t('downloads.showInFolder'), enabled: d.state !== 'in_progress', click: () => ctx.downloads.show(d.id) },
+        { label: i18n.t(d.paused || resumable ? 'downloads.resume' : 'downloads.pause'), visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, d.paused || resumable ? 'resume' : 'pause') },
+        { label: i18n.t('downloads.cancel'), visible: d.state === 'in_progress' || resumable, click: () => ctx.downloads.control(d.id, 'cancel') },
       ],
     };
   });
-  if (!items.length) items.push({ label: 'No downloads yet', enabled: false });
-  items.push({ type: 'separator' }, { label: 'Open downloads folder', click: () => shell.openPath(ctx.downloads.folder()) });
+  if (!items.length) items.push({ label: i18n.t('downloads.none'), enabled: false });
+  items.push({ type: 'separator' }, { label: i18n.t('downloads.openFolder'), click: () => shell.openPath(ctx.downloads.folder()) });
   Menu.buildFromTemplate(items).popup({ window: w.win, x: Math.round(x), y: Math.round(y) });
 }
 
@@ -477,15 +488,25 @@ function installPageIpc() {
       case 'settings':
         return {
           values: {
+            language: ctx.settings.get('language'),
             searchEngine: ctx.settings.get('searchEngine'),
             startCompanion: ctx.settings.get('startCompanion'),
             identifyAsChrome: ctx.settings.get('identifyAsChrome'),
             persistBrowserSession: ctx.settings.get('persistBrowserSession'),
           },
           searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
+          languages: LANGUAGES.map((id) => ({
+            id,
+            name: id === 'auto' ? i18n.t('page.settings.languageAuto') : i18n.NATIVE_NAMES[id],
+            lang: id === 'auto' ? i18n.locale() : id,
+          })),
         };
       case 'setSetting': {
         const [key, value] = args;
+        if (key === 'language' && LANGUAGES.includes(value)) {
+          ctx.settings.set(key, value);
+          ctx.settings.flush();
+        }
         if (key === 'searchEngine' && SEARCH_ENGINES[value]) ctx.settings.set(key, value);
         if (key === 'startCompanion') ctx.settings.set(key, Boolean(value));
         if (key === 'identifyAsChrome') ctx.settings.set(key, Boolean(value));

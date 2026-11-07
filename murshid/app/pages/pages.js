@@ -7,6 +7,12 @@
   const api = window.murshid;
   const $ = (id) => document.getElementById(id);
   const page = document.body.dataset.page;
+  // The page arrives translated (app/protocol.js); these are for what we fill in.
+  const strings = api?.i18n?.strings || {};
+  const t = (key, vars) => {
+    const text = strings[key] ?? key;
+    return vars ? text.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole)) : text;
+  };
 
   // New tab fallback ------------------------------------------------------------
   $('search')?.addEventListener('submit', (event) => {
@@ -18,7 +24,17 @@
 
   // Settings ----------------------------------------------------------------------
   if (page === 'settings' && api) {
-    api.settings().then(({ values, searchEngines }) => {
+    api.settings().then(({ values, searchEngines, languages }) => {
+      const language = $('language');
+      for (const entry of languages || []) {
+        const option = document.createElement('option');
+        option.value = entry.id;
+        option.lang = entry.lang;
+        option.textContent = entry.name;
+        language.append(option);
+      }
+      language.value = values.language || 'auto';
+      language.addEventListener('change', () => api.setSetting('language', language.value));
       const select = $('engine');
       for (const engine of searchEngines) {
         const option = document.createElement('option');
@@ -54,9 +70,11 @@
       set('platform', info.platform);
       set('profile', info.profile);
       set('userAgent', info.userAgent);
-      set('webBrain', info.webBrain ? `${info.webBrain.version} (${info.webBrain.id})` : 'not installed in this build');
+      set('webBrain', info.webBrain ? `${info.webBrain.version} (${info.webBrain.id})` : t('page.about.notInBuild'));
       const c = info.companion;
-      set('companion', c.running ? `running on 127.0.0.1:${c.port}` : c.found ? `installed, not running (${c.path})` : 'not installed');
+      set('companion', c.running
+        ? t('page.about.companionRunning', { address: `127.0.0.1:${c.port}` })
+        : c.found ? t('page.about.companionStopped', { path: c.path }) : t('page.about.companionMissing'));
     });
   }
 
@@ -66,20 +84,13 @@
     const url = params.get('url') || '';
     let host = url;
     try { host = new URL(url).host || url; } catch {}
-    $('host').textContent = host || 'The page';
+    $('host').textContent = host || t('page.error.thePage');
     $('url').textContent = url;
     const description = params.get('description') || '';
     $('code').textContent = `${description} (${params.get('code') || '?'})`;
-    const friendly = {
-      ERR_NAME_NOT_RESOLVED: 'Its address could not be found. Check the spelling, or your connection.',
-      ERR_INTERNET_DISCONNECTED: 'This computer is offline.',
-      ERR_CONNECTION_REFUSED: 'The server refused the connection.',
-      ERR_CONNECTION_TIMED_OUT: 'The server took too long to answer.',
-      ERR_CERT_AUTHORITY_INVALID: 'Its security certificate is not trusted, so Murshid stopped.',
-      ERR_CERT_COMMON_NAME_INVALID: 'Its security certificate is for a different site, so Murshid stopped.',
-      ERR_CERT_DATE_INVALID: 'Its security certificate has expired or is not valid yet.',
-    };
-    $('why').textContent = friendly[description] || '';
+    // A plain-language reason for the common errors (page.error.ERR_* strings).
+    const reason = /^ERR_[A-Z_]+$/.test(description) ? `page.error.${description}` : '';
+    $('why').textContent = reason && strings[reason] ? strings[reason] : '';
     $('retry').addEventListener('click', () => { if (url) api?.navigate(url); });
   }
 })();

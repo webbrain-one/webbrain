@@ -5,6 +5,7 @@
 
 const { WebContentsView, dialog } = require('electron');
 const { mapInternal } = require('./url');
+const { t } = require('./i18n');
 
 const ERROR_ABORTED = -3;
 
@@ -80,7 +81,7 @@ class Tab {
     const history = wc.navigationHistory;
     return {
       id: this.id,
-      title: this.title || (isNewTab ? 'New Tab' : this.url || 'New Tab'),
+      title: this.title || (isNewTab ? t('tab.newTab') : this.url || t('tab.newTab')),
       url: this.url,
       isNewTab,
       favicon: isNewTab ? 'murshid' : this.favicon,
@@ -158,8 +159,8 @@ class Tab {
     wc.on('context-menu', (_event, params) => this.ctx.contextMenu(this, params));
     wc.on('will-prevent-unload', (event) => {
       const response = dialog.showMessageBoxSync(this.owner.win, {
-        type: 'question', buttons: ['Leave', 'Stay'], defaultId: 1, cancelId: 1,
-        title: 'Leave this page?', message: 'Changes you made may not be saved.', noLink: true,
+        type: 'question', buttons: [t('leave.leave'), t('leave.stay')], defaultId: 1, cancelId: 1,
+        title: t('leave.title'), message: t('leave.message'), noLink: true,
       });
       if (response === 0) event.preventDefault();
       else if (this.pendingClose) {
