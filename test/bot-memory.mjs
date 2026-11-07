@@ -69,7 +69,7 @@ for (const browser of ['chrome', 'firefox']) {
     assert.equal(h.session.pending.size, 0);
   });
   test(`${browser}: reconciles only the current acknowledged and independently verified native navigation`, async () => {
-    for (const scenario of ['verified', 'missing-ack', 'wrong-page', 'different-task', 'new-run', 'unverified', 'wrong-attempt']) {
+    for (const scenario of ['verified', 'missing-ack', 'no-navigation-proof', 'same-url', 'wrong-page', 'different-task', 'new-run', 'unverified', 'wrong-attempt']) {
       const h = harness(); let taskKey = 'task-1'; let navigated = false;
       const guard = { enabled: true, taskKey, successfulConsequentialToolCalls: 0,
         successfulConsequentialActionKeys: new Set(), requiresSubmission: true, verifiedSubmissionEvidence: false };
@@ -90,7 +90,8 @@ for (const browser of ['chrome', 'firefox']) {
             observationInterrupted: true, outcomeUnknown: true };
       const action = await h.agent.executeTool(7, 'click_ax', { ref_id: 'ref_5' });
       // The outer agent records the observed navigation after executeTool returns.
-      Object.assign(action, { pageUrlChanged: true, previousUrl: target.url, currentUrl: 'https://example.test/receipt' });
+      Object.assign(action, { pageUrlChanged: scenario !== 'no-navigation-proof', previousUrl: target.url,
+        currentUrl: scenario === 'same-url' ? target.url : 'https://example.test/receipt' });
       navigated = true;
       if (scenario === 'different-task') taskKey = 'task-2';
       if (scenario === 'new-run') h.agent._planExecutionGuards.set(7, { ...guard, successfulConsequentialActionKeys: new Set() });
