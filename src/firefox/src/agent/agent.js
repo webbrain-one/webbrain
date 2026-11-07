@@ -95,6 +95,8 @@ import {
   registrableDomain,
   validateFetchUrl,
   getAllowLocalNetwork,
+  recordBackgroundRead,
+  backgroundReadNote,
 } from '../network/network-tools.js';
 import { executeWikipediaSkillTool } from './wikipedia-offline.js';
 import {
@@ -1892,6 +1894,10 @@ export class Agent extends LoopDetector {
         && structuredChatBinding.body === this._workflowMessageBody(args.text) ? structuredChatBinding : null);
     const nativeChatReadRepair = this._isOwnedNativeChatReadRepair(tabId, name, args, result, messageRecipientContext);
     const next = recordCompletionToolResult(state, name, completionArgs, result, { chatDeliveryBinding, nativeChatReadRepair });
+    // How this run's fetch_url and research_url reads read their pages, for
+    // a request that says how pages are to be opened or read (see done).
+    const backgroundReads = recordBackgroundRead(state.backgroundReads, name, args, result);
+    if (backgroundReads !== state.backgroundReads) next.backgroundReads = backgroundReads;
     this.completionInvariants.set(tabId, next);
     // The completion state does not count an app-owned read repair as an
     // action either: the model did not send it. Nor does the dispatch record
@@ -45317,6 +45323,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // only a sure answer adds the note.
             if (!args.data_ref && completionDecision?.outcome === 'succeeded' && completionDecision.laterOutcome === 'asked') {
               args.summary += '\n\nPublication was verified. Future upvotes and moderation outcomes remain unverified.';
+            }
+            // A request that says how pages are to be opened or read (in the
+            // background, without a new tab, keeping this tab) gets what this run's
+            // fetch_url and research_url reads reported doing. The judge is asked
+            // only after such a read, in the same request as its verdict; only a
+            // sure answer adds the line.
+            if (!args.data_ref && completionDecision?.readMethod === 'asked') {
+              const readNote = backgroundReadNote(this.completionInvariants.get(tabId)?.backgroundReads);
+              if (readNote) args.summary += `\n\n${readNote}`;
             }
             const runId = this.currentRunId.get(tabId);
             if (dataUrl && runId) {
