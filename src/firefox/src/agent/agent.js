@@ -122,6 +122,7 @@ import { captchaChallengeKey, captchaChallengeMatcherOptions, challengeDialogTit
 import { applyCaptchaFrameVisibility, observeAwsWafChallengeInPage } from './captcha-frame-runtime.js';
 import { settleCookieBannersForTurn } from './cookie-banner-turn.js';
 import {
+  cloudflareChallengeDocumentKey,
   cloudflareChallengeNavigationTransition,
   cloudflareChallengePlatformTransition,
   cloudflareChallengeResponseTransition,
@@ -6841,11 +6842,13 @@ export class Agent extends LoopDetector {
   }
 
   // What the page probe proved an action cannot post: an ordinary HTML form,
-  // a deletion, or a control it resolved as a link, a field, a menu item or
-  // another control that submits nothing.
+  // a deletion, a control it resolved as a link, a field, a menu item or
+  // another control that submits nothing, or an X or Bluesky control the app
+  // itself names as one that publishes nothing (a post's Like or Bookmark).
   _cannotPost(detected) {
     if (!detected || typeof detected !== 'object' || detected.publicationControl === true) return false;
     if (detected.publicationControl === false || detected.mutationKind === 'delete') return true;
+    if (detected.isSubmit === false && detected.resolvedNonPublishingControl === true) return true;
     // An ordinary control on X or Bluesky whose caption no model read proves
     // nothing: it may be a Post button.
     if (detected.captionUnread === true) return false;
@@ -13252,7 +13255,42 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _clearCaptchaGateAfterNavigation(tabId, toolName, beforeUrl, afterUrl, toolResult) {
     if (!Agent.NAV_TOOLS.has(toolName)) return null;
-    return this._clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult);
+    const cleared = this._clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult);
+    if (cleared) return cleared;
+    // A navigation that lands on a challenge reports that challenge, so its
+    // result never reads as a clear page.
+    const destinationGate = this._destinationCaptchaGate(tabId, afterUrl);
+    if (!destinationGate) return null;
+    const gate = this._captchaGateForTools(tabId, destinationGate)?.publicGate || destinationGate.publicGate;
+    if (toolResult && typeof toolResult === 'object') toolResult.captchaGate = gate;
+    return gate;
+  }
+
+  // Cloudflare arms its interstitial from the destination's own main-frame
+  // response, so a navigation can land on a challenge. That gate belongs to
+  // the page now shown, not to the page that was left.
+  _destinationCaptchaGate(tabId, afterUrl) {
+    const destination = cloudflareChallengeDocumentKey(afterUrl);
+    const signal = this._cloudflareManagedChallenges.get(tabId);
+    if (!destination || signal?.active !== true || signal.documentKey !== destination) return null;
+    const gate = this._captchaGateStates.get(tabId);
+    if (gate?.cloudflareManagedChallenge === true && gate.cloudflareSignal?.documentKey === destination) return gate;
+    this._activeCloudflareManagedChallengeGate(tabId);
+    return this._captchaGateStates.get(tabId) || null;
+  }
+
+  // A navigation's main-frame response can still be settling into the
+  // Cloudflare signal when the tool returns; wait briefly so the gate is read
+  // after it.
+  async _settleCloudflareManagedChallenge(tabId, timeoutMs = 1000) {
+    const pending = this._cloudflareManagedChallengeTransitions.get(tabId);
+    if (!pending) return;
+    let timer = null;
+    await Promise.race([
+      pending.catch(() => null),
+      new Promise(resolve => { timer = setTimeout(resolve, timeoutMs); }),
+    ]);
+    clearTimeout(timer);
   }
 
   _clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult, { documentReplaced = false } = {}) {
@@ -13261,6 +13299,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!beforeDocument || !afterDocument) return null;
     const nativeAnswerRetired = this._retireNativeCaptchaAnswerIfPageChanged(tabId, afterUrl);
     if (beforeDocument === afterDocument && !nativeAnswerRetired && !documentReplaced) return null;
+    // Leaving a page does not clear a challenge the new page itself shows.
+    if (this._destinationCaptchaGate(tabId, afterUrl)) return null;
     const gate = this._captchaGateStates.get(tabId);
     if (!gate) return null;
     const clearedGate = {
@@ -16376,6 +16416,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
 
+      let navigationCaptchaGate = null;
       if (
         navigationProneCall
         && beforeUrl
@@ -16416,6 +16457,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         const beforePath = this._normalizeUrlPath(beforeUrl);
         const afterPath = this._normalizeUrlPath(afterUrl);
+        if (Agent.NAV_TOOLS.has(fnName)) await this._settleCloudflareManagedChallenge(tabId);
         const clearedCaptchaGate = this._clearCaptchaGateAfterNavigation(
           tabId,
           fnName,
@@ -16424,6 +16466,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           toolResult,
         );
         if (clearedCaptchaGate) onUpdate('captcha_gate', clearedCaptchaGate);
+        if (clearedCaptchaGate && clearedCaptchaGate.status !== 'cleared') navigationCaptchaGate = clearedCaptchaGate;
         // Explicit navigation tools intentionally go somewhere. For implicit
         // navigation, retain the less noisy path-level warning policy: query /
         // hash-only SPA changes reset state but do not force a re-plan notice.
@@ -16844,7 +16887,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         resultTrustName,
         this._limitToolResult(toolResult, modelResultChars),
       );
-      resultContent += this._captchaRoutingMessage(tabId, captchaGateDecision, captchaSolveOutcome, toolResult, onUpdate);
+      // A navigation that landed on a challenge gets the same trusted
+      // manual-completion note as a page read of it would.
+      resultContent += this._captchaRoutingMessage(tabId, captchaGateDecision || navigationCaptchaGate,
+        captchaSolveOutcome, toolResult, onUpdate);
       resultContent += signupRecoveryNote;
       if (nytimesPageGateFallback) {
         resultContent += `\n${nytimesPageGateFallback.note}`;
@@ -23006,8 +23052,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .some(key => typeof key === 'string' && /^(?:enter|return|space|spacebar| )$/i.test(key));
     if (!guard?.enabled || (!this._isFormValidationCandidate(name, args) && !activationKey
         && name !== 'execute_webmcp_tool' && !networkMutation)) return null;
+    // This guard runs on X and Bluesky whatever the task, so its refusal
+    // names a workflow job only when one is bound.
     const blocked = error => ({ success: false, dispatched: false, noDispatch: true, repeatBlocked: true,
-      workflowJob: 'publish-post', error,
+      socialPublicationGuard: true,
+      ...(guard.siteWorkflow?.job?.id ? { workflowJob: guard.siteWorkflow.job.id } : {}), error,
       publicationContract: guard.socialPublication?.contract || null,
       publicationProgress: publicationProgress(guard.socialPublication?.contract, guard.socialPublication?.outcomes),
       ...(guard.socialPublication?.deniedAudit ? { publicationAudit: guard.socialPublication.deniedAudit } : {}),
@@ -23032,8 +23081,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!SOCIAL_PLATFORMS.includes(live?.adapterName)) return null;
     if (detected?.resolvedEditableTarget || detected?.resolvedNavigationTarget || detected?.resolvedNonSubmitTarget) return null;
     // The DOM probe separates preparation from an actual commit. A missing
-    // publication contract says nothing about an independently resolved menu.
-    if (detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true || detected.resolvedPreparatoryTarget === true)
+    // publication contract says nothing about an independently resolved
+    // menu, or about a control the app itself names as one that publishes
+    // nothing (a post's Like or Bookmark). That one still gets the checks
+    // any other commit gets.
+    const resolvedCannotPublish = detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true
+      || detected.resolvedPreparatoryTarget === true || detected.resolvedNonPublishingControl === true);
+    if (resolvedCannotPublish
         && ['click', 'click_ax', 'iframe_click'].includes(name)
         && this._planExecutionGuards.get(tabId) === guard
         && guard.taskKey === this._progressTaskKeyHash(tabId)
@@ -23046,7 +23100,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (detected?.isSubmit !== true) {
       // Say which evidence is missing: a stale task, an unidentified key
       // target, or an unidentified control. None of them is a publication.
-      if (detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true || detected.resolvedPreparatoryTarget === true)) {
+      if (resolvedCannotPublish) {
         return blocked('The task changed while this control was being checked, so it was not activated. Continue under the latest request and read the page again before retrying.');
       }
       if (name === 'press_keys') return { ...blocked('Enter was not pressed: outside the post editor, a key activation on X or Bluesky could publish. Click the specific control instead; to publish, verify the draft and use the composer\'s Post button.'), targetUnresolved: true };
@@ -24894,6 +24948,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (gate.approvedScratchpadText) {
+      // Strict secret mode: credentials this conversation already knows are
+      // struck before the plan is pinned, and the run's guard is built from
+      // the same text (one that becomes known later: _scrubKnownCredentialsFromNotes).
+      gate.approvedScratchpadText = this._redactApprovedPlanCredentials(tabId, gate.approvedScratchpadText);
       let scratchText = gate.approvedScratchpadText;
       if (runOptions.steeringRevision != null) {
         const scratchIdx = this._findScratchpadIndex(messages);
@@ -26201,6 +26259,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       plannerClarification: followUpContext.plannerClarification,
       researchEscalationEnabled: this.researchEscalationEnabled,
       siteWorkflow: this._adapterWorkflowRoutingForUrl(tabUrl),
+      strictSecretMode: this._strictCredentialRedactionActive(tabId),
     });
     const plannerStep = 0;
     onUpdate('thinking', { step: plannerStep, note: 'Understanding request…' });
@@ -26500,6 +26559,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       researchEscalationEnabled: this.researchEscalationEnabled,
       siteWorkflow: this._adapterWorkflowRoutingForUrl(tabUrl),
       planReview: this._plannerReviewPromptPolicy(tabId),
+      strictSecretMode: this._strictCredentialRedactionActive(tabId),
     });
     const plannerStep = 0;
 
@@ -31349,6 +31409,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           frameDocumentIdentity: ordinaryActivations[0].frameDocumentIdentity,
           ...(ordinaryActivations[0].actionResource ? { actionResource: ordinaryActivations[0].actionResource } : {}) };
       }
+      // X's or Bluesky's own Like or Bookmark toggle: it cannot publish, but
+      // it is not an ordinary control either. Like the ordinary branch above,
+      // it carries no host or url, so a caller falls back to the page's URL;
+      // a toggle in a frame would need the probe's own url passed on here.
+      const nonPublishingControls = rawResults.filter(item => item?.isSubmit === false
+        && item.resolvedNonPublishingControl === true);
+      if (nonPublishingControls.length === 1 && ['click', 'click_ax', 'iframe_click'].includes(name)) {
+        return { isSubmit: false, resolvedNonPublishingControl: true,
+          appControl: String(nonPublishingControls[0].appControl || '').slice(0, 40),
+          frameDocumentIdentity: nonPublishingControls[0].frameDocumentIdentity };
+      }
       // Explicit negative: the probe resolved the click target to an editable
       // field, proving activation only focuses it. Propagated (not dropped
       // like inconclusive results) so gates can pass proven non-submits while
@@ -33738,18 +33809,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const owner = labelControlFor(el) || el;
         return owner?.closest?.('button,input,[role="button"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],[role="tab"],[role="option"],[role="treeitem"],[role="switch"],[role="checkbox"],[role="radio"],summary') || null;
       };
-      const ordinaryControlEvidence = (ordinary, labels) => {
+      // X and Bluesky name a post's Like and Bookmark toggles: X's like,
+      // unlike, bookmark and removeBookmark test ids, and Bluesky's likeBtn
+      // and postBookmarkBtn. Liking or bookmarking saves something to the
+      // account, so a caption read as a commit still keeps the control from
+      // being ordinary, but the app's own name for it says it publishes
+      // nothing. Share and More open a menu and are not among them.
+      const socialNonPublishingToggle = el => {
+        const testId = String(el?.getAttribute?.('data-testid') || '');
+        const adapterName = socialPublishAdapterName();
+        return adapterName === 'twitter' ? /^(?:like|unlike|bookmark|removeBookmark)$/.test(testId)
+          : adapterName === 'bluesky' && /^(?:likeBtn|postBookmarkBtn)$/.test(testId);
+      };
+      const ordinaryControlEvidence = (ordinary, labels, { commitAllowed = false } = {}) => {
         // An app's own control name decides publication capability on X and
         // Bluesky (socialPublishControlEvidence). A non-publish test id
         // disproves a caption read as a publication, such as Reply or
         // Schedule post, while a caption read as a deletion, send, save or
-        // payment still marks a commit. A popup launcher that only names the
+        // payment still marks a commit (unless the caller allows a commit,
+        // for the toggles above). A popup launcher that only names the
         // post it operates on ("Post actions") reads as opening a menu; one
         // whose caption reads as publishing stays a commit.
         const appNamedNonPublish = !!socialPublishAdapterName() && !!ordinary.getAttribute('data-testid') && !sendMarker(ordinary);
         const captionChoice = captionsReading(labels);
         const consequential = appNamedNonPublish
-          ? captionChoice === 'commit' || deletionReading(captionChoice)
+          ? (captionChoice === 'commit' && !commitAllowed) || deletionReading(captionChoice)
           : commitReading(captionChoice) || deletionReading(captionChoice);
         let uniqueTarget = true;
         if (args.text) {
@@ -33879,6 +33963,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ...(captionsReading(labels) === null && socialSiteHost() && !socialPublishAdapterName() ? { captionUnread: true } : {}),
             frameDocumentIdentity: [url, performance.timeOrigin].join('|'), actionResource,
             popupLauncherToken: popupTarget ? rememberPopupLauncher(control, actionResource) : '' };
+        }
+        // A post's own Like or Bookmark toggle on X or Bluesky, outside any
+        // form, typed or not: identified, and unable to publish even when its
+        // caption reads as a commit. Not ordinary, so it keeps the checks any
+        // other commit gets; only the refusal of a control that could publish
+        // does not apply to it. A caption read as a deletion still leaves it
+        // unresolved here (ordinaryControlEvidence refuses it).
+        const nonPublishingToggle = control && socialNonPublishingToggle(control)
+          && ((tag === 'button' && ['', 'button'].includes(type)) || (!['button', 'input', 'a'].includes(tag) && role === 'button'));
+        if (nonPublishingToggle && isVisible(control) && !control.form && !control.closest('form') && !control.hasAttribute('form')
+            && ordinaryControlEvidence(control, labels, { commitAllowed: true })) {
+          return { isSubmit: false, host, url, resolvedNonPublishingControl: true,
+            appControl: String(control.getAttribute('data-testid') || ''),
+            frameDocumentIdentity: [url, performance.timeOrigin].join('|') };
         }
       }
       // A vision click on plain content: no control, link, field, label or
@@ -39667,8 +39765,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const previousUrl = this._normalizeUrl(result?.previousUrl || '');
       const currentUrl = this._normalizeUrl(result?.currentUrl || result?.pageUrl || result?.url || '');
       const completion = this.completionInvariants.get(tabId);
+      // A verified action whose navigation outcome is unknown, or a delivered
+      // native click whose own navigation committed the new document
+      // (ownNavigation; only the Chrome build's trusted native button sends it).
       const navigatedButUncertain = result?.success === true
-        && result?.verified === true
+        && (result?.verified === true || (result?.ownNavigation === true
+          && result?.nativeInputAcknowledged === true && result?.dispatched === true))
         && result?.outcomeUnknown === true
         && result?.pageUrlChanged === true
         && !!previousUrl
@@ -39680,6 +39782,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             currentUrl,
             previousDocument: String(this._lastAxScopes.get(tabId)?.documentToken || ''),
             taskKey: state.taskKey,
+            // A managed bot-memory action is also reconciled by its own
+            // verification (executeTool). Both credits use its key: one count.
+            ...(result?.memoryAttemptId ? { memoryKey: `bot-memory:${result.memoryAttemptId}` } : {}),
           }
         : null;
     }
@@ -39719,7 +39824,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // missing execution evidence. This only reconciles the generic plan
       // counter; submission, publication, messaging, payment and workflow
       // contracts below still require their own terminal evidence.
-      state.successfulConsequentialToolCalls += 1;
+      const counted = state.successfulConsequentialActionKeys instanceof Set ? state.successfulConsequentialActionKeys : new Set();
+      if (!pendingNavigation.memoryKey || !counted.has(pendingNavigation.memoryKey)) state.successfulConsequentialToolCalls += 1;
+      if (pendingNavigation.memoryKey) {
+        counted.add(pendingNavigation.memoryKey);
+        state.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
+      }
       state.pendingNavigatedConsequentialAction = null;
     }
     if (contentRead && observationUrl && state.workflowRequiredJobEvidence) {
@@ -48300,10 +48410,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   // Strict secret mode: the known values taken out of notes written before
   // they became known, only from what the model wrote. In the scratchpad, the
-  // app-owned approved plans keep their text and move with it, and the app's
-  // own `[auto]` lines (download ids, attachment names) stay as written, since
-  // a match there would break the handle they carry. Each of the model's
-  // ledger rows gets what its progress_update would get now, except in
+  // app-owned approved plans lose them too and stay app-owned, moved with
+  // their text: the planner writes its plan from the user's request, so a
+  // password the request gave can sit in a step ("Fill the password field
+  // with …"), pinned into every later request (_redactApprovedPlanCredentials).
+  // The run's own copies of the plan follow (_redactApprovedPlanGuardCredentials).
+  // The app's own `[auto]` lines (download ids, attachment names) stay as
+  // written, since a match there would break the handle they carry. Each of
+  // the model's ledger rows gets what its progress_update would get now, except in
   // `target`, `url` and `href`: the runtime may have written those and they
   // identify the row. App-owned rows keep their fields, and row ids stay, as
   // at write time.
@@ -48342,8 +48456,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       let from = 0;
       for (const plan of this._scratchpadApprovedPlanRanges(message)) {
         next += scrubModelText(body.slice(from, plan.start));
-        plans.push({ start: next.length, end: next.length + plan.text.length, text: plan.text });
-        next += plan.text;
+        const text = this._redactApprovedPlanCredentials(tabId, plan.text);
+        plans.push({ start: next.length, end: next.length + text.length, text });
+        next += text;
         from = plan.end;
       }
       next += scrubModelText(body.slice(from));
@@ -48355,6 +48470,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         changed = true;
       }
     }
+    this._redactApprovedPlanGuardCredentials(tabId);
     const rows = this.progressLedgers.get(tabId);
     let rowsChanged = false;
     const nextRows = (Array.isArray(rows) ? rows : []).map(row => {
@@ -48385,6 +48501,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (typeof text !== 'string' || !this._strictCredentialRedactionActive(tabId)) return text;
     const known = this._knownCredentialValues?.get(tabId);
     return known?.length ? redactCredentialValues(text, known) : text;
+  }
+
+  // An approved plan's text with every known credential value struck, in
+  // strict secret mode; otherwise unchanged. Its first line, the app's
+  // `[Approved plan — …]` marker, stays as written: it is what says the
+  // pinned plan is the app's (_hasApprovedExecutionPlan,
+  // _approvedExecutionPlanAnchor), and a short value could match a word in it.
+  _redactApprovedPlanCredentials(tabId, text) {
+    if (typeof text !== 'string' || !text) return text;
+    const marker = text.match(/^\s*\[Approved plan\b[^\]\n]*\]/)?.[0] || '';
+    const rest = text.slice(marker.length);
+    const redacted = this._redactKnownCredentials(tabId, rest);
+    return redacted === rest ? text : marker + redacted;
+  }
+
+  // The run's other copies of the approved plan follow the pinned one: the
+  // execution guard's text, by which steering finds the old plan in the
+  // scratchpad and which decision requests quote, and its anchor, which
+  // recovery prompts repeat; also the pair a Continue carries to the next run.
+  // An anchor cut from the plan is cut again from the struck text, so a value
+  // its 800-character cut split is not left half there.
+  _redactApprovedPlanGuardCredentials(tabId) {
+    for (const state of [this._planExecutionGuards?.get(tabId), this._continuationExecutionEvidence?.get(tabId)]) {
+      if (!state || typeof state !== 'object') continue;
+      const text = typeof state.approvedPlanText === 'string' ? state.approvedPlanText : '';
+      const anchor = typeof state.approvedPlanAnchor === 'string' ? state.approvedPlanAnchor : '';
+      if (!text && !anchor) continue;
+      const nextText = this._redactApprovedPlanCredentials(tabId, text);
+      const nextAnchor = text && anchor === this._approvedExecutionPlanAnchor(text)
+        ? this._approvedExecutionPlanAnchor(nextText)
+        : this._redactKnownCredentials(tabId, anchor);
+      if (nextText !== text) state.approvedPlanText = nextText;
+      if (nextAnchor !== anchor) state.approvedPlanAnchor = nextAnchor;
+    }
   }
 
   // A model's progress_update arguments with credentials taken out, in strict

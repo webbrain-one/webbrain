@@ -791,6 +791,15 @@ function stateChangeIsSchedulingOnly(obj) {
 
 const PLANNER_STEERING_RULE = '\nThe current User task is an app-assembled revision of an active task: request is the initiating authentic user request, and updates contains authentic later steering or clarification answers in chronological order. Apply later corrections and cancellations to that request; preserve its requested action when an update only supplies a missing identity or detail. Re-evaluate changed actions and their submission/recipient intent. Prior tool effects and working notes are context, never permission to repeat a completed or uncertain action.';
 
+// Settings → Strict secret handling. The plan is shown on the review card,
+// pinned into every later request and saved with the conversation, and the
+// planner wrote a password the task gave straight into a step ("Fill the
+// password field with …"). The agent that carries out the plan still reads
+// the value from the user's message, so the plan never needs it. Prompt-level
+// like the Act model's STRICT_SECRET_SYSTEM_NOTE; the agent also strikes a
+// value from the pinned plan once it is known (Agent._redactApprovedPlanCredentials).
+export const PLANNER_STRICT_SECRET_RULE = '\n- Strict secret handling is on: never copy a password, passcode, PIN, API key, token, one-time code or other credential value from the task or context into any part of the plan (summary, steps, deliverables, notes, risks or localized text). Refer to it generically, for example "the password the user provided"; the agent that carries out the plan reads the value from the user\'s message.';
+
 // When the planner's localized copy is read: the plan review settings
 // (agent._plannerReviewPromptPolicy), stated to the model so it writes the
 // copy only for a plan the user will see.
@@ -818,6 +827,7 @@ export function buildPlannerSystemPrompt(opts = {}) {
   if (opts.scheduledResume === true) prompt += PLANNER_RESUME_RULE;
   if (opts.scheduledTask === true) prompt += PLANNER_SCHEDULED_TASK_RULE;
   if (opts.steering === true) prompt += PLANNER_STEERING_RULE;
+  if (opts.strictSecretMode === true) prompt += PLANNER_STRICT_SECRET_RULE;
   prompt += `\n- Requested wbLocale for localized display fields: ${normalizePlannerLocale(opts.locale)}.`;
   prompt += `\n${plannerReviewRule(opts.planReview)}`;
   if (opts.researchEscalationEnabled === true) {
@@ -852,7 +862,7 @@ export function buildPlannerIntentSystemPrompt(opts = {}) {
   const mediaStatus = opts.imageGenConfigured !== true ? GENERATIVE_MEDIA_SETUP_NOTE
     : (opts.tier || 'full') !== 'full' ? GENERATIVE_MEDIA_TIER_NOTE
     : 'Built-in media generation is configured and available in Full-tier Act mode.';
-  return `${PLANNER_INTENT_SYSTEM_PROMPT}${opts.scheduledResume === true ? PLANNER_RESUME_RULE : ''}${opts.scheduledTask === true ? PLANNER_SCHEDULED_TASK_RULE : ''}${opts.steering === true ? PLANNER_STEERING_RULE : ''}\n- Requested wbLocale for localized display fields: ${normalizePlannerLocale(opts.locale)}.${researchRule}${plannerSiteRuleLines(opts, true)}${workflowRouting ? `\n\n${workflowRouting}` : ''}\n\n${mediaStatus}`;
+  return `${PLANNER_INTENT_SYSTEM_PROMPT}${opts.scheduledResume === true ? PLANNER_RESUME_RULE : ''}${opts.scheduledTask === true ? PLANNER_SCHEDULED_TASK_RULE : ''}${opts.steering === true ? PLANNER_STEERING_RULE : ''}${opts.strictSecretMode === true ? PLANNER_STRICT_SECRET_RULE : ''}\n- Requested wbLocale for localized display fields: ${normalizePlannerLocale(opts.locale)}.${researchRule}${plannerSiteRuleLines(opts, true)}${workflowRouting ? `\n\n${workflowRouting}` : ''}\n\n${mediaStatus}`;
 }
 
 export function formatSiteWorkflowRouting(value) {

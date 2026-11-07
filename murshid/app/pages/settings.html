@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="{{lang}}" dir="{{dir}}">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
+<title>{{t:page.settings.title}}</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-page="settings">
+<main class="wrap">
+  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span lang="en" dir="ltr">Murshid</span></div>
+  <h1>{{rich:page.settings.heading}}</h1>
+  <p class="lede">{{t:page.settings.lede}}</p>
+  <div class="panel">
+    <div class="row">
+      <label for="language">{{t:page.settings.language}}<small>{{t:page.settings.languageHelp}}</small></label>
+      <select id="language"></select>
+    </div>
+    <div class="row">
+      <label for="engine">{{t:page.settings.engine}}<small>{{t:page.settings.engineHelp}}</small></label>
+      <select id="engine"></select>
+    </div>
+    <div class="row">
+      <label for="suggest">{{t:page.settings.suggest}}<small>{{t:page.settings.suggestHelp}}</small></label>
+      <input id="suggest" type="checkbox">
+    </div>
+    <div class="row">
+      <div class="k">{{t:page.settings.history}}<small id="history-count">{{t:page.settings.historyHelp}}</small></div>
+      <button class="button" id="clear-history" type="button">{{t:page.settings.clearHistory}}</button>
+    </div>
+    <div class="row">
+      <label for="companion">{{t:page.settings.companion}}<small>{{t:page.settings.companionHelp}}</small></label>
+      <input id="companion" type="checkbox">
+    </div>
+    <div class="row">
+      <label for="as-chrome">{{t:page.settings.asChrome}}<small>{{t:page.settings.asChromeHelp}}</small></label>
+      <input id="as-chrome" type="checkbox">
+    </div>
+    <div class="row">
+      <label for="persist-session">{{t:page.settings.persist}}<small>{{t:page.settings.persistHelp}}</small></label>
+      <input id="persist-session" type="checkbox">
+    </div>
+  </div>
+  <div class="actions">
+    <button class="button" id="webbrain" type="button">{{t:page.openWebBrain}}</button>
+    <button class="button" id="open-companion" type="button">{{t:page.companion}}</button>
+    <a class="button" href="murshid://about">{{t:page.aboutMurshid}}</a>
+  </div>
+</main>
+<script src="pages.js"></script>
+</body>
+</html>

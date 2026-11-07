@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Murshid</title>
+  <defs>
+    <mask id="cut">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M168 132 A88 19 0 0 0 344 132" fill="none" stroke="#000" stroke-width="12" stroke-linecap="round"/>
+      <path d="M256 131 C300 124 340 128 356 146 C366 160 370 188 371 222" fill="none" stroke="#000" stroke-width="22" stroke-linecap="round"/>
+      <path d="M360 230 C356 268 350 304 342 340 C356 348 386 348 400 340 C392 304 386 268 382 230 Z" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g fill="#000" transform="translate(256 276) scale(1.3) translate(-256 -276)">
+    <g mask="url(#cut)">
+      <path d="M168 132 L124 396 Q256 436 388 396 L344 132 Z"/>
+      <ellipse cx="256" cy="132" rx="88" ry="19"/>
+    </g>
+    <path d="M256 131 C300 124 340 128 356 146 C366 160 370 188 371 222" fill="none" stroke="#000" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="256" cy="131" r="13"/>
+    <path d="M360 230 C356 268 350 304 342 340 C356 348 386 348 400 340 C392 304 386 268 382 230 Z"/>
+  </g>
+</svg>

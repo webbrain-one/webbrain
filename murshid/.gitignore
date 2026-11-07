@@ -1,0 +1,4 @@
+dist/
+node_modules/
+# installers are deployed with the site, not committed
+web/download/

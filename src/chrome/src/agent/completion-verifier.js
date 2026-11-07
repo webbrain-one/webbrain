@@ -43,9 +43,29 @@ function completionSideAnswers(later, summary) {
     ...(summary === 'meta_only' || summary === 'plan_only' ? { summaryKind: summary } : {}) };
 }
 
+// Why a judge's attempt ended without a verdict, for traces. A request that
+// ran out of its time is a timeout, with the time it had; a reply that is not
+// a verdict is an invalid response; only a judge that could not be reached or
+// did not answer at all is unavailable.
+export const COMPLETION_TIMEOUT = 'COMPLETION_TIMEOUT';
+export const COMPLETION_INVALID_VERDICT = 'COMPLETION_INVALID_VERDICT';
+
+function invalidVerdictError(message) {
+  return Object.assign(new Error(message), { code: COMPLETION_INVALID_VERDICT });
+}
+
+export function completionAttemptFailure(error) {
+  if (error?.code === COMPLETION_TIMEOUT) {
+    return { reason: 'timeout', ...(Number.isFinite(error.timeoutMs) ? { timeoutMs: error.timeoutMs } : {}) };
+  }
+  if (error?.code === COMPLETION_INVALID_VERDICT) return { reason: 'invalid_response' };
+  const status = error?.status ?? error?.httpStatus;
+  return { reason: error?.code || (status ? `http_${status}` : 'unavailable') };
+}
+
 export function decisionCompletionVerdict(result, threshold = .9) {
   const answer = result?.answers?.task_outcome;
-  if (!COMPLETION_OUTCOMES.includes(answer?.choice)) throw new Error('Invalid completion decision.');
+  if (!COMPLETION_OUTCOMES.includes(answer?.choice)) throw invalidVerdictError('Invalid completion decision.');
   const probability = answer.probabilities?.[answer.choice];
   return { outcome: probability >= threshold ? answer.choice : 'uncertain', probability,
     confidence: answer.confidence, model: result.model, provider: result.provider, usage: result.usage,
@@ -60,8 +80,10 @@ export const LATER_OUTCOME_FIELD = 'Set "later" to "asked" when the task also as
 export const SUMMARY_KIND_FIELD = 'Set "summary" to "meta_only" when candidate_summary_not_proof only says that an answer, explanation or confirmation was given (for example "Explained how ...") without giving it, to "plan_only" when it only describes what will be done next or proposes steps instead of what was done, and otherwise to "result". Judge both in any language.';
 
 export function llmCompletionVerdict(content) {
-  const parsed = JSON.parse(String(content || '').trim().replace(/^```(?:json)?\s*|\s*```$/g, ''));
-  if (!parsed || !COMPLETION_OUTCOMES.includes(parsed.outcome) || typeof parsed.reason !== 'string' || parsed.reason.length > 1500) throw new Error('Invalid LLM completion verdict.');
+  let parsed;
+  try { parsed = JSON.parse(String(content || '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); }
+  catch { throw invalidVerdictError('Invalid LLM completion verdict.'); }
+  if (!parsed || !COMPLETION_OUTCOMES.includes(parsed.outcome) || typeof parsed.reason !== 'string' || parsed.reason.length > 1500) throw invalidVerdictError('Invalid LLM completion verdict.');
   return { outcome: parsed.outcome, reason: parsed.reason, ...completionSideAnswers(parsed.later, parsed.summary) };
 }
 
@@ -87,9 +109,11 @@ export async function verifyCompletion({ decision, llm, capture, isCurrent, sign
   for (const engine of [decision, llm].filter(Boolean)) {
     let answeredUnsure = false, needsConfirmation = false;
     for (const modality of engine.supportsVision ? (preferAx ? ['ax', 'vision'] : ['vision', 'ax']) : ['ax']) {
+      // Each attempt names its judge's model, whether or not it answered.
+      const attempt = fields => onAttempt({ engine: engine.name, ...(engine.model ? { model: engine.model } : {}), modality, ...fields });
       const started = now();
       if (Number.isFinite(deadline) && deadline - started < COMPLETION_ATTEMPT_MIN_MS) {
-        onAttempt({ engine: engine.name, modality, outcome: 'uncertain', reason: 'time_budget' });
+        attempt({ outcome: 'uncertain', reason: 'time_budget' });
         break;
       }
       try {
@@ -98,19 +122,19 @@ export async function verifyCompletion({ decision, llm, capture, isCurrent, sign
         try { evidence = await capture(modality); }
         catch (error) {
           if (completionStopError(error, signal)) throw error;
-          onAttempt({ engine: engine.name, modality, outcome: 'uncertain', reason: 'capture_unavailable', captureMs: now() - started });
+          attempt({ outcome: 'uncertain', reason: 'capture_unavailable', captureMs: now() - started });
           continue;
         }
         const captured = now();
-        if (!evidence) { onAttempt({ engine: engine.name, modality, outcome: 'uncertain', reason: 'capture_unavailable', captureMs: captured - started }); continue; }
+        if (!evidence) { attempt({ outcome: 'uncertain', reason: 'capture_unavailable', captureMs: captured - started }); continue; }
         if (Number.isFinite(deadline) && deadline - captured < COMPLETION_ATTEMPT_MIN_MS) {
-          onAttempt({ engine: engine.name, modality, outcome: 'uncertain', reason: 'time_budget', captureMs: captured - started });
+          attempt({ outcome: 'uncertain', reason: 'time_budget', captureMs: captured - started });
           break;
         }
         const verdict = await engine.evaluate(evidence, modality, Number.isFinite(deadline) ? { timeoutMs: deadline - captured } : {});
         if (signal?.aborted) throw signal.reason || new Error('Cancelled');
         if (!await isCurrent(evidence)) { const error = new Error('Completion evidence changed during verification.'); error.code = 'STALE_COMPLETION'; throw error; }
-        onAttempt({ engine: engine.name, modality, ...verdict, captureMs: captured - started, evaluateMs: now() - captured });
+        attempt({ ...verdict, captureMs: captured - started, evaluateMs: now() - captured });
         // Experimental local decisions are evidence, not sole completion authority.
         if (verdict.outcome === 'succeeded' && engine.requiresIndependentSuccessConfirmation) { needsConfirmation = true; break; }
         if (verdict.outcome !== 'uncertain') return { ...verdict, engine: engine.name, modality, identity: evidence.identity, evidenceKey: evidence.key };
@@ -118,8 +142,7 @@ export async function verifyCompletion({ decision, llm, capture, isCurrent, sign
       } catch (error) {
         if (completionStopError(error, signal)) throw error;
         const status = error?.status ?? error?.httpStatus;
-        onAttempt({ engine: engine.name, modality, outcome: 'uncertain', reason: error?.code || (status ? `http_${status}` : 'unavailable'),
-          elapsedMs: now() - started });
+        attempt({ outcome: 'uncertain', ...completionAttemptFailure(error), elapsedMs: now() - started });
         // Moving pixels invalidate the image verdict, not the whole task.
         // Transport failures still skip this judge without a second request.
         if (!(modality === 'vision' && (error?.code === 'COMPLETION_VISUAL_CHANGED' || [400, 413, 415, 422].includes(status)))) break;
@@ -134,7 +157,9 @@ export async function withCompletionTimeout(fn, parentSignal, timeoutMs) {
   const controller = new AbortController();
   const abort = () => controller.abort(parentSignal.reason || new Error('Cancelled'));
   if (parentSignal?.aborted) abort(); else parentSignal?.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error('Completion verification timed out.')), timeoutMs);
+  // The error says how long the call had, so a caller can report a timeout.
+  const timer = setTimeout(() => controller.abort(Object.assign(new Error('Completion verification timed out.'),
+    { code: COMPLETION_TIMEOUT, timeoutMs })), timeoutMs);
   let cancel;
   try {
     if (controller.signal.aborted) throw controller.signal.reason;

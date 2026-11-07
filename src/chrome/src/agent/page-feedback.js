@@ -13,6 +13,12 @@ const PAGE_GESTURE_LEASE_MS = 15000;
 const AGENT_SAME_DOCUMENT_NAVIGATION_MS = 3000;
 // A page route update this soon after physical input is the user's.
 const USER_NAVIGATION_PROXIMITY_MS = 2000;
+// A top-level navigation follows its activating click or submit within this window.
+const AGENT_NAVIGATION_MS = 10000;
+// A press's own top-level navigation can replace the observed document before
+// the browser's report of its commit arrives (a read of the old document fails
+// first). How long, in all, that press's observation waits for the report.
+const AGENT_NAVIGATION_COMMIT_WAIT_MS = 300;
 // How long a same-document Back/Forward update waits for its frame monitor's
 // page-initiated reading before the user attribution simply stands.
 const PAGE_TRAVERSAL_ATTRIBUTION_MS = 500;
@@ -298,6 +304,44 @@ function preparationVetoError(cause, monitorVeto = null, ownerPendingAfter = fal
   return error;
 }
 
+// The embedded frames each operation was prepared in as the receiver of its
+// native input (prepareReceiverFrame), by the operation's frame set.
+const receiverPreparations = new WeakMap();
+
+/**
+ * A vision operation is prepared in the top document at its point. When the
+ * top document finds an embedded frame there (or focus in one), Chrome will
+ * deliver the operation's native input into that frame's document, and its
+ * monitor fences each command (beforePageAgentDispatch). Prepare it there
+ * too, now: bound to the node the browser's own hit test (or focus) finds
+ * there (agent._pageFeedbackInputReceiver marks it, as each command does),
+ * never to the top document's coordinates. A change in that frame between
+ * now and the first command then refuses the input as the same change in
+ * the top document would. Firefox defines no receiver hook and never routes
+ * vision input to a frame's monitor.
+ */
+async function prepareReceiverFrame(agent, api, tabId, owner, { runToken, operationId, binding, point, allowPassiveRebase }) {
+  if (typeof agent._pageFeedbackInputReceiver !== 'function') return;
+  let receiver = null;
+  try { receiver = await agent._pageFeedbackInputReceiver(tabId, binding.visionFocusFollowUp ? { focused: true } : point); }
+  catch { /* Unresolved: input that reaches a frame is refused there. */ }
+  const frames = owner.operationFrames.get(operationId);
+  const frameId = typeof receiver?.documentToken === 'string' ? owner.frameForDocument(receiver.documentToken) : undefined;
+  if (!Number.isSafeInteger(frameId) || frameId <= 0 || typeof receiver.nativeTarget !== 'string' || !receiver.nativeTarget
+      || !frames || dispatchOwners.get(tabId) !== owner || owner.operationId !== operationId) return;
+  frames.add(frameId);
+  let prepared;
+  try {
+    prepared = await api.tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare', params: {
+      ...binding, frameReceiver: true, runToken, operationId, allowPassiveRebase: allowPassiveRebase === true,
+      nativeTarget: receiver.nativeTarget, ...(point ? { receiverPoint: { x: point.x, y: point.y } } : {}),
+    } }, { frameId });
+  } catch { /* No monitor answered: its input is refused. */ }
+  if (prepared?.ready !== true || owner.operationFrames.get(operationId) !== frames) return;
+  if (!receiverPreparations.has(frames)) receiverPreparations.set(frames, new Set());
+  receiverPreparations.get(frames).add(frameId);
+}
+
 /** Called at the transport boundary, not while a selector/permission is being prepared. */
 export async function beforePageAgentDispatch(api, tabId, details = {}) {
   const owner = dispatchOwners.get(tabId);
@@ -335,7 +379,20 @@ export async function beforePageAgentDispatch(api, tabId, details = {}) {
       error.code = 'page_feedback_pending'; error.pagePreparationVeto = { cause: 'receiver_frame_changed' }; throw error;
     }
   }
-  owner.operationFrames.get(owner.operationId)?.add(Number(details.frameId) || 0);
+  // Chrome delivers a vision operation's trusted input at its point (or into
+  // the focused field) to the document there, an embedded frame's included,
+  // whose monitor then fences every command. That frame was prepared with
+  // the top document (prepareReceiverFrame). Input reaching a frame that was
+  // not, say one moved under the point or focused since, is refused: its
+  // monitor holds no preparation to judge it by (QA B2).
+  const receiverFrameId = Number(details.frameId) || 0;
+  if (!details.release && details.nativeInput === true && receiverFrameId > 0 && operationId === owner.operationId
+      && owner.frameReceiver?.()
+      && !receiverPreparations.get(owner.operationFrames.get(operationId))?.has(receiverFrameId)) {
+    const error = new Error(pageFeedbackPendingResult().error);
+    error.code = 'page_feedback_pending'; error.pagePreparationVeto = { cause: 'receiver_frame_changed' }; throw error;
+  }
+  owner.operationFrames.get(owner.operationId)?.add(receiverFrameId);
   const monitorParams = { ...dispatchDetails, runToken: owner.runToken, operationId };
   let acknowledgement;
   let preparationAcknowledgement;
@@ -440,6 +497,10 @@ function safeAction(tool, args = {}) {
   return { tool, ...target };
 }
 
+function sameOrigin(expected, actual) {
+  try { return new URL(expected).origin === new URL(actual).origin; } catch { return false; }
+}
+
 function sameOriginPath(expected, actual) {
   try {
     const expectedUrl = new URL(expected), actualUrl = new URL(actual);
@@ -496,6 +557,10 @@ export const pageFeedbackMethods = {
       tool: () => run.dispatchCall?.name || '',
       // The current call acts on a certified node of the top document.
       modelBound: () => !!run.dispatchCall?.expectedModelSnapshot,
+      // The current call's vision binding (a point, the field its click
+      // focused, or a wheel): its native input may reach only an embedded
+      // frame prepared with it (prepareReceiverFrame).
+      frameReceiver: () => run.dispatchCall?.frameReceiver || null,
       pending: () => this._pageFeedbackBlocksCall(tabId, run.dispatchCall?.policyName || run.dispatchCall?.name,
         run.dispatchCall?.args, run.dispatchCall?.blockOptions),
       allowPassiveRebase: () => run.dispatchCall?.allowPassiveRebase === true,
@@ -691,7 +756,7 @@ export const pageFeedbackMethods = {
       clearGestureLease(run, frameId);
       // A replaced document cannot inherit a click's same-document route marker.
       if (frameId === 0 || run.sameDocumentNavigation?.frameId === frameId) run.sameDocumentNavigation = null;
-      if (frameId === 0) run.agentRoute = null;
+      if (frameId === 0) { run.agentRoute = null; run.agentDocument = null; }
       run.documents.set(frameId, { id: details.documentId || '', url: details.url || '',
         parentFrameId: Number.isSafeInteger(details.parentFrameId) ? details.parentFrameId : undefined });
       if (frameId === 0) {
@@ -717,7 +782,7 @@ export const pageFeedbackMethods = {
       ? redirect && !!navigation.documentId && navigation.documentId === details.documentId
       : (!!navigation?.url && navigation.url === details.url) || firstRedirect || formGetDestination
         || (navigation?.kind === 'navigate' && navigation.history && qualifiers.includes('forward_back'));
-    const agentNavigation = !explicit && navigation && navigation.frameId === frameId && Date.now() - navigation.at < 10000
+    const agentNavigation = !explicit && navigation && navigation.frameId === frameId && Date.now() - navigation.at < AGENT_NAVIGATION_MS
       && (!qualifiers.includes('forward_back') || navigation.history)
       && sameNavigation;
     // A completed click/navigation consumes its marker. Retain it only for a
@@ -730,6 +795,15 @@ export const pageFeedbackMethods = {
     }
     if (agentNavigation) {
       if (frameId === 0 && type !== 'committed') run.agentRoute = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      // A new top document committed for the navigation the agent's own click
+      // or submit started (a form POST answered with a redirect, say). Bound
+      // to that dispatch operation, like agentRoute; any later commit clears it.
+      // A redirect is that press's document only as its form submission or at
+      // its destination's origin, not any redirect within the window.
+      if (frameId === 0 && type === 'committed'
+          && (details.transitionType === 'form_submit' || sameOrigin(navigation.url, details.url))) {
+        run.agentDocument = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      }
       return;
     }
     // A route update after the agent's own click in the same frame, before any
@@ -866,6 +940,42 @@ export const pageFeedbackMethods = {
     return !!run?.agentRoute && !!run.url && run.agentRoute.url === run.url && run.agentRoute.at >= since
       && !!operationId && run.agentRoute.operationId === operationId
       && (!proof || !(run.traversedAt >= since));
+  },
+
+  // The current top document is the one the navigation of the action in
+  // flight committed (its dispatch operation), at or after `since`, with no
+  // Back/Forward since, and every other part of the model state the action
+  // was bound to is still current. Only the document and the address that
+  // navigation replaced may differ.
+  _pageFeedbackAgentDocumentCurrent(tabId, run, state, since = 0) {
+    const operationId = dispatchOwners.get(tabId)?.operationId || '';
+    const committed = run?.agentDocument;
+    return !!committed && !!run.url && committed.url === run.url && committed.at >= since
+      && !!operationId && committed.operationId === operationId && !(run.traversedAt >= since)
+      && !!state && this._pageFeedbackStateCurrent(tabId, run, { ...state, url: run.url, frames: new Map() });
+  },
+
+  // Bounded wait while the agent's own click or submit in the action in
+  // flight (its dispatch operation, at or after `since`) has started a
+  // top-level navigation whose commit the browser has not reported yet. Ends
+  // early on that report or on anything else that ends the expectation:
+  // another commit or route update, input from the person, a new action, the
+  // end of the run, or Stop. Sends nothing and decides nothing; the caller
+  // checks ownership again afterwards. Every wait of one action shares its
+  // `budget`, so that action waits AGENT_NAVIGATION_COMMIT_WAIT_MS at most.
+  async _pageFeedbackAgentNavigationSettled(tabId, run, since = 0, signal = null, budget = {}) {
+    const pending = () => {
+      const navigation = run?.navigation, operationId = dispatchOwners.get(tabId)?.operationId || '';
+      return this._pageFeedbackRuns?.get(tabId) === run && !!navigation && navigation.frameId === 0
+        && ['click', 'submit'].includes(navigation.kind) && !!navigation.url && !navigation.redirectChain
+        && navigation.at >= since && Date.now() - navigation.at < AGENT_NAVIGATION_MS
+        && !!operationId && navigation.operationId === operationId;
+    };
+    while (pending()) {
+      budget.until ||= Date.now() + AGENT_NAVIGATION_COMMIT_WAIT_MS;
+      if (Date.now() >= budget.until) return;
+      await untilAborted(new Promise(resolve => setTimeout(resolve, 20)), signal);
+    }
   },
 
   // Bounded: each pending traversal attribution settles within its timeout.
@@ -2009,9 +2119,21 @@ export function installPageFeedback(Agent) {
     let commitBrowserBatchInput = false;
     const expectedModelSnapshot = modelBound ? modelState.actionBinding.snapshotToken : undefined;
     const relaxedMonitorGrantToken = expectedModelSnapshot && this._monitoringRetryCurrent(tabId, run)?.grantToken;
+    // The monitor rebases these over passive churn while the element at the
+    // CSS point (or the focused field) stays the same; a wheel binds no
+    // element. A person's input still voids all three. A native hover_at /
+    // drag_at gives its point as monitorPoint.
+    const visionPoint = policy.kind === 'vision_point' ? vision?.cssPoint || vision?.monitorPoint || null : null;
+    const visionBinding = { ...(visionPoint ? { visionPoint: true } : {}), ...(focusFollowUp ? { visionFocusFollowUp: true } : {}),
+      ...(name === 'scroll_at' ? { visionWheel: true } : {}) };
+    // The top document holds that point. Native input at it can reach an
+    // embedded frame's document, whose monitor is prepared with the same
+    // binding (prepareReceiverFrame). A wheel's point only finds that frame.
+    const frameReceiver = Object.keys(visionBinding).length ? { tool: name, ...visionBinding } : null;
+    const receiverPoint = visionPoint || (name === 'scroll_at' ? vision?.wheelPoint || null : null);
     if (run) run.dispatchCall = { name, args, allowPassiveRebase: false, dispatchState, expectedModelSnapshot, modelState, mutation, batchId,
       ...(policyName !== name ? { policyName } : {}), ...(focusFollowUp ? { blockOptions } : {}),
-      ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}) };
+      ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}), ...(frameReceiver ? { frameReceiver } : {}) };
     if (run && mutation && owner) {
       owner.operationId = operationId;
       owner.operationFrames.set(operationId, new Set([0]));
@@ -2021,19 +2143,17 @@ export function installPageFeedback(Agent) {
         const modelHeldMs = expectedModelSnapshot ? this._pageFeedbackModelHeldMs(modelState) : 0;
         prepared = await apiFor().tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare',
           params: { ...safeAction(name, args), runToken: run.token, operationId, allowPassiveRebase: allowPassiveRebase === true,
-            // The monitor rebases these over passive churn while the element
-            // at the CSS point (or the focused field) stays the same; a wheel
-            // binds no element. A person's input still voids all three. A
-            // native hover_at / drag_at gives its point as monitorPoint.
-            ...(policy.kind === 'vision_point' && (vision?.cssPoint || vision?.monitorPoint)
-              ? { visionPoint: true, x: (vision.cssPoint || vision.monitorPoint).x, y: (vision.cssPoint || vision.monitorPoint).y } : {}),
-            ...(focusFollowUp ? { visionFocusFollowUp: true } : {}),
-            ...(name === 'scroll_at' ? { visionWheel: true } : {}),
+            ...visionBinding, ...(visionPoint ? { x: visionPoint.x, y: visionPoint.y } : {}),
+            ...(receiverPoint ? { receiverPoint: { x: receiverPoint.x, y: receiverPoint.y } } : {}),
             ...(batchId ? { batchId } : {}),
             ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}),
             ...(expectedModelSnapshot ? { expectedModelSnapshot } : {}),
             ...(modelHeldMs > 0 ? { modelHeldMs } : {}) } }, { frameId: 0 });
       } catch {}
+      if (frameReceiver && prepared?.receiverFrame === true && (receiverPoint || focusFollowUp)) {
+        await prepareReceiverFrame(this, apiFor(), tabId, owner, { runToken: run.token, operationId, binding: frameReceiver,
+          point: focusFollowUp ? null : receiverPoint, allowPassiveRebase });
+      }
       // Certified targets keep their pre-inference footprint across passive
       // updates during preparation; legacy preparation retains its revision fence.
       if ((modelBound ? prepared?.ready === true && prepared.modelBindingValid === true

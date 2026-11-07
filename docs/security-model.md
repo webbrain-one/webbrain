@@ -126,14 +126,21 @@ When enabled (Settings → "Strict secret handling"), the agent:
 - **Is instructed never to quote credentials** in summaries, assistant text, or tool-call arguments — even when the user explicitly asks
 - The `done` tool description is swapped for `DONE_TOOL_STRICT`, which adds a hard prohibition
 - After filling a sensitive field, `CREDENTIAL_NOTE_STRICT` is injected into the tool result
+- The planner is told (`PLANNER_STRICT_SECRET_RULE`) not to copy a credential from the task into the plan's summary, steps, deliverables, notes or risks; the agent that carries out the plan types the value from the user's message
 
-Those three are prompt-level, so they hold only as far as the model complies.
+Those four are prompt-level, so they hold only as far as the model complies.
 In every run, a value the agent filled into a field detected as sensitive
 (`set_field` or `type_ax`, and `type_text` or `iframe_type` when the page
 reports the field it typed into) is held in memory for the conversation and
 struck by exact match (also URL-encoded) from what the model writes to its
 scratchpad and progress ledger, which are pinned into later requests and saved
-with the conversation. Short values are everywhere in ordinary text, so a value
+with the conversation. The planner's approved plan, which is pinned there too,
+loses it as well: a plan pinned once the value is known is pinned without it,
+and a plan pinned earlier (a password the request gave, written into a step
+before it was typed) is struck when the value becomes known, together with the
+run's own copies of the plan (the execution guard's text and its recovery
+anchor). The plan stays the app's: its `[Approved plan — …]` marker line is
+never struck. Short values are everywhere in ordinary text, so a value
 of digits only shorter than six digits (a 4-digit PIN) is never struck, and any
 other value under eight characters, or a longer one of digits only (a one-time
 code), is struck only as a whole token, not inside a longer word or number.
@@ -166,9 +173,11 @@ Cloud runs add a redaction layer underneath that does not:
 text — a one-time code in the body of an inbox message, say — is never seen in a
 form the redactor can recognize. If the model then repeats it in a clarification
 or a final answer, only the prompt-level rules above stand in the way. The
-same holds for the scratchpad and progress ledger: a secret the user only typed
-into chat, or that was never filled into a detected field (Chrome's selector
-form of `type_text` reports no field details), is not known to the redactor, a
+same holds for the scratchpad, the approved plan and the progress ledger: a
+secret the user only typed into chat, or that was never filled into a detected
+field (Chrome's selector form of `type_text` reports no field details), is not
+known to the redactor (so a plan review card shown before the value is typed,
+and the requests sent before then, depend on the planner's instruction), a
 ledger row id is kept even when it holds one, and the model's original
 tool-call arguments stay in the conversation until they are summarized away.
 Strict mode raises the cost of a leak
@@ -239,7 +248,7 @@ The primary threat: a malicious page crafts content that, when read by the agent
 | **Universal preamble** | Every system prompt includes guidance on cookie banners and paywalls — two common injection vectors that look like benign page content. |
 | **Loop detection** | Three independent detectors stop the agent if it's repeating the same action or oscillating. Repeated click loops may include an exact same-tab XHR/fetch URL+method hint so the agent can switch to `fetch_url` instead of clicking forever. Limits damage from a persistently injected prompt. |
 | **Finance adapters** | Adapters with `category: 'finance'` inject extra confirmation guidance and a warning banner. |
-| **Strict secret handling** | Instructs the model not to quote credentials, strikes credentials it filled into sensitive fields from its scratchpad and progress ledger, and in cloud runs strikes every credential it typed, sent, or read from a labelled field out of what gets published. A secret it only saw in page prose still depends on the instruction. |
+| **Strict secret handling** | Instructs the model and the planner not to quote credentials, strikes credentials it filled into sensitive fields from its scratchpad, approved plan and progress ledger, and in cloud runs strikes every credential it typed, sent, or read from a labelled field out of what gets published. A secret it only saw in page prose still depends on the instruction. |
 | **Local network blocking** | Local-network access is off by default. When access is off, URLs written with private or loopback IP literals and localhost names are blocked. `fetch_url`, `read_page_source` and `research_url` also check the address a hostname resolved to: the browser reports the server address of each response (for `research_url`, every top-level redirect hop of its hidden tab), and a response from a blocked address is discarded before the model sees it. Firefox also resolves the hostname before sending and refuses it when any answer is blocked. Resolved addresses use the same tiers as literals. Cloud-metadata IP literals (169.254.169.254) and listed metadata or `*.internal`/`*.local` hostnames stay blocked even when local-network access is enabled, as do names that resolve to link-local, CGNAT, multicast or unspecified addresses. See **Resolved-address limits** below. |
 
 ### Resolved-address limits

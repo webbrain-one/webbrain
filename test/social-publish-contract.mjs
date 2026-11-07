@@ -1540,13 +1540,21 @@ for (const browser of ['chrome', 'firefox']) {
           const result = await f.agent._workflowPreSubmitDispatchBlock(f.tabId, name, { url, body, method: 'POST' }, null, f.provider);
           assert.equal(result?.noDispatch, true, `${page}: ${name} ${url}`);
           assert.equal(result.dispatched, false);
-          assert.equal(result.workflowJob, 'publish-post');
+          assert.equal(result.socialPublicationGuard, true);
+          // No workflow job is bound to this task, so the refusal names none.
+          assert.equal(result.workflowJob, undefined);
         }
       }
       assert.equal(await f.agent._workflowPreSubmitDispatchBlock(f.tabId, 'fetch_url', {
         url: 'https://api.x.com/2/tweets/123', method: 'GET',
       }, null, f.provider), null, 'read-only API access remains available');
     }
+    // With a publication workflow bound, the refusal names its job.
+    f.guard.siteWorkflow = f.agent._resolvePlannerSiteWorkflow('https://x.com/home', { request_kind: 'execute', site_job: 'publish-post' });
+    f.agent._currentUrl = async () => 'https://x.com/home';
+    const bound = await f.agent._workflowPreSubmitDispatchBlock(f.tabId, 'fetch_url', { url: 'https://api.x.com/2/tweets', method: 'POST' }, null, f.provider);
+    assert.equal(bound?.noDispatch, true);
+    assert.equal(bound.workflowJob, 'publish-post');
     assert.equal(f.calls.length, 0);
   });
 

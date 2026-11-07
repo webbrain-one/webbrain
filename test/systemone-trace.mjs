@@ -33,8 +33,14 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.deepEqual(data.extra, { phase: 'done_verification', engine: 'llm', modality: 'vision', outcome: 'failed',
         reason: 'judged', model: 'owned-model', captureMs: 420, evaluateMs: 3100, elapsedMs: 3600 });
     }
+    // A second look that ran out of time keeps its label and the time it had.
+    const timedOut = { phase: 'done_verification', engine: 'llm', model: 'owned-model', modality: 'ax', outcome: 'uncertain',
+      reason: 'timeout', timeoutMs: 7998, elapsedMs: 8002 };
+    for (const includeContent of [false, true]) {
+      assert.deepEqual(projectTraceEventData('note', { step: 0, note: 'system_one', extra: timedOut }, { includeContent }).extra, timedOut);
+    }
     const unsafe = projectTraceEventData('note', { step: 0, note: 'system_one', extra: {
-      engine: 'llm with spaces', outcome: 'x'.repeat(200), captureMs: -1, evaluateMs: Infinity, elapsedMs: '9' } }, {});
+      engine: 'llm with spaces', outcome: 'x'.repeat(200), captureMs: -1, evaluateMs: Infinity, elapsedMs: '9', timeoutMs: -1 } }, {});
     assert.deepEqual(unsafe.extra, {});
   });
 

@@ -355,6 +355,13 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
       assert.deepEqual(preparedFor('hover_at'), [{ visionPoint: true, visionWheel: undefined, x: 360, y: 90 }], JSON.stringify(prepared));
       assert.deepEqual(preparedFor('drag_at'), [{ visionPoint: true, visionWheel: undefined, x: 0, y: 0 }], 'a drag binds its start point');
       assert.deepEqual(preparedFor('scroll_at'), [{ visionPoint: undefined, visionWheel: true, x: undefined, y: undefined }], 'a wheel binds no element');
+      // Each point also tells the top document where the input goes, so the
+      // embedded frame there (if any) is prepared too (prepareReceiverFrame);
+      // the wheel's is where scroll_at sends it.
+      const receiverPointFor = tool => prepared.filter(params => params.tool === tool).map(params => params.receiverPoint);
+      assert.deepEqual(receiverPointFor('hover_at'), [{ x: 360, y: 90 }]);
+      assert.deepEqual(receiverPointFor('drag_at'), [{ x: 0, y: 0 }]);
+      assert.deepEqual(receiverPointFor('scroll_at'), [{ x: 720, y: 450 }]);
       const wheel = platform.find(entry => entry.kind === 'wheel');
       assert.deepEqual({ x: wheel.x, y: wheel.y, deltaX: wheel.deltaX, deltaY: wheel.deltaY }, { x: 720, y: 450, deltaX: 0, deltaY: 300 });
       const hover = platform.find(entry => entry.kind === 'hover');
