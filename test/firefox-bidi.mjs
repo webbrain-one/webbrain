@@ -54,7 +54,7 @@ test('an unfocused upload marks the file input instead of the active control', a
   } finally { await session.close(); }
 });
 test('the companion reads a saved download only as the browser recorded it', async () => {
-  const { mkdtemp, writeFile, symlink, rm } = await import('node:fs/promises');
+  const { mkdtemp, mkdir, writeFile, symlink, lstat, rm } = await import('node:fs/promises');
   const { join } = await import('node:path');
   const { tmpdir } = await import('node:os');
   const dir = await mkdtemp(join(tmpdir(), 'webbrain-saved-download-'));
@@ -70,8 +70,20 @@ test('the companion reads a saved download only as the browser recorded it', asy
     await assert.rejects(session.readSavedDownload(runId, { ...record, fileSize: 99 }), /no longer matches/);
     await assert.rejects(session.readSavedDownload(runId, { ...record, state: 'in_progress' }), /completed browser download/);
     await assert.rejects(session.readSavedDownload(runId, { ...record, filename: 'report.pdf' }), /completed browser download/);
+    // Only a regular file is read: not a folder, and not a link, which is refused rather than followed.
+    const folder = join(dir, 'folder.pdf');
+    await mkdir(folder);
+    await assert.rejects(session.readSavedDownload(runId, { ...record, filename: folder }), /not a regular file/);
+    // A file symlink needs admin rights or Developer Mode on Windows; a directory junction needs
+    // neither and is a link all the same, so the link case runs on every machine.
     const link = join(dir, 'link.pdf');
-    await symlink(file, link);
+    try {
+      await symlink(file, link);
+    } catch (error) {
+      if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code)) throw error;
+      await symlink(folder, link, 'junction');
+    }
+    assert.equal((await lstat(link)).isSymbolicLink(), true);
     await assert.rejects(session.readSavedDownload(runId, { ...record, filename: link }), /not a regular file/);
     // The largest file the companion returns still fits a native reply; a larger one is refused with the fallback marker.
     const { nativeReplyMessages } = await import('../firefox-companion/native-messages.mjs');
