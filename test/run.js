@@ -44548,15 +44548,15 @@ test('extension language dropdowns pin English and Chinese before alphabetical l
     assert.deepEqual(
       i18n.LANGUAGES.map(({ code }) => code),
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
 
-test('web language dropdowns pin English and Chinese before alphabetical languages', () => {
+test('web language dropdowns pin English, Hindi and Chinese before alphabetical languages', () => {
   const expectedCodes = [
-    'en', 'zh',
-    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko',
+    'en', 'hi', 'zh',
+    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'id', 'ja', 'ko',
     'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi',
   ];
 
@@ -44572,7 +44572,7 @@ test('web language dropdowns pin English and Chinese before alphabetical languag
     assert.deepEqual(
       codes,
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
@@ -45463,7 +45463,7 @@ test('every webbrain.one page shares one footer', () => {
     for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = `${dir}/${entry.name}`;
       if (entry.isDirectory() && entry.name !== 'assets') walk(rel);
-      else if (entry.name === 'index.html' && !rel.startsWith('web/docs/zh/') && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
+      else if (entry.name === 'index.html' && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
     }
   };
   walk('web/docs');
@@ -45478,7 +45478,10 @@ test('every webbrain.one page shares one footer', () => {
     ...blogPosts,
     ...docsPages,
   ]) {
-    assert.equal(footerOf(rel), reference, `${rel}: footer differs from the homepage footer`);
+    const locale = rel.match(/^web\/docs\/([a-z]{2})\//)?.[1];
+    const localizedHome = locale && `web/${locale}/index.html`;
+    const expectedFooter = localizedHome && fs.existsSync(path.join(ROOT, localizedHome)) ? footerOf(localizedHome) : reference;
+    assert.equal(footerOf(rel), expectedFooter, `${rel}: footer differs from its homepage footer`);
   }
   assert.match(footerOf('web/tr/index.html'), /<a href="\/tr\/">/, 'localized footers link to their own homepage for the extension');
   assert.match(reference, /<a href="\/companion\/">Desktop Companion<\/a>/, 'the footer links the desktop Companion');
