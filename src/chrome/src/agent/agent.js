@@ -44,6 +44,7 @@ import { STANDARD_TOOL_RESULT_CHARS, createReadCompletenessState, isCommunicatio
 import { LoopDetector } from './loop-detector.js';
 import { recordCollectionReadProgress } from './collection-read-progress.js';
 import { recordDocumentReadProgress } from './document-read-progress.js';
+import { PAGE_COVERAGE_CAVEAT, createPageReadCoverage, fitPageContentResult, pageReadCoverageBlock, pageReadCoverageGap, recordPageObservation, recordPageRead } from './page-read-coverage.js';
 import { parseToolCallsFromText } from './tool-call-parser.js';
 import { IMAGE_BUDGET, estimateImageTokens, fitImageDimensions } from './image-budget.js';
 import { cropImage } from './vision-encoder.js';
@@ -1455,6 +1456,7 @@ export class Agent extends LoopDetector {
     this.progressActionDispatches = new Map();
     this._completionRunCounter = 0;
     this.readCompletenessStates = new Map(); // tabId -> run-scoped whole-thread read coverage
+    this.pageReadCoverage = new Map(); // tabId -> run-scoped open-page read coverage (page-read-coverage.js)
     this._readCompletenessRunCounter = 0;
     this.scheduler = null;
     this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation, autoApprovePlanReview }
@@ -1488,6 +1490,7 @@ export class Agent extends LoopDetector {
     this._runtimeAskLimitations?.delete(tabId);
     this._readCompletenessRunCounter += 1;
     const token = `read_${tabId}_${Date.now()}_${this._readCompletenessRunCounter}`;
+    this.pageReadCoverage.delete(tabId);
     if (this._isStandaloneChatRun(runOptions)) {
       this.readCompletenessStates.set(tabId, createReadCompletenessState(token, false, false, ''));
       return token;
@@ -1497,6 +1500,13 @@ export class Agent extends LoopDetector {
     const communicationThread = isCommunicationThreadContext(pageUrl, adapterName);
     const required = requiresCompleteThreadRead(userMessage, runOptions, { communicationThread });
     this.readCompletenessStates.set(tabId, createReadCompletenessState(token, required, communicationThread, adapterName));
+    // A conversation's whole-thread read is checked above; any other page's
+    // coverage is recorded here. The Summarize this page action asks for the
+    // whole page in its own words.
+    if (!communicationThread) {
+      this.pageReadCoverage.set(tabId, createPageReadCoverage({ url: pageUrl,
+        wholePage: String(runOptions?.recommendedAction?.id || '') === 'summarize-page' }));
+    }
     return token;
   }
 
@@ -1505,7 +1515,72 @@ export class Agent extends LoopDetector {
     if (!state) return;
     if (runToken && state.runToken !== runToken) return;
     this.readCompletenessStates.delete(tabId);
+    this.pageReadCoverage.delete(tabId);
     this._runtimeAskLimitations?.delete(tabId);
+  }
+
+  // Page content the model is shown: its own read tools' results, as a
+  // tool result of `maxChars` (applied as _limitToolResult applies it)
+  // delivers them, and page observations the runtime attaches
+  // (page-feedback.js). See page-read-coverage.js.
+  _recordPageReadCoverage(tabId, toolName, args, result, maxChars) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (state) recordPageRead(state, toolName, args, result, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
+  }
+
+  _notePageObservationCoverage(tabId, url, page, maxChars = STANDARD_TOOL_RESULT_CHARS) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (state) recordPageObservation(state, url, page, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
+  }
+
+  // Before an Ask answer is accepted (done or a plain final): when the page
+  // content the model was given was cut off and no read reached the end of
+  // the page, whether the request is about the whole page. That is asked
+  // once per run (page_read_scope); the synchronous check that follows
+  // (_readCompletenessBlock) then sends the answer back with the exact next
+  // read. Act runs, conversations (their own whole-thread check) and runs
+  // with no recorded coverage are not affected.
+  async _preparePageReadCoverage(tabId, allowedToolNames = null) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (!state) return null;
+    state.gap = null;
+    // A tiny Ask turn reads the page its own way (tiny-ask.js).
+    if (this._effectiveRunMode(tabId) !== 'ask' || this._leanRunActive(tabId) || this._tinyAskRunTabs?.has(tabId)) return null;
+    let url = '';
+    try { url = await this._currentUrl(tabId); } catch {}
+    const gap = pageReadCoverageGap(state, url, { tools: allowedToolNames instanceof Set ? allowedToolNames : null });
+    if (!gap) return null;
+    if (state.scope == null) {
+      let choice = null;
+      try {
+        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request: this._latestTaskText(tabId) || '' }))?.choice || null;
+      } catch (error) {
+        if (this._checkAbort(tabId)) throw error;
+      }
+      state.scope = choice || 'unknown';
+      const runId = this.currentRunId?.get(tabId);
+      if (runId) trace.recordNote(runId, 0, 'page_read_scope', { scope: state.scope, nextRead: gap.nextRead });
+    }
+    if (state.scope !== 'whole_page' || this.pageReadCoverage.get(tabId) !== state) return null;
+    state.gap = gap;
+    return gap;
+  }
+
+  _pageReadCoverageBlock(tabId) {
+    return pageReadCoverageBlock(this.pageReadCoverage?.get(tabId)?.gap);
+  }
+
+  // Whether the read-coverage refusal is about the open page rather than a
+  // requested whole conversation.
+  _pageReadCoverageRefusal(tabId) {
+    const thread = this.readCompletenessStates.get(tabId);
+    return !(thread?.required && !thread.complete) && !!this._pageReadCoverageBlock(tabId);
+  }
+
+  _readCoverageWarning(tabId) {
+    return this._pageReadCoverageRefusal(tabId)
+      ? 'Whole-page answer sent back to read the rest of the page.'
+      : 'Whole-thread answer blocked until every read page is covered.';
   }
 
 
@@ -2169,7 +2244,7 @@ export class Agent extends LoopDetector {
     const limits = this._readWindowLimits(provider);
     return readCompletenessBlock(this.readCompletenessStates.get(tabId), limits.treePageChars, {
       mode: this._effectiveRunMode(tabId),
-    });
+    }) || this._pageReadCoverageBlock(tabId);
   }
 
   _readCompletenessLimitation(tabId) {
@@ -6088,6 +6163,11 @@ export class Agent extends LoopDetector {
   // tell). Ask mode cannot expand Gmail messages, so by default that
   // limitation reaches the user through this caveat.
   _readCoverageGuardRefuses(tabId) {
+    // An Ask answer about the whole open page, written from page content that
+    // was cut off (_preparePageReadCoverage): known incomplete.
+    if (this._pageReadCoverageRefusal(tabId)) {
+      return this._guardRefusesOnce(tabId, 'read-coverage-incomplete', { decided: true, caveat: PAGE_COVERAGE_CAVEAT });
+    }
     const state = this.readCompletenessStates.get(tabId);
     const expansionUnverified = state?.requiresExpansionEvidence === true
       && state.treeCoverageComplete === true && state.expansionConfirmed !== true;
@@ -17862,6 +17942,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { action: 'return', value: readLimitation, status: 'read_scope_limited' };
         }
 
+        await this._preparePageReadCoverage(tabId, allowedToolNames);
         const readBlock = this._readCompletenessBlock(tabId);
         if (readBlock && this._readCoverageGuardRefuses(tabId)) {
           const blockedResult = {
@@ -17883,7 +17964,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               name: fnName, args: fnArgs, result: blockedResult, latencyMs: 0,
             });
           }
-          onUpdate('warning', { message: 'Whole-thread answer blocked until every read page is covered.' });
+          onUpdate('warning', { message: this._readCoverageWarning(tabId) });
           this._appendSyntheticToolResults(
             tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
             () => ({ success: false, skipped: true, error: 'skipped: complete the whole-thread read before answering' })
@@ -18906,6 +18987,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (tc._browserBatch && tc._browserBatch.index < tc._browserBatch.total - 1) {
         modelResultChars = Math.min(modelResultChars, BATCH_INTERMEDIATE_RESULT_CHARS);
       }
+      this._recordPageReadCoverage(tabId, fnName, fnArgs, toolResult, modelResultChars);
       let resultContent = this._wrapUntrusted(
         resultTrustName,
         this._limitToolResult(toolResult, modelResultChars),
@@ -39111,6 +39193,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.completionInvariants.delete(tabId);
     this.progressActionDispatches.delete(tabId);
     this.readCompletenessStates.delete(tabId);
+    this.pageReadCoverage.delete(tabId);
     const pendingNativeAnswer = preserveRunGuard && this._hasUnappliedNativeCaptchaSolution(tabId)
       && Date.now() - this._nativeCaptchaSolutions.get(tabId).createdAt <= 180_000;
     if (pendingNativeAnswer) {
@@ -45465,6 +45548,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
     }
+
+    // Page content (a tree read, a gated article's text, a page observation)
+    // is cut inside pageContent, so the result stays JSON and says how to
+    // read the whole page; a chopped one hides where the page goes on.
+    const pageContentFit = fitPageContentResult(safeResult, maxResultChars);
+    if (pageContentFit) return JSON.stringify(pageContentFit);
 
     // If still too big, just chop the JSON
     return json.slice(0, maxResultChars) + '\n[...result truncated]';
@@ -59540,6 +59629,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         continue;
       }
       // By default each check refuses at most once per run (_plainFinalGuardBlocks).
+      await this._preparePageReadCoverage(tabId, allowedToolNames);
       const {
         progressFinalBlock, completionFinalBlock, readFinalBlock, exactTableFinalBlock,
       } = this._plainFinalGuardBlocks(tabId, result.content);
@@ -59592,7 +59682,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         messages.push(this._appOwnedUserMessage(plainFinalBlocks.join('\n\n'), 'plain_final_block'));
         if (completionFinalBlock || readFinalBlock) onUpdate('text', { content: '', replace: true });
         onUpdate('warning', { message: readFinalBlock
-          ? 'Whole-thread answer blocked until every read page is covered.'
+          ? this._readCoverageWarning(tabId)
           : completionFinalBlock
             ? 'Runtime completion invariant requires an explicit done outcome.'
             : 'Progress ledger has unresolved rows; continuing.' });
@@ -60966,6 +61056,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           continue;
         }
         // By default each check refuses at most once per run (_plainFinalGuardBlocks).
+        await this._preparePageReadCoverage(tabId, allowedToolNames);
         const {
           progressFinalBlock, completionFinalBlock, readFinalBlock, exactTableFinalBlock,
         } = this._plainFinalGuardBlocks(tabId, fullText);
@@ -61017,7 +61108,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           messages.push(this._appOwnedUserMessage(plainFinalBlocks.join('\n\n'), 'plain_final_block'));
           if (completionFinalBlock || readFinalBlock) onUpdate('text', { content: '', replace: true });
           onUpdate('warning', { message: readFinalBlock
-            ? 'Whole-thread answer blocked until every read page is covered.'
+            ? this._readCoverageWarning(tabId)
             : completionFinalBlock
               ? 'Runtime completion invariant requires an explicit done outcome.'
               : 'Progress ledger has unresolved rows; continuing.' });

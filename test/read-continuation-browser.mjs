@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { installModelStub } from './semantic-decision-stub.mjs';
 import { sharedBrowsers } from './lib/shared-browsers.mjs';
 import { scaled } from './lib/time-budget.mjs';
 
@@ -11,6 +12,113 @@ const browsers = sharedBrowsers([chromium, firefox]);
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   const { getToolsForMode } = await import(`../src/${build}/src/agent/tools.js`);
+
+  // QA case G7 with the real content handlers: an Ask summary written from
+  // the first tree page of a long article is sent back once, the read its
+  // note names continues through the real read_page windows to the end, and
+  // the summary given then is accepted as it is.
+  test(`${build}: an Ask summary of a long article is sent back to the read that reaches its end`, { timeout: scaled(60000) }, async () => {
+    const browser = await browsers.lease(engine);
+    const context = await browser.newContext();
+    const url = 'https://owned-read.test/long-article';
+    const text = Array.from({ length: 120 }, (_, index) =>
+      `<p>Owned section ${index + 1}: ${'Placeholder history of one era for the fixture. '.repeat(4)}</p>`).join('');
+    await context.route(`${url}*`, route => route.fulfill({ contentType: 'text/html',
+      body: `<!doctype html><title>Owned long article</title><h1>Owned long article</h1><article>${text}<p>OWNED_ARTICLE_TAIL</p></article>` }));
+    await context.addInitScript(() => {
+      const listeners = [];
+      window.chrome = window.browser = { runtime: {
+        onMessage: { addListener: listener => listeners.push(listener) },
+        sendMessage: async () => ({}), getURL: file => file,
+      } };
+      window.deliverRead = message => new Promise(resolve => {
+        for (const listener of listeners) if (listener(message, {}, resolve) === true) break;
+      });
+    });
+    for (const file of ['accessibility-tree.js', 'content.js']) {
+      await context.addInitScript({ content: await fs.readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8') });
+    }
+    const page = await context.newPage();
+    const previousChrome = globalThis.chrome;
+    const previousBrowser = globalThis.browser;
+    const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
+    globalThis.chrome = globalThis.browser = {
+      runtime: { getURL: file => `extension://owned/${file}` },
+      storage: { local: area, session: area },
+      tabs: {
+        get: async id => ({ id, url, status: 'complete' }),
+        sendMessage: async (_id, message) => (['get_accessibility_tree', 'get_page_info_cdp'].includes(message.action)
+          ? page.evaluate(message => window.deliverRead(message), message) : {}),
+      },
+    };
+    try {
+      await page.goto(url);
+      const provider = { promptTier: 'full', contextWindow: 32000, supportsVision: false,
+        chat: async () => { throw new Error('Only fixed-choice questions reach the model here.'); } };
+      const agent = new Agent({ getActive: () => provider, getVisionProvider: async () => null });
+      Object.assign(agent, { _ensureGateSetting: async () => false, _skipPermissionGate: true, _currentUrl: async () => url,
+        _persist: () => {}, _persistNow: async () => true });
+      agent._rememberMastodonObservation = agent._recordProgressObservation = async () => null;
+      agent._autoRecordProgressAction = () => null;
+      const questions = installModelStub(agent, { decide: kind => (kind === 'page_read_scope' ? 'whole_page' : null) });
+      const execute = agent.executeTool.bind(agent);
+      agent.executeTool = (tabId, name, args, ...rest) => (name === 'done'
+        ? Promise.resolve({ done: true, summary: args.summary }) : execute(tabId, name, args, ...rest));
+      const task = 'Summarize this page.';
+      const schemas = new Map(getToolsForMode('ask', { tier: 'full' }).map(tool => [tool.function.name, tool.function.parameters]));
+      const summary = 'The article covers every owned section, from the first to the last.';
+      let sequence = 0;
+      // One Ask run per tab: the model reads the first part with `firstTool`,
+      // answers, and then follows the read the note names.
+      for (const [tab, firstTool, firstArgs, expectedTool] of [[1, 'get_accessibility_tree', {}, 'get_accessibility_tree'],
+        [2, 'read_page', { includeChrome: false }, 'read_page']]) {
+        const messages = [{ role: 'system', content: 'sys' }, { role: 'user', content: task }];
+        agent.conversationModes.set(tab, 'ask');
+        agent.conversations.set(tab, messages);
+        await agent._beginReadCompleteness(tab, task, {});
+        const call = async (name, args) => {
+          const id = `owned-article-${++sequence}`;
+          messages.push({ role: 'assistant', content: null, tool_calls: [{ id, function: { name, arguments: JSON.stringify(args) } }] });
+          const outcome = await agent._executeToolBatch(tab, messages.at(-1).tool_calls, messages, () => {}, provider, null,
+            new Set(['done', 'read_page', 'get_accessibility_tree']), sequence, {}, schemas);
+          const result = messages.find(message => message.role === 'tool' && message.tool_call_id === id);
+          return { outcome, shown: agent._unwrapUntrusted(result.content) };
+        };
+        const first = JSON.parse((await call(firstTool, firstArgs)).shown);
+        assert.equal(first.hasMore, true, `The real article takes more than one ${firstTool} result`);
+        const sentBack = await call('done', { summary });
+        assert.equal(sentBack.outcome.action, 'continue', `A summary from the first ${firstTool} result is sent back`);
+        const note = JSON.parse(sentBack.shown).error;
+        const named = note.match(/Call (read_page|get_accessibility_tree)\((\{[^\n]*?\})\) now/);
+        assert.ok(named, note);
+        assert.equal(named[1], expectedTool, note);
+        // The named read is exactly the continuation the first result returned.
+        assert.deepEqual(JSON.parse(named[2]), first.continuationArgs, note);
+        let tool = named[1];
+        let args = JSON.parse(named[2]);
+        let content = first.text ?? first.pageContent;
+        for (let windows = 1; ; windows++) {
+          const shown = JSON.parse((await call(tool, args)).shown);
+          assert.notEqual(shown.invalidToolArguments, true, `${tool}(${JSON.stringify(args)}) is a valid call`);
+          content += shown.text ?? shown.pageContent;
+          if (!shown.hasMore) break;
+          assert.ok(windows < 40, 'Each continuation makes forward progress');
+          ({ continuationArgs: args } = shown);
+        }
+        assert.match(content, /OWNED_ARTICLE_TAIL/, 'The named read reaches the real end of the article');
+        const accepted = await call('done', { summary });
+        assert.equal(accepted.outcome.action, 'return');
+        assert.equal(accepted.outcome.value, summary, `A summary of the whole article (${firstTool}) gets no caveat`);
+      }
+      assert.deepEqual(questions.map(question => question.kind), ['page_read_scope'],
+        'The same request is read once and remembered');
+    } finally {
+      globalThis.chrome = previousChrome;
+      globalThis.browser = previousBrowser;
+      await context.close();
+      await browser.close();
+    }
+  });
 
   test(`${build}: real expanded-tree continuations and bounded prose requests reach the content handler`, { timeout: scaled(60000) }, async () => {
     const browser = await browsers.lease(engine);

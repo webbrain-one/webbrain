@@ -1053,6 +1053,24 @@ object is recognized by its shape, and one the model rates at zero confidence
 is its refusal; a plain final message in an Act run gets one recovery whatever
 it says. No word list reads a summary or a final message.
 
+An Ask answer can be written from the start of a long page only: a page
+observation cut to fit the context, a first tree page or a first read_page
+window. A page-content result too large for its tool result is cut inside
+`pageContent`, so it stays JSON, ends with `[...page content truncated]` and
+its `notice` names `read_page({"includeChrome":false})` for the whole page.
+`page-read-coverage.js` records, per run, whether the page content the model
+was shown was cut off and whether read_page windows or full-depth tree slices
+later joined up to the end of the page. When an Ask answer (done or a plain
+final) arrives while the rest is unread, the `page_read_scope` question reads
+the request once per run (the Summarize this page action is the whole page by
+construction): a sure `whole_page` sends the answer back once
+(`read-coverage-incomplete`) with the exact call that continues the read, such
+as the next read_page window's `continuationArgs`. An answer given again
+without reading on is accepted as partial with the note that only part of the
+page was read. Short pages, a question about one part of the page, unsure
+readings, Act runs and conversations (their own whole-thread check) are not
+affected.
+
 When the model request fails after an Act run sent a submission, WebBrain reads
 the page itself and completes the run only while that submission is still the
 run's latest action (or a navigation bound to its result) and the plan names at

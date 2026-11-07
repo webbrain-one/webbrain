@@ -135,6 +135,23 @@ export const SEMANTIC_QUESTIONS = Object.freeze({
     }),
     authorizing: Object.freeze([]),
   }),
+  // Whether an Ask answer needs the rest of a page the model saw only the
+  // start of (page-read-coverage.js). Only the user's own words are read.
+  page_read_scope: Object.freeze({
+    instructions: 'A user sent the request in `request` to a browser assistant about the web page open in their '
+      + 'browser. The assistant has read only the first part of that page. Decide whether a complete answer to the '
+      + 'request needs the content of the whole page. Judge the meaning in any language.',
+    choices: Object.freeze({
+      whole_page: 'It asks about the page as a whole: a summary, overview, outline or review of the page, everything '
+        + 'or every item on it, its main points, or how it ends.',
+      part: 'It asks about one part, item, section, fact or value of the page, or about what is visible now, or it does '
+        + 'not need the page\'s content at all.',
+      unclear: 'It is unclear which.',
+    }),
+    // A sure "whole_page" sends the answer back once to read further; it
+    // authorizes nothing.
+    authorizing: Object.freeze([]),
+  }),
   incomplete_task: Object.freeze({
     instructions: 'An Act/Dev browser agent proposes ending an authorized task with a partial or failed outcome. '
       + 'Decide whether it should continue, using the genuine task in `request`, fresh observed page/control/status '

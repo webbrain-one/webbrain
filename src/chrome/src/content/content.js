@@ -6250,13 +6250,15 @@
   const TRUNCATED_PREVIEW_MIN_HIDDEN = 10;
   // Every cut marker the runtime appends to model-visible text, exactly as
   // written there (agent.js, conversation-persistence.js, page-monitor.js,
-  // completion-invariant.js, otp-email-tool.js, the PDF readers, the
-  // network inspector, error-format.js and the chat and selection stores).
+  // completion-invariant.js, otp-email-tool.js, page-read-coverage.js, the
+  // PDF readers, the network inspector, error-format.js and the chat and
+  // selection stores).
   // test/improver-content-truncated-replacement.mjs keeps it complete.
   const TRUNCATED_PREVIEW_MARKERS = Object.freeze([
     '[...truncated to fit context]',
     '[...truncated]',
     '[...page text truncated]',
+    '[...page content truncated]',
     '[...tool data text truncated]',
     '[...research answer truncated]',
     '[...result truncated]',
