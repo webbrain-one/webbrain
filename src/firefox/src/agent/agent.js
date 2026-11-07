@@ -122,6 +122,7 @@ import { captchaChallengeKey, captchaChallengeMatcherOptions, challengeDialogTit
 import { applyCaptchaFrameVisibility, observeAwsWafChallengeInPage } from './captcha-frame-runtime.js';
 import { settleCookieBannersForTurn } from './cookie-banner-turn.js';
 import {
+  cloudflareChallengeDocumentKey,
   cloudflareChallengeNavigationTransition,
   cloudflareChallengePlatformTransition,
   cloudflareChallengeResponseTransition,
@@ -13254,7 +13255,42 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _clearCaptchaGateAfterNavigation(tabId, toolName, beforeUrl, afterUrl, toolResult) {
     if (!Agent.NAV_TOOLS.has(toolName)) return null;
-    return this._clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult);
+    const cleared = this._clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult);
+    if (cleared) return cleared;
+    // A navigation that lands on a challenge reports that challenge, so its
+    // result never reads as a clear page.
+    const destinationGate = this._destinationCaptchaGate(tabId, afterUrl);
+    if (!destinationGate) return null;
+    const gate = this._captchaGateForTools(tabId, destinationGate)?.publicGate || destinationGate.publicGate;
+    if (toolResult && typeof toolResult === 'object') toolResult.captchaGate = gate;
+    return gate;
+  }
+
+  // Cloudflare arms its interstitial from the destination's own main-frame
+  // response, so a navigation can land on a challenge. That gate belongs to
+  // the page now shown, not to the page that was left.
+  _destinationCaptchaGate(tabId, afterUrl) {
+    const destination = cloudflareChallengeDocumentKey(afterUrl);
+    const signal = this._cloudflareManagedChallenges.get(tabId);
+    if (!destination || signal?.active !== true || signal.documentKey !== destination) return null;
+    const gate = this._captchaGateStates.get(tabId);
+    if (gate?.cloudflareManagedChallenge === true && gate.cloudflareSignal?.documentKey === destination) return gate;
+    this._activeCloudflareManagedChallengeGate(tabId);
+    return this._captchaGateStates.get(tabId) || null;
+  }
+
+  // A navigation's main-frame response can still be settling into the
+  // Cloudflare signal when the tool returns; wait briefly so the gate is read
+  // after it.
+  async _settleCloudflareManagedChallenge(tabId, timeoutMs = 1000) {
+    const pending = this._cloudflareManagedChallengeTransitions.get(tabId);
+    if (!pending) return;
+    let timer = null;
+    await Promise.race([
+      pending.catch(() => null),
+      new Promise(resolve => { timer = setTimeout(resolve, timeoutMs); }),
+    ]);
+    clearTimeout(timer);
   }
 
   _clearCaptchaGateAfterPageChange(tabId, beforeUrl, afterUrl, toolResult, { documentReplaced = false } = {}) {
@@ -13263,6 +13299,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!beforeDocument || !afterDocument) return null;
     const nativeAnswerRetired = this._retireNativeCaptchaAnswerIfPageChanged(tabId, afterUrl);
     if (beforeDocument === afterDocument && !nativeAnswerRetired && !documentReplaced) return null;
+    // Leaving a page does not clear a challenge the new page itself shows.
+    if (this._destinationCaptchaGate(tabId, afterUrl)) return null;
     const gate = this._captchaGateStates.get(tabId);
     if (!gate) return null;
     const clearedGate = {
@@ -16378,6 +16416,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
 
+      let navigationCaptchaGate = null;
       if (
         navigationProneCall
         && beforeUrl
@@ -16418,6 +16457,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         const beforePath = this._normalizeUrlPath(beforeUrl);
         const afterPath = this._normalizeUrlPath(afterUrl);
+        if (Agent.NAV_TOOLS.has(fnName)) await this._settleCloudflareManagedChallenge(tabId);
         const clearedCaptchaGate = this._clearCaptchaGateAfterNavigation(
           tabId,
           fnName,
@@ -16426,6 +16466,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           toolResult,
         );
         if (clearedCaptchaGate) onUpdate('captcha_gate', clearedCaptchaGate);
+        if (clearedCaptchaGate && clearedCaptchaGate.status !== 'cleared') navigationCaptchaGate = clearedCaptchaGate;
         // Explicit navigation tools intentionally go somewhere. For implicit
         // navigation, retain the less noisy path-level warning policy: query /
         // hash-only SPA changes reset state but do not force a re-plan notice.
@@ -16846,7 +16887,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         resultTrustName,
         this._limitToolResult(toolResult, modelResultChars),
       );
-      resultContent += this._captchaRoutingMessage(tabId, captchaGateDecision, captchaSolveOutcome, toolResult, onUpdate);
+      // A navigation that landed on a challenge gets the same trusted
+      // manual-completion note as a page read of it would.
+      resultContent += this._captchaRoutingMessage(tabId, captchaGateDecision || navigationCaptchaGate,
+        captchaSolveOutcome, toolResult, onUpdate);
       resultContent += signupRecoveryNote;
       if (nytimesPageGateFallback) {
         resultContent += `\n${nytimesPageGateFallback.note}`;
