@@ -76986,6 +76986,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   const expectedIds = `
     api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
     atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
+    cloudgpu
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
     evroc fastrouter freebuff2api friendli google-vertex google-vertex-anthropic helicone
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
@@ -76999,7 +77000,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 85);
+  assert.equal(expectedIds.length, 86);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77014,8 +77015,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 119/118 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 120 : 119;
+    // deliberately omitted from the 120/119 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 121 : 120;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77214,6 +77215,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI['api-route'].suggestions,
     ['gpt-6.1-sol'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://cloudgpu.app/v1',
+      model: 'deepseek-v4-flash',
+      contextWindow: 131072,
+      supportsVision: false,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://cloudgpu.app',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.cloudgpu.suggestions,
+    ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.3', 'kimi-k3', 'qwen3.5-397b'],
   );
   assert.deepEqual(
     {
