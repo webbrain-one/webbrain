@@ -452,7 +452,30 @@ async function runVariant(variant, script) {
     const resultsOf = result => (result.updates || []).filter(event => event.type === 'tool_result').map(event => ({ name: event.data?.name,
       success: event.data?.result?.success, reason: event.data?.result?.actionGuard?.reason || event.data?.result?.reasonCode || null,
       error: event.data?.result?.error || null }));
-    const result = await message('chat', { tabId, text: task, mode: 'act', requestId: 'owned-cross-site', locale: 'en' });
+    const deniedFirstRun = [];
+    let answeringFirstRun = ['xpro-then-x', 'xpro-slow-plain-then-x'].includes(variant);
+    const firstAnswerer = (async () => {
+      const seen = new Set();
+      while (answeringFirstRun) {
+        const ids = await worker.evaluate(id => [...(crossSiteFixtureAgent._pendingClarifications.get(id)?.keys() || [])], tabId);
+        for (const id of ids) if (!seen.has(id)) {
+          seen.add(id); deniedFirstRun.push(id);
+          await message('clarify_response', { tabId, clarifyId: id, answer: 'deny', source: 'option' });
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    })();
+    let result;
+    try { result = await message('chat', { tabId, text: task, mode: 'act', requestId: 'owned-cross-site', locale: 'en' }); }
+    finally { answeringFirstRun = false; await firstAnswerer; }
+    if (['xpro-then-x', 'xpro-slow-plain-then-x'].includes(variant)) {
+      assert.equal(deniedFirstRun.length, 1, 'The repeated publication needs one explicit decision.');
+      const card = (result.updates || []).find(event => event.type === 'clarify' && event.data?.clarifyId === deniedFirstRun[0])?.data?.unverifiedStepConfirmation;
+      assert.equal(card?.guardId, 'social-publication-authorization-guard');
+      assert.equal(card?.hard, true);
+      assert.equal(card?.action, 'publish');
+      assert.equal(card?.reason, 'repeat_unverified');
+    }
     const toolResults = resultsOf(result);
     let continuedResults = null, workerRestarted = null, xPostsBeforeRestart = null, continuedReply = null;
     if (script.again) {
