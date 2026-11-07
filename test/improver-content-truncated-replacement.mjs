@@ -189,7 +189,7 @@ for (const build of BUILDS) {
 
 test('chrome: trusted type_text asks the page before select-all clears the field', () => {
   const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
-  const start = source.indexOf("    if (name === 'type_text') {\n      try {\n        await cdpClient.attach(tabId);");
+  const start = source.indexOf("    trustedTypeText: if (name === 'type_text') {\n      try {\n        await cdpClient.attach(tabId);");
   const end = source.indexOf('type_text: internal — no branch matched', start);
   assert.ok(start >= 0 && end > start);
   const block = source.slice(start, end);
