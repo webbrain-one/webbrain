@@ -26,10 +26,11 @@ function panelHarness(build) {
   const restored = [];
   const handledUpdates = [];
   const context = {
-    currentTabId: 1, renderedTabId: 1, tabSwitchGeneration: 0,
+    currentTabId: 1, renderedTabId: 1, tabSwitchGeneration: 0, document: { visibilityState: 'visible' },
     tabSwitchTransitionId: null, queuedTabSwitchMessages: [],
     newConversationConfirmationState: null, visibleStateRefreshPending: false,
-    currentAssistantEl: null, TAB_CHAT_LOAD_FAILED: Symbol('load-failed'),
+    currentAssistantEl: null, historyPopover: null, newtabHandoff: { consume: async () => {} },
+    waitForHistoryRecovery: async () => {}, TAB_CHAT_LOAD_FAILED: Symbol('load-failed'),
     messagesEl: { innerHTML: 'tab 1', querySelectorAll: () => [] },
     sendToBackground: (_action, { tabId }) => {
       const request = deferred(); pending.set(tabId, request); return request.promise;
@@ -49,6 +50,7 @@ function panelHarness(build) {
     'syncSelectionScopeUi', 'hydrateRestoredChatHistory', 'migrateLegacyEmptyStateFromRestoredChat',
     'rebindRestoredMessageControls', 'refreshRenderedStepLabels', 'syncProgressDisplayMode', 'restoreInputDraftForTab',
     'renderAttachmentPreviews', 'renderQueuedComposerMessages', 'restoreLatestChatTurnPosition',
+    'closePermissionSkipDialog', 'restoreComposerModeForCurrentTab',
     'refreshScheduledJobs', 'refreshRecommendedActions', 'drainQueuedAgentUpdatesForTab',
     'drainQueuedPromptsAfterRunSettles', 'requestVisibleSidePanelStateRefresh', 'waitForTabChatHandoffRetry',
   ]) context[name] = () => {};
@@ -63,6 +65,7 @@ if (!process.argv.includes('--dom')) for (const build of ['chrome', 'firefox']) 
   {
     const h = panelHarness(build);
     const toB = h.switchToTab(2);
+    await tick();
     assert.equal(h.context.tabSwitchTransitionId, 2, 'preflight blocks sending to the outgoing tab');
     await h.switchToTab(1);
     h.pending.get(2).resolve({});
@@ -77,7 +80,9 @@ if (!process.argv.includes('--dom')) for (const build of ['chrome', 'firefox']) 
   {
     const h = panelHarness(build);
     const toB = h.switchToTab(2);
+    await tick();
     const toC = h.switchToTab(3);
+    await tick();
     const loadC = deferred(); h.loads.set(3, loadC);
     h.pending.get(3).resolve({});
     await tick();
@@ -95,6 +100,7 @@ if (!process.argv.includes('--dom')) for (const build of ['chrome', 'firefox']) 
   {
     const h = panelHarness(build);
     const toB = h.switchToTab(2);
+    await tick();
     await h.switchToTab(1);
     h.pending.get(2).reject(new Error('worker unavailable'));
     await toB;
@@ -105,6 +111,7 @@ if (!process.argv.includes('--dom')) for (const build of ['chrome', 'firefox']) 
   {
     const h = panelHarness(build);
     const toResearchTab = h.switchToTab(2);
+    await tick();
     h.pending.get(2).resolve({ sourceTabId: 1 });
     await toResearchTab;
     assert.equal(h.context.currentTabId, 1);
@@ -117,6 +124,7 @@ if (!process.argv.includes('--dom')) for (const build of ['chrome', 'firefox']) 
     const restore = deferred();
     h.context.restoreActiveRunState = async () => restore.promise;
     const toResearchTab = h.switchToTab(2);
+    await tick();
     h.pending.get(2).resolve({ sourceTabId: 1 });
     await tick();
     assert.equal(h.context.tabSwitchTransitionId, 1, 'retained source owns in-flight update queue');

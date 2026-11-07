@@ -196,6 +196,9 @@ test('a tree-mode capture of a right-to-left page wider than the window shows th
   // off screen, as a blank frame.
   const { browser, page, agent } = await open({ url: '/rtl', windowSize: '1000,700', scrollbars: true });
   try {
+    // A styled scrollbar reserves layout space even on macOS with overlay
+    // scrollbars, so this exercises the same classic-scrollbar geometry.
+    await page.addStyleTag({ content: '::-webkit-scrollbar { width: 16px; height: 16px; }' });
     const { cssW, clientW } = await page.evaluate(() => ({ cssW: innerWidth, clientW: document.documentElement.clientWidth }));
     assert.ok(cssW > clientW, 'the page has a classic scrollbar');
     const shot = await agent._captureAutoScreenshot(TAB, { coordAligned: true });

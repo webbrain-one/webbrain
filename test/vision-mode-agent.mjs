@@ -1275,6 +1275,114 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
     assert.doesNotMatch(refused, /uploadHandoff/);
   });
 
+  // The page-action binding check (page-feedback.js) in the real loop. The
+  // page monitor is faked as GitHub's release form reads to it: the binary
+  // input is hidden on a page too deep for the observation to certify, so an
+  // upload_file is target_uncovered, and the monitor says `inventoried` only
+  // for the very node an inventory with this token listed under this exact
+  // selector. The first upload_file of every handoff used to be refused here,
+  // and each file cost a get_interactive_elements and the same call again.
+  function fakeReleaseMonitor(ctx, tab) {
+    const dom = new Map([['#upload', 'binary'], ['input[type="file"]', 'binary']]);
+    const monitor = { inventory: null, log: [], validations: [] };
+    const saved = api.tabs.sendMessage;
+    let snapshots = 0;
+    api.tabs.sendMessage = async (_tab, message) => {
+      const params = message.params || {};
+      if (message.action === 'page_monitor_capture_model') {
+        monitor.log.push({ capture: params.uploadTargets || [] });
+        return { ready: true, runToken: params.runToken, documentToken: 'content-1', snapshotToken: `owned-${++snapshots}`,
+          targetCount: 2, focusedTargetAvailable: false,
+          page: { success: true, url: PAGE, pageContent: 'button "Attach binaries by dropping them here or selecting them." [ref_attach]' } };
+      }
+      if (message.action === 'page_monitor_record_upload_targets') {
+        const pairs = (params.selectors || []).filter(selector => dom.has(selector)).map(selector => [dom.get(selector), selector]);
+        monitor.log.push({ record: params.selectors, token: params.token });
+        if (pairs.length) monitor.inventory = { token: params.token, entries: new Map(pairs) };
+        return { recorded: pairs.map(([, selector]) => selector), runToken: params.runToken, documentToken: 'content-1' };
+      }
+      if (message.action === 'page_monitor_validate_model') {
+        monitor.validations.push(params);
+        const node = dom.get(params.selector);
+        const inventoried = !!node && typeof params.fileInventoryToken === 'string' && !!params.fileInventoryToken
+          && monitor.inventory?.token === params.fileInventoryToken && monitor.inventory.entries.get(node) === params.selector;
+        return { ready: false, reason: node ? 'target_uncovered' : 'target_unresolved', ...(inventoried ? { inventoried: true } : {}),
+          runToken: params.runToken, documentToken: 'content-1', snapshotToken: params.snapshotToken };
+      }
+      if (message.action === 'page_monitor_prepare') return { ready: true, modelBindingValid: true };
+      return { ready: true };
+    };
+    // The page's monitor joins the run as its content script does.
+    ctx.agent._enrichUserMessageWithCurrentPage = async (_tab, _messages, content) => {
+      assert.equal(ctx.agent.pageMonitorState({ tab: { id: tab }, frameId: 0, documentId: 'document-1', url: PAGE }, 'content-1').active, true);
+      return { role: 'user', content };
+    };
+    return { monitor, restore: () => { api.tabs.sendMessage = saved; } };
+  }
+  const uploadResults = request => toolTexts(request).filter(text => /"attachmentState"|action_binding_unavailable/.test(text));
+
+  for (const streaming of [false, true]) {
+    const label = `${build}${streaming ? ' (streaming)' : ''}`;
+
+    test(`${label}: the first upload_file of a handoff, with the blocked click's selector, attaches past the page-action binding check`, async () => {
+      const tab = nextTab++;
+      const reasons = [];
+      const ctx = runAgent(step => {
+        reasons.push(ctx.agent._visionRunState(tab, 'act').reason);
+        if (step === 1) return { toolCalls: [call('click_at', { x: 300, y: 200 })] };
+        if (step === 2) return { toolCalls: [call('upload_file', { selector: '#upload', attachmentId: 'attachment_t_1' })] };
+        if (step === 3) return { toolCalls: [call('done', { summary: 'Attached.', outcome: 'success' })] };
+        return { content: 'done' };
+      });
+      ctx.upload = attached;
+      const restoreChooser = blockChooser(ctx);
+      const { monitor, restore } = fakeReleaseMonitor(ctx, tab);
+      try { await runLoop(ctx.agent, tab, streaming); } finally { restore(); restoreChooser(); }
+      assert.deepEqual(reasons, ['vision_capable_model', 'file_upload_needs_element_inventory', 'vision_capable_model']);
+      assert.deepEqual(ctx.dispatched.filter(entry => entry.name === 'upload_file').map(entry => entry.args.selector), ['#upload']);
+      const [result, ...others] = uploadResults(ctx.requests[2]);
+      assert.equal(others.length, 0, 'one upload_file');
+      assert.match(result, /"success":true/, result);
+      assert.doesNotMatch(result, /action_binding_unavailable/);
+      // The handoff observed the input the click's result named before the
+      // capture that preceded its first decision.
+      const record = monitor.log.findIndex(entry => entry.record);
+      assert.deepEqual(monitor.log[record].record, ['#upload']);
+      assert.equal(monitor.log.filter(entry => entry.record).length, 1, 'only the start of the handoff observes its input');
+      assert.deepEqual(monitor.log[record + 1], { capture: ['#upload'] }, JSON.stringify(monitor.log));
+      const checked = monitor.validations.filter(params => params.tool === 'upload_file');
+      assert.ok(checked.length >= 1 && checked.every(params => params.fileInventoryToken === monitor.log[record].token), JSON.stringify(checked));
+    });
+  }
+
+  test(`${build}: during a handoff a guessed upload selector is still refused by the binding check`, async () => {
+    for (const observe of [true, false]) {
+      const tab = nextTab++;
+      const ctx = runAgent((step, _messages, options) => {
+        const vision = names(options.tools).includes('click_at');
+        if (step === 1) return { toolCalls: [call('click_at', { x: 300, y: 200 })] };
+        if (step === 2) return { toolCalls: [call('upload_file', { selector: 'input[type="file"]', attachmentId: 'attachment_t_1' })] };
+        if (step === 3 && !vision) return { toolCalls: [call('upload_file', { selector: '#upload', attachmentId: 'attachment_t_1' })] };
+        if (step <= 4) return { toolCalls: [call('done', { summary: 'Upload step finished.', outcome: 'partial' })] };
+        return { content: 'done' };
+      });
+      ctx.upload = attached;
+      const restoreChooser = blockChooser(ctx);
+      const { restore } = fakeReleaseMonitor(ctx, tab);
+      // Without the handoff's observation, the result's own selector meets
+      // the same refusal: what every file's first upload_file met before.
+      if (!observe) ctx.agent._pageFeedbackObserveUploadTargets = async () => false;
+      try { await runLoop(ctx.agent, tab, false); } finally { restore(); restoreChooser(); }
+      const label = observe ? 'observed handoff' : 'unobserved handoff';
+      const [guessed] = uploadResults(ctx.requests[2]);
+      assert.match(guessed, /"errorCode":"action_binding_unavailable"/, `${label}: ${guessed}`);
+      assert.match(guessed, /"bindingFailure":"target_uncovered"/, label);
+      const [, named] = uploadResults(ctx.requests[3]);
+      assert.match(named, observe ? /"success":true/ : /"bindingFailure":"target_uncovered"/, `${label}: ${named}`);
+      assert.deepEqual(ctx.dispatched.filter(entry => entry.name === 'upload_file').map(entry => entry.args.selector), observe ? ['#upload'] : [], label);
+    }
+  });
+
   if (build === 'firefox') {
     test('firefox: a vision click settles the file-chooser guard and reports a blocked chooser in vision terms', async () => {
       const agent = new Agent({});

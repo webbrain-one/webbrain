@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Murshid (Development Preview) — the browser that knows the way</title>
-<meta name="description" content="Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.">
+<title data-i18n="meta.title">Murshid (Development Preview) — the browser that knows the way</title>
+<meta name="description" data-i18n-content="meta.description" content="Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.">
 <meta name="theme-color" content="#e2aa3a">
 <script>
   // The top of the page is yellow unless this visitor chose red with the
@@ -16,9 +16,17 @@
     }
   } catch {}
 </script>
-<meta property="og:title" content="Murshid — the browser that knows the way">
-<meta property="og:description" content="A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.">
+<meta property="og:title" data-i18n-content="meta.og.title" content="Murshid — the browser that knows the way">
+<meta property="og:description" data-i18n-content="meta.og.description" content="A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.">
 <meta property="og:image" content="art/murshid-icon.svg">
+<meta property="og:locale" content="en_US">
+<link rel="canonical" href="https://murshid.one/">
+<!-- the same page in each language (scripts/i18n/build.mjs writes tr/, ar/ and fa/) -->
+<link rel="alternate" hreflang="en" href="https://murshid.one/">
+<link rel="alternate" hreflang="tr" href="https://murshid.one/tr/">
+<link rel="alternate" hreflang="ar" href="https://murshid.one/ar/">
+<link rel="alternate" hreflang="fa" href="https://murshid.one/fa/">
+<link rel="alternate" hreflang="x-default" href="https://murshid.one/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -40,27 +48,37 @@
     <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></symbol>
   </defs>
 </svg>
 
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#main" data-i18n="nav.skip">Skip to content</a>
 
 <header class="nav" id="top">
-  <a class="brand" href="#top" aria-label="Murshid home">
+  <a class="brand" href="#top" aria-label="Murshid home" data-i18n-aria-label="nav.home">
     <img src="art/murshid-icon.svg" alt="" width="34" height="34">
-    <span>Murshid</span>
-    <span class="badge" title="Murshid is a development preview">Dev Preview</span>
+    <span lang="en">Murshid</span>
+    <span class="badge" title="Murshid is a development preview" data-i18n-title="nav.badge.title" data-i18n="nav.badge">Dev Preview</span>
   </a>
-  <nav class="links" aria-label="Sections">
-    <a href="#carries">Browser</a>
-    <a href="#way">The way</a>
-    <a href="#tray">Companion</a>
-    <a href="#get">Get it</a>
+  <nav class="links" aria-label="Sections" data-i18n-aria-label="nav.sections">
+    <a href="#carries" data-i18n="nav.browser">Browser</a>
+    <a href="#way" data-i18n="nav.way">The way</a>
+    <a href="#tray" data-i18n="nav.companion">Companion</a>
+    <a href="#get" data-i18n="nav.get-it">Get it</a>
   </nav>
   <div class="nav-end">
-    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid on GitHub"><svg><use href="#i-github"/></svg></a>
-    <a class="button small" href="#get">Get Murshid</a>
-    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="Show the top in red" title="Make the top red"><span></span></button>
+    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid on GitHub" data-i18n-aria-label="nav.github"><svg><use href="#i-github"/></svg></a>
+    <a class="button small" href="#get" data-i18n="nav.get">Get Murshid</a>
+    <details class="lang" data-lang>
+      <summary aria-label="Language: English" data-i18n-aria-label="lang.label"><svg><use href="#i-globe"/></svg><span lang="en" data-lang-code>EN</span></summary>
+      <ul>
+        <li><a href="./" hreflang="en" lang="en" data-lang-link="en" aria-current="page">English</a></li>
+        <li><a href="tr/" hreflang="tr" lang="tr" data-lang-link="tr">Türkçe</a></li>
+        <li><a href="ar/" hreflang="ar" lang="ar" dir="rtl" data-lang-link="ar">العربية</a></li>
+        <li><a href="fa/" hreflang="fa" lang="fa" dir="rtl" data-lang-link="fa">فارسی</a></li>
+      </ul>
+    </details>
+    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="Show the top in red" data-i18n-aria-label="hue.label" title="Make the top red" data-i18n-title="hue.to-red" data-to-red="Make the top red" data-i18n-data-to-red="hue.to-red" data-to-yellow="Make the top yellow" data-i18n-data-to-yellow="hue.to-yellow"><span></span></button>
   </div>
 </header>
 
@@ -72,36 +90,36 @@
   <div class="hero-rays" aria-hidden="true"></div>
 
   <div class="hero-copy">
-    <h1 id="hero-title">The browser<br>that knows<br><em>the way.</em></h1>
-    <p class="lede">Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.</p>
+    <h1 id="hero-title" data-i18n="hero.title">The browser<br>that knows<br><em>the way.</em></h1>
+    <p class="lede" data-i18n="hero.lede">Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.</p>
     <div class="cta">
-      <a class="button" href="#get" data-get>Get Murshid <svg><use href="#i-arrow"/></svg></a>
-      <a class="button ghost" href="https://webbrain.one">Meet WebBrain</a>
+      <a class="button" href="#get" data-get data-win="Download for Windows" data-i18n-data-win="hero.get.win" data-mac="Download for macOS" data-i18n-data-mac="hero.get.mac" data-linux="Download for Linux" data-i18n-data-linux="hero.get.linux"><span data-i18n="hero.get">Get Murshid</span> <svg class="arrow"><use href="#i-arrow"/></svg></a>
+      <a class="button ghost" href="https://webbrain.one" data-i18n="hero.meet">Meet WebBrain</a>
     </div>
 
     <div class="terminal" data-terminal>
-      <div class="terminal-tabs" role="tablist" aria-label="Your system">
-        <button role="tab" aria-selected="false" data-os="mac">macOS</button>
-        <button role="tab" aria-selected="false" data-os="linux">Linux</button>
-        <button role="tab" aria-selected="true" data-os="win">Windows</button>
+      <div class="terminal-tabs" role="tablist" aria-label="Your system" data-i18n-aria-label="hero.terminal.system">
+        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
       </div>
       <div class="terminal-body">
         <div class="terminal-head">
-          <span class="terminal-label">Run from source</span>
-          <label class="switch"><input type="checkbox" data-fast checked> <span>Exclude binaries</span></label>
+          <span class="terminal-label" data-i18n="hero.terminal.label">Run from source</span>
+          <label class="switch"><input type="checkbox" data-fast checked> <span data-i18n="hero.terminal.fast">Exclude binaries</span></label>
         </div>
-        <pre><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
+        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
 cd webbrain && git sparse-checkout set murshid src/chrome
 cd murshid && npm install && npm start</code></pre>
-        <button class="copy" type="button" aria-label="Copy commands"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note>Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.</p>
+        <button class="copy" type="button" aria-label="Copy commands" data-i18n-aria-label="hero.terminal.copy" data-copied="Copied" data-i18n-data-copied="hero.terminal.copied"><svg><use href="#i-copy"/></svg></button>
+        <p class="terminal-note" data-fast-note data-i18n="hero.terminal.note">Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.</p>
       </div>
     </div>
   </div>
 
   <figure class="hero-art">
     <div class="arch">
-      <img class="photo" src="art/halftone/hero-yellow.webp" data-yellow="art/halftone/hero-yellow.webp" data-red="art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.">
+      <img class="photo" src="art/halftone/hero-yellow.webp" data-yellow="art/halftone/hero-yellow.webp" data-red="art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" data-i18n-alt="hero.alt" alt="An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.">
       <script>if (document.documentElement.dataset.hero === 'red') { const p = document.currentScript.previousElementSibling; p.src = p.dataset.red; }</script>
     </div>
     <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
@@ -109,7 +127,7 @@ cd murshid && npm install && npm start</code></pre>
       <path class="inner" d="M3 128 L3 52 C3 31.6 18 19.5 35 12.4 C43.4 8.9 47 7.6 50 4.6 C53 7.6 56.6 8.9 65 12.4 C82 19.5 97 31.6 97 52 L97 128"/>
     </svg>
     <span class="finial" aria-hidden="true"></span>
-    <figcaption><span class="arabic" lang="ar">مرشد</span><span>Mürşid · the guide</span></figcaption>
+    <figcaption><span class="arabic" lang="ar">مرشد</span><span data-i18n="hero.caption">Mürşid · the guide</span></figcaption>
   </figure>
 </section>
 
@@ -117,23 +135,23 @@ cd murshid && npm install && npm start</code></pre>
 
 <!-- ========================================================== SCREENSHOT -->
 <section class="shot" aria-labelledby="shot-title">
-  <h2 class="visually-hidden" id="shot-title">Murshid at work</h2>
+  <h2 class="visually-hidden" id="shot-title" data-i18n="shot.title">Murshid at work</h2>
   <figure>
     <picture>
       <source type="image/avif" srcset="art/screenshot/murshid-webbrain-1x.avif 1280w, art/screenshot/murshid-webbrain-2x.avif 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
       <source type="image/webp" srcset="art/screenshot/murshid-webbrain-1x.webp 1280w, art/screenshot/murshid-webbrain-2x.webp 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
-      <img src="art/screenshot/murshid-webbrain.jpg" width="2560" height="1599" loading="lazy" decoding="async" alt="The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.">
+      <img src="art/screenshot/murshid-webbrain.jpg" width="2560" height="1599" loading="lazy" decoding="async" data-i18n-alt="shot.alt" alt="The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.">
     </picture>
-    <figcaption>A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.</figcaption>
+    <figcaption data-i18n="shot.caption">A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.</figcaption>
   </figure>
 </section>
 
 <!-- ============================================================= CARRIES -->
 <section class="carries" id="carries" aria-labelledby="carries-title">
   <header class="section-head">
-    <p class="eyebrow">What the guide carries</p>
-    <h2 id="carries-title">A whole browser,<br><em>and a mind for it.</em></h2>
-    <p>Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.</p>
+    <p class="eyebrow" data-i18n="carries.eyebrow">What the guide carries</p>
+    <h2 id="carries-title" data-i18n="carries.title">A whole browser,<br><em>and a mind for it.</em></h2>
+    <p data-i18n="carries.lede">Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.</p>
   </header>
 
   <div class="cards">
@@ -141,54 +159,54 @@ cd murshid && npm install && npm start</code></pre>
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-browse.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#1 Browse</p>
-      <h3>Chromium, with tabs</h3>
-      <p>Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.</p>
+      <p class="num" data-i18n="card1.num">#1 Browse</p>
+      <h3 data-i18n="card1.title">Chromium, with tabs</h3>
+      <p data-i18n="card1.text">Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.</p>
     </article>
 
     <article class="card">
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-ask.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#2 Ask &amp; act</p>
-      <h3>WebBrain in the side panel</h3>
-      <p>Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.</p>
+      <p class="num" data-i18n="card2.num">#2 Ask &amp; act</p>
+      <h3 data-i18n="card2.title">WebBrain in the side panel</h3>
+      <p data-i18n="card2.text">Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.</p>
     </article>
 
     <article class="card">
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-tray.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#3 Tray</p>
-      <h3>Your AI plans, from the tray</h3>
-      <p>WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.</p>
+      <p class="num" data-i18n="card3.num">#3 Tray</p>
+      <h3 data-i18n="card3.title">Your AI plans, from the tray</h3>
+      <p data-i18n="card3.text">WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.</p>
     </article>
 
     <article class="card">
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-newtab.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#4 New tab</p>
-      <h3>A new tab that listens</h3>
-      <p>Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.</p>
+      <p class="num" data-i18n="card4.num">#4 New tab</p>
+      <h3 data-i18n="card4.title">A new tab that listens</h3>
+      <p data-i18n="card4.text">Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.</p>
     </article>
 
     <article class="card">
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-local.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#5 Local</p>
-      <h3>Models on your own machine</h3>
-      <p>The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.</p>
+      <p class="num" data-i18n="card5.num">#5 Local</p>
+      <h3 data-i18n="card5.title">Models on your own machine</h3>
+      <p data-i18n="card5.text">The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.</p>
     </article>
 
     <article class="card">
       <div class="plate" aria-hidden="true">
         <img class="photo" src="art/halftone/card-open.webp" width="800" height="500" loading="lazy" alt="">
       </div>
-      <p class="num">#6 Open</p>
-      <h3>Open, all the way down</h3>
-      <p>GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.</p>
+      <p class="num" data-i18n="card6.num">#6 Open</p>
+      <h3 data-i18n="card6.title">Open, all the way down</h3>
+      <p data-i18n="card6.text">GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.</p>
     </article>
   </div>
 </section>
@@ -199,28 +217,28 @@ cd murshid && npm install && npm start</code></pre>
     <img class="photo" src="art/halftone/way.webp" width="1000" height="1432" loading="lazy" alt="">
   </div>
   <div class="way-copy">
-    <p class="eyebrow gold">The way</p>
-    <h2 id="way-title">The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em></h2>
+    <p class="eyebrow gold" data-i18n="way.eyebrow">The way</p>
+    <h2 id="way-title" data-i18n="way.title">The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em></h2>
     <ol class="steps">
       <li>
-        <span class="step-num">I</span>
+        <span class="step-num" data-i18n="way.step1.num">I</span>
         <div>
-          <h3>Ask</h3>
-          <p>Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.</p>
+          <h3 data-i18n="way.step1.title">Ask</h3>
+          <p data-i18n="way.step1.text">Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.</p>
         </div>
       </li>
       <li>
-        <span class="step-num">II</span>
+        <span class="step-num" data-i18n="way.step2.num">II</span>
         <div>
-          <h3>See the plan</h3>
-          <p>For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.</p>
+          <h3 data-i18n="way.step2.title">See the plan</h3>
+          <p data-i18n="way.step2.text">For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.</p>
         </div>
       </li>
       <li>
-        <span class="step-num">III</span>
+        <span class="step-num" data-i18n="way.step3.num">III</span>
         <div>
-          <h3>Walk</h3>
-          <p>Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.</p>
+          <h3 data-i18n="way.step3.title">Walk</h3>
+          <p data-i18n="way.step3.text">Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.</p>
         </div>
       </li>
     </ol>
@@ -231,67 +249,67 @@ cd murshid && npm install && npm start</code></pre>
 <section class="tray" id="tray" aria-labelledby="tray-title">
   <div class="tray-inner">
     <div>
-      <p class="eyebrow">In the system tray</p>
-      <h2 id="tray-title">The plans you already pay for,<br><em>poured for WebBrain.</em></h2>
-      <p>Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.</p>
+      <p class="eyebrow" data-i18n="tray.eyebrow">In the system tray</p>
+      <h2 id="tray-title" data-i18n="tray.title">The plans you already pay for,<br><em>poured for WebBrain.</em></h2>
+      <p data-i18n="tray.text">Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.</p>
     </div>
-    <ul class="providers" aria-label="Subscriptions the Companion serves">
-      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local">Bonsai 2 27B · local</li><li class="local">d1 · local</li>
+    <ul class="providers" aria-label="Subscriptions the Companion serves" data-i18n-aria-label="tray.providers">
+      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local" data-i18n="tray.local.bonsai">Bonsai 2 27B · local</li><li class="local" data-i18n="tray.local.d1">d1 · local</li>
     </ul>
-    <pre class="endpoint" aria-label="Companion endpoint"><code>http://127.0.0.1:8327/v1</code></pre>
+    <pre class="endpoint" aria-label="Companion endpoint" data-i18n-aria-label="tray.endpoint"><code dir="ltr">http://127.0.0.1:8327/v1</code></pre>
   </div>
 </section>
 
 <!-- ================================================================ GET -->
 <section class="get" id="get" aria-labelledby="get-title">
   <header class="section-head center">
-    <p class="eyebrow">Get Murshid</p>
-    <h2 id="get-title">Take the guide <em>with you.</em></h2>
-    <p>Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.</p>
+    <p class="eyebrow" data-i18n="get.eyebrow">Get Murshid</p>
+    <h2 id="get-title" data-i18n="get.title">Take the guide <em>with you.</em></h2>
+    <p data-i18n="get.lede">Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.</p>
   </header>
   <div class="platforms">
-    <article class="platform" data-platform="win">
+    <article class="platform" data-platform="win" data-you="Your system" data-i18n-data-you="get.yours">
       <h3>Windows</h3>
-      <p>10 and 11, x64. Arm64 runs from source.</p>
+      <p data-i18n="get.win.req">10 and 11, x64. Arm64 runs from source.</p>
       <div class="downloads">
-        <a class="button crimson download" href="download/Murshid-0.1.0-windows-x64-setup.exe" download>Download installer</a>
+        <a class="button crimson download" href="download/Murshid-0.1.0-windows-x64-setup.exe" download data-i18n="get.download">Download installer</a>
       </div>
-      <span class="status">0.1.0 · x64 · 150 MB</span>
-      <p class="fine">Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.</p>
+      <span class="status" data-i18n="get.win.status">0.1.0 · x64 · 150 MB</span>
+      <p class="fine" data-i18n="get.win.fine">Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.</p>
     </article>
-    <article class="platform" data-platform="mac">
+    <article class="platform" data-platform="mac" data-you="Your system" data-i18n-data-you="get.yours">
       <h3>macOS</h3>
-      <p>12 Monterey and later, Apple Silicon and Intel.</p>
+      <p data-i18n="get.mac.req">12 Monterey and later, Apple Silicon and Intel.</p>
       <div class="downloads">
-        <a class="button crimson download" href="download/Murshid-0.1.0-macos-universal.dmg" download>Download installer</a>
+        <a class="button crimson download" href="download/Murshid-0.1.0-macos-universal.dmg" download data-i18n="get.download">Download installer</a>
       </div>
-      <span class="status">0.1.0 · Apple Silicon and Intel · 294 MB</span>
-      <p class="fine">Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.</p>
+      <span class="status" data-i18n="get.mac.status">0.1.0 · Apple Silicon and Intel · 294 MB</span>
+      <p class="fine" data-i18n="get.mac.fine">Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.</p>
     </article>
-    <article class="platform" data-platform="linux">
+    <article class="platform" data-platform="linux" data-you="Your system" data-i18n-data-you="get.yours">
       <h3>Linux</h3>
-      <p>x64. Arm64 runs from source.</p>
+      <p data-i18n="get.linux.req">x64. Arm64 runs from source.</p>
       <div class="downloads">
-        <a class="button crimson download" href="download/Murshid-0.1.0-linux-x86_64.AppImage" download>AppImage</a>
+        <a class="button crimson download" href="download/Murshid-0.1.0-linux-x86_64.AppImage" download lang="en">AppImage</a>
         <a class="button crimson" href="download/Murshid-0.1.0-linux-amd64.deb" download>.deb</a>
       </div>
-      <span class="status">0.1.0 · x64 · 171 MB · 135 MB</span>
-      <p class="fine">AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
+      <span class="status" data-i18n="get.linux.status">0.1.0 · x64 · 171 MB · 135 MB</span>
+      <p class="fine" data-i18n="get.linux.fine">AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
     </article>
   </div>
   <div class="get-cta">
-    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> Source on GitHub</a>
+    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span data-i18n="get.source">Source on GitHub</span></a>
   </div>
-  <p class="checksums"><a href="download/SHA256SUMS.txt">SHA-256 checksums</a></p>
+  <p class="checksums"><a href="download/SHA256SUMS.txt" data-i18n="get.checksums">SHA-256 checksums</a></p>
 </section>
 
 <!-- ============================================================ PRIVACY -->
 <section class="privacy" id="privacy" aria-labelledby="privacy-title">
   <div class="privacy-inner">
     <div class="section-head privacy-copy">
-      <p class="eyebrow gold">Privacy, thoughtfully</p>
-      <h2 id="privacy-title">Private<br><em>where it matters.</em></h2>
-      <p>Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.</p>
+      <p class="eyebrow gold" data-i18n="privacy.eyebrow">Privacy, thoughtfully</p>
+      <h2 id="privacy-title" data-i18n="privacy.title">Private<br><em>where it matters.</em></h2>
+      <p data-i18n="privacy.text">Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.</p>
     </div>
     <div class="privacy-art" aria-hidden="true">
       <img src="art/halftone/privacy-dame-turque.webp" width="1402" height="1122" loading="lazy" alt="">
@@ -304,14 +322,14 @@ cd murshid && npm install && npm start</code></pre>
 <footer class="footer">
   <div class="footer-mark" aria-hidden="true"><span class="arabic" lang="ar">مرشد</span></div>
   <div class="footer-row">
-    <a class="brand" href="#top"><img src="art/murshid-icon.svg" alt="" width="28" height="28"><span>Murshid</span></a>
-    <nav aria-label="Footer">
-      <a href="https://webbrain.one">WebBrain</a>
-      <a href="https://webbrain.one/companion/">Companion</a>
-      <a href="https://github.com/webbrain-one/webbrain">GitHub</a>
-      <a href="https://webbrain.one/privacy">Privacy</a>
+    <a class="brand" href="#top"><img src="art/murshid-icon.svg" alt="" width="28" height="28"><span lang="en">Murshid</span></a>
+    <nav aria-label="Footer" data-i18n-aria-label="footer.nav">
+      <a href="https://webbrain.one" lang="en">WebBrain</a>
+      <a href="https://webbrain.one/companion/" lang="en">Companion</a>
+      <a href="https://github.com/webbrain-one/webbrain" lang="en">GitHub</a>
+      <a href="https://webbrain.one/privacy" data-i18n="footer.privacy">Privacy</a>
     </nav>
-    <p>GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span></p>
+    <p data-i18n="footer.credits">GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span></p>
   </div>
 </footer>
 

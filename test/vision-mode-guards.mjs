@@ -165,8 +165,8 @@ for (const build of ['chrome', 'firefox']) {
     const ok = { success: true, dispatched: true, method: 'cdp-vision-pointer' };
     return {
       agent, tab, session, provider,
-      // What a screen update showing a change records (a patch).
-      changeScreen() { session.registerPatches([{ x: 0, y: 0, width: 16, height: 16 }], null); },
+      // What a screen update showing a change records (a patch, frame px).
+      changeScreen(region = { x: 0, y: 0, width: 16, height: 16 }) { session.registerPatches([region], null); },
       click(x = 300, y = 200, result = ok) {
         const args = { x, y, coordinate_space: 'css' };
         return { loop: agent._checkLoop(tab, 'click', args, structuredClone(result)), coord: agent._checkCoordClickLoop(tab, x, y) };
@@ -226,6 +226,82 @@ for (const build of ['chrome', 'firefox']) {
     const treeChecks = [];
     for (let i = 0; i < 8; i++) { treeChecks.push(tree.click()); tree.changeScreen(); }
     assert.equal(treeChecks.at(-1).coord.kind, 'stop');
+  });
+
+  // From a trace: a Bluesky composer's Post button missed ten times, every
+  // click landing on the dialog's backdrop, while a video played in the feed
+  // behind it. Each screen update showed the video's new frame, so every
+  // click counted as made on a new screen, and the model's points drifted a
+  // few pixels (1035,80 / 1030,78 / 1038,76 / 1040,78): nothing added up.
+  // What changes while nothing acts on the page (an update after a look) and
+  // went on changing is the page's own; a click's effect anywhere else, or a
+  // first change seen after a look, is still progress.
+  test(`${build}: a vision click missing the same point adds up while a video elsewhere keeps changing`, () => {
+    const f = loopFixture();
+    const video = { x: 8, y: 8, width: 24, height: 24 };
+    const look = (regions = [video]) => f.session.registerPatches(regions, null, { lookedOnly: true });
+    f.click(1035, 80); f.changeScreen(video); look(); look();
+    const points = [[1035, 80], [1035, 80], [1030, 78], [1035, 80], [1038, 76], [1035, 80], [1040, 78], [1035, 80]];
+    const checks = points.map(([x, y], i) => {
+      const check = f.click(x, y);
+      f.changeScreen(video);
+      if (i % 3 === 2) look();
+      return check;
+    });
+    assert.deepEqual(checks.map(check => check.coord.kind), ['none', 'none', 'none', 'none', 'nudge', 'nudge', 'nudge', 'stop']);
+    assert.equal(checks[1].loop.kind, 'none');
+    // The look may be a full frame (take_screenshot) whose only change is the video.
+    const framed = loopFixture();
+    const frame = seed => {
+      const pixels = new Uint8ClampedArray(64 * 48 * 4);
+      for (let y = 8; y < 32; y++) for (let x = 8; x < 32; x++) pixels[(y * 64 + x) * 4] = (seed * 97 + x * 5) % 256;
+      return pixels;
+    };
+    const meta = { imageWidth: 64, imageHeight: 48, cssWidth: 64, cssHeight: 48, url: 'https://shop.example/invitations' };
+    framed.session.registerKeyframe(meta, frame(0));
+    framed.session.registerKeyframe(meta, frame(1), { lookedOnly: true });
+    framed.session.registerKeyframe(meta, frame(2), { lookedOnly: true });
+    const kinds = [];
+    for (let i = 3; i <= 11; i++) {
+      kinds.push(framed.click(1035, 80).coord.kind);
+      framed.changeScreen(video);
+      framed.session.registerKeyframe(meta, frame(i), { lookedOnly: true });
+    }
+    assert.equal(kinds.at(-1), 'stop', JSON.stringify(kinds));
+    // The button's effect beside it, with the video still playing: progress.
+    const counter = loopFixture();
+    counter.click(1035, 80); counter.changeScreen(video); counter.session.registerPatches([video], null, { lookedOnly: true }); counter.session.registerPatches([video], null, { lookedOnly: true });
+    const presses = [];
+    for (let i = 0; i < 9; i++) {
+      presses.push(counter.click(1035, 80).coord.kind);
+      counter.changeScreen(video);
+      counter.changeScreen({ x: 40, y: 30, width: 16, height: 16 });
+    }
+    assert.deepEqual(presses, Array(9).fill('none'));
+    // A slow page: nothing visible after the click, its result after a look.
+    const slow = loopFixture();
+    const tries = [];
+    for (let i = 0; i < 9; i++) {
+      tries.push(slow.click(1035, 80).coord.kind);
+      slow.session.registerNoChange();
+      slow.session.registerPatches([{ x: 40, y: 30, width: 16, height: 16 }], null, { lookedOnly: true });
+    }
+    assert.deepEqual(tries, Array(9).fill('none'));
+    // A loading state and its delayed result overlap, but both follow an action.
+    const asyncPage = loopFixture();
+    const progress = [];
+    for (let i = 0; i < 10; i++) {
+      progress.push(asyncPage.click(1035, 80).coord.kind);
+      asyncPage.changeScreen(video);
+      asyncPage.session.registerPatches([video], null, { lookedOnly: true });
+    }
+    assert.deepEqual(progress, Array(10).fill('none'));
+    assert.deepEqual(asyncPage.session.ambientRegions, []);
+    // Points further apart than a drift are different targets.
+    const grid = loopFixture();
+    const cells = [];
+    for (let i = 0; i < 8; i++) cells.push(grid.click(400 + (i % 4) * 24, 300).coord.kind);
+    assert.deepEqual(cells, Array(8).fill('none'));
   });
 
   test(`${build}: vision loop messages name click_at, the model's point and only tools the run has`, () => {
@@ -501,6 +577,169 @@ for (const build of ['chrome', 'firefox']) {
     await agent._visionUploadHandoffTick(tab, 8);
     assert.equal(agent._visionRunState(tab, 'act').active, true);
     agent._endVisionRun(tab, null);
+  });
+
+  // The page-action binding check (page-feedback.js) during an upload
+  // handoff. The page monitor is faked as GitHub's release form reads to it:
+  // the binary input is hidden behind its widget on a page too deep for the
+  // observation to certify, so every upload_file is target_uncovered, and the
+  // monitor says `inventoried` only for the very node an inventory with this
+  // token listed under this exact selector. A three-asset release used to
+  // spend a refusal, a get_interactive_elements and the same upload_file
+  // again on every file (trace steps 15-18 and 24-27).
+  const RELEASE_PAGE = 'https://owned.example/owned/repository/releases/new';
+  const GUESSED_SAME_INPUT = 'input[type="file"][multiple]:not([accept])';
+  function uploadBindingFixture({ strict = false, documentToken = 'content-1' } = {}) {
+    const agent = agentFor();
+    agent.visionMode = 'auto';
+    agent.strictGuards = strict;
+    const tab = 37;
+    agent._currentUrl = async () => RELEASE_PAGE;
+    agent._lastTabUrls = new Map([[tab, RELEASE_PAGE]]);
+    agent._uncertainTextMutationBlock = async () => null;
+    agent._finalizeToolResultOnce = async (_tab, _name, _args, result) => result;
+    const sent = [];
+    agent._executeToolImpl = async (_tab, name, args) => {
+      sent.push({ name, selector: args.selector });
+      return { success: true, dispatched: true, file: 'chrome.zip', attached: { name: 'chrome.zip', size: 4 }, attachmentState: 'input_attached' };
+    };
+    // Which node each selector names on the page right now.
+    const dom = new Map([['#releases-upload', 'binary'], [GUESSED_SAME_INPUT, 'binary'], ['#fc-release-body', 'markdown']]);
+    const monitor = { inventory: null, records: [], validations: [] };
+    const answer = message => {
+      const params = message.params || {};
+      if (message.action === 'page_monitor_record_upload_targets') {
+        monitor.records.push(params);
+        const pairs = (params.selectors || []).filter(selector => dom.has(selector)).map(selector => [dom.get(selector), selector]);
+        if (params.runToken !== 'pf-run' || !pairs.length) return { recorded: [], runToken: 'pf-run', documentToken };
+        monitor.inventory = { token: params.token, entries: new Map(pairs) };
+        return { recorded: pairs.map(([, selector]) => selector), runToken: 'pf-run', documentToken };
+      }
+      if (message.action === 'page_monitor_validate_model') {
+        monitor.validations.push(params);
+        const node = dom.get(params.selector);
+        const inventoried = !!node && params.tool === 'upload_file' && typeof params.fileInventoryToken === 'string'
+          && !!params.fileInventoryToken && monitor.inventory?.token === params.fileInventoryToken
+          && monitor.inventory.entries.get(node) === params.selector;
+        return { ready: false, reason: node ? 'target_uncovered' : 'target_unresolved', ...(node ? { certificationFailure: 'identity_unobserved' } : {}),
+          ...(inventoried ? { inventoried: true } : {}), runToken: params.runToken, documentToken: 'content-1', snapshotToken: params.snapshotToken };
+      }
+      return { ready: true };
+    };
+    const frame = { token: 'content-1', id: 'document-1' };
+    const state = { token: 'pf-run', url: RELEASE_PAGE, frames: new Map([[0, frame]]), steeringRevision: 0,
+      actionBinding: { snapshotToken: 'snapshot-1', runToken: 'pf-run', documentToken: 'content-1' } };
+    const run = { token: 'pf-run', url: RELEASE_PAGE, documents: new Map(), frames: new Map([[0, { ...frame }]]), revision: 0,
+      events: new Map(), modelState: state, gestures: new Set(), gestureLeases: new Map() };
+    agent._pageFeedbackRuns = new Map([[tab, run]]);
+    const blocked = (selector = '#releases-upload') => ({ success: false, dispatched: true, filePickerBlocked: true, selector, error: 'Blocked a native file chooser.' });
+    const upload = selector => agent.executeTool(tab, 'upload_file', { selector, downloadId: 2157 }, null, { guardAdvisories: [] });
+    return { agent, tab, run, dom, monitor, sent, blocked, upload, answer };
+  }
+  async function withFakeMonitor(answer, work) {
+    const saved = { chrome: globalThis.chrome, browser: globalThis.browser };
+    const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
+    const fake = {
+      storage: { local: area, session: area },
+      runtime: { getURL: value => `extension://test/${value}`, sendMessage: async () => ({}) },
+      tabs: { get: async id => ({ id, url: RELEASE_PAGE }), query: async () => [], sendMessage: async (_tab, message) => answer(message) },
+      webNavigation: { getAllFrames: async () => [{ frameId: 0, parentFrameId: -1, documentId: 'document-1', url: RELEASE_PAGE }] },
+    };
+    globalThis.chrome = globalThis.browser = fake;
+    try { return await work(); } finally {
+      for (const name of ['chrome', 'browser']) {
+        if (saved[name] === undefined) delete globalThis[name]; else globalThis[name] = saved[name];
+      }
+    }
+  }
+  const refusedAsUncovered = (result, sent, label) => {
+    assert.deepEqual(sent, [], `${label}: nothing was attached`);
+    assert.equal(result.errorCode, 'action_binding_unavailable', `${label}: ${JSON.stringify(result)}`);
+    assert.equal(result.bindingFailure, 'target_uncovered', label);
+    assert.equal(result.recoveryRequired, 'get_interactive_elements', label);
+  };
+
+  for (const [mode, strict] of [['default', false], ['strict', true]]) {
+    test(`${build}: ${mode} checks: the first upload_file of a handoff ${strict ? 'is refused like an inventory\'s' : 'attaches to the input the blocked click named'}; a guessed selector is refused`, async () => {
+      const f = uploadBindingFixture({ strict });
+      await withFakeMonitor(f.answer, async () => {
+        f.agent._beginVisionRun(f.tab);
+        assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'click', f.blocked(), { vision: { tool: 'click_at' } }).uploadHandoff, true);
+        // What the first upload_file met before: the input is not covered and
+        // no inventory named it.
+        refusedAsUncovered(await f.upload('#releases-upload'), f.sent, 'before the handoff starts');
+        await f.agent._visionUploadHandoffTick(f.tab, 1);
+        assert.equal(f.agent._visionRunState(f.tab, 'act').reason, 'file_upload_needs_element_inventory');
+        assert.equal(f.monitor.records.length, 1);
+        assert.deepEqual(f.monitor.records[0].selectors, ['#releases-upload']);
+        assert.deepEqual(f.run.uploadObservationScope, { documentToken: 'content-1', url: RELEASE_PAGE,
+          token: f.monitor.records[0].token, selectors: ['#releases-upload'], source: 'upload_handoff' });
+        // A guessed selector, for the same input or another one, keeps its refusal.
+        for (const guessed of [GUESSED_SAME_INPUT, '#fc-release-body']) refusedAsUncovered(await f.upload(guessed), f.sent, guessed);
+        const first = await f.upload('#releases-upload');
+        assert.equal(f.monitor.validations.at(-1).fileInventoryToken, f.monitor.records[0].token, 'the monitor is asked about the recorded node');
+        if (strict) refusedAsUncovered(first, f.sent, 'Strict checks');
+        else {
+          assert.deepEqual(f.sent, [{ name: 'upload_file', selector: '#releases-upload' }], JSON.stringify(first));
+          assert.equal(first.success, true);
+          assert.deepEqual(first.guardAdvisories.map(item => item.guard), ['page-feedback-target-binding']);
+          assert.match(first.guardAdvisories[0].note, /the exact input the blocked file-chooser click named/);
+          assert.doesNotMatch(first.guardAdvisories[0].note, /inventory/);
+          // The upload ends the handoff; the run is back on screenshots.
+          assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'upload_file', first, {}), first);
+          await f.agent._visionUploadHandoffTick(f.tab, 2);
+          assert.equal(f.agent._visionRunState(f.tab, 'act').active, true);
+          f.sent.length = 0;
+        }
+        // A node the page renders later under the same selector was never observed.
+        f.dom.set('#releases-upload', 'binary-remounted');
+        refusedAsUncovered(await f.upload('#releases-upload'), f.sent, 'a re-mounted input');
+        assert.equal(f.monitor.records.length, 1, 'only the start of a handoff observes its inputs');
+      });
+      f.agent._endVisionRun(f.tab, null);
+    });
+  }
+
+  test(`${build}: a handoff observes every input its batch blocked, on the page and run it starts in, never for the compact tier`, async () => {
+    // Another chooser in the batch that armed the handoff is covered by it.
+    const batch = uploadBindingFixture();
+    await withFakeMonitor(batch.answer, async () => {
+      batch.agent._beginVisionRun(batch.tab);
+      batch.agent._visionNoteUploadHandoff(batch.tab, 'click', batch.blocked(), { vision: { tool: 'click_at' } });
+      batch.agent._visionNoteUploadHandoff(batch.tab, 'click', batch.blocked('#fc-release-body'), { vision: { tool: 'click_at' } });
+      await batch.agent._visionUploadHandoffTick(batch.tab, 1);
+      assert.deepEqual(batch.monitor.records.map(record => record.selectors), [['#releases-upload', '#fc-release-body']]);
+      assert.deepEqual(batch.run.uploadObservationScope.selectors, ['#releases-upload', '#fc-release-body']);
+      await batch.agent._visionUploadHandoffTick(batch.tab, 2);
+      assert.equal(batch.monitor.records.length, 1, 'an active handoff does not observe again');
+    });
+    batch.agent._endVisionRun(batch.tab, null);
+    // The monitor answered for another document (the page was replaced while
+    // the click's update settled): nothing is observed.
+    const replaced = uploadBindingFixture({ documentToken: 'content-2' });
+    await withFakeMonitor(replaced.answer, async () => {
+      replaced.agent._beginVisionRun(replaced.tab);
+      replaced.agent._visionNoteUploadHandoff(replaced.tab, 'click', replaced.blocked(), { vision: { tool: 'click_at' } });
+      await replaced.agent._visionUploadHandoffTick(replaced.tab, 1);
+      assert.equal(replaced.monitor.records.length, 1);
+      assert.equal(replaced.run.uploadObservationScope, undefined);
+      refusedAsUncovered(await replaced.upload('#releases-upload'), replaced.sent, 'another document');
+    });
+    replaced.agent._endVisionRun(replaced.tab, null);
+    // The compact tier's upload_file finds its own target by discovery, and a
+    // chooser the guard could not name gives no selector: neither is observed.
+    for (const [label, result, promptTier] of [['compact', null, 'compact'], ['unnamed', { selector: undefined }, '']]) {
+      const f = uploadBindingFixture();
+      await withFakeMonitor(f.answer, async () => {
+        f.agent._userAttachmentHandles.set(f.tab, new Map([['attachment_t_1', { name: 'chrome.zip' }]]));
+        f.agent._beginVisionRun(f.tab);
+        assert.equal(f.agent._visionNoteUploadHandoff(f.tab, 'click', { ...f.blocked(), ...result }, { vision: { tool: 'click_at' }, promptTier }).uploadHandoff, true, label);
+        await f.agent._visionUploadHandoffTick(f.tab, 1);
+        assert.deepEqual(f.monitor.records, [], label);
+        assert.equal(f.run.uploadObservationScope, undefined, label);
+      });
+      f.agent._endVisionRun(f.tab, null);
+    }
   });
 
   test(`${build}: back on vision, a failed capture leaves no frame to aim at and retires the old one in the history`, async () => {
@@ -839,6 +1078,64 @@ test('chrome: a vision click result is not judged by a DOM text snapshot', async
     if (savedTabs) globalThis.chrome.tabs = savedTabs;
   }
 });
+
+// From a trace: every click meant for a Bluesky composer's Post button came
+// back { success: true, target: { tag: 'div', role: 'dialog' } }, and the
+// model clicked the same backdrop ten times. The click still goes (clicking
+// outside a dialog may be how it closes), and its result now says the point
+// is on no control.
+for (const build of ['chrome', 'firefox']) {
+  test(`${build}: a vision click on an open dialog's background goes out and says it hit no control`, async () => {
+    const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+    const provider = { model: 'owned-vision-dialog-fixture', supportsVision: true, chat: async () => ({ content: '{}' }) };
+    const agent = new Agent({ getActive: () => provider });
+    const tab = 43;
+    let point = null;
+    agent._visionPlatformDomProbe = async () => ({ points: [point] });
+    agent._visionMutationBindingBlock = async () => null;
+    const sent = [];
+    const restore = [];
+    if (build === 'chrome') {
+      agent._redirectTargetBlankClick = async () => null;
+      agent._visionPlatformLateTab = async () => null;
+      agent._showAgentTarget = () => {};
+      const saved = { attach: cdpClient.attach, sendCommand: cdpClient.sendCommand, armFileInputClickGuard: cdpClient.armFileInputClickGuard, consumeFileInputClickGuard: cdpClient.consumeFileInputClickGuard };
+      const savedTabs = globalThis.chrome?.tabs;
+      globalThis.chrome = { ...(globalThis.chrome || {}), tabs: { ...(savedTabs || {}), query: async () => [{ id: tab }],
+        onCreated: { addListener() {}, removeListener() {} }, onUpdated: { addListener() {}, removeListener() {} } } };
+      cdpClient.attach = async () => {};
+      cdpClient.sendCommand = async (_tab, method, params) => { if (method === 'Input.dispatchMouseEvent') sent.push(params.type); return {}; };
+      cdpClient.armFileInputClickGuard = async () => {};
+      cdpClient.consumeFileInputClickGuard = async () => null;
+      restore.push(() => { Object.assign(cdpClient, saved); if (savedTabs) globalThis.chrome.tabs = savedTabs; });
+    } else {
+      agent._visionContentInput = async (_tab, params) => { sent.push(params.type); return { success: true, dispatched: true, method: 'synthetic-vision-pointer', clicks: 1, target: { tag: point.tag } }; };
+      agent._settleContentFilePickerGuard = async (_tab, response) => response;
+    }
+    const click = (button = 'left') => agent._visionDispatchClick(tab, { x: 1035, y: 80, coordinate_space: 'css' },
+      { vision: { tool: 'click_at', button, clickCount: 1 } });
+    try {
+      point = { found: true, tag: 'div', role: 'dialog', clickable: false, opaqueFrame: false, dialogBackground: 'backdrop' };
+      const backdrop = await click();
+      assert.equal(backdrop.success, true, JSON.stringify(backdrop));
+      assert.ok(sent.length > 0, 'the click went out');
+      assert.match(backdrop.note, /backdrop around an open dialog, outside the dialog's content, not on a button, link or field/);
+      assert.match(backdrop.note, /this click missed it/);
+      assert.match(backdrop.note, /clicking outside it, check the next screen/);
+      if (build === 'chrome') assert.deepEqual(backdrop.target, { tag: 'div', role: 'dialog', dialogBackground: 'backdrop' });
+      point = { ...point, role: undefined, dialogBackground: 'empty' };
+      assert.match((await click()).note, /an empty area of an open dialog/);
+      // A right click there opens a menu; it is not told it missed a control.
+      assert.equal((await click('right')).note, undefined);
+      point = { found: true, tag: 'button', clickable: true, control: 'button', opaqueFrame: false };
+      const onButton = await click();
+      assert.equal(onButton.success, true);
+      assert.equal(onButton.note, undefined);
+    } finally {
+      for (const undo of restore) undo();
+    }
+  });
+}
 
 test('chrome: on a protected Chrome Web Store page vision input and zooms stop with the protected-page result', () => {
   for (const name of ['hover_at', 'drag_at', 'scroll_at', 'zoom', 'click']) assert.equal(isChromeProtectedPageDomTool(name), true, name);

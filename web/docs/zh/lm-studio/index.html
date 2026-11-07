@@ -5,13 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>在 LM Studio 中使用 WebBrain — WebBrain 用户指南</title>
   <meta name="description" content="在 LM Studio 中安装 WebBrain Web Tools 插件，使用本地模型读取公开 URL，并可选择将任务委派到你的已登录 Chromium 浏览器。">
-  <link rel="canonical" href="https://webbrain.one/docs/zh/lm-studio/">
-  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/lm-studio/">
-  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/lm-studio/">
-  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/lm-studio/">
-  <link rel="icon" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/docs/zh/lm-studio/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/lm-studio/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/lm-studio/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/lm-studio/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/lm-studio/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/lm-studio/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/lm-studio/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/lm-studio/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/lm-studio/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/lm-studio/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/lm-studio/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/lm-studio/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/lm-studio/"><link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261028">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -69,7 +65,7 @@
 </head>
 <body class="doc-page">
   <a class="skip-link" href="#main">跳到正文</a>
-  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">用户指南</span></a><nav class="top-nav" aria-label="主导航"><a href="/">首页</a><a href="/docs/zh/" aria-current="page">文档</a><a href="/blog/">博客</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><a class="lang-switch" href="/docs/lm-studio/" aria-label="Read in English"><span>EN</span><span class="active">中文</span></a><button class="icon-button" type="button" data-theme-toggle aria-label="切换主题">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="打开文档菜单">☰</button></div></div></header>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">用户指南</span></a><nav class="top-nav" aria-label="主导航"><a href="/">首页</a><a href="/docs/zh/" aria-current="page">文档</a><a href="/blog/">博客</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="切换语言"><option value="/docs/lm-studio/">English</option><option value="/docs/hi/lm-studio/">हिन्दी</option><option value="/docs/zh/lm-studio/" selected>中文</option><option value="/docs/ar/lm-studio/">العربية</option><option value="/docs/nl/lm-studio/">Nederlands</option><option value="/docs/tl/lm-studio/">Filipino</option><option value="/docs/fr/lm-studio/">Français</option><option value="/docs/de/lm-studio/">Deutsch</option><option value="/docs/id/lm-studio/">Bahasa Indonesia</option><option value="/docs/es/lm-studio/">Español</option><option value="/docs/tr/lm-studio/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="切换主题">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="打开文档菜单">☰</button></div></div></header>
 
   <div class="docs-shell">
     <aside class="docs-sidebar" aria-label="文档目录"><div class="sidebar-group"><div class="sidebar-label">从这里开始</div><nav><a href="/docs/zh/">概览</a><a href="/docs/zh/faq/">常见问题</a></nav></div><div class="sidebar-group"><div class="sidebar-label">使用 WebBrain</div><nav><a href="/docs/zh/settings/">设置说明</a><a href="/docs/zh/providers/">提供商与模型</a><a href="/companion/">WebBrain Companion</a><a href="/docs/zh/safety/">模式、安全与隐私</a><a href="/docs/zh/formats/">导出与工作流</a><a href="/docs/zh/lm-studio/" aria-current="page">LM Studio 插件</a><a href="/docs/zh/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">LM Studio 源码</div><nav><a href="https://lmstudio.ai/webbrain/web-tools">Hub 列表 ↗</a><a href="https://github.com/webbrain-one/webbrain/tree/main/lmstudio-plugin">插件包 ↗</a><a href="https://lmstudio.ai/docs/typescript/plugins">LM Studio 插件文档 ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">社区</div><nav><a href="https://discord.gg/cgC325ssfw">Discord 支持</a></nav></div></aside>
@@ -138,6 +134,6 @@ lms dev --install</code></pre><p>参阅 LM Studio 的 <a href="https://lmstudio.
   </div>
 </footer>
 <!-- Site footer: end -->
-  <script src="/docs/assets/docs.js?v=20260809"></script>
+  <script src="/docs/assets/docs.js?v=20261107"></script>
 </body>
 </html>

@@ -208,7 +208,11 @@ does not depend on a separate model AX call. This does not recertify a decision
 after inference. The existing model, preparation, recipient and dispatch checks
 still apply; Send, Escape and unrelated header controls acquire no exception.
 A unique native subtitle must match the unchanged header,
-and a separate unique native phone field supplies the canonical identity. The
+and a separate unique native phone field supplies the canonical identity.
+The subtitle must be plain text. Its only elements may be WhatsApp's own emoji
+images (an `img` marked `.emoji`, `data-type="emoji"` or `data-plain-text`
+whose text is emoji only), which the header and row titles also leave out of
+their text; any other element or image fails. The
 phone stays private; the public thread contains its bounded SHA-256 hash. The
 selected sidebar row, main panel, header, title, composer and transcript must
 remain the exact original nodes throughout. Pre-existing drawers, stale drawer
@@ -220,7 +224,8 @@ confirmed yet carries the same exact reference (`nativeWhatsappRepairTarget`,
 `open_contact` or `close_contact`), and the Agent names that control to the
 model instead of telling it to re-read the page and retry. A row of WhatsApp's
 own chat list, clicked on the row itself, opens another chat whatever the open
-chat's state; the row's menu and other nested controls stay guarded. A run
+chat's state, and opens one with no chat open at all, without a model reading
+the row's caption; the row's menu and other nested controls stay guarded. A run
 checks one contact, for its anchor chat: the first chat it looks at, or, in a
 request that names its recipient, the chat that is selected when the run arms
 its check with the guarded contact-name click, so such a request can first open

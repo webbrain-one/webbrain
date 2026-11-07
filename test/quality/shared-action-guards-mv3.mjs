@@ -529,8 +529,10 @@ try {
         for (const clarifyId of pending) {
           if (answered.has(clarifyId)) continue;
           answered.add(clarifyId);
-          if (!clarifyId.startsWith('deletion_')) { current.otherQuestions.push(clarifyId); continue; }
-          current.deletionCards.push(clarifyId);
+          if (!clarifyId.startsWith('deletion_')) current.otherQuestions.push(clarifyId);
+          else current.deletionCards.push(clarifyId);
+          // Deny every unexpected card so the run finishes and the assertion
+          // below reports it instead of hanging indefinitely.
           await message('clarify_response', { tabId: current.tabId, clarifyId, answer: 'deny', source: 'option' });
         }
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -555,7 +557,24 @@ try {
     let error;
     try {
       assert.deepEqual(worlds, { isolated: 'function', main: 'undefined' }, 'The manifest installs AX only in the isolated content world.');
-      assert.deepEqual(current.otherQuestions, [], 'No question other than WebBrain\'s deletion card is expected.');
+      const expectedHardCard = {
+        'x-post-correction-delete-only': ['social-publication-authorization-guard', 'publish', 'step_unverified'],
+        'x-duplicate-original-after-correction': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-virtualized-prior-effect': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-archived-publication-replay': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-toolbar-save-consequential': ['steer-post-correction-commit-guard', 'submit', 'step_unverified'],
+      }[current.id];
+      if (expectedHardCard) {
+        assert.equal(current.otherQuestions.length, 1, 'The unverified action must require one explicit approval.');
+        const card = (result.updates || []).find(event => event.type === 'clarify'
+          && event.data?.clarifyId === current.otherQuestions[0])?.data?.unverifiedStepConfirmation;
+        assert.equal(card?.guardId, expectedHardCard[0]);
+        assert.equal(card?.action, expectedHardCard[1]);
+        assert.equal(card?.reason, expectedHardCard[2]);
+        assert.equal(card?.hard, true);
+      } else {
+        assert.deepEqual(current.otherQuestions, [], 'No question other than WebBrain\'s deletion card is expected.');
+      }
       if (!current.unrelatedRecord && !current.resourceDrift && !current.accountDrift) {
         assert.deepEqual(current.deletionCards, [], 'A deletion the request binds needs no card.');
       }

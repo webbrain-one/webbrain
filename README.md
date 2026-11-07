@@ -16,6 +16,7 @@
 
 <p align="center">
   <a href="README.md">English</a> ·
+  <a href="README.hi.md">हिन्दी</a> ·
   <a href="README.zh-CN.md">中文</a> ·
   <a href="README.fr.md">Français</a> ·
   <a href="README.ja.md">日本語</a> ·
@@ -127,7 +128,7 @@ preview `ollama launch webbrain --model <model>` handoff. Details:
 **Cloud APIs** — OpenAI, Anthropic Claude, Google Gemini, Azure OpenAI, AWS
 Bedrock, Mistral, DeepSeek, xAI Grok, MiniMax, Kimi, Qwen, z.ai GLM, Groq,
 Together, Cloudflare, Nvidia NIM, Hugging Face, Fireworks, OpenRouter, and more.
-The Providers page ships **119 built-in provider cards on Chromium** (118 on Firefox),
+The Providers page ships **120 built-in provider cards on Chromium** (119 on Firefox),
 including an endpoint-free local WebGPU option with the tested LFM2.5 2.6B
 preset and an experimental custom Hugging Face ONNX repository option —
 see the [full catalog](docs/providers-and-models.md#extended-provider-catalog).

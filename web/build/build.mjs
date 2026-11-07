@@ -298,12 +298,18 @@ function faqUrlFor(locale) {
   return `${SITE_ORIGIN}${faqPathFor(locale)}`;
 }
 
+// Locales that have a full translated user-guide set under /docs/<code>/.
+const TRANSLATED_DOCS_LANGS = ['zh', 'hi', 'fr', 'es', 'de', 'ar', 'tr', 'nl', 'id', 'tl'];
+const TRANSLATED_DOCS = Object.fromEntries(TRANSLATED_DOCS_LANGS.map((code) => [code, `/docs/${code}/`]));
+// Guide pages that exist in every translated set.
+const TRANSLATED_DOCS_PAGES = ['', 'settings/', 'providers/', 'easy-cli-proxy/', 'safety/', 'apocalypse-mode/', 'formats/', 'mcp/', 'lm-studio/', 'ollama/'];
+
 function docsPathFor(locale) {
-  return locale.code === 'zh' ? '/docs/zh/' : '/docs/';
+  return TRANSLATED_DOCS[locale.code] || '/docs/';
 }
 
 // The footer's no-JavaScript language list, in the language picker's order.
-const FOOTER_LANGUAGE_ORDER = ['en', 'zh', 'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko', 'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi'];
+const FOOTER_LANGUAGE_ORDER = ['en', 'hi', 'zh', 'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'id', 'ja', 'ko', 'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi'];
 
 function validateFooterLanguageOrder() {
   const codes = LOCALES.map((l) => l.code);
@@ -646,7 +652,9 @@ function applyTemplate(template, dict, locale, page = 'home') {
     .replace(/\{\{sites_demo_site_id\}\}/g, SITES_DEMO_SITE_ID)
     .replace(/\{\{home_title_size\}\}/g, homeTitleSize(dict))
     .replace(/\{\{docs_url\}\}/g, docsUrl)
-    .replace(/\{\{docs_language_label\}\}/g, locale.code === 'zh' ? '中文' : 'EN')
+    .replace(/\{\{docs_language_label\}\}/g, TRANSLATED_DOCS[locale.code]
+      ? (LOCALES.find((l) => l.code === locale.code)?.label || locale.code.toUpperCase())
+      : 'EN')
     .replace(/\{\{faq_url\}\}/g, faqPathFor(locale))
     .replace(/\{\{faq_canonical\}\}/g, faqUrlFor(locale))
     .replace(/\{\{plausible_analytics\}\}/g, PLAUSIBLE_ANALYTICS)
@@ -806,14 +814,15 @@ async function main() {
     { loc: `${SITE_ORIGIN}/docs/easy-cli-proxy/`, alternates: 'easy-cli-proxy' },
     { loc: `${SITE_ORIGIN}/docs/safety/` },
     { loc: `${SITE_ORIGIN}/docs/apocalypse-mode/` },
+    { loc: `${SITE_ORIGIN}/docs/formats/` },
     { loc: `${SITE_ORIGIN}/docs/mcp/` },
     { loc: `${SITE_ORIGIN}/docs/lm-studio/` },
     { loc: `${SITE_ORIGIN}/docs/ollama/` },
-    { loc: `${SITE_ORIGIN}/docs/zh/` },
-    { loc: `${SITE_ORIGIN}/docs/zh/settings/` },
-    { loc: `${SITE_ORIGIN}/docs/zh/providers/` },
-    { loc: `${SITE_ORIGIN}/docs/zh/easy-cli-proxy/`, alternates: 'easy-cli-proxy' },
-    { loc: `${SITE_ORIGIN}/docs/zh/safety/` },
+    // Every translated guide set: the same page list under /docs/<code>/.
+    ...TRANSLATED_DOCS_LANGS.flatMap((code) => TRANSLATED_DOCS_PAGES.map((page) => ({
+      loc: `${SITE_ORIGIN}/docs/${code}/${page}`,
+      ...(page === 'easy-cli-proxy/' ? { alternates: 'easy-cli-proxy' } : {}),
+    }))),
   ];
   const sitemap = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -824,11 +833,10 @@ async function main() {
         ? faqUrlFor
         : homeUrlFor;
       const alts = u.alternates === 'easy-cli-proxy'
-        ? [
-            `    <xhtml:link rel="alternate" hreflang="en" href="${SITE_ORIGIN}/docs/easy-cli-proxy/"/>`,
-            `    <xhtml:link rel="alternate" hreflang="zh" href="${SITE_ORIGIN}/docs/zh/easy-cli-proxy/"/>`,
-            `    <xhtml:link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/docs/easy-cli-proxy/"/>`,
-          ].join('\n') + '\n'
+        ? ['en', ...TRANSLATED_DOCS_LANGS]
+            .map((code) => `    <xhtml:link rel="alternate" hreflang="${code}" href="${SITE_ORIGIN}/docs/${code === 'en' ? '' : `${code}/`}easy-cli-proxy/"/>`)
+            .concat([`    <xhtml:link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/docs/easy-cli-proxy/"/>`])
+            .join('\n') + '\n'
         : u.alternates
           ? LOCALES.map(
               (l) => `    <xhtml:link rel="alternate" hreflang="${l.code}" href="${alternateUrlFor(l)}"/>`,

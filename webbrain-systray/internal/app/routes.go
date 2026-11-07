@@ -203,7 +203,10 @@ func (a *App) routes(e *gin.Engine) {
 			"decision": gin.H{
 				"endpoint": s.Decision.Endpoint,
 				"ready":    s.Decision.Phase == d1.PhaseReady,
-				"model":    d1.ModelName,
+				// The model answering /decide: Compass VLD v6 2B by default,
+				// d1 when chosen or while it is the only one installed.
+				"model":     s.Decision.Model,
+				"installed": installedDecisionModels(s.Decision),
 			},
 		})
 	})
@@ -437,9 +440,40 @@ func (a *App) routes(e *gin.Engine) {
 	})
 	api.POST("/decision/cancel", func(c *gin.Context) { a.D1.Cancel(); c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	api.POST("/decision/remove", func(c *gin.Context) {
-		if err := a.D1.Remove(); err != nil {
+		// An empty body removes the model in use; {"model": id} removes either.
+		var req struct {
+			Model string `json:"model"`
+		}
+		if c.Request.ContentLength > 0 {
+			if err := c.ShouldBindJSON(&req); err != nil {
+				fail(c, http.StatusBadRequest, err)
+				return
+			}
+		}
+		if err := a.D1.RemoveModel(req.Model); err != nil {
 			fail(c, http.StatusConflict, err)
 			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	api.POST("/decision/model", func(c *gin.Context) {
+		var req struct {
+			Model string `json:"model"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := a.D1.SetModel(req.Model); err != nil {
+			fail(c, http.StatusConflict, err)
+			return
+		}
+		if a.Store.Get().Decision.Enabled && a.D1.Installed() {
+			go func() {
+				if err := a.D1.Load(); err != nil {
+					logx.Printf("decision load: %v", err)
+				}
+			}()
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -606,4 +640,15 @@ func (a *App) routes(e *gin.Engine) {
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
+}
+
+// installedDecisionModels names the decision models on disk.
+func installedDecisionModels(st d1.Status) []string {
+	out := []string{}
+	for _, m := range st.Models {
+		if m.Installed {
+			out = append(out, m.Model)
+		}
+	}
+	return out
 }

@@ -1501,10 +1501,44 @@ export const pageFeedbackMethods = {
     const observedUpload = name === 'upload_file' && args?.ref_id == null && hasSelector
       && run.actionBindingInventoried === true && uploadSelectorObserved(run, args.selector);
     if (!observedRef && !observedUpload) return false;
-    return this._guardAdvisesFor(advisories, 'page-feedback-target-binding', observedUpload
-      ? 'WebBrain could not certify the page context of this file input, so the attachment was sent to the exact input your file-input inventory named without that check. Read the page to confirm the file landed where you intended.'
-      : 'This target was outside the page observation WebBrain certified for this action, so its binding to what you observed was not checked. It was sent anyway; read the page to confirm what it changed.',
+    const handoffUpload = observedUpload && run.uploadObservationScope?.source === 'upload_handoff';
+    return this._guardAdvisesFor(advisories, 'page-feedback-target-binding', !observedUpload
+      ? 'This target was outside the page observation WebBrain certified for this action, so its binding to what you observed was not checked. It was sent anyway; read the page to confirm what it changed.'
+      : handoffUpload
+        ? 'WebBrain could not certify the page context of this file input, so the attachment was sent to the exact input the blocked file-chooser click named without that check. Read the page to confirm the file landed where you intended.'
+        : 'WebBrain could not certify the page context of this file input, so the attachment was sent to the exact input your file-input inventory named without that check. Read the page to confirm the file landed where you intended.',
     { tabId, decided: false });
+  },
+
+  // A vision run's upload handoff (vision-runtime.js): the click_at the
+  // file-chooser guard stopped told the model to call upload_file with the
+  // blocked input's selector. That result is the model's observation of the
+  // input, as get_interactive_elements is on the tree path, so before the
+  // first decision of the handoff the page monitor keeps the node each
+  // selector names, and the run's upload scope holds exactly those
+  // selectors. The first upload_file with one of them is then covered by the
+  // capture (uploadTargets) or sent as an inventoried input above, instead of
+  // being refused until the model reads an inventory and sends the same call
+  // again. Any other selector, and a node the page renders later under the
+  // same selector, keep their answer. Returns whether the scope was set.
+  async _pageFeedbackObserveUploadTargets(tabId, selectors = []) {
+    const run = this._pageFeedbackRuns?.get(tabId);
+    const documentToken = run?.frames.get(0)?.token, url = run?.url;
+    const wanted = [...new Set((Array.isArray(selectors) ? selectors : []).filter(selector =>
+      typeof selector === 'string' && selector.length > 0 && selector.length <= 4096))].slice(0, 8);
+    if (!run || !documentToken || !url || !wanted.length) return false;
+    const signal = this._runAbortSignal?.(tabId) || null;
+    const inventoryToken = token();
+    let response = null;
+    try {
+      response = await untilAborted(apiFor().tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_record_upload_targets',
+        params: { runToken: run.token, token: inventoryToken, selectors: wanted } }, { frameId: 0 }), signal);
+    } catch { this._throwIfAborted?.(signal); return false; }
+    const recorded = Array.isArray(response?.recorded) ? wanted.filter(selector => response.recorded.includes(selector)) : [];
+    if (!recorded.length || response.runToken !== run.token || response.documentToken !== documentToken
+        || this._pageFeedbackRuns?.get(tabId) !== run || run.frames.get(0)?.token !== documentToken || run.url !== url) return false;
+    run.uploadObservationScope = { documentToken, url, token: inventoryToken, selectors: recorded, source: 'upload_handoff' };
+    return true;
   },
 
   _pageFeedbackBlocksCall(tabId, name, args = {}, { focusFollowUp = false } = {}) {

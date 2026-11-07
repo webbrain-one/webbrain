@@ -7,6 +7,7 @@
   <meta name="description" content="Respuestas rápidas sobre configuración, modelos, facturación, seguridad y el funcionamiento de WebBrain en tu navegador.">
   <link rel="canonical" href="https://webbrain.one/docs/es/faq/">
   <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/faq/">
+  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/faq/">
   <link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/faq/">
   <link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/faq/">
   <link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/faq/">
@@ -21,7 +22,6 @@
   <link rel="alternate" hreflang="ms" href="https://webbrain.one/docs/ms/faq/">
   <link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/faq/">
   <link rel="alternate" hreflang="he" href="https://webbrain.one/docs/he/faq/">
-  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/faq/">
   <link rel="alternate" hreflang="pt" href="https://webbrain.one/docs/pt/faq/">
   <link rel="alternate" hreflang="vi" href="https://webbrain.one/docs/vi/faq/">
   <link rel="alternate" hreflang="bn" href="https://webbrain.one/docs/bn/faq/">
@@ -37,7 +37,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261028">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
   <!-- Site footer styles: start -->
   <style>
     .wb-footer {
@@ -559,14 +559,14 @@
     <div class="header-inner">
       <a class="brand" href="https://webbrain.one/es/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">Preguntas frecuentes</span></a>
       <nav class="top-nav" aria-label="Docs">
-        <a href="/docs/">Docs</a>
+        <a href="/docs/es/">Docs</a>
         <a href="/blog/">Blog</a>
         <a href="https://github.com/webbrain-one/webbrain">GitHub</a>
       </nav>
       <div class="header-tools">
         <label class="faq-language">
           <span class="visually-hidden">Seleccionar idioma</span>
-          <select data-faq-language aria-label="Seleccionar idioma"><option value="en">English</option><option value="es" selected>Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option><option value="hi">हिन्दी</option><option value="pt">Português</option><option value="vi">Tiếng Việt</option><option value="bn">বাংলা</option><option value="fa">فارسی</option><option value="nl">Nederlands</option><option value="de">Deutsch</option></select>
+          <select data-faq-language aria-label="Seleccionar idioma"><option value="en">English</option><option value="hi">हिन्दी</option><option value="es" selected>Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option><option value="pt">Português</option><option value="vi">Tiếng Việt</option><option value="bn">বাংলা</option><option value="fa">فارسی</option><option value="nl">Nederlands</option><option value="de">Deutsch</option></select>
         </label>
         <button class="icon-button" type="button" data-theme-toggle aria-label="Alternar tema claro / oscuro">☀</button>
         <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Temas">☰</button>
@@ -583,14 +583,14 @@
       <div class="sidebar-group">
         <div class="sidebar-label">Docs</div>
         <nav>
-          <a href="/docs/">Docs <span class="sidebar-link-note">EN</span></a>
+          <a href="/docs/es/">Docs <span class="sidebar-link-note">Español</span></a>
           <a href="https://discord.gg/cgC325ssfw">WebBrain en Discord</a>
         </nav>
       </div>
     </aside>
 
     <main class="doc-main" id="main">
-      <div class="breadcrumb"><a href="/docs/">Docs</a> / Preguntas frecuentes</div>
+      <div class="breadcrumb"><a href="/docs/es/">Docs</a> / Preguntas frecuentes</div>
       <section class="doc-hero faq-hero">
         <div class="eyebrow">Preguntas frecuentes</div>
         <h1>Preguntas frecuentes</h1>
@@ -782,7 +782,7 @@
         <a href="/websites/">Para sitios web</a>
         <a href="/companion/es/">Companion de escritorio</a>
         <a href="/research/">Investigación</a>
-        <a href="/docs/">Docs</a>
+        <a href="/docs/es/">Docs</a>
         <a href="/docs/es/faq/">Preguntas</a>
         <a href="/blog/">Blog</a>
         <a href="/privacy">Política de privacidad</a>
@@ -808,7 +808,7 @@
       const themeButton = document.querySelector('[data-theme-toggle]');
       const sidebarButton = document.querySelector('[data-sidebar-toggle]');
       const languageSelect = document.querySelector('[data-faq-language]');
-      const languageRoutes = Object.freeze({"en":"/docs/faq/","es":"/docs/es/faq/","fr":"/docs/fr/faq/","tr":"/docs/tr/faq/","zh":"/docs/zh/faq/","ru":"/docs/ru/faq/","uk":"/docs/uk/faq/","ar":"/docs/ar/faq/","ja":"/docs/ja/faq/","ko":"/docs/ko/faq/","id":"/docs/id/faq/","th":"/docs/th/faq/","ms":"/docs/ms/faq/","tl":"/docs/tl/faq/","he":"/docs/he/faq/","hi":"/docs/hi/faq/","pt":"/docs/pt/faq/","vi":"/docs/vi/faq/","bn":"/docs/bn/faq/","fa":"/docs/fa/faq/","nl":"/docs/nl/faq/","de":"/docs/de/faq/"});
+      const languageRoutes = Object.freeze({"en":"/docs/faq/","hi":"/docs/hi/faq/","es":"/docs/es/faq/","fr":"/docs/fr/faq/","tr":"/docs/tr/faq/","zh":"/docs/zh/faq/","ru":"/docs/ru/faq/","uk":"/docs/uk/faq/","ar":"/docs/ar/faq/","ja":"/docs/ja/faq/","ko":"/docs/ko/faq/","id":"/docs/id/faq/","th":"/docs/th/faq/","ms":"/docs/ms/faq/","tl":"/docs/tl/faq/","he":"/docs/he/faq/","pt":"/docs/pt/faq/","vi":"/docs/vi/faq/","bn":"/docs/bn/faq/","fa":"/docs/fa/faq/","nl":"/docs/nl/faq/","de":"/docs/de/faq/"});
       const searchInput = document.querySelector('[data-faq-search]');
       const emptyState = document.querySelector('[data-faq-empty]');
       const topics = Array.from(document.querySelectorAll('[data-faq-topic]'));

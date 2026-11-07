@@ -7,7 +7,21 @@ This changelog was generated from the repository Git history and release tags. V
 ## [Unreleased]
 
 ### Fixed
+- In vision mode, a click that lands on the backdrop around an open dialog, or on an empty area of it, now says so instead of reporting a plain success. A model aiming at a composer's Post button clicked the dialog's backdrop ten times without noticing. Chrome and Firefox.
+- In vision mode, repeated clicks that keep missing the same spot are caught even while a video or animation elsewhere on the page keeps changing the screen, and points a few pixels apart count as the same spot. Chrome and Firefox.
+- The check that pins the exact text of a social post gets the same output budget as a normal step. With a model that thinks before answering, it used to run out of tokens and fail before checking anything. Chrome and Firefox.
+
+## [46.1.3] - 2026-11-06
+
+### Added
+- Added a full-page new-tab Ask experience and Hindi user documentation.
+
+### Fixed
+- Replies cut off by the model's output limit retain their partial text, show a localized notice asking you to request the rest, and end as partial rather than successful. This applies to streaming and non-streaming answers in Chrome and Firefox, without automatically retrying the request or replaying browser actions.
+- WhatsApp contacts with an emoji in their name can be messaged. WhatsApp draws a name's emoji as an image, and WebBrain's contact check required a name with no images, so it never confirmed such a contact and blocked the Contact info panel's Close button, the step it asked the agent to take. Attach, Send and every other action in that chat stayed blocked. Chrome and Firefox.
+- On WhatsApp with no chat open, the agent can open a chat from the chat list. A row click used to wait for a model to read the row's text, and with that model slow or unavailable every row stayed blocked, so the agent could not reach the chat it was asked to message. Chrome and Firefox.
 - Vision mode can attach more than two files in one task. Each file goes through its own upload hand-off, and a run used to stop after two hand-offs even when both uploads worked: the third file, such as the last zip of a three-asset GitHub release, was refused with "file uploads are not available in vision mode", and the agent asked you to turn Vision mode off. Now only hand-offs that end without attaching a file count toward the limit of two. When that limit is reached, the agent says the earlier attempts attached nothing instead of blaming vision mode. Chrome and Firefox.
+- Vision mode attaches each file with the first upload attempt. After a click on an upload control hands the upload to the element tools, the agent uses the file input the click named, but WebBrain's page check refused that first attempt when the input was hidden, as on a GitHub release form, because it had not seen that input itself. The agent then had to list the page's file inputs and send the same upload again, two wasted steps per file. The hand-off now records that exact input before the agent's next step, so the first attempt attaches the file. A file input the agent guessed is still refused. Chrome and Firefox.
 
 ## [46.1.0] - 2026-11-05
 

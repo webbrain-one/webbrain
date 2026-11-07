@@ -40,7 +40,7 @@ Files (1280×800):
 - 04-any-llm.png: Model picker, cropped to the provider dropdown
 - 05-plan-before-act.png: Plan review with Approve/Adjust before actions run
 - 06-launch-offer.png: WebBrain Compass $5/mo (reg. $8), Save 35%
-- 07-social-proof.png: ~1300 GitHub stars, 80+ contributors, GPL — repo bar with contributor avatars
+- 07-social-proof.png: 1700+ GitHub stars, 100+ contributors, GPL — repo bar with contributor avatars
 - 14-record-video.png: Record calls and demos with `/record`; illustrated call preview and screen/window command
 
 Light-background alternates of the two dark slides (originals kept, use whichever fits the gallery):

@@ -31,7 +31,7 @@ import {
 } from './ui-scale.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
-import { createNewtabHandoff } from './newtab-handoff.js';
+import { createNewtabHandoff, NEWTAB_HANDOFF_TARGET_PANEL, NEWTAB_HANDOFF_TARGET_TAB_CHAT } from './newtab-handoff.js';
 import {
   formatSelectionPromptForDisplay,
   normalizeSelectionAction,
@@ -105,6 +105,10 @@ const _btwParams = new URLSearchParams(window.location.search);
 const isBtwWindow = _btwParams.get('btw') === '1';
 const btwSourceTabId = isBtwWindow ? (Number(_btwParams.get('forkFromTabId')) || null) : null;
 const btwInitialPrompt = isBtwWindow ? (_btwParams.get('prompt') || '') : '';
+// The full-page chat that Ask in the WebBrain new tab opens in that same tab (`tab=1`). Like the
+// standalone window it stays in Ask, but it lives in an ordinary tab among others, so it is bound
+// to that one tab: it never follows tab switches and never stands in for the window's side panel.
+const isTabChat = isStandaloneWindow && _btwParams.get('tab') === '1';
 let _btwReadyResolve = null;
 let _btwReadySettled = false;
 const btwReady = new Promise((resolve) => { _btwReadyResolve = resolve; });
@@ -142,6 +146,9 @@ if (globalThis.chrome?.storage?.onChanged) {
 const pinCoachmarkDismissed = (async function initPinCoachmark() {
   let cleanupCoachmark = () => {};
   try {
+    // It points at the side panel's own header, which a standalone window or the full-page chat
+    // does not have; leave it pending for the first real side panel.
+    if (isStandaloneWindow) return;
     const stored = await chrome.storage.local.get('pinCoachmarkPending');
     if (!stored.pinCoachmarkPending) return;
 
@@ -1662,6 +1669,8 @@ const newtabHandoff = createNewtabHandoff({
   storage: chrome.storage.local,
   onChanged: chrome.storage.onChanged,
   getCurrentTabId: () => currentTabId,
+  // Ask from the new tab is for the full-page chat; a panel open beside that tab must leave it.
+  receiver: isTabChat ? NEWTAB_HANDOFF_TARGET_TAB_CHAT : NEWTAB_HANDOFF_TARGET_PANEL,
   getIsProcessing: () => isProcessing,
   getIsBlocked: () => isConversationClearInProgress(),
   getIsDocumentVisible: () => document.visibilityState !== 'hidden',
@@ -5638,12 +5647,14 @@ async function init() {
   // Lets the background reuse this panel instead of re-opening it (which closes it). It
   // is reported as soon as the window is known, ahead of the awaits below, so an action
   // that arrives while the panel is still starting up does not open it a second time.
-  const presenceReportedEarly = !isBtwWindow && initialWindowId != null;
+  const presenceReportedEarly = !isBtwWindow && !isTabChat && initialWindowId != null;
   let presenceReporter = null;
   if (presenceReportedEarly) {
     presenceReporter = reportSidePanelPresence({ runtime: chrome.runtime, doc: document, windowId: initialWindowId });
   }
-  const [tab] = await chrome.tabs.query(initialWindowId != null
+  // A tab chat is its own tab; the active tab of the window is only the same while it is in front.
+  const ownTab = isTabChat ? await chrome.tabs.getCurrent().catch(() => null) : null;
+  const [tab] = ownTab ? [ownTab] : await chrome.tabs.query(initialWindowId != null
     ? { active: true, windowId: initialWindowId }
     : { active: true, currentWindow: true });
   let initialTabId = tab?.id;
@@ -5657,7 +5668,7 @@ async function init() {
     } catch {
       // Degrade to an empty standalone window rather than aborting init.
     }
-  } else {
+  } else if (!isTabChat) {
     try {
       const state = await sendToBackground('agent_run_state', { tabId: initialTabId });
       const sourceTabId = researchEscalationSourceTabIdFromState(state);
@@ -5670,8 +5681,8 @@ async function init() {
   // Tab-activation and window-focus events are extension-wide — every
   // browser window fires them, and each window has its own side panel
   // instance. Without scoping, activity in window B would silently
-  // retarget window A's panel to B's tab.
-  const windowScope = isBtwWindow ? null : createSidePanelWindowScope({
+  // retarget window A's panel to B's tab. A tab chat follows no tab but its own.
+  const windowScope = isBtwWindow || isTabChat ? null : createSidePanelWindowScope({
     browserApi: chrome,
     initialWindowId: initialWindowId ?? tab?.windowId ?? null,
     getCurrentTabId: () => currentTabId,
@@ -5682,7 +5693,7 @@ async function init() {
   });
 
   // The window could not be read up front; fall back to the active tab's.
-  if (!isBtwWindow && !presenceReportedEarly) {
+  if (!isBtwWindow && !isTabChat && !presenceReportedEarly) {
     presenceReporter = reportSidePanelPresence({ runtime: chrome.runtime, doc: document, windowId: tab?.windowId ?? null });
   }
 
@@ -6271,6 +6282,7 @@ async function adoptRestoredRunState(tabId, state) {
       mode,
       foreground: runUi.foreground === true,
       ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
       ...standaloneWebgpuRunPayload(),
     }, {
       probeFirst: true,
@@ -10753,6 +10765,7 @@ async function sendMessage(extraChatParams = {}) {
       apiMutationsAllowed: apiMutationsAllowedForSend,
       foreground: foregroundForSend,
       ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
       ...(runCaptureDirective ? {
         runCapture: {
           kind: runCaptureDirective.kind,
@@ -14640,6 +14653,7 @@ async function continueAgent(options = {}) {
       foreground: foregroundForSend,
       ...(options.failureRecoveryId ? { recoveryId: options.failureRecoveryId, choice: 'retry' } : {}),
       ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
       ...standaloneWebgpuRunPayload(),
     }, {
       onStateObserved: state => {

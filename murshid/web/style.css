@@ -1,19 +1,37 @@
 /* Murshid — crimson, parchment and gold leaf. */
 
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-300-italic.woff2) format("woff2"); font-weight: 300; font-style: italic; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-500-italic.woff2) format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; }
+/* Latin, then Latin Extended for Turkish (ğ ş İ) and the rest; the Arabic
+   script faces only download on pages that use them (tr/, ar/, fa/). */
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-300-italic.woff2) format("woff2"); font-weight: 300; font-style: italic; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-300-italic.woff2) format("woff2"); font-weight: 300; font-style: italic; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-500-italic.woff2) format("woff2"); font-weight: 500; font-style: italic; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-500-italic.woff2) format("woff2"); font-weight: 500; font-style: italic; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-600-italic.woff2) format("woff2"); font-weight: 600; font-style: italic; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-latin-ext-600-italic.woff2) format("woff2"); font-weight: 600; font-style: italic; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-ext-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); font-weight: 600; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-latin-ext-600-normal.woff2) format("woff2"); font-weight: 600; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Plex Mono"; src: url(fonts/ibm-plex-mono-latin-ext-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Plex Sans Arabic"; src: url(fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: "Plex Sans Arabic"; src: url(fonts/ibm-plex-sans-arabic-arabic-500-normal.woff2) format("woff2"); font-weight: 500; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: "Plex Sans Arabic"; src: url(fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2) format("woff2"); font-weight: 600; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: "Amiri"; src: url(fonts/amiri-arabic-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
 @font-face { font-family: "Ruqaa"; src: url(fonts/aref-ruqaa-arabic-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Ruqaa"; src: url(fonts/aref-ruqaa-arabic-700-normal.woff2) format("woff2"); font-weight: 700; font-display: swap; }
 
@@ -40,7 +58,29 @@
   --arabic: "Ruqaa", "Aref Ruqaa", "Noto Naskh Arabic", serif;
   --gutter: clamp(16px, 4vw, 56px);
   --max: 1280px;
+  /* the hero headline fills its column: "The browser" is about 4.6 em wide */
+  --h1-fit: 20.5cqi;
+  /* where the glow behind the arch and the fades sit; mirrored for Arabic and Persian */
+  --hero-x: 78%;
+  --toward-end: 90deg;
+  --carries-x: 90%;
+  --way-x: 25%;
+  --out: 100%;
   color-scheme: light;
+}
+
+/* Arabic and Persian: IBM Plex Sans Arabic for text and Amiri, a Naskh in
+   the Bulaq press tradition, for the headings; Latin words keep the Latin
+   faces. */
+[dir="rtl"] {
+  --display: "Amiri", "Cormorant", "Noto Naskh Arabic", serif;
+  --sans: "Plex Sans Arabic", "Plex Sans", "Noto Sans Arabic", system-ui, sans-serif;
+  --mono: "Plex Mono", "Plex Sans Arabic", ui-monospace, monospace;
+  --hero-x: 22%;
+  --toward-end: 270deg;
+  --carries-x: 10%;
+  --way-x: 75%;
+  --out: -100%;
 }
 
 * { box-sizing: border-box; }
@@ -59,9 +99,13 @@ a { color: inherit; }
 svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .arabic { font-family: var(--arabic); direction: rtl; unicode-bidi: isolate; }
 em { font-style: italic; }
+/* code, commands and file names read left to right on every page */
+code { direction: ltr; unicode-bidi: isolate; }
+/* a Latin name inside Arabic or Persian text (SHA-256, Bonsai 2 27B) stays whole */
+bdi { white-space: nowrap; }
 
-.skip { position: absolute; left: -999px; top: 8px; background: var(--parchment); color: var(--crimson); padding: 8px 14px; z-index: 50; }
-.skip:focus { left: 8px; }
+.skip { position: absolute; inset-inline-start: -999px; top: 8px; background: var(--parchment); color: var(--crimson); padding: 8px 14px; z-index: 50; }
+.skip:focus { inset-inline-start: 8px; }
 
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
@@ -109,7 +153,7 @@ em { font-style: italic; }
 .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px rgba(244,234,214,.25); }
 .brand span { font: 500 14px/1 var(--mono); letter-spacing: .32em; text-transform: uppercase; }
-.brand .badge { padding: 5px 9px 5px 10px; border: 1px solid var(--gold); border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: .16em; color: var(--gold-hi); background: rgba(40, 6, 12, .35); white-space: nowrap; }
+.brand .badge { padding-block: 5px; padding-inline: 10px 9px; border: 1px solid var(--gold); border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: .16em; color: var(--gold-hi); background: rgba(40, 6, 12, .35); white-space: nowrap; }
 
 .links { display: flex; gap: clamp(18px, 3vw, 44px); }
 .links a { font: 500 12.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; text-decoration: none; opacity: .86; padding: 8px 0; border-bottom: 1px solid transparent; }
@@ -131,7 +175,7 @@ em { font-style: italic; }
   gap: clamp(24px, 4vw, 72px);
   padding: 132px max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter))) 72px;
   background:
-    radial-gradient(120% 90% at 78% 40%, var(--crimson-hi) 0%, var(--crimson) 42%, var(--crimson-deep) 100%);
+    radial-gradient(120% 90% at var(--hero-x) 40%, var(--crimson-hi) 0%, var(--crimson) 42%, var(--crimson-deep) 100%);
   color: var(--parchment);
 }
 .hero::before {
@@ -143,7 +187,7 @@ em { font-style: italic; }
   opacity: .09;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23f4ead6' stroke-width='1'%3E%3Cpath d='M60 18 72 48 102 60 72 72 60 102 48 72 18 60 48 48Z'/%3E%3Cpath d='M30 30h60v60H30Z' transform='rotate(45 60 60)'/%3E%3Cpath d='M30 30h60v60H30Z'/%3E%3Cpath d='M0 0 30 30M120 0 90 30M0 120l30-30M120 120 90 90'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 120px 120px;
-  mask-image: linear-gradient(90deg, #000 0%, transparent 60%);
+  mask-image: linear-gradient(var(--toward-end), #000 0%, transparent 60%);
 }
 .hero-grain { position: absolute; inset: 0; z-index: -1; opacity: .2; mix-blend-mode: soft-light; pointer-events: none; }
 .hero-grain svg { width: 100%; height: 100%; }
@@ -152,7 +196,7 @@ em { font-style: italic; }
   z-index: -1;
   width: 1500px;
   height: 1500px;
-  right: calc(22% - 750px);
+  inset-inline-end: calc(22% - 750px);
   top: calc(52% - 750px);
   background: repeating-conic-gradient(from 0deg, rgba(244, 234, 214, .16) 0deg .35deg, transparent .35deg 3deg);
   mask-image: radial-gradient(circle, transparent 0 24%, #000 30%, rgba(0,0,0,.5) 50%, transparent 68%);
@@ -167,7 +211,7 @@ em { font-style: italic; }
   font: 300 clamp(58px, 8.6vw, 120px)/.9 var(--display);
   /* "The browser" is about 4.6 em wide: size it from the column it sits in,
      so it stays on one line however wide the window gets */
-  font-size: clamp(58px, min(8.6vw, 20.5cqi), 132px);
+  font-size: clamp(58px, min(8.6vw, var(--h1-fit)), 132px);
   letter-spacing: -.025em;
   text-wrap: balance;
 }
@@ -197,23 +241,24 @@ em { font-style: italic; }
   padding: 12px 0;
   cursor: pointer;
 }
-.terminal-tabs button + button { border-left: 1px solid rgba(244, 234, 214, .2); }
+.terminal-tabs button + button { border-inline-start: 1px solid rgba(244, 234, 214, .2); }
 .terminal-tabs button[aria-selected="true"] { color: var(--parchment); background: rgba(244, 234, 214, .08); box-shadow: inset 0 -2px 0 var(--gold); }
-.terminal-body { position: relative; padding: 16px 52px 18px 18px; }
+.terminal-body { position: relative; padding-block: 16px 18px; padding-inline: 18px 52px; }
 .terminal-label { display: block; margin-bottom: 8px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-hi); }
 .terminal-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
 .terminal-head .terminal-label { margin: 0; }
 .switch { display: inline-flex; align-items: center; gap: 9px; font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: rgba(244, 234, 214, .85); cursor: pointer; user-select: none; }
 .switch input { appearance: none; position: relative; flex: none; width: 30px; height: 17px; margin: 0; border-radius: 999px; background: rgba(244, 234, 214, .22); cursor: pointer; transition: background .2s; }
-.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--parchment); transition: transform .2s, background .2s; }
+.switch input::after { content: ""; position: absolute; top: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--parchment); transition: transform .2s, background .2s; }
 .switch input:checked { background: var(--gold); }
 .switch input:checked::after { transform: translateX(13px); background: var(--crimson-ink); }
+[dir="rtl"] .switch input:checked::after { transform: translateX(-13px); }
 .switch input:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .terminal-note { margin: 10px 0 0; font: 400 12.5px/1.5 var(--sans); color: rgba(244, 234, 214, .68); }
 .terminal-note code { font: 500 12px/1 var(--mono); color: var(--parchment); }
 .terminal pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.7; color: var(--parchment); }
 .terminal pre::before { content: ""; }
-.copy { position: absolute; right: 10px; top: 12px; width: 34px; height: 34px; display: grid; place-items: center; background: none; border: 0; color: var(--parchment); opacity: .7; cursor: pointer; border-radius: 2px; }
+.copy { position: absolute; inset-inline-end: 10px; top: 12px; width: 34px; height: 34px; display: grid; place-items: center; background: none; border: 0; color: var(--parchment); opacity: .7; cursor: pointer; border-radius: 2px; }
 .copy:hover { opacity: 1; background: rgba(244,234,214,.1); }
 .copy svg { width: 17px; height: 17px; }
 .copy.done { color: var(--gold-hi); opacity: 1; }
@@ -261,13 +306,13 @@ em { font-style: italic; }
 }
 .hero-art figcaption {
   position: absolute;
-  right: -12px;
+  inset-inline-end: -12px;
   bottom: 18%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  transform: translateX(100%);
+  transform: translateX(var(--out));
   color: var(--gold-hi);
 }
 .hero-art figcaption .arabic { font-size: 54px; line-height: 1; writing-mode: horizontal-tb; }
@@ -291,7 +336,7 @@ em { font-style: italic; }
 [data-hero="yellow"] .hero .button.ghost:hover { background: rgba(74, 9, 18, .08); border-color: var(--crimson-ink); color: var(--crimson-ink); }
 
 [data-hero="yellow"] .hero {
-  background: radial-gradient(120% 90% at 78% 40%, var(--saffron-hi) 0%, var(--saffron) 42%, var(--saffron-deep) 100%);
+  background: radial-gradient(120% 90% at var(--hero-x) 40%, var(--saffron-hi) 0%, var(--saffron) 42%, var(--saffron-deep) 100%);
   color: var(--crimson-ink);
 }
 [data-hero="yellow"] .hero::before {
@@ -324,7 +369,8 @@ em { font-style: italic; }
   place-items: center;
   width: 44px;
   height: 44px;
-  margin: 0 -10px 0 -6px;
+  margin-block: 0;
+  margin-inline: -6px -10px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -347,6 +393,56 @@ em { font-style: italic; }
 .hue:focus-visible { outline: none; }
 .hue:focus-visible span { outline: 2px solid var(--gold); outline-offset: 4px; }
 [data-hero="yellow"] .hue:focus-visible span { outline-color: var(--crimson-ink); }
+
+/* the language menu beside it: a globe and the page's language, opening a
+   short list of the others */
+.lang { position: relative; }
+.lang summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 4px;
+  list-style: none;
+  cursor: pointer;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: .14em;
+  opacity: .9;
+  -webkit-tap-highlight-color: transparent;
+}
+.lang summary::-webkit-details-marker { display: none; }
+.lang summary:hover, .lang[open] summary { opacity: 1; }
+.lang summary svg { width: 18px; height: 18px; }
+.lang summary span { padding: 4px 0; border-bottom: 1px solid transparent; }
+.lang summary:hover span, .lang[open] summary span { border-color: currentColor; }
+.lang ul {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline-end: -8px;
+  z-index: 20;
+  min-width: 176px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--parchment);
+  color: var(--crimson-ink);
+  border: 1px solid rgba(74, 9, 18, .18);
+  border-radius: 3px;
+  box-shadow: 0 22px 44px -20px rgba(27, 18, 16, .6);
+}
+.lang a {
+  display: block;
+  padding: 11px 14px;
+  border-inline-start: 2px solid transparent;
+  font: 500 15px/1.25 var(--sans);
+  text-align: left;
+  text-decoration: none;
+}
+[dir="rtl"] .lang a { text-align: right; }
+.lang a:is([lang="ar"], [lang="fa"]) { font-family: "Plex Sans Arabic", var(--sans); }
+.lang a:hover { background: rgba(158, 27, 43, .08); }
+.lang a[aria-current="page"] { border-inline-start-color: var(--crimson); color: var(--crimson); }
+.nav .lang ul a:focus-visible { outline: 2px solid var(--crimson); outline-offset: -2px; }
 
 /* ------------------------------------------------------- iznik border band */
 
@@ -382,7 +478,7 @@ section { position: relative; }
 .carries {
   padding: clamp(80px, 10vw, 140px) 0;
   background:
-    radial-gradient(60% 40% at 90% 0%, rgba(217, 174, 85, .16), transparent 70%),
+    radial-gradient(60% 40% at var(--carries-x) 0%, rgba(217, 174, 85, .16), transparent 70%),
     var(--parchment);
 }
 .cards {
@@ -456,7 +552,7 @@ section { position: relative; }
   gap: clamp(32px, 5vw, 96px);
   padding: clamp(80px, 10vw, 140px) max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
   background:
-    radial-gradient(50% 60% at 25% 55%, rgba(217, 174, 85, .14), transparent 70%),
+    radial-gradient(50% 60% at var(--way-x) 55%, rgba(217, 174, 85, .14), transparent 70%),
     var(--night);
   color: var(--parchment);
   overflow: hidden;
@@ -492,7 +588,7 @@ section { position: relative; }
 .providers { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; align-content: end; }
 .providers li { padding: 9px 14px; border: 1px solid rgba(158, 27, 43, .3); border-radius: 999px; font: 500 13px/1 var(--mono); color: var(--crimson-deep); background: rgba(255, 255, 255, .35); }
 .providers li.local { border-color: rgba(42, 157, 150, .55); color: #1d6f6a; }
-.endpoint { grid-column: 1 / -1; margin: 18px 0 0; padding: 18px 22px; background: var(--crimson-ink); color: var(--gold-hi); font: 500 clamp(15px, 2vw, 22px)/1 var(--mono); letter-spacing: .04em; border-left: 3px solid var(--gold); overflow-x: auto; }
+.endpoint { grid-column: 1 / -1; margin: 18px 0 0; padding: 18px 22px; background: var(--crimson-ink); color: var(--gold-hi); font: 500 clamp(15px, 2vw, 22px)/1 var(--mono); letter-spacing: .04em; border-inline-start: 3px solid var(--gold); overflow-x: auto; }
 
 /* --------------------------------------------------------------------- get */
 
@@ -506,7 +602,7 @@ section { position: relative; }
   border-top: 3px solid var(--crimson);
 }
 .platform.is-you { border-top-color: var(--gold); box-shadow: 0 24px 48px -32px rgba(108, 15, 29, .55); }
-.platform.is-you::after { content: "Your system"; position: absolute; top: 14px; right: 16px; font: 500 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-deep); }
+.platform.is-you::after { content: attr(data-you); position: absolute; top: 14px; inset-inline-end: 16px; font: 500 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-deep); }
 .platform h3 { margin: 0 0 6px; font: 500 34px/1 var(--display); color: var(--crimson-ink); }
 .platform p { margin: 0 0 18px; color: #5a4436; font-size: 15.5px; }
 .status { font: 500 11.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--crimson); }
@@ -535,13 +631,48 @@ section { position: relative; }
 /* ------------------------------------------------------------------ footer */
 
 .footer { position: relative; overflow: hidden; background: var(--crimson-ink); color: rgba(244, 234, 214, .78); padding: 64px var(--gutter) 40px; }
-.footer-mark { position: absolute; right: -2%; bottom: -34%; font-size: clamp(160px, 26vw, 380px); line-height: 1; color: rgba(217, 174, 85, .1); pointer-events: none; }
+.footer-mark { position: absolute; inset-inline-end: -2%; bottom: -34%; font-size: clamp(160px, 26vw, 380px); line-height: 1; color: rgba(217, 174, 85, .1); pointer-events: none; }
 .footer-row { position: relative; max-width: var(--max); margin: 0 auto; display: grid; grid-template-columns: auto 1fr; gap: 18px 40px; align-items: center; }
 .footer .brand { color: var(--parchment); }
 .footer nav { display: flex; flex-wrap: wrap; gap: 24px; justify-self: end; }
 .footer nav a { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; text-decoration: none; }
 .footer nav a:hover { color: var(--gold-hi); }
 .footer-row p { grid-column: 1 / -1; margin: 18px 0 0; padding-top: 18px; border-top: 1px solid rgba(217, 174, 85, .2); font-size: 13.5px; }
+
+/* ------------------------------------------------- Arabic and Persian */
+/* Arabic script joins its letters, so none of the letter-spacing the Latin
+   labels use; the small labels are set larger, and the lines further apart.
+   Latin names inside (lang="en") keep their tracking. */
+
+[dir="rtl"] .arrow { transform: scaleX(-1); }
+[dir="rtl"] body { line-height: 1.8; }
+[dir="rtl"] :is(.hero h1, .section-head h2, .way h2, .tray h2, .card h3, .steps h3, .platform h3) { letter-spacing: 0; font-weight: 400; }
+[dir="rtl"] em { font-style: normal; }
+[dir="rtl"] .hero h1 { font-size: clamp(52px, min(7vw, 17cqi), 104px); line-height: 1.25; }
+[dir="rtl"] :is(.section-head h2, .way h2, .tray h2) { line-height: 1.4; font-size: clamp(34px, 4.4vw, 60px); }
+[dir="rtl"] .card h3 { line-height: 1.35; font-size: clamp(26px, 2.2vw, 31px); }
+[dir="rtl"] .steps h3 { line-height: 1.35; }
+[dir="rtl"] .step-num { font-size: 44px; line-height: 1.1; }
+[dir="rtl"] .lede { line-height: 1.85; }
+[dir="rtl"] :is(.button, .links a, .badge, .eyebrow, .num, .status, .terminal-label, .switch, .footer nav a, .hero-art figcaption span:last-child, .shot figcaption, .checksums, .lang summary span):not([lang="en"]),
+[dir="rtl"] .platform.is-you::after { letter-spacing: 0; }
+[dir="rtl"] .button { font-size: 15px; }
+[dir="rtl"] .button.small { font-size: 14px; }
+[dir="rtl"] .links a { font-size: 15px; }
+[dir="rtl"] .brand .badge { font-size: 12px; font-weight: 500; padding-inline: 10px; }
+[dir="rtl"] .eyebrow { font-size: 15px; }
+[dir="rtl"] .num { font-size: 14.5px; }
+[dir="rtl"] .status { font-size: 13.5px; }
+[dir="rtl"] .terminal-label, [dir="rtl"] .switch { font-size: 13px; }
+[dir="rtl"] .terminal-note { font-size: 14px; line-height: 1.7; }
+[dir="rtl"] .platform.is-you::after { font-size: 12.5px; }
+[dir="rtl"] .platform .fine { font-size: 14px; line-height: 1.75; }
+[dir="rtl"] .hero-art figcaption span:last-child { font-size: 14px; line-height: 1.3; }
+/* mirrored, the label sits on the lighter side of the red glow */
+[dir="rtl"][data-hero="red"] .hero-art figcaption span:last-child { color: rgba(244, 234, 214, .95); }
+[dir="rtl"] .shot figcaption, [dir="rtl"] .checksums { font-size: 14px; line-height: 1.7; }
+[dir="rtl"] .footer nav a { font-size: 14px; }
+[dir="rtl"] .footer-row p { line-height: 1.9; }
 
 /* ----------------------------------------------------------------- reveal */
 
@@ -560,7 +691,7 @@ section { position: relative; }
   .links { display: none; }
   .hero { grid-template-columns: 1fr; padding-top: 108px; min-height: 0; }
   .hero-art { width: min(86%, 460px); margin-top: 40px; order: 2; }
-  .hero-rays { right: calc(50% - 750px); top: auto; bottom: -560px; }
+  .hero-rays { inset-inline-end: calc(50% - 750px); top: auto; bottom: -560px; }
   .way { grid-template-columns: 1fr; }
   .way-art .photo { max-width: 340px; }
   .tray-inner { grid-template-columns: 1fr; }
@@ -575,10 +706,23 @@ section { position: relative; }
   body { font-size: 16px; }
   .cards { grid-template-columns: 1fr; }
   .nav .button.small { display: none; }
-  .terminal-body { padding-right: 48px; }
+  /* room for the language menu: GitHub is also in the footer and beside the downloads */
+  .nav { gap: 12px; }
+  .nav .icon-link { display: none; }
+  .nav-end { gap: 8px; }
+  .terminal-body { padding-inline-end: 48px; }
   .terminal pre { font-size: 12px; }
   .steps li { grid-template-columns: 44px 1fr; gap: 14px; }
   .step-num { font-size: 32px; }
+}
+
+@media (max-width: 400px) {
+  .nav .brand { gap: 9px; }
+  .nav .brand > span:not(.badge) { letter-spacing: .24em; }
+  .nav .brand .badge { padding-inline: 8px; letter-spacing: .1em; }
+  /* the globe alone; its label still names the language */
+  .lang summary { min-width: 44px; justify-content: center; }
+  .lang summary span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

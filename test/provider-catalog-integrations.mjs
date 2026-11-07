@@ -25,6 +25,17 @@ for (const browser of ['chrome', 'firefox']) {
   const { providerIconUrl } = await import(pathToFileURL(path.join(prefix, 'ui', 'provider-icons.js')).href);
   assert.ok(providerIconUrl('api-route').endsWith('/api-route.png'));
 
+  const cloudgpu = ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu;
+  assert.equal(cloudgpu.type, 'openai', `${browser}: CloudGPU must use the OpenAI-compatible adapter`);
+  assert.equal(cloudgpu.baseUrl, 'https://cloudgpu.app/v1', `${browser}: CloudGPU endpoint changed`);
+  assert.equal(cloudgpu.model, 'deepseek-v4-flash');
+  assert.equal(cloudgpu.contextWindow, 131072);
+  assert.equal(cloudgpu.enabled, false);
+  assert.equal(cloudgpu.apiKey, '');
+  assert.equal(cloudgpu.supportsTools, true);
+  assert.equal(cloudgpu.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('cloudgpu').endsWith('/cloudgpu.svg'));
+
   const runcrate = ADDITIONAL_PROVIDER_DEFAULTS.runcrate;
   assert.equal(runcrate.type, 'openai', `${browser}: Runcrate must use the OpenAI-compatible adapter`);
   assert.equal(runcrate.baseUrl, 'https://api.runcrate.ai/v1', `${browser}: Runcrate endpoint changed`);

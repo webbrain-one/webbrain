@@ -408,9 +408,9 @@ function proofScene() {
     `<svg width="46" height="46" viewBox="0 0 24 24" fill="${color}" aria-hidden="true">${paths}</svg>`;
   const stats = [
     [icon('<path d="M12 2.2l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.27l-5.9 3.1 1.13-6.57L2.45 9.14l6.6-.96z"/>', 'var(--accent2)'),
-      '~1300', 'GitHub stars'],
+      '1700+', 'GitHub stars'],
     [icon('<path d="M9 11.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Zm7.2.3a3.1 3.1 0 1 0 0-6.2 3.1 3.1 0 0 0 0 6.2ZM9 13.2c-3.4 0-6.6 1.75-6.6 3.9V20h13.2v-2.9c0-2.15-3.2-3.9-6.6-3.9Zm7.2.2c-.62 0-1.2.05-1.74.14 1.2.94 1.94 2.11 1.94 3.56V20h5.2v-2.5c0-1.9-2.5-3.1-5.4-3.1Z"/>', 'var(--accent)'),
-      '80+', 'contributors'],
+      '100+', 'contributors'],
     [icon('<path d="M12 2.4c.6 0 1.1.5 1.1 1.1v.9l6.4 1.2a1 1 0 0 1-.18 1.98l-.5-.02 2.6 5.9c0 1.9-1.75 3.15-3.6 3.15s-3.6-1.25-3.6-3.15l2.55-5.8-3.67-.68V18.6h3.3a1.1 1.1 0 1 1 0 2.2H7.6a1.1 1.1 0 1 1 0-2.2h3.3V6.81l-3.67.68 2.55 5.8c0 1.9-1.75 3.15-3.6 3.15s-3.6-1.25-3.6-3.15l2.6-5.9-.5.02a1 1 0 0 1-.18-1.98l6.4-1.2v-.9c0-.6.5-1.1 1.1-1.1Zm5.82 7.7-1.5 3.42h3l-1.5-3.42Zm-11.64 0-1.5 3.42h3l-1.5-3.42Z"/>', 'var(--accent)'),
       'GPL', 'open-source forever'],
   ];
@@ -469,7 +469,7 @@ function proofScene() {
               </span>`).join('')}
             <span style="height:44px; padding:0 14px; border-radius:999px; background:rgba(255,255,255,0.14);
               color:#e7eaf3; display:grid; place-items:center; font-size:15px; font-weight:800;
-              border:2px solid #171827; margin-left:-12px;">+70</span>
+              border:2px solid #171827; margin-left:-12px;">+95</span>
           </div>
         </div>
       </div>

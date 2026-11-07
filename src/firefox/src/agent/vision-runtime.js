@@ -97,6 +97,9 @@ const MICRO_CHANGE_MIN_CELLS = 6;
 // run their loop identity includes the screen version (_loopScreenIdentity),
 // as does the coordinate click click_at becomes.
 const VISION_LOOP_SCREEN_TOOLS = new Set([...VISION_NATIVE_TOOLS, 'type_text', 'press_keys']);
+// Calls that look at the page or wait without acting on it, besides those
+// that get no screen update at all (VISION_NO_OBSERVE_TOOLS).
+const VISION_LOOK_ONLY_TOOLS = new Set(['take_screenshot', 'wait']);
 
 // Does this vision call place something at points of a screenshot (a click,
 // hover, drag, zoom region, or a wheel at a point)?
@@ -172,6 +175,18 @@ function pageKey(url) {
 function uploadAttached(result) {
   return result?.success === true && result.discoveryOnly !== true && result.outcomeUnknown !== true
     && result.noDispatch !== true && ['input_attached', 'page_consumed'].includes(result.attachmentState);
+}
+
+// The selector a blocked chooser's result tells the model to pass to
+// upload_file, kept with the handoff that covers it until the handoff starts
+// (_visionUploadHandoffTick). The compact tier's upload_file names its target
+// by its own discovery, never by selector.
+function noteHandoffUploadSelector(handoff, result, compact) {
+  const selector = typeof result?.selector === 'string' ? result.selector : '';
+  const selectors = handoff.selectors ??= [];
+  if (compact || handoff.active || !selector || selector.length > 4096 || selectors.includes(selector)
+      || selectors.length >= 8) return;
+  selectors.push(selector);
 }
 
 function regionLabel(region) {
@@ -381,14 +396,18 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       // Another chooser in the batch that armed a handoff: that handoff gives
       // the next steps upload_file for this input too, so the model is told
       // so, not that uploads are unavailable.
-      if (!reason && snapshot.uploadHandoff) return visionFilePickerBlockedResult(result, { handoff: true, compact });
+      if (!reason && snapshot.uploadHandoff) {
+        noteHandoffUploadSelector(snapshot.uploadHandoff, result, compact);
+        return visionFilePickerBlockedResult(result, { handoff: true, compact });
+      }
       if (!reason && snapshot.unsuccessfulUploadHandoffs >= UNSUCCESSFUL_UPLOAD_HANDOFFS_PER_RUN) reason = 'exhausted';
       if (reason) {
         this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'refused', reason });
         return visionFilePickerBlockedResult(result, { compact, reason });
       }
       snapshot.uploadHandoffs += 1;
-      snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '' };
+      snapshot.uploadHandoff = { active: false, done: false, since: 0, url: '', selectors: [] };
+      noteHandoffUploadSelector(snapshot.uploadHandoff, result, compact);
       this._visionTraceNote(tabId, 'vision_upload_handoff', { stage: 'armed', count: snapshot.uploadHandoffs });
       return visionFilePickerBlockedResult(result, { handoff: true, compact });
     }
@@ -404,7 +423,9 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * after its upload, when that page is left, or after
    * UPLOAD_HANDOFF_DECISIONS decisions without an upload; the last two count
    * as unsuccessful. `step` is the loop's count of model calls, which grows
-   * only when the model decides.
+   * only when the model decides. Starting runs before the step's page
+   * capture, so the blocked inputs the click's result named are observed for
+   * the first upload_file (page-feedback.js _pageFeedbackObserveUploadTargets).
    */
   proto._visionUploadHandoffTick = async function _visionUploadHandoffTick(tabId, step) {
     const snapshot = this._visionRunSnapshots?.get(tabId);
@@ -414,6 +435,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       handoff.active = true;
       handoff.since = step;
       handoff.url = pageKey(await this._currentUrl?.(tabId));
+      if (handoff.selectors?.length) await this._pageFeedbackObserveUploadTargets?.(tabId, handoff.selectors);
       return;
     }
     let end = handoff.done ? 'uploaded' : '';
@@ -530,7 +552,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     }
     const refusal = visionMultiClickRefusal(probe, { clickCount, recipientGuarded, submitDetected });
     if (refusal) return { refusal };
-    return { target: point?.found ? { tag: point.tag, ...(point.role ? { role: point.role } : {}) } : null };
+    const background = ['backdrop', 'empty'].includes(point?.dialogBackground) ? point.dialogBackground : '';
+    return {
+      target: point?.found ? { tag: point.tag, ...(point.role ? { role: point.role } : {}),
+        ...(background ? { dialogBackground: background } : {}) } : null,
+      // The click still goes: outside a dialog may be how it closes. The
+      // model is told the point is on no control, which a bare
+      // {tag:'div', role:'dialog'} target did not make plain enough.
+      ...(button === 'left' && background ? { note: visionDialogBackgroundNote(background) } : {}),
+    };
   };
 
   /**
@@ -566,13 +596,17 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * includes the screen it acted on. The same point, key or scroll after the
    * screen visibly changed is progress (the next row moved under the point,
    * the next stretch of a list), while a repeat on a screen that did not
-   * change still adds up to a loop.
+   * change still adds up to a loop. A click leaves out what the page changes
+   * on its own (VisionSession.clickScreenVersion): a video playing behind a
+   * dialog is no new screen for the dialog's button.
    */
   proto._loopScreenIdentity = function _loopScreenIdentity(tabId, name, args) {
     const screenTool = name === 'click' ? args?.coordinate_space === 'css' : VISION_LOOP_SCREEN_TOOLS.has(name);
     if (!screenTool || this._visionRunState(tabId).active !== true) return '';
     const session = this._visionSessions?.get(tabId);
-    return session?.keyframe ? `v${session.screenVersion || 0}` : '';
+    if (!session?.keyframe) return '';
+    return name === 'click' && Number.isInteger(session.clickScreenVersion)
+      ? `c${session.clickScreenVersion}` : `v${session.screenVersion || 0}`;
   };
 
   /** Loop advice names what a vision run offers (loop-detector.js). */
@@ -856,7 +890,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
   };
 
   /** Push a full frame (keyframe) for the current screen. */
-  proto._visionPushKeyframe = async function _visionPushKeyframe(tabId, messages, onUpdate, { state, frame = null, reason = '', unchanged = false } = {}) {
+  proto._visionPushKeyframe = async function _visionPushKeyframe(tabId, messages, onUpdate, { state, frame = null, reason = '', unchanged = false, lookedOnly = false } = {}) {
     const session = this._visionSessionFor(tabId, state);
     const captured = frame || await this._visionCaptureFrame(tabId, state);
     const encoding = await this._visionEncoding(captured.profile);
@@ -870,7 +904,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       scrollX: captured.probe.scrollX,
       scrollY: captured.probe.scrollY,
       url: captured.probe.url,
-    }, captured.raster.pixels, { unchanged });
+    }, captured.raster.pixels, { unchanged, lookedOnly });
     // Zooms taken earlier in this batch belong to the previous frame, whose
     // ids this keyframe retires; the fresh frame supersedes them.
     const droppedZooms = this._visionTakePendingZooms(tabId);
@@ -1006,8 +1040,12 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       if (isControlFlowError(error)) throw error;
       return failed('observe', error);
     }
+    // A batch that did not act on the page (it looked, waited or read): what
+    // changed meanwhile, the page changed on its own (VisionSession
+    // clickScreenVersion).
+    const lookedOnly = names.length > 0 && names.every(name => VISION_LOOK_ONLY_TOOLS.has(name) || VISION_NO_OBSERVE_TOOLS.has(name));
     try {
-      return await this._visionObserveFrame(tabId, messages, onUpdate, { state, session, frame });
+      return await this._visionObserveFrame(tabId, messages, onUpdate, { state, session, frame, lookedOnly });
     } catch (error) {
       if (isControlFlowError(error)) throw error;
       return failed('encode', error);
@@ -1015,7 +1053,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
   };
 
   /** The part of _visionObserveAfterBatch after a settled capture. */
-  proto._visionObserveFrame = async function _visionObserveFrame(tabId, messages, onUpdate, { state, session, frame }) {
+  proto._visionObserveFrame = async function _visionObserveFrame(tabId, messages, onUpdate, { state, session, frame, lookedOnly = false }) {
     const meta = {
       cssWidth: frame.probe.cssWidth, cssHeight: frame.probe.cssHeight,
       devicePixelRatio: frame.probe.devicePixelRatio, url: frame.probe.url,
@@ -1029,7 +1067,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
         ? diffFrames(session.seenPixels, frame.raster.pixels, frame.size.width, frame.size.height) : null;
       const unchanged = same?.comparable === true && same.regions.length === 0;
       await this._visionPushKeyframe(tabId, messages, onUpdate, {
-        state, frame, unchanged, reason: session.forceKeyframe ? 'requested' : (urlChanged ? 'page changed' : (session.keyframe ? 'layout changed' : 'first frame')),
+        state, frame, unchanged, lookedOnly, reason: session.forceKeyframe ? 'requested' : (urlChanged ? 'page changed' : (session.keyframe ? 'layout changed' : 'first frame')),
       });
       return { kind: 'keyframe', ...(unchanged ? { unchanged: true } : {}) };
     }
@@ -1042,7 +1080,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       align: frame.profile.align,
     });
     if (plan.kind === 'keyframe') {
-      await this._visionPushKeyframe(tabId, messages, onUpdate, { state, frame, reason: plan.reason === 'large_change' ? 'large change' : plan.reason.replace(/_/g, ' ') });
+      await this._visionPushKeyframe(tabId, messages, onUpdate, { state, frame, lookedOnly, reason: plan.reason === 'large_change' ? 'large change' : plan.reason.replace(/_/g, ' ') });
       return { kind: 'keyframe', reason: plan.reason };
     }
     const zooms = this._visionTakePendingZooms(tabId);
@@ -1069,7 +1107,7 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
       const encoded = await this._visionEncodeRegion(frame.raster.canvas, region, { mimeType: encoding.mimeType, quality: encoding.quality });
       encodedPatches.push({ region, encoded });
     }
-    const patches = session.registerPatches(plan.regions.map(regionLabel), frame.raster.pixels);
+    const patches = session.registerPatches(plan.regions.map(regionLabel), frame.raster.pixels, { lookedOnly });
     session.noteObservedScroll(frame.probe.scrollX, frame.probe.scrollY);
     this._visionRefreshZooms(session, zooms, frame);
     const note = visionPatchNote(patches, session.keyframe, { coordinates: session.coordinates });
@@ -1493,4 +1531,17 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
   proto._visionPruneImages = function _visionPruneImages(messages) {
     return pruneVisionImages(messages);
   };
+}
+
+/**
+ * What the model is told after a click on an open dialog's background
+ * (vision-dom-probe.js dialogBackground).
+ */
+export function visionDialogBackgroundNote(background) {
+  const where = background === 'backdrop'
+    ? "on the backdrop around an open dialog, outside the dialog's content"
+    : 'on an empty area of an open dialog';
+  return `This point was ${where}, not on a button, link or field. If you meant a control in the dialog, this click missed it: `
+    + 'find that control in the dialog on the latest screen and click its own point (zoom on the dialog first if it is small). '
+    + 'If you meant to close the dialog by clicking outside it, check the next screen.';
 }

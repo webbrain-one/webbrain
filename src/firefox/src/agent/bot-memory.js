@@ -514,6 +514,14 @@ export class BotMemorySession {
   }
   async afterTool(tabId, name, args, result, prepared) {
     const reservation = prepared?.reservation;
+    const ownPending = reservation && this.pending.get(reservation.attemptId);
+    if (ownPending && prepared.executionTaskKey && result?.dispatched === true
+        && result?.nativeInputAcknowledged === true && result?.observationInterrupted === true
+        && result?.outcomeUnknown === true) {
+      // The agent appends authoritative navigation information after this call.
+      // Keep this private object reference so the later observation can use it.
+      ownPending.executionEvidence = { taskKey: prepared.executionTaskKey, guard: prepared.executionGuard, result };
+    }
     if (reservation && (result?.noDispatch === true || result?.dispatched === false)) {
       const pending = this.pending.get(reservation.attemptId);
       const observedTarget = pending?.observation.targets.find(target => memoryTargetIdentity(target) === memoryTargetIdentity(reservation.target));
@@ -525,12 +533,24 @@ export class BotMemorySession {
         this.pending.delete(reservation.attemptId);
       }
     }
+    const reconciledActions = [];
     if (OBSERVATION_TOOLS.has(name) && result && result.success !== false && !result.error) {
-      for (const attemptId of this.pending.keys()) await this.verify(tabId, attemptId, name, result);
+      for (const [attemptId, pending] of this.pending) {
+        const verification = await this.verify(tabId, attemptId, name, result);
+        const verified = verification?.verified === true || verification?.status === 'verified' || verification?.attempt?.status === 'verified';
+        const action = pending.executionEvidence?.result;
+        if (verified && action?.pageUrlChanged === true && typeof action.previousUrl === 'string'
+            && typeof action.currentUrl === 'string' && action.previousUrl !== action.currentUrl
+            && this.lastObservation?.url === action.currentUrl
+            && (!verification?.attempt?.id || verification.attempt.id === attemptId)) {
+          reconciledActions.push({ attemptId, taskKey: pending.executionEvidence.taskKey, guard: pending.executionEvidence.guard });
+        }
+      }
     }
     if (name === 'scratchpad_write' && typeof args?.text === 'string') {
       await this.call('scratchpad', { text: compact(args.text, 4000), replace: args.replace === true });
     }
+    return reconciledActions;
   }
   async verify(tabId, attemptId, name = 'bot_memory_verify', toolResult = null) {
     const pending = this.pending.get(attemptId) || this.knownAttempts.get(attemptId);

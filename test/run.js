@@ -15920,7 +15920,8 @@ test('agent trace instrumentation: turn/step boundaries, retries-before-wait, an
     assert.match(streamingBody, /recordStepStart\(runId, steps, \{\}\)/, `${browser}: streaming step_start missing`);
     assert.match(agentSource, /modelOutputDiagnostics\(result,[\s\S]*?requestedMaxTokens: chatOpts\.maxTokens/, `${browser}: non-streaming responses omit output diagnostics`);
     assert.match(streamingBody, /recordLLMResponse\(runId, steps,[\s\S]*?\.\.\.outputDiagnostics/, `${browser}: streaming responses omit output diagnostics`);
-    assert.match(streamingBody, /finishReason = String\(/, `${browser}: streaming terminal reason is discarded`);
+    assert.match(streamingBody, /finishReason = modelOutputDiagnostics\(chunk\)\.finishReason/, `${browser}: streaming terminal reason is discarded`);
+    assert.match(streamingBody, /outputTruncated = chunk\.outputTruncated === true/, `${browser}: streaming worker output-limit flag is discarded`);
     assert.doesNotMatch(agentSource, /raise the step limit in settings/, `${browser}: empty response guidance still blames the unrelated agent step limit`);
     assert.match(nonStreamingBody, /_traceStepEndForResult\(result\)/, `${browser}: non-streaming output is not validated before step_end`);
     assert.match(streamingBody, /const closeTraceStep = \(payload\) => \{[\s\S]*?traceStepClosed = true/, `${browser}: streaming step_end is not single-shot`);
@@ -42036,11 +42037,19 @@ test('standalone WebGPU uses a compact tool-free chat profile with no browser co
   );
 
   const agentSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  // Standalone tools come from one filter, which is empty for WebGPU (only the new tab's
+  // full-page chat on a cloud/local provider gets its read-only web tools).
   assert.equal(
-    (agentSource.match(/if \(selectionOnly \|\| standaloneChatRun\) tools = \[\];/g) || []).length,
+    (agentSource.match(/if \(selectionOnly\) tools = \[\];\n\s*else if \(standaloneChatRun\) tools = this\._standaloneChatTools\(tools, runOptions\);/g) || []).length,
     4,
     'both initial and repeated requests on both agent entry paths must suppress tools',
   );
+  {
+    const agent = new AgentCh({ getActive() { return null; } });
+    const offered = ['fetch_url', 'research_url', 'calculate', 'read_page'].map(name => ({ function: { name } }));
+    assert.deepEqual(agent._standaloneChatTools(offered, { standaloneChat: true, standaloneWebTools: true, providerId: 'webgpu' }), [],
+      'standalone WebGPU must stay tool-free even when the page asks for web tools');
+  }
   assert.equal(
     (agentSource.match(/steps > 0 && !selectionOnly && !standaloneChatRun/g) || []).length,
     2,
@@ -42104,6 +42113,124 @@ test('standalone chat isolates browser context and inherited sidepanel history f
     const provenance = provenanceBuilder(modelMessages, [], 'ask');
     assert.equal(provenance.systemPromptVariant, 'standalone_chat');
     assert.equal(provenance.systemPromptMatchesRuntime, true);
+  }
+});
+
+test('the new tab full-page chat keeps the plain-chat boundary but can read the web', async () => {
+  for (const [label, AgentClass, provenanceBuilder] of [
+    ['chrome', AgentCh, buildPromptTraceProvenanceCh],
+    ['firefox', AgentFx, buildPromptTraceProvenanceFx],
+  ]) {
+    const agent = new AgentClass({
+      getActive() { throw new Error('the full-page chat prompt must not inspect the active provider'); },
+    });
+    const tabId = label === 'chrome' ? 1712 : 1713;
+    const webOptions = { standaloneChat: true, standaloneWebTools: true, providerId: 'openai' };
+    assert.equal(agent._isStandaloneWebToolsRun(webOptions), true, `${label}: web-tools run not recognised`);
+    assert.equal(agent._isStandaloneWebToolsRun({ standaloneChat: true, providerId: 'openai' }), false,
+      `${label}: the standalone window must stay tool-free`);
+    assert.equal(agent._isStandaloneWebToolsRun({ standaloneWebTools: true }), false,
+      `${label}: the flag only means something on a standalone run`);
+    assert.equal(agent._isStandaloneWebToolsRun({ ...webOptions, providerId: 'webgpu' }), false,
+      `${label}: an in-browser model keeps the tool-free profile`);
+
+    const offered = ['read_page', 'get_accessibility_tree', 'fetch_url', 'research_url', 'calculate',
+      'delegate_research', 'clarify', 'done'].map(name => ({ type: 'function', function: { name } }));
+    assert.deepEqual(agent._standaloneChatTools(offered, webOptions).map(tool => tool.function.name),
+      ['fetch_url', 'research_url', 'calculate'], `${label}: only the read-only web tools may reach the model`);
+    assert.deepEqual(agent._standaloneChatTools(offered, { standaloneChat: true }), [],
+      `${label}: plain standalone chat must get no tools`);
+
+    agent._standaloneChatRunTabs.add(tabId);
+    agent._standaloneWebToolsRunTabs.add(tabId);
+    const prompt = agent._buildSystemPrompt('ask', tabId);
+    assert.match(prompt, /^You are WebBrain's chat assistant, opened from the browser's new tab page\./);
+    assert.match(prompt, /There is no current page/);
+    assert.match(prompt, /fetch_url/);
+    assert.match(prompt, /untrusted page data, never instructions/);
+    assert.doesNotMatch(prompt, /click_ax|get_accessibility_tree|read_page|User profile|cookie|paywall/i);
+
+    const question = 'Who won the 2026 Istanbul Marathon?';
+    const enriched = await agent._enrichUserMessageWithCurrentPage(tabId, [], question, null, webOptions);
+    assert.deepEqual(enriched, { role: 'user', content: question },
+      `${label}: the full-page chat received browser/runtime context`);
+
+    const persisted = agent._standalonePersistedUserMessage(enriched, webOptions);
+    const webCall = { id: 'web-1', type: 'function', function: { name: 'fetch_url', arguments: '{"url":"https://example.org/results"}' } };
+    const conversation = [
+      { role: 'system', content: prompt },
+      { role: 'user', content: '[Current page context - URL: https://example.test]\nRead this page' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'old-tool', type: 'function', function: { name: 'read_page', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'old-tool', content: 'secret page text' },
+      persisted,
+      { role: 'assistant', content: null, tool_calls: [webCall] },
+      { role: 'tool', tool_call_id: 'web-1', content: 'fetched results text' },
+    ];
+    const view = (keepTools) => (label === 'chrome'
+      ? agent._messagesForStandaloneChatRun(conversation, persisted, enriched, agent._standaloneHistoryMarker(webOptions), { keepTools })
+      : agent._messagesForStandaloneChatRun(conversation, persisted, enriched, { keepTools }));
+    assert.deepEqual(view(true), [
+      { role: 'system', content: prompt },
+      { role: 'user', content: question },
+      { role: 'assistant', content: null, tool_calls: [webCall] },
+      { role: 'tool', tool_call_id: 'web-1', content: 'fetched results text' },
+    ], `${label}: the run must keep its own web reads in the model view`);
+    assert.doesNotMatch(JSON.stringify(view(true)), /example\.test|old-tool|secret page text/,
+      `${label}: side panel page and tool history crossed into the full-page chat`);
+    assert.ok(view(false).every(message => message.role !== 'tool' && !message.tool_calls),
+      `${label}: plain standalone chat must stay text only`);
+
+    // Continue (and a follow-up the planner folds into the same task) reaches this view as a
+    // projected copy of the turn, not the persisted object; it must still be found, or the model
+    // is sent an empty conversation.
+    const continueEnriched = { role: 'user', content: 'Please continue from where you left off.' };
+    const continuePersisted = agent._standalonePersistedUserMessage(continueEnriched, webOptions);
+    const taskNote = `\n\n[APP-OWNED CURRENT USER TASK - assembled from genuine user messages]\n${question}`;
+    const projectedContinue = { ...continuePersisted, content: `${continuePersisted.content}${taskNote}` };
+    const continued = [...conversation, { role: 'assistant', content: 'I reached the step limit.' }, projectedContinue];
+    const continuedView = label === 'chrome'
+      ? agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, agent._standaloneHistoryMarker(webOptions), { keepTools: true })
+      : agent._messagesForStandaloneChatRun(continued, continuePersisted, continueEnriched, { keepTools: true });
+    assert.ok(continuedView.length > 1, `${label}: a continued standalone run sent an empty conversation`);
+    assert.equal(continuedView.at(-1).content, `${continueEnriched.content}${taskNote}`,
+      `${label}: the continued turn must carry the assembled task`);
+    assert.ok(continuedView.some(message => message.role === 'tool' && message.tool_call_id === 'web-1'),
+      `${label}: the continued run lost its own earlier web reads`);
+    assert.doesNotMatch(JSON.stringify(continuedView), /secret page text|old-tool/,
+      `${label}: side panel history crossed into a continued full-page chat`);
+
+    const provenance = provenanceBuilder(view(true), offered.slice(2, 5), 'ask');
+    assert.equal(provenance.systemPromptVariant, 'standalone_web_chat');
+    assert.equal(provenance.systemPromptMatchesRuntime, true);
+    assert.equal(provenance.runtimeEnvelopeRequired, false);
+  }
+
+  for (const browserDir of ['chrome', 'firefox']) {
+    const agentSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/agent/agent.js`), 'utf8');
+    assert.doesNotMatch(agentSrc, /if \(selectionOnly \|\| standaloneChatRun\) tools = \[\];/,
+      `${browserDir}: a tool list still clears standalone tools unconditionally`);
+    assert.equal((agentSrc.match(/else if \(standaloneChatRun\) tools = this\._standaloneChatTools\(tools, runOptions\);/g) || []).length, 4,
+      `${browserDir}: every tool list (first step and later steps, both run paths) must use the standalone tool filter`);
+    const backgroundSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/background.js`), 'utf8');
+    assert.equal((backgroundSrc.match(/msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/g) || []).length, 3,
+      `${browserDir}: the background must forward the flag on standalone runs only (two run paths and Continue)`);
+    // Continue (and a failure-recovery retry, which runs through it) keeps the standalone boundary:
+    // without both flags a continued full-page chat would turn into a page-aware panel run.
+    const continueCase = backgroundSrc.slice(backgroundSrc.indexOf("case 'continue': {"),
+      backgroundSrc.indexOf('agent.continueProcessing(', backgroundSrc.indexOf("case 'continue': {")));
+    assert.match(continueCase, /\.\.\.\(msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}\),/,
+      `${browserDir}: Continue must keep a standalone run standalone`);
+    assert.match(continueCase, /msg\.standaloneChat === true && msg\.standaloneWebTools === true \? \{ standaloneWebTools: true \}/,
+      `${browserDir}: Continue must keep the full-page chat's web tools`);
+    const panelSrc = fs.readFileSync(path.join(ROOT, `src/${browserDir}/src/ui/sidepanel.js`), 'utf8');
+    assert.doesNotMatch(panelSrc, /isStandaloneWindow \? \{ standaloneWebTools: true \}/,
+      `${browserDir}: the standalone window must not ask for web tools`);
+    assert.match(panelSrc, /\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
+      `${browserDir}: the full-page chat must ask for web tools`);
+    const continueAgentSrc = panelSrc.slice(panelSrc.indexOf('async function continueAgent('),
+      panelSrc.indexOf('onStateObserved', panelSrc.indexOf('async function continueAgent(')));
+    assert.match(continueAgentSrc, /\.\.\.\(isStandaloneWindow \? \{ standaloneChat: true \} : \{\}\),\s*\.\.\.\(isTabChat \? \{ standaloneWebTools: true \} : \{\}\),/,
+      `${browserDir}: the Continue request must carry the standalone and full-page chat flags`);
   }
 });
 
@@ -44050,8 +44177,10 @@ test('new locales are registered in extension and web language dropdowns', () =>
   const webBuild = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
   const webTemplate = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
   const privacy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
+  assert.match(webBuild, /readFile\(new URL\('.\/languages\.json', import\.meta\.url\)/, 'web build should load its locale registry');
+  const webLanguages = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/languages.json'), 'utf8'));
   for (const [code, languageLabel] of addedLocales) {
-    assert.match(webBuild, new RegExp(`\\{ code: '${code}', bcp47:`), `web build: ${code} locale missing`);
+    assert.ok(webLanguages.some(language => language.code === code && language.bcp47 && language.label === languageLabel), `web build: ${code} locale missing`);
     for (const [surface, html] of [['landing template', webTemplate], ['privacy page', privacy]]) {
       const option = `<option value="${code}">${languageLabel}</option>`;
       assert.equal(html.split(option).length - 1, 1, `${surface}: ${code} language option should appear exactly once`);
@@ -44419,15 +44548,15 @@ test('extension language dropdowns pin English and Chinese before alphabetical l
     assert.deepEqual(
       i18n.LANGUAGES.map(({ code }) => code),
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
 
-test('web language dropdowns pin English and Chinese before alphabetical languages', () => {
+test('web language dropdowns pin English, Hindi and Chinese before alphabetical languages', () => {
   const expectedCodes = [
-    'en', 'zh',
-    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko',
+    'en', 'hi', 'zh',
+    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'id', 'ja', 'ko',
     'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi',
   ];
 
@@ -44443,7 +44572,7 @@ test('web language dropdowns pin English and Chinese before alphabetical languag
     assert.deepEqual(
       codes,
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
@@ -45334,7 +45463,7 @@ test('every webbrain.one page shares one footer', () => {
     for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = `${dir}/${entry.name}`;
       if (entry.isDirectory() && entry.name !== 'assets') walk(rel);
-      else if (entry.name === 'index.html' && !rel.startsWith('web/docs/zh/') && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
+      else if (entry.name === 'index.html' && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
     }
   };
   walk('web/docs');
@@ -45349,7 +45478,10 @@ test('every webbrain.one page shares one footer', () => {
     ...blogPosts,
     ...docsPages,
   ]) {
-    assert.equal(footerOf(rel), reference, `${rel}: footer differs from the homepage footer`);
+    const locale = rel.match(/^web\/docs\/([a-z]{2})\//)?.[1];
+    const localizedHome = locale && `web/${locale}/index.html`;
+    const expectedFooter = localizedHome && fs.existsSync(path.join(ROOT, localizedHome)) ? footerOf(localizedHome) : reference;
+    assert.equal(footerOf(rel), expectedFooter, `${rel}: footer differs from its homepage footer`);
   }
   assert.match(footerOf('web/tr/index.html'), /<a href="\/tr\/">/, 'localized footers link to their own homepage for the extension');
   assert.match(reference, /<a href="\/companion\/">Desktop Companion<\/a>/, 'the footer links the desktop Companion');
@@ -45966,6 +46098,8 @@ test('first install opens a browser-aware panel launcher without fake toolbar co
   assert.match(chromePanelJs, /event\.key !== 'Tab'[\s\S]*?event\.shiftKey[\s\S]*?overlay\.contains\(activeElement\)/, 'chrome: modal coachmark should keep forward and reverse tab focus inside the dialog');
   assert.match(chromePanelJs, /doneButton\.addEventListener\('click', dismiss\)/, 'chrome: pin confirmation should dismiss the coachmark');
   assert.match(chromePanelJs, /skipButton\.addEventListener\('click', dismiss\)/, 'chrome: explicit skip should dismiss the coachmark');
+  assert.match(chromePanelJs, /async function initPinCoachmark\(\) \{[\s\S]*?if \(isStandaloneWindow\) return;\s*const stored = await chrome\.storage\.local\.get\('pinCoachmarkPending'\);/,
+    'chrome: the standalone window and the new tab\'s full-page chat have no panel header to pin from, so the coachmark waits for a real side panel');
   assert.match(chromePanelJs, /event\.key === 'Escape'[\s\S]*?stopImmediatePropagation\(\)[\s\S]*?dismiss\(\)/, 'chrome: Escape should be consumed by the modal and use the same dismissal path');
   assert.match(
     chromePanelCss,
@@ -48876,7 +49010,7 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /function clearStreamedAssistantText\(textEl\)[\s\S]*?cancelAnimationFrame\(frame\);[\s\S]*?streamedAssistantRenderFrameByEl\.delete\(textEl\);/, `${label}: terminal and tool transitions should cancel pending stream renders`);
     assert.match(panel, /async function flushRenderedTabChat\(\{ allowHidden = false \} = \{\}\)[\s\S]*?flushPendingStreamedAssistantMarkdownRenders\(\);[\s\S]*?const html = messagesEl\.innerHTML;[\s\S]*?return persistTabChat\(tabId, html, \{ allowHidden \}\);/, `${label}: tab switches and visibility handoffs should render a queued frame before serializing its last acknowledged stream chunk`);
     assert.doesNotMatch(panel, /const nextText = textEl\.textContent \+ data\.content;/, `${label}: rendered Markdown must never become the source for later deltas`);
-    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
+    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(code, lang\) : escapeHtml\(code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
     assert.match(panel, /case 'run_complete':[\s\S]*?const streamedText = getStreamedAssistantText\(textEl\);[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const visibleStreamedText = streamedText[\s\S]*?\|\| \(hasStreamedText \? textEl\?\.innerText \|\| textEl\?\.textContent \|\| '' : ''\);[\s\S]*?else if \(textEl && \(hasStreamedText\s*\|\| \(data\.status === 'completed' && textEl\.dataset\.responseIncomplete === 'true'\)\)\)[\s\S]*?const terminalContent = data\.status === 'stopped' \|\| data\.status === 'cancelled'[\s\S]*?\? visibleStreamedText[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, terminalContent, \{[\s\S]*?replace: terminalContent !== streamedText,[\s\S]*?else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored/background streams and incomplete completed replies should receive one enhanced authoritative terminal render while stopped runs preserve visible partial text`);
     const liveStreamBody = panel.slice(panel.indexOf("case 'text_delta':"), panel.indexOf("case 'response_retry':"));
     assert.doesNotMatch(liveStreamBody, /dataset\.streamedAssistantText\s*=/, `${label}: active stream chunks must not duplicate raw text into serialized attributes`);
@@ -49807,6 +49941,7 @@ test('the Providers page LLM tab has a search box beside provider filters', () =
     const rankEnd = settings.indexOf('\n}\n\nfunction ', rankStart);
     const providerSearchRank = vm.runInNewContext(`(${settings.slice(rankStart, rankEnd + 2)})`, {
       normalizeGeneralSearchText: (value) => String(value || '').toLowerCase(),
+      providerDisplayLabel: (id, config) => config.label || id,
     });
     const exactOpenAiRank = providerSearchRank('openai', { label: 'OpenAI', providerName: 'openai' }, 'openai');
     const azureOpenAiRank = providerSearchRank('azure_openai', { label: 'Azure OpenAI', providerName: 'azure-openai' }, 'openai');
@@ -55495,10 +55630,14 @@ test('background does not re-open a side panel that is already showing, and stil
   assert.match(background, /chrome\.runtime\.onConnect\.addListener\(\(port\) => \{ sidePanelPresence\.attach\(port\); \}\);/,
     'the presence port must be accepted at the top level of the worker');
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
-  assert.match(panel, /const initialWindowId = initialWindow\?\.id \?\? null;[\s\S]*?const presenceReportedEarly = !isBtwWindow && initialWindowId != null;\s*let presenceReporter = null;\s*if \(presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: initialWindowId \}\);\s*\}\s*const \[tab\] = await chrome\.tabs\.query/,
+  assert.match(panel, /const initialWindowId = initialWindow\?\.id \?\? null;[\s\S]*?const presenceReportedEarly = !isBtwWindow && !isTabChat && initialWindowId != null;\s*let presenceReporter = null;\s*if \(presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: initialWindowId \}\);\s*\}\s*(?:\/\/[^\n]*\n\s*)*const ownTab = isTabChat \? await chrome\.tabs\.getCurrent\(\)\.catch\(\(\) => null\) : null;\s*const \[tab\] = ownTab \? \[ownTab\] : await chrome\.tabs\.query/,
     'the side panel must tell the background it is on screen as soon as its window is known, before its other awaits');
-  assert.match(panel, /if \(!isBtwWindow && !presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: tab\?\.windowId \?\? null \}\);/,
+  assert.match(panel, /if \(!isBtwWindow && !isTabChat && !presenceReportedEarly\) \{\s*presenceReporter = reportSidePanelPresence\(\{ runtime: chrome\.runtime, doc: document, windowId: tab\?\.windowId \?\? null \}\);/,
     'and still report when the window could only be learned from the active tab');
+  // The full-page chat the new tab opens is an ordinary tab, not the window's side panel: reporting
+  // it would make the background reuse it instead of opening the real panel there.
+  assert.doesNotMatch(panel, /const presenceReportedEarly = !isBtwWindow && initialWindowId != null;/,
+    'a tab chat must never report itself as the side panel of its window');
   assert.match(panel, /createSidePanelWindowScope\(\{[^}]*?onWindowChanged: \(windowId\) => presenceReporter\?\.setWindowId\(windowId\),/,
     'a panel the browser moves to another window must tell the background, or the old window stays occupied and the new one looks empty');
 });
@@ -55986,8 +56125,8 @@ test('standalone window transport, sizing, and translations are mirrored', async
     assert.match(panel, /isStandaloneWindow \? \{ standaloneChat: true \} : \{\}/, `${label}: standalone flag is not sent with chat_start`);
     assert.equal(
       [...background.matchAll(/msg\.standaloneChat === true \? \{ standaloneChat: true \} : \{\}/g)].length,
-      2,
-      `${label}: standalone flag must reach both streaming paths`,
+      3,
+      `${label}: standalone flag must reach both streaming paths and Continue`,
     );
     assert.match(agent, /const standaloneChat = runOptions\?\.standaloneChat === true;/, `${label}: agent does not recognize standalone runs`);
     assert.match(agent, /if \(!selectionScoped && !standaloneChat\)/, `${label}: standalone run still reads the active tab`);
@@ -71668,7 +71807,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.doesNotMatch(settingsScript, /data-webgpu-download-action=/,
     'the Apocalypse-style download action block must not be duplicated on Settings');
   assert.doesNotMatch(settingsScript, /saveVisionConfig\(\{\s*type:\s*'webgpu'/);
-  assert.match(settingsScript, /let entries = Object\.entries\(providersData\);/,
+  assert.match(settingsScript, /let entries = Object\.entries\(providersData\)\s*(?:;|\.)/,
     'Settings should render the WebGPU provider card');
   const webgpuSettingsBlock = settingsScript.slice(
     settingsScript.indexOf('    webgpu: {'),
@@ -76853,6 +76992,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   const expectedIds = `
     api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
     atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
+    cloudgpu
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
     evroc fastrouter freebuff2api friendli google-vertex google-vertex-anthropic helicone
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
@@ -76866,7 +77006,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 85);
+  assert.equal(expectedIds.length, 86);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -76881,8 +77021,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 119/118 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 120 : 119;
+    // deliberately omitted from the 120/119 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 121 : 120;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77081,6 +77221,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI['api-route'].suggestions,
     ['gpt-6.1-sol'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.cloudgpu.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://cloudgpu.app/v1',
+      model: 'deepseek-v4-flash',
+      contextWindow: 131072,
+      supportsVision: false,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://cloudgpu.app',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.cloudgpu.suggestions,
+    ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.3', 'kimi-k3', 'qwen3.5-397b'],
   );
   assert.deepEqual(
     {

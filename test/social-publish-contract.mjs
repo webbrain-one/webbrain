@@ -815,11 +815,23 @@ for (const browser of ['chrome', 'firefox']) {
         return { content: JSON.stringify({ key: input.key, actionId: input.action.id, authorized: true, reason: 'Matches.', providerMetadata: true }) };
       };
       assert.equal(await f.agent._workflowPreSubmitDispatchBlock(f.tabId, 'click_ax', {}, f.detected, f.provider), null);
-      assert.deepEqual(attempts.map(a => a.options.maxTokens), [2048, 4096]);
+      assert.deepEqual(attempts.map(a => a.options.maxTokens), [4096, 8192]);
       assert.equal(attempts[0].messages[1].content, attempts[1].messages[1].content);
       assert.match(attempts[1].messages[0].content, /format repair/);
       assert.equal(attempts[1].messages.length, 2, 'repair cannot become a new user instruction');
     }
+  });
+
+  // From a trace: with a provider that sends no thinking controls (WebBrain
+  // Compass), the checker's first attempt spent all 2048 tokens reasoning and
+  // returned nothing. It gets what a normal step gets; a configured output
+  // limit still caps both attempts.
+  test(`${browser}: the publication checker gets a normal step's output budget, within the provider's limit`, () => {
+    const f = setup();
+    assert.deepEqual([false, true].map(retry => f.agent._socialPublicationChatOptions(f.provider, retry).maxTokens), [4096, 8192]);
+    assert.deepEqual([false, true].map(retry => f.agent._socialPublicationChatOptions(f.provider, retry, false, true).maxTokens), [4096, 8192], 'the audit too');
+    const capped = { ...f.provider, config: { maxOutputTokens: 3000 } };
+    assert.deepEqual([false, true].map(retry => f.agent._socialPublicationChatOptions(capped, retry).maxTokens), [3000, 3000]);
   });
 
   test(`${browser}: publication controls fall back to portable requests only after explicit option rejection`, async () => {

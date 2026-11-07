@@ -308,7 +308,12 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   attachment. A node the page re-mounts later under the same selector was
   never listed and keeps the refusal until a fresh inventory lists it, as does
   any other selector. A blocked native chooser names its input with the
-  selector the inventory uses.
+  selector the inventory uses. In a vision run that blocked `click_at` hands
+  the next steps to the element tools (`docs/vision-mode.md`), and its result
+  is the model's observation of the input: when the handoff starts, the
+  monitor keeps the node the result's selector names under a fresh token
+  (`page_monitor_record_upload_targets`), an inventory of the blocked inputs
+  only, so the first `upload_file` with that selector binds as above.
 - Native `summary` controls and authored click/tab-focus targets use the same
   observed owner and exact action footprint as native and ARIA buttons. Changed
   handler identity, disclosure state, target/owner identity and user intervention

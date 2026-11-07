@@ -3,6 +3,9 @@ import { URL_FAMILY_TOOLS, bucketArgsKey } from './loop-bucket.js';
 // Error codes of a call the runtime refused because the run does not offer
 // the named tool (retired, or outside the mode/provider tool set).
 const UNAVAILABLE_TOOL_ERROR_CODES = new Set(['tool_unavailable', 'retired_tool']);
+// How far apart (CSS px) two vision clicks may be and still count as the
+// same point read off a screenshot (_checkCoordClickLoop).
+const VISION_REPEAT_RADIUS_PX = 12;
 
 /**
  * Browser-free loop detection used by Agent and the unit tests.
@@ -755,10 +758,10 @@ export class LoopDetector {
   /**
    * Coordinate-click loop detector. Buckets to nearest 5px so a click that
    * drifts by a pixel or two between attempts still hashes the same. Window
-   * of 8 — generous, since the goal is to survive interleaved noise like
+   * of 12 — generous, since the goal is to survive interleaved noise like
    * execute_js / type_text / read_page calls between coord retries.
    *
-   * Returns 'nudge' on the 3rd repeat and 'stop' on the 5th. Gives the
+   * Returns 'nudge' on the 5th repeat and 'stop' on the 8th. Gives the
    * agent more room to retry on pages with loading states or animations.
    */
   _checkCoordClickLoop(tabId, x, y) {
@@ -769,13 +772,18 @@ export class LoopDetector {
     const screen = this._loopScreenIdentity(tabId, 'click', { x, y, coordinate_space: 'css' });
     const key = `${bx},${by}${screen ? `@${screen}` : ''}`;
     const buf = this.recentCoordClicks.get(tabId) || [];
-    buf.push({ key, ts: Date.now() });
+    buf.push({ key, x: Number(x), y: Number(y), screen, ts: Date.now() });
     if (buf.length > 12) buf.shift();
     this.recentCoordClicks.set(tabId, buf);
 
-    const counts = new Map();
-    for (const e of buf) counts.set(e.key, (counts.get(e.key) || 0) + 1);
-    const n = counts.get(key) || 0;
+    // A point read off a screenshot drifts by a few pixels between tries at
+    // the same control (1035,80 / 1030,78 / 1038,76), which split one
+    // repeated miss across several 5px buckets. In a vision run, earlier
+    // clicks this close on the same screen count as the same point.
+    const n = screen
+      ? buf.filter(e => e.screen === screen && Math.abs(e.x - x) <= VISION_REPEAT_RADIUS_PX
+        && Math.abs(e.y - y) <= VISION_REPEAT_RADIUS_PX).length
+      : buf.filter(e => e.key === key).length;
     if (n >= 8) return { kind: 'stop', x: bx, y: by };
     if (n >= 5) return { kind: 'nudge', x: bx, y: by };
     return { kind: 'none' };

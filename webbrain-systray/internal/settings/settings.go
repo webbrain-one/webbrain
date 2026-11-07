@@ -41,10 +41,17 @@ type Local struct {
 }
 
 type Decision struct {
-	// Enabled loads the d1 decision model at startup when it is installed.
+	// Enabled loads the decision model at startup when it is installed.
 	Enabled bool `json:"enabled"`
+	// Model is "compass" or "d1"; empty uses the default model, or d1 while
+	// only d1 is installed.
+	Model string `json:"model,omitempty"`
 	// Threads overrides ONNX Runtime intra-op threads; 0 lets the runtime decide.
 	Threads int `json:"threads,omitempty"`
+	// MaxPixels caps a screenshot's size for Compass (0: the extension's
+	// 16,777,216). A 1280x800 screenshot is 1,000 image tokens; 262,144 makes
+	// it 240 and the decision about three times faster on the CPU.
+	MaxPixels int `json:"max_pixels,omitempty"`
 }
 
 type Settings struct {
