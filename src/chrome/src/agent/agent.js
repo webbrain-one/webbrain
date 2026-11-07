@@ -21753,6 +21753,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // other change of run, call, steering, Stop, mode or document still
     // interrupts, and before input the route may not change at all.
     const ownRoute = () => this._pageFeedbackAgentRouteCurrent(tabId, run, baseline.startedAt);
+    // The press's own form or link navigation can replace the observed
+    // document before the browser's report of its commit arrives: a read of
+    // the old document fails first. Wait, bounded, for that report, so the
+    // owner check that follows sees the new page, not an unavailable one. One
+    // budget for the press: every failed read shares it.
+    const ownNavigationBudget = {};
+    const ownNavigationSettled = () => this._pageFeedbackAgentNavigationSettled(tabId, run, baseline.startedAt,
+      this._runAbortSignal?.(tabId), ownNavigationBudget);
     const assertObservedOwner = async () => {
       await this._pageFeedbackTraversalSettled(run, this._runAbortSignal?.(tabId));
       assertNotAborted();
@@ -21906,7 +21914,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const target = await this._resolveClickAxFallbackTarget(tabId, args.ref_id, abortSignal, { observeOnly: true });
         await assertObservationCurrent();
         if (target?.success !== true || target.tag !== 'button' || target.ref_id !== args.ref_id
-            || target.documentToken !== prepared.documentToken || target.refScopeUrl !== prepared.refScopeUrl) return null;
+            || target.documentToken !== prepared.documentToken || target.refScopeUrl !== prepared.refScopeUrl) {
+          await ownNavigationSettled();
+          await assertObservationCurrent();
+          return null;
+        }
         return (!!prepared.buttonStrongState && !!target.fallbackStrongState
           && prepared.buttonStrongState !== target.fallbackStrongState)
           || (typeof prepared.buttonDisabled === 'boolean' && typeof target.fallbackNativeButtonDisabled === 'boolean'
@@ -21972,7 +21984,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (observationInterrupted) {
         // A failed read cannot erase completed input delivery. Preserve the
         // pending lock while the ordinary execution loop obtains fresh proof.
+        // A read can fail because the press's own navigation is replacing the
+        // document; once its commit is reported it is read as that (below).
         try {
+          await assertObservedOwner();
+          await ownNavigationSettled();
           await assertObservedOwner();
           if (run.lastUserAt === clickUserAt
               && ![...run.events.values()].some(event => event.source === 'user')) {
@@ -22002,6 +22018,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 && run.lastUserAt === clickUserAt && ![...run.events.values()].some(event => event.source === 'user')
                 && this._pageFeedbackAgentDocumentCurrent(tabId, run, dispatchCall.modelState, baseline.startedAt)
                 && previousUrl && currentUrl && urlWithoutFragment(previousUrl) !== urlWithoutFragment(currentUrl)) {
+              // Diagnostics only: the owner change was this press's own navigation.
+              if (timing?.preparationVeto) timing.preparationVeto.ownNavigation = true;
               return { success: true, method: 'cdp-native-button', initialTrustedNativeButton: true,
                 ref_id: args.ref_id, dispatched: true, trusted: true, verified: false,
                 nativeInputAcknowledged: true, observationInterrupted: true,

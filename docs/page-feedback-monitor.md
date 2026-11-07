@@ -521,9 +521,14 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   operation. If nothing else changed (same run, call, task and mode, no input
   from the person, no Stop, steering or Back/Forward) and the address is new,
   the press is delivered with `ownNavigation`, `pageUrlChanged`, `previousUrl`
-  and `currentUrl` and an unknown outcome; it is not proof. A navigation the
-  press cannot be tied to, a redirect back to the same address, or the
-  person's own navigation keeps the interrupted, failed result.
+  and `currentUrl` and an unknown outcome; it is not proof. A redirected
+  commit counts as the press's own only as its form submission or at the
+  origin of its form or link destination. A navigation the press cannot be
+  tied to, a redirect back to the same address, or the person's own
+  navigation keeps the interrupted, failed result. The old document's reply
+  can be lost before the browser reports the commit; while that press's own
+  navigation is still pending, a failed read waits for the report before the
+  press is judged, up to 300 ms in all for that press.
 - A run's app-owned observations, captures and recovery nudges are removed
   when it ends, so the next request observes the current page instead. Stop
   interrupts page capture and the refresh read.
