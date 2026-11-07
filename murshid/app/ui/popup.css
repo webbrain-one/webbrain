@@ -1,0 +1,132 @@
+/* The address bar's dropdown: a card that continues the focused address bar
+   down over the page. Sizes are mirrored in app/omnibox-popup.js (ROW_HEIGHT,
+   CARD_CHROME, SHADOW, SIDE). */
+
+:root {
+  --surface: #ffffff; /* ui.css --omni-focus */
+  --text: #2a1d16;
+  --muted: #7a6656;
+  --faint: #b6a58e;
+  --border: #e4d7c1;
+  --gold: #a87a22;
+  --url: #8a6216;
+  --gold-soft: rgba(168, 122, 34, 0.16);
+  --hover: rgba(42, 29, 22, 0.05);
+  --shadow: rgba(42, 29, 22, 0.22);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0f0b09;
+    --text: #f1e6d0;
+    --muted: #a8977f;
+    --faint: #6d5e4e;
+    --border: #2e231d;
+    --gold: #d4a64a;
+    --url: #d4a64a;
+    --gold-soft: rgba(212, 166, 74, 0.17);
+    --hover: rgba(241, 230, 208, 0.05);
+    --shadow: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+html, body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  padding: 0 8px; /* SIDE */
+  color: var(--text);
+  font: 13px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "SF Pro Text", Ubuntu, Cantarell, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+#card {
+  background: var(--surface);
+  border: 1px solid var(--gold);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  padding-bottom: 6px;
+  box-shadow: 0 12px 20px -10px var(--shadow), 0 3px 6px -3px var(--shadow);
+}
+#card::before {
+  /* hairline between the address bar and the first row */
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 0 14px 3px;
+  background: var(--border);
+}
+
+.row {
+  height: 36px; /* ROW_HEIGHT */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px;
+  padding-block: 0;
+  padding-inline: 7px 12px;
+  border-radius: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--gold-soft); }
+
+.ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.ico img { width: 16px; height: 16px; border-radius: 3px; }
+.ico svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.row.sel .ico { color: var(--gold); }
+
+.main {
+  flex: 0 1 auto;
+  max-width: 64%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+}
+.main b, .sub b { font-weight: 650; }
+.sep { flex: none; color: var(--faint); }
+.sub {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--url);
+}
+.sub.note { color: var(--muted); }
+
+.badge {
+  flex: none;
+  margin-inline-start: auto;
+  padding: 2px 9px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  color: var(--gold);
+  font-size: 11.5px;
+}

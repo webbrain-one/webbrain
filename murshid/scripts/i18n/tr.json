@@ -1,0 +1,399 @@
+{
+  "lang": "tr",
+  "dir": "ltr",
+  "locale": "tr_TR",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "tr": "Murshid (Geliştirme Önizlemesi) — yolu bilen tarayıcı"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "tr": "Geliştirme önizlemesi. Murshid, WebBrain ajanı içine yerleşik bir Chromium tarayıcısıdır: herhangi bir sayfa hakkında soru sorun, ona bir iş verin, bırakın sistem tepsisindeki kendi yapay zekâ abonelikleriniz yürütsün. Açık kaynak."
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "tr": "Murshid — yolu bilen tarayıcı"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "tr": "WebBrain yerleşik bir Chromium tarayıcısı. Sorun, planlayın, harekete geçin — kendi sekmelerinizde."
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "tr": "İçeriğe geç"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "tr": "Murshid ana sayfa"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "tr": "Murshid bir geliştirme önizlemesidir"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "tr": "Önizleme"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "tr": "Bölümler"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "tr": "Tarayıcı"
+    },
+    "nav.way": {
+      "en": "The way",
+      "tr": "Yol"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "tr": "<span lang=\"en\">Companion</span>"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "tr": "İndir"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "tr": "GitHub'da Murshid"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "tr": "<span lang=\"en\">Murshid</span>'i indirin"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "tr": "Dil: Türkçe"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "tr": "Üst kısmı kırmızı göster"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "tr": "Üst kısmı kırmızı yap"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "tr": "Üst kısmı sarı yap"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "tr": "<em>Yolu</em> bilen<br>tarayıcı."
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "tr": "Murshid, içinde <strong>WebBrain</strong> olan bir Chromium tarayıcısı. Önünüzdeki sayfa hakkında soru sorun ya da ona bir iş verin. Siz izlerken kendi sekmelerinizde okur, tıklar ve yazar; üstelik zaten ödediğiniz yapay zekâ abonelikleriyle çalışır."
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "tr": "Windows için indirin"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "tr": "macOS için indirin"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "tr": "Linux için indirin"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "tr": "<span lang=\"en\">Murshid</span>'i indirin"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "tr": "<span lang=\"en\">WebBrain</span> ile tanışın"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "tr": "Sisteminiz"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "tr": "Kaynaktan çalıştırın"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "tr": "İkili dosyalar hariç"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "tr": "Komutları kopyala"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "tr": "Kopyalandı"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "tr": "Yalnızca son commit ve yalnızca <code>murshid/</code> ile onun yüklediği WebBrain eklentisi: geçmiş, sürüm zip'leri, videolar ya da test dosyaları inmez."
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "tr": "Beyaz sarıklı, başını eline dayamış, Kuran okuyan bir Osmanlı âlimi: Osman Hamdi Bey'in 1902 tarihli tablosundan uyarlanmış yarım ton (halftone) bir baskı."
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "tr": "Mürşid · rehber"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "tr": "Murshid iş başında"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "tr": "Windows'ta Murshid tarayıcısı. Bir sekmede Mevlevîlik hakkındaki İngilizce Wikipedia maddesi açık; yanındaki WebBrain yan paneli sayfanın tamamını okumuş ve &quot;Summarize this page&quot; (bu sayfayı özetle) isteğini maddeler hâlinde bir özetle yanıtlıyor."
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "tr": "Murshid'in Windows'taki gerçek bir ekran görüntüsü; açık olduğu sayfayı özetlemesi istendi. Geliştirme önizlemesi sürümü, hiç hesap açılmamış yeni bir profilde."
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "tr": "Rehberin heybesinde"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "tr": "Eksiksiz bir tarayıcı,<br><em>bir de onun aklı.</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "tr": "Chrome'dan beklediğiniz her şey; WebBrain ajanı sonradan eklenmiş değil, dokusuna işlenmiş."
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "tr": "#1 Gezinti"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "tr": "Chromium, sekmeleriyle"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "tr": "Sürükleyip yeniden açabileceğiniz sekmeler, arama da yapan bir adres çubuğu, indirmeler, sayfada bul, yakınlaştırma, geliştirici araçları ve ellerinizin zaten bildiği kısayollar."
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "tr": "#2 Sor ve yaptır"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "tr": "Yan panelde WebBrain"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "tr": "Herhangi bir sayfa, PDF ya da seçtiğiniz metin hakkında soru sorun. Ya da ne yapılmasını istediğinizi söyleyin; formları doldursun, adımları tek tek tıklasın, sekmeleri sizin yerinize karşılaştırsın."
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "tr": "#3 Tepsi"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "tr": "Yapay zekâ abonelikleriniz, tepsiden"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "tr": "WebBrain Companion sistem tepsisinde durur ve Claude, ChatGPT, Gemini, Grok, Kimi, Muse ve Devin aboneliklerinizi 127.0.0.1 üzerinden WebBrain'e sunar. API anahtarı gerekmez."
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "tr": "#4 Yeni sekme"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "tr": "Sizi dinleyen yeni sekme"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "tr": "Her yeni sekme WebBrain'in sayfasıyla açılır: bir soru, bir iş ya da bir arama yazın, doğrudan panele gitsin. Önceden yüklü ve açık gelir."
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "tr": "#5 Yerel"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "tr": "Kendi bilgisayarınızda modeller"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "tr": "Companion, PrismML'in Bonsai 2 27B modelini ve WebBrain'in d1 karar modelini yerelde çalıştırabilir; GPU'nuza göre boyutlandırılır, SHA-256 ile doğrulanır."
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "tr": "#6 Açık"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "tr": "Baştan sona açık"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "tr": "GPL-3.0; WebBrain ile birlikte herkesin gözü önünde geliştiriliyor. Tarayıcıda telemetri yok. Sayfalarınıza dokunan her satırı okuyabilirsiniz."
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "tr": "Yol"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "tr": "Talip sorar.<br>Mürşid gösterir.<br><em>Sonra birlikte yürürsünüz.</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "tr": "I"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "tr": "Sor"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "tr": "Önünüzdeki sayfa hakkında soru sorun. WebBrain onu okur — metinleri, tabloları, formları, PDF'leri, hatta yalnızca ekranda görünenleri — ve hemen yanında yanıtlar."
+    },
+    "way.step2.num": {
+      "en": "II",
+      "tr": "II"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "tr": "Planı gör"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "tr": "Tıklama ya da yazma gerektiren her işte “Plan before Act” (önce plan, sonra eylem) önce adımları ortaya koyar. Onaylayın, değiştirin ya da durdurun."
+    },
+    "way.step3.num": {
+      "en": "III",
+      "tr": "III"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "tr": "Yürü"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "tr": "Sonra gerçek sekmelerinizde, gerçek oturumlarınızla çalışır. Her hamlesi görünür ve dümeni istediğiniz an devralabilirsiniz."
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "tr": "Sistem tepsisinde"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "tr": "Zaten ödediğiniz abonelikler,<br><em>WebBrain'in hizmetinde.</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "tr": "Murshid açılırken WebBrain Companion'ı da başlatır. Küçük tepsi uygulamasında bir kez oturum açın; abonelikleriniz yalnızca bu bilgisayarın erişebildiği tek bir yerel uç noktaya dönüşür, her birinden ne kadar kaldığını da bir bakışta görürsünüz."
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "tr": "Companion'ın sunduğu abonelikler"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "tr": "Bonsai 2 27B · yerel"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "tr": "d1 · yerel"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "tr": "Companion uç noktası"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "tr": "<span lang=\"en\">Murshid</span>'i edinin"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "tr": "Rehberi <em>yanınıza alın.</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "tr": "Murshid bir geliştirme önizlemesidir. Windows, macOS ve Linux için WebBrain Companion'ı da içeren yükleyiciler var. WebBrain ve yeni sekme sayfası önceden yüklü gelir."
+    },
+    "get.yours": {
+      "en": "Your system",
+      "tr": "Sisteminiz"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "tr": "10 ve 11, x64. Arm64'te kaynaktan çalışır."
+    },
+    "get.download": {
+      "en": "Download installer",
+      "tr": "Yükleyiciyi indirin"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "tr": "0.1.0 · x64 · 150 MB"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "tr": "Henüz kod imzalı değil, bu yüzden Windows SmartScreen onu durdurabilir: önce <b>Ek bilgi</b>'yi, ardından <b>Yine de çalıştır</b>'ı seçin."
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "tr": "12 Monterey ve sonrası; Apple Silicon ve Intel."
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "tr": "0.1.0 · <span lang=\"en\">Apple Silicon</span> ve <span lang=\"en\">Intel</span> · 294 MB"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "tr": "Apple tarafından onaylanmadı (notarize edilmedi): uygulamaya sağ tıklayıp <b>Aç</b>'ı seçin ya da <b>Sistem Ayarları &gt; Gizlilik ve Güvenlik &gt; Yine de Aç</b> yolunu kullanın."
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "tr": "x64. Arm64'te kaynaktan çalışır."
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "tr": "0.1.0 · x64 · 171 MB · 135 MB"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "tr": "AppImage: çalıştırılabilir yapıp açın. Debian ya da Ubuntu'da: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "tr": "<span lang=\"en\">GitHub</span>'da kaynak kodu"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "tr": "SHA-256 sağlama toplamları"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "tr": "Gizlilik, özenle"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "tr": "Gerektiği yerde<br><em>gizli.</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "tr": "Murshid bir tarama geçmişi listesi tutmaz. Çerezler, açık oturumlar ve site verileri varsayılan olarak saklanır; döndüğünüzde her şey kaldığı yerden devam eder."
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "tr": "Alt bilgi"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "tr": "Gizlilik"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "tr": "GPL-3.0-or-later · Yazı tipleri SIL Open Font License altında · <span>Görseller kamu malı eserlerden uyarlandı: Osman Hamdi Bey'in <i>İslam İlahiyatçısı</i> (1902), <i>Kaplumbağa Terbiyecisi</i> (1906) ve <i>Arzuhalci</i> (1910) tabloları; Vanmour serisinden bir Mevlevi dervişi (1700–37); 1870–1910 dolaylarında İstanbul'da çekilmiş, biri Sébah &amp; Joaillier stüdyosundan Mevlevi dervişi fotoğrafları. Derviş ve fotoğraflar Rijksmuseum'dadır. Gizlilik çizimi: Open Culture aracılığıyla, <i>Dame Turque</i>'ten yapay zekâyla stilize edildi.</span>"
+    }
+  }
+}

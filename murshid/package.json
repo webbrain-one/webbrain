@@ -1,0 +1,95 @@
+{
+  "name": "murshid",
+  "productName": "Murshid",
+  "version": "0.1.0",
+  "description": "Murshid — a Chromium browser with the WebBrain agent built in.",
+  "private": true,
+  "main": "app/main.js",
+  "license": "GPL-3.0-or-later",
+  "author": "Emre Sokullu",
+  "homepage": "https://github.com/webbrain-one/webbrain/tree/main/murshid",
+  "scripts": {
+    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs",
+    "test:integration": "node test/run-smoke.cjs",
+    "test:session": "node test/run-session-smoke.cjs",
+    "start": "electron .",
+    "dev": "electron . --murshid-devtools",
+    "art": "npm run art:pictures && npm run art:icons",
+    "art:pictures": "node scripts/art/halftone.mjs",
+    "art:icons": "node scripts/art/icon.mjs && node scripts/build-icons.mjs && node scripts/copy-art.mjs",
+    "fonts": "node scripts/copy-fonts.mjs",
+    "web": "node scripts/serve.mjs",
+    "web:i18n": "node scripts/i18n/build.mjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-chrome-extensions": "4.10.0"
+  },
+  "devDependencies": {
+    "@fontsource/amiri": "^5.3.0",
+    "@fontsource/aref-ruqaa": "^5.3.0",
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "one.webbrain.murshid",
+    "productName": "Murshid",
+    "copyright": "Copyright © 2026 Emre Sokullu",
+    "directories": { "output": "dist", "buildResources": "assets/icons" },
+    "files": [
+      "app/**/*",
+      "assets/icons/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "../src/chrome",
+        "to": "extensions/webbrain",
+        "filter": ["**/*", "!**/*.map", "!**/.DS_Store"]
+      },
+      {
+        "from": "vendor/companion/${platform}-${arch}",
+        "to": "companion",
+        "filter": ["**/*"]
+      }
+    ],
+    "protocols": [
+      { "name": "Web page", "schemes": ["http", "https"] }
+    ],
+    "fileAssociations": [
+      { "ext": ["html", "htm"], "name": "HTML document", "role": "Viewer" }
+    ],
+    "win": {
+      "icon": "assets/icons/murshid.ico",
+      "target": [{ "target": "nsis", "arch": ["x64", "arm64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Murshid",
+      "artifactName": "Murshid-${version}-windows-${arch}-setup.${ext}"
+    },
+    "mac": {
+      "icon": "assets/icons/murshid-1024.png",
+      "category": "public.app-category.productivity",
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "artifactName": "Murshid-${version}-macos-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "assets/icons/murshid-512.png",
+      "maintainer": "Emre Sokullu <emre@webbrain.one>",
+      "category": "Network;WebBrowser",
+      "target": ["AppImage", "deb"],
+      "artifactName": "Murshid-${version}-linux-${arch}.${ext}",
+      "mimeTypes": ["text/html", "x-scheme-handler/http", "x-scheme-handler/https"]
+    }
+  }
+}

@@ -1,0 +1,339 @@
+<!doctype html>
+<!-- Written by scripts/i18n/build.mjs from web/index.html and scripts/i18n/ar.json: edit those, then run npm run web:i18n. -->
+<html lang="ar" dir="rtl" data-hero="yellow">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المتصفح الذي يعرف الطريق — Murshid (معاينة تطويرية)</title>
+<meta name="description" content="معاينة تطويرية. Murshid متصفح مبني على Chromium ومدمج فيه وكيل WebBrain: اسأل عن أي صفحة، وكلّفه بمهمة، ودَع اشتراكاتك في الذكاء الاصطناعي تنفّذها من علبة النظام. مفتوح المصدر.">
+<meta name="theme-color" content="#e2aa3a">
+<script>
+  // The top of the page is yellow unless this visitor chose red with the
+  // circle in the nav (site.js); set it before the first paint.
+  try {
+    if (localStorage.getItem('murshid-hero') === 'red') {
+      document.documentElement.dataset.hero = 'red';
+      document.querySelector('meta[name="theme-color"]').content = '#9e1b2b';
+    }
+  } catch {}
+</script>
+<meta property="og:title" content="المتصفح الذي يعرف الطريق — Murshid">
+<meta property="og:description" content="متصفح Chromium مدمج فيه WebBrain. اسأل، وخطّط، ونفّذ — في علامات تبويبك أنت.">
+<meta property="og:image" content="../art/murshid-icon.svg">
+<meta property="og:locale" content="ar_AR">
+<link rel="canonical" href="https://murshid.one/ar/">
+<!-- the same page in each language (scripts/i18n/build.mjs writes tr/, ar/ and fa/) -->
+<link rel="alternate" hreflang="en" href="https://murshid.one/">
+<link rel="alternate" hreflang="tr" href="https://murshid.one/tr/">
+<link rel="alternate" hreflang="ar" href="https://murshid.one/ar/">
+<link rel="alternate" hreflang="fa" href="https://murshid.one/fa/">
+<link rel="alternate" hreflang="x-default" href="https://murshid.one/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preload" href="../fonts/amiri-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- the Ottoman ogee arch, in the units of whatever it frames -->
+    <clipPath id="arch-clip" clipPathUnits="objectBoundingBox">
+      <path d="M0 1 L0 .40 C0 .23 .16 .13 .34 .07 C.43 .04 .47 .03 .5 0 C.53 .03 .57 .04 .66 .07 C.84 .13 1 .23 1 .40 L1 1 Z"/>
+    </clipPath>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 .55 0"/>
+    </filter>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">انتقل إلى المحتوى</a>
+
+<header class="nav" id="top">
+  <a class="brand" href="#top" aria-label="الصفحة الرئيسية لـ Murshid">
+    <img src="../art/murshid-icon.svg" alt="" width="34" height="34">
+    <span lang="en">Murshid</span>
+    <span class="badge" title="Murshid في مرحلة المعاينة التطويرية">معاينة</span>
+  </a>
+  <nav class="links" aria-label="الأقسام">
+    <a href="#carries">المتصفح</a>
+    <a href="#way">الطريق</a>
+    <a href="#tray">Companion</a>
+    <a href="#get">التنزيل</a>
+  </nav>
+  <div class="nav-end">
+    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid على GitHub"><svg><use href="#i-github"/></svg></a>
+    <a class="button small" href="#get">نزّل Murshid</a>
+    <details class="lang" data-lang>
+      <summary aria-label="اللغة: العربية"><svg><use href="#i-globe"/></svg><span lang="en" data-lang-code>AR</span></summary>
+      <ul>
+        <li><a href="../" hreflang="en" lang="en" data-lang-link="en">English</a></li>
+        <li><a href="../tr/" hreflang="tr" lang="tr" data-lang-link="tr">Türkçe</a></li>
+        <li><a href="../ar/" hreflang="ar" lang="ar" dir="rtl" data-lang-link="ar" aria-current="page">العربية</a></li>
+        <li><a href="../fa/" hreflang="fa" lang="fa" dir="rtl" data-lang-link="fa">فارسی</a></li>
+      </ul>
+    </details>
+    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="اعرض الجزء العلوي بالأحمر" title="اجعل الجزء العلوي أحمر" data-to-red="اجعل الجزء العلوي أحمر" data-to-yellow="اجعل الجزء العلوي أصفر"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================================================ HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-grain" aria-hidden="true"><svg width="100%" height="100%"><rect width="100%" height="100%" filter="url(#grain)"/></svg></div>
+  <div class="hero-rays" aria-hidden="true"></div>
+
+  <div class="hero-copy">
+    <h1 id="hero-title">المتصفح<br>الذي يعرف<br><em>الطريق.</em></h1>
+    <p class="lede">Murshid متصفح مبني على Chromium وفي داخله <strong>WebBrain</strong>. اسأل عن الصفحة التي أمامك، أو كلّفه بمهمة. يقرأ وينقر ويكتب في علامات تبويبك أنت وأنت تراقب، ويعمل باشتراكات الذكاء الاصطناعي التي تدفع ثمنها أصلًا.</p>
+    <div class="cta">
+      <a class="button" href="#get" data-get data-win="نزّل لنظام Windows" data-mac="نزّل لنظام macOS" data-linux="نزّل لنظام Linux"><span>نزّل Murshid</span> <svg class="arrow"><use href="#i-arrow"/></svg></a>
+      <a class="button ghost" href="https://webbrain.one">تعرّف على WebBrain</a>
+    </div>
+
+    <div class="terminal" data-terminal>
+      <div class="terminal-tabs" role="tablist" aria-label="نظامك">
+        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-head">
+          <span class="terminal-label">شغّله من المصدر</span>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>استبعد الملفات الثنائية</span></label>
+        </div>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
+        <button class="copy" type="button" aria-label="انسخ الأوامر" data-copied="تم النسخ"><svg><use href="#i-copy"/></svg></button>
+        <p class="terminal-note" data-fast-note hidden>آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار.</p>
+      </div>
+    </div>
+  </div>
+
+  <figure class="hero-art">
+    <div class="arch">
+      <img class="photo" src="../art/halftone/hero-yellow.webp" data-yellow="../art/halftone/hero-yellow.webp" data-red="../art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="عالِم عثماني بعمامة بيضاء، يسند رأسه إلى يده ويقرأ القرآن: صورة نقطية (هافتون) مأخوذة عن لوحة عثمان حمدي بك لعام 1902.">
+      <script>if (document.documentElement.dataset.hero === 'red') { const p = document.currentScript.previousElementSibling; p.src = p.dataset.red; }</script>
+    </div>
+    <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 128 L0 51.2 C0 29.4 16 16.6 34 9 C43 5.1 47 3.8 50 0 C53 3.8 57 5.1 66 9 C84 16.6 100 29.4 100 51.2 L100 128"/>
+      <path class="inner" d="M3 128 L3 52 C3 31.6 18 19.5 35 12.4 C43.4 8.9 47 7.6 50 4.6 C53 7.6 56.6 8.9 65 12.4 C82 19.5 97 31.6 97 52 L97 128"/>
+    </svg>
+    <span class="finial" aria-hidden="true"></span>
+    <figcaption><span class="arabic" lang="ar">مرشد</span><span>مُرشِد · الدليل</span></figcaption>
+  </figure>
+</section>
+
+<div class="border-band" aria-hidden="true"></div>
+
+<!-- ========================================================== SCREENSHOT -->
+<section class="shot" aria-labelledby="shot-title">
+  <h2 class="visually-hidden" id="shot-title">Murshid أثناء العمل</h2>
+  <figure>
+    <picture>
+      <source type="image/avif" srcset="../art/screenshot/murshid-webbrain-1x.avif 1280w, ../art/screenshot/murshid-webbrain-2x.avif 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <source type="image/webp" srcset="../art/screenshot/murshid-webbrain-1x.webp 1280w, ../art/screenshot/murshid-webbrain-2x.webp 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <img src="../art/screenshot/murshid-webbrain.jpg" width="2560" height="1599" loading="lazy" decoding="async" alt="متصفح Murshid على Windows. في علامة تبويب مقالة ويكيبيديا الإنجليزية عن الطريقة المولوية، وإلى جانبها اللوحة الجانبية لـ WebBrain وقد قرأت الصفحة كاملة وهي تجيب عن &quot;Summarize this page&quot; (لخّص هذه الصفحة) بملخّص في نقاط.">
+    </picture>
+    <figcaption>لقطة حقيقية لـ Murshid على Windows، وقد طُلب منه تلخيص الصفحة المفتوحة فيه. إصدار معاينة تطويرية، على ملف تعريف جديد بلا أي حسابات.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================= CARRIES -->
+<section class="carries" id="carries" aria-labelledby="carries-title">
+  <header class="section-head">
+    <p class="eyebrow">في جعبة المرشد</p>
+    <h2 id="carries-title">متصفح كامل،<br><em>وعقلٌ يديره.</em></h2>
+    <p>كل ما تنتظره من Chrome، مع وكيل WebBrain منسوجًا في داخله، لا مُلصقًا عليه.</p>
+  </header>
+
+  <div class="cards">
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-browse.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#1 تصفّح</p>
+      <h3>Chromium، بعلامات تبويب</h3>
+      <p>علامات تبويب تسحبها وتعيد فتحها، وشريط عنوان يبحث أيضًا، وتنزيلات، وبحث في الصفحة، وتكبير، وأدوات المطوّر، والاختصارات التي تعرفها يداك.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-ask.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#2 اسأل ونفّذ</p>
+      <h3>WebBrain في اللوحة الجانبية</h3>
+      <p>اسأل عن أي صفحة أو ملف PDF أو نص تحدّده. أو أخبره بما تريد إنجازه، فيملأ النماذج ويمضي في الخطوات نقرةً نقرة ويقارن علامات التبويب نيابةً عنك.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-tray.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#3 علبة النظام</p>
+      <h3>اشتراكاتك في الذكاء الاصطناعي، من علبة النظام</h3>
+      <p>يقيم WebBrain Companion في علبة النظام، ويقدّم اشتراكاتك في Claude وChatGPT وGemini وGrok وKimi وMuse وDevin إلى WebBrain على 127.0.0.1. بلا مفاتيح API.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-newtab.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#4 تبويب جديد</p>
+      <h3>علامة تبويب جديدة تُصغي إليك</h3>
+      <p>كل علامة تبويب جديدة تُفتح على صفحة WebBrain: اكتب سؤالًا أو مهمة أو بحثًا، فيذهب مباشرةً إلى اللوحة. مثبّتة مسبقًا ومفعّلة.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-local.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#5 محلي</p>
+      <h3>نماذج على جهازك أنت</h3>
+      <p>يستطيع Companion تشغيل <bdi>Bonsai 2 27B</bdi> من PrismML ونموذج القرار d1 من WebBrain محليًا، بحجم يناسب بطاقة الرسوميات لديك، مع التحقق منهما بـ <bdi>SHA-256</bdi>.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-open.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#6 مفتوح</p>
+      <h3>مفتوح حتى آخر سطر</h3>
+      <p>برخصة <bdi>GPL-3.0</bdi>، ويُبنى علنًا مع WebBrain. لا يرسل المتصفح أي بيانات قياس عن بُعد. اقرأ كل سطر يلمس صفحاتك.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ================================================================ WAY -->
+<section class="way" id="way" aria-labelledby="way-title">
+  <div class="way-art" aria-hidden="true">
+    <img class="photo" src="../art/halftone/way.webp" width="1000" height="1432" loading="lazy" alt="">
+  </div>
+  <div class="way-copy">
+    <p class="eyebrow gold">الطريق</p>
+    <h2 id="way-title">المريد يسأل.<br>والمرشد يدلّ.<br><em>ثم تسيران معًا.</em></h2>
+    <ol class="steps">
+      <li>
+        <span class="step-num">أ</span>
+        <div>
+          <h3>اسأل</h3>
+          <p>اسأل عن الصفحة التي أمامك. يقرؤها WebBrain — النصوص والجداول والنماذج وملفات PDF، بل وما يظهر على الشاشة فقط — ويجيب إلى جانبها.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">ب</span>
+        <div>
+          <h3>اطّلع على الخطة</h3>
+          <p>في كل ما يتطلّب نقرًا أو كتابة، تعرض ميزة «<bdi>Plan before Act</bdi>» (الخطة قبل التنفيذ) الخطوات أولًا. وافق عليها، أو عدّلها، أو أوقفها.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">ج</span>
+        <div>
+          <h3>امضِ</h3>
+          <p>ثم يعمل في علامات تبويبك الحقيقية، بتسجيلات دخولك الحقيقية. كل خطوة ظاهرة أمامك، ويمكنك أن تمسك المقود في أي لحظة.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- =============================================================== TRAY -->
+<section class="tray" id="tray" aria-labelledby="tray-title">
+  <div class="tray-inner">
+    <div>
+      <p class="eyebrow">في علبة النظام</p>
+      <h2 id="tray-title">اشتراكاتك المدفوعة أصلًا،<br><em>تُصبّ في WebBrain.</em></h2>
+      <p>يشغّل Murshid تطبيق WebBrain Companion حين يبدأ. سجّل الدخول مرة واحدة في تطبيق علبة النظام الصغير، فتصبح اشتراكاتك نقطة اتصال محلية واحدة لا يصل إليها إلا هذا الحاسوب، مع نظرة سريعة على ما تبقّى من كل اشتراك.</p>
+    </div>
+    <ul class="providers" aria-label="الاشتراكات التي يقدّمها Companion">
+      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local"><bdi>Bonsai 2 27B</bdi> · محلي</li><li class="local">d1 · محلي</li>
+    </ul>
+    <pre class="endpoint" aria-label="نقطة اتصال Companion"><code dir="ltr">http://127.0.0.1:8327/v1</code></pre>
+  </div>
+</section>
+
+<!-- ================================================================ GET -->
+<section class="get" id="get" aria-labelledby="get-title">
+  <header class="section-head center">
+    <p class="eyebrow">احصل على Murshid</p>
+    <h2 id="get-title">خُذ المرشد <em>معك.</em></h2>
+    <p>Murshid في مرحلة المعاينة التطويرية. لأنظمة Windows وmacOS وLinux برامج تثبيت تتضمّن WebBrain Companion. ويأتي WebBrain وصفحة علامة التبويب الجديدة الخاصة به مثبّتَين مسبقًا.</p>
+  </header>
+  <div class="platforms">
+    <article class="platform" data-platform="win" data-you="نظامك">
+      <h3>Windows</h3>
+      <p>الإصداران 10 و11، x64. أما Arm64 فيعمل من المصدر.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-windows-x64-setup.exe" download>نزّل برنامج التثبيت</a>
+      </div>
+      <span class="status">0.1.0 · x64 · ‏150 ميغابايت</span>
+      <p class="fine">لم يُوقَّع رقميًا بعد، لذا قد يوقفه Windows SmartScreen: اختر <b>مزيد من المعلومات</b>، ثم <b>تشغيل على أي حال</b>.</p>
+    </article>
+    <article class="platform" data-platform="mac" data-you="نظامك">
+      <h3>macOS</h3>
+      <p>الإصدار 12 Monterey وما بعده، Apple Silicon وIntel.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-macos-universal.dmg" download>نزّل برنامج التثبيت</a>
+      </div>
+      <span class="status">0.1.0 · Apple Silicon وIntel · ‏294 ميغابايت</span>
+      <p class="fine">لم تصادق عليه Apple بعد (notarization): انقر بزر الفأرة الأيمن على التطبيق واختر <b>فتح</b>، أو استخدم <b>إعدادات النظام &gt; الخصوصية والأمن &gt; فتح على أي حال</b>.</p>
+    </article>
+    <article class="platform" data-platform="linux" data-you="نظامك">
+      <h3>Linux</h3>
+      <p>x64. أما Arm64 فيعمل من المصدر.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-linux-x86_64.AppImage" download lang="en">AppImage</a>
+        <a class="button crimson" href="../download/Murshid-0.1.0-linux-amd64.deb" download>.deb</a>
+      </div>
+      <span class="status">0.1.0 · x64 · ‏171 ميغابايت · 135 ميغابايت</span>
+      <p class="fine">AppImage: اجعله قابلًا للتنفيذ ثم شغّله. على Debian أو Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
+    </article>
+  </div>
+  <div class="get-cta">
+    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span>المصدر على GitHub</span></a>
+  </div>
+  <p class="checksums"><a href="../download/SHA256SUMS.txt">مجاميع التحقق <bdi>SHA-256</bdi></a></p>
+</section>
+
+<!-- ============================================================ PRIVACY -->
+<section class="privacy" id="privacy" aria-labelledby="privacy-title">
+  <div class="privacy-inner">
+    <div class="section-head privacy-copy">
+      <p class="eyebrow gold">خصوصية مدروسة</p>
+      <h2 id="privacy-title">الخصوصية<br><em>حيث تهمّ.</em></h2>
+      <p>لا يحفظ Murshid قائمة بسجلّ التصفح. أما ملفات تعريف الارتباط وتسجيلات الدخول وبيانات المواقع فتبقى محفوظة افتراضيًا، فتجد جلساتك جاهزة حين تعود.</p>
+    </div>
+    <div class="privacy-art" aria-hidden="true">
+      <img src="../art/halftone/privacy-dame-turque.webp" width="1402" height="1122" loading="lazy" alt="">
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-mark" aria-hidden="true"><span class="arabic" lang="ar">مرشد</span></div>
+  <div class="footer-row">
+    <a class="brand" href="#top"><img src="../art/murshid-icon.svg" alt="" width="28" height="28"><span lang="en">Murshid</span></a>
+    <nav aria-label="التذييل">
+      <a href="https://webbrain.one" lang="en">WebBrain</a>
+      <a href="https://webbrain.one/companion/" lang="en">Companion</a>
+      <a href="https://github.com/webbrain-one/webbrain" lang="en">GitHub</a>
+      <a href="https://webbrain.one/privacy">الخصوصية</a>
+    </nav>
+    <p><bdi>GPL-3.0-or-later</bdi> · الخطوط بموجب رخصة SIL Open Font License · <span>الصور مأخوذة عن أعمال في الملك العام: لوحات عثمان حمدي بك <i>عالِم دين إسلامي</i> (1902) و<i>مروّض السلاحف</i> (1906) و<i>كاتب العرائض</i> (1910)؛ ودرويش مولوي من سلسلة فانمور (1700–1737)؛ وصور فوتوغرافية لدراويش مولويين في القسطنطينية نحو 1870–1910، إحداها لاستوديو Sébah &amp; Joaillier. الدرويش والصور محفوظة في متحف رايكس (Rijksmuseum). رسم الخصوصية: معالَج بالذكاء الاصطناعي عن <i>Dame Turque</i>، عبر Open Culture.</span></p>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>

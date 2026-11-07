@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Murshid</title>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf4e4"/>
+      <stop offset="1" stop-color="#e6d3ad"/>
+    </linearGradient>
+    <linearGradient id="felt" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8e1626"/>
+      <stop offset="0.3" stop-color="#d0343f"/>
+      <stop offset="0.62" stop-color="#b3202f"/>
+      <stop offset="1" stop-color="#650d1b"/>
+    </linearGradient>
+    <linearGradient id="silk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2a1a14"/>
+      <stop offset="0.5" stop-color="#140d0a"/>
+      <stop offset="1" stop-color="#2a1a14"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="16" y="16" width="480" height="480" rx="114"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="16" y="16" width="480" height="480" fill="url(#paper)"/>
+    <ellipse cx="258" cy="426" rx="168" ry="26" fill="#4a0912" opacity="0.16"/>
+    <g transform="translate(256 262) scale(1.16) translate(-256 -262)">
+      <path d="M168 132 L124 396 Q256 436 388 396 L344 132 Z" fill="url(#felt)"/>
+      <ellipse cx="256" cy="132" rx="88" ry="19" fill="#7a1220"/>
+      <path d="M256 131 C300 124 340 128 356 146 C366 160 370 188 371 222" fill="none" stroke="#140d0a" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="256" cy="131" r="10" fill="#140d0a"/>
+      <rect x="360" y="216" width="22" height="16" rx="5" fill="#d9ae55"/>
+      <path d="M360 230 C356 268 350 304 342 340 C356 348 386 348 400 340 C392 304 386 268 382 230 Z" fill="url(#silk)"/>
+      <path d="M364 246 L356 334 M371 246 L371 338 M378 246 L386 334" stroke="#4a3a32" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    </g>
+  </g>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="113.5" fill="none" stroke="#4a0912" stroke-opacity="0.2"/>
+</svg>

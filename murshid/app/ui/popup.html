@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: http: data:">
+<title>Suggestions</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <defs>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.7 2.6 14.3 0 17M12 3.5c-2.6 2.7-2.6 14.3 0 17"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/><path d="M12 8v4.5l3 1.8"/></symbol>
+      <symbol id="i-tab" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 10h17"/></symbol>
+    </defs>
+  </svg>
+  <div id="card" role="listbox" aria-label="Suggestions"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
