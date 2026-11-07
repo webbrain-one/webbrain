@@ -68,6 +68,10 @@ function murshidPost() {
           for (const [fn, options] of listeners) {
             if (!matches(options.filter, details)) continue;
             const data = { ...details };
+            // Electron can omit the remote address (for example for a cached
+            // response). Let WebBrain's address validator fail closed rather
+            // than treating an unverified destination as public.
+            if ((name === 'onResponseStarted' || name === 'onBeforeRedirect') && !data.ip) data.ip = 'unavailable';
             if (!options.extra?.includes('requestBody')) delete data.requestBody;
             if (!options.extra?.includes('requestHeaders')) delete data.requestHeaders;
             if (!options.extra?.includes('responseHeaders')) delete data.responseHeaders;
