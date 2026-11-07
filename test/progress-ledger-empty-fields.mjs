@@ -77,6 +77,7 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal('emptyFields' in rows[0], false, 'An empty list clears it');
     rows = ledger.upsertLedgerItems([], [{ id: 'b', status: 'processed', emptyFields: [] }]).rows;
     assert.equal('emptyFields' in rows[0], false, 'A new row keeps no empty list');
+    assert.equal(ledger.ledgerFieldCheckedEmpty({ emptyFields: ['Bio'] }, 'bio'), true, 'Names match ignoring case');
 
     // A restored ledger that folds a duplicate row into its canonical row
     // keeps what either of them listed.
@@ -88,6 +89,20 @@ for (const build of ['chrome', 'firefox']) {
     ]);
     assert.equal(restored.rows.length, 1);
     assert.deepEqual(restored.rows[0].emptyFields, ['email', 'bio']);
+  });
+
+  test(`${build}: a value written later for a field listed empty takes it off the list`, () => {
+    let rows = ledger.upsertLedgerItems([], [{ id: 'a', status: 'processed', fields: { bio: 'None' }, emptyFields: ['Bio', 'email'] }]).rows;
+    rows = ledger.upsertLedgerItems(rows, [{ id: 'a', status: 'processed', fields: { bio: 'None', email: null } }]).rows;
+    assert.deepEqual(rows[0].emptyFields, ['Bio', 'email'], 'The same value again, or null, keeps the names');
+    rows = ledger.upsertLedgerItems(rows, [{ id: 'a', status: 'processed', fields: { bio: 'Writes about static sites.' } }]).rows;
+    assert.deepEqual(rows[0].emptyFields, ['email'], 'A bio found later is no longer listed as checked empty');
+    assert.match(ledger.formatLedgerRow(rows[0]), /\[checked empty: email\]/);
+    rows = ledger.upsertLedgerItems(rows, [{ id: 'a', status: 'processed', fields: { email: 'a@example.com' } }]).rows;
+    assert.equal('emptyFields' in rows[0], false, 'The last listed name taken off clears the list');
+    assert.doesNotMatch(ledger.formatLedgerRow(rows[0]), /checked empty/);
+    rows = ledger.upsertLedgerItems(rows, [{ id: 'a', status: 'processed', fields: { bio: 'Writes about static sites.' }, emptyFields: ['bio'] }]).rows;
+    assert.deepEqual(rows[0].emptyFields, ['bio'], 'A list given with the value is taken as given');
   });
 
   test(`${build}: progress_update tells the model how to record a field the item has no value for`, () => {
@@ -122,6 +137,12 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(agent._expectedItemsDoneBlock(tab), null);
     assert.equal(agent._progressDoneBlock(tab, 'success'), null);
     assert.equal(agent._shouldBlockDoneForProgress(tab), false);
+
+    // A name written in another case lists the same required field.
+    const other = makeAgent(Agent);
+    const otherTab = bindExpected(other);
+    update(other, otherTab, profileRows({ emptyFields: ['Bio'] }));
+    assert.equal(other._expectedItemsDoneBlock(otherTab), null);
   });
 
   test(`${build}: a field that was never filled still counts as missing`, () => {
@@ -185,6 +206,15 @@ for (const build of ['chrome', 'firefox']) {
     update(repeated, repeatedTab, rows([null, 'a@example.com', 'a@example.com']));
     assert.match(repeated._expectedItemsDoneBlock(repeatedTab)?.error || '', /non-duplicated email values/,
       'Two items with the same value are still duplicates');
+
+    // Rows that list the field as empty but hold the same value are the same
+    // item recorded twice, and are still caught.
+    const listed = makeAgent(Agent);
+    const listedTab = bindExpected(listed, expected);
+    update(listed, listedTab, rows([null, 'a@example.com', 'a@example.com'])
+      .map(row => ({ ...row, emptyFields: ['email'] })));
+    assert.match(listed._expectedItemsDoneBlock(listedTab)?.error || '', /non-duplicated email values/,
+      'Listing the field does not hide a repeated value');
   });
 }
 
@@ -246,7 +276,11 @@ const profileApiUrl = index => `https://example.com/api/users/test-account-${'ab
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
 
-  for (const listedFirst of [false, true]) test(`${build}: a read-only profile list with no-bio profiles ends a success${listedFirst ? ' when the first update lists them' : ' after one refusal'}`, async () => {
+  // The first name is progress-success-claim-checks' mustNotBlock test.
+  for (const [listedFirst, name] of [
+    [true, 'a read-only profile list with no-bio profiles ends a success when the first update lists them'],
+    [false, 'a read-only profile list with no-bio profiles ends a success after one refusal'],
+  ]) test(`${build}: ${name}`, async () => {
     const tab = nextTab++, toolResults = [];
     let requests = 0;
     // The profiles are read from the site's API, as the F2 run did.

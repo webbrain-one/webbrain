@@ -83,9 +83,25 @@ function sanitizeEmptyFieldNames(value) {
 }
 
 // Whether a row records `field` as checked on the item and empty: the item
-// has no value for it. A field that is only null or absent was never filled.
+// has no value for it. Names match ignoring case ("Bio" lists the required
+// "bio"). A field that is only null or absent was never filled.
 export function ledgerFieldCheckedEmpty(row, field) {
-  return Array.isArray(row?.emptyFields) && row.emptyFields.includes(String(field));
+  if (!Array.isArray(row?.emptyFields)) return false;
+  const name = String(field).toLowerCase();
+  return row.emptyFields.some(listed => String(listed).toLowerCase() === name);
+}
+
+// A row's checked-empty names after an update. A list the update gives
+// replaces the row's. Without one, a name stays listed until the update
+// writes a different value for that field: the later value wins, so a bio
+// found on a second look is not shown as checked empty next to it.
+function mergedEmptyFieldNames(existing, incoming) {
+  if (incoming?.emptyFields) return incoming.emptyFields;
+  if (!Array.isArray(existing?.emptyFields)) return undefined;
+  const rewritten = new Set(Object.entries(incoming?.fields || {})
+    .filter(([key, value]) => value != null && String(value).trim() !== '' && value !== existing.fields?.[key])
+    .map(([key]) => key.toLowerCase()));
+  return existing.emptyFields.filter(name => !rewritten.has(String(name).toLowerCase()));
 }
 
 function cleanTarget(value) {
@@ -687,8 +703,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       status: keepTerminal ? existing.status : incoming.status,
       ...(incoming.action ? { action: incoming.action } : {}),
       fields: { ...(existing.fields || {}), ...(incoming.fields || {}) },
-      // A list the update gives replaces the row's; no list keeps it.
-      emptyFields: incoming.emptyFields || existing.emptyFields,
+      emptyFields: mergedEmptyFieldNames(existing, incoming),
       ...(incoming.reason ? { reason: incoming.reason } : {}),
       sessionId: incoming.sessionId || existing.sessionId,
       pageScope: incoming.pageScope || existing.pageScope,

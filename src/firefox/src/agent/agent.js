@@ -38777,8 +38777,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     const identityField = expected.required_fields[0];
     if (identityField) {
-      // Items that have no value for the field are not duplicates of each other.
-      const values = orderedRows.filter(row => !ledgerFieldCheckedEmpty(row, identityField))
+      // Items listed as having no value for the field, with none recorded,
+      // are not duplicates of each other. A listed row that holds a value is
+      // still compared, so the same item recorded twice is caught.
+      const values = orderedRows.filter(row => !(ledgerFieldCheckedEmpty(row, identityField)
+          && String(row?.fields?.[identityField] ?? '').trim() === ''))
         .map(row => String(row?.fields?.[identityField] || '').trim().toLowerCase());
       if (new Set(values).size !== values.length) {
         return { blocked: true, error: `Expected ${expected.count} non-duplicated ${identityField} values; duplicate rows remain.` };

@@ -1067,10 +1067,14 @@ of an expected item that only says it is missing ("unknown", "bilinmiyor", "—"
 is found this way once, at a successful done, among values of 40 characters or
 fewer; no sure answer leaves the value counted as given. Missing values are
 otherwise JSON null. A field the item itself has no value for (a profile with
-no bio) is recorded by name: the row lists it in `emptyFields`, it counts as
-answered and is not read. A field that is null or absent and not listed was
-never filled and still blocks success, and the refusal tells the model how to
-list one. Action names in progress rows and requested field names
+no bio) is recorded by name: the row lists it in `emptyFields` (names match
+ignoring case), it counts as answered and is not read. A later update that
+writes a different value for a listed field takes it off the list. A field
+that is null or absent and not listed was never filled and still blocks
+success, and the refusal tells the model how to list one. Rows that list the
+first required field and hold no value for it are left out of its duplicate
+check; a listed row that holds a value is still compared. Action names in
+progress rows and requested field names
 are the canonical names the models are given; another word for one is rejected
 (progress_update) or names no field (the requirement stays incomplete).
 
