@@ -1191,4 +1191,118 @@ for (const build of ['chrome', 'firefox']) {
       if (previous === undefined) delete globalThis[key]; else globalThis[key] = previous;
     }
   });
+
+  // Cloudflare arms its interstitial from the destination's main-frame
+  // response, so a navigation can land on the challenge it would otherwise
+  // report as left behind.
+  function cloudflareSession(t, { readDelayMs = 0 } = {}) {
+    const apiName = build === 'chrome' ? 'chrome' : 'browser';
+    const previous = globalThis[apiName];
+    const stored = {};
+    globalThis[apiName] = { ...(previous || {}), storage: { ...(previous?.storage || {}), session: {
+      get: async key => {
+        if (readDelayMs) await new Promise(resolve => setTimeout(resolve, readDelayMs));
+        return typeof key === 'string' ? { [key]: stored[key] } : { ...stored };
+      },
+      set: async values => Object.assign(stored, structuredClone(values)),
+      remove: async key => { delete stored[key]; },
+    } } };
+    t.after(() => { if (previous === undefined) delete globalThis[apiName]; else globalThis[apiName] = previous; });
+    return stored;
+  }
+  const cloudflareResponse = (url, challenged = true) => ({ tabId: 1, type: 'main_frame', url,
+    responseHeaders: challenged ? [{ name: 'cf-mitigated', value: 'challenge' }] : [{ name: 'content-type', value: 'text/html' }] });
+  const profileUrl = 'https://social.example/@account-a';
+  const challengedProfileUrl = `${profileUrl}?__cf_chl_rt_tk=placeholder-token`;
+  test(`${build}: a navigation that lands on a Cloudflare challenge keeps its gate instead of reporting it cleared`, async t => {
+    cloudflareSession(t);
+    const agent = agentFor('act', 'full', false);
+    await agent.observeCloudflareManagedChallengeResponse(cloudflareResponse(profileUrl));
+    await agent.observeCloudflareChallengePlatformRequest({ tabId: 1, type: 'sub_frame',
+      url: 'https://challenges.example/cdn-cgi/challenge-platform/h/g/turnstile/if/placeholder' });
+    const result = {};
+    const gate = agent._clearCaptchaGateAfterNavigation(1, 'navigate', 'https://social.example/home', challengedProfileUrl, result);
+    assert.equal(gate?.status, 'manual_required');
+    assert.equal(gate?.cloudflareManagedChallenge, true);
+    assert.equal(gate?.clearedByNavigation, undefined);
+    assert.equal(result.captchaGate?.status, 'manual_required');
+    assert.equal(result.captchaGate?.clearedByNavigation, undefined);
+    assert.equal(agent._captchaGateStates.get(1)?.cloudflareManagedChallenge, true);
+    assert.equal(agent._cloudflareManagedChallenges.get(1)?.documentKey, profileUrl);
+    assert.equal(agent._captchaGateBlockResult(1, 'click', {})?.cloudflareManagedChallenge, true);
+    assert.equal(agent._captchaGateBlockResult(1, 'solve_captcha', {})?.manualCompletionRequired, true);
+    const note = agent._captchaRoutingMessage(1, gate, null, result);
+    assert.match(note, /Cloudflare managed challenge is active/);
+    assert.doesNotMatch(note, /has been left|is cleared/);
+    agent._visionRunState = () => ({ active: true });
+    assert.match(agent._captchaRoutingMessage(1, gate, null, result), /cannot be solved automatically in this mode[\s\S]*ask the user to complete it manually/);
+
+    // A reload of the same challenged page reports the challenge again.
+    const reload = {};
+    assert.equal(agent._clearCaptchaGateAfterNavigation(1, 'navigate', challengedProfileUrl, profileUrl, reload)?.status, 'manual_required');
+    assert.equal(reload.captchaGate?.cloudflareManagedChallenge, true);
+  });
+  test(`${build}: a challenged destination replaces the gate of the page that was left`, () => {
+    const agent = agentFor('act', 'full');
+    const from = 'https://social.example/join';
+    agent._captchaGateStates.set(1, { key: `${from}\nsecurity verification`, pageUrl: from, status: 'manual_required',
+      publicGate: { status: 'manual_required', solveFailed: true } });
+    agent._cloudflareManagedChallenges.set(1, { active: true, documentKey: profileUrl,
+      detectedAt: 1, lastResponseAt: 1, lastChallengePlatformActivityAt: 0 });
+    const result = {};
+    const gate = agent._clearCaptchaGateAfterNavigation(1, 'go_back', from, challengedProfileUrl, result);
+    assert.equal(gate?.status, 'manual_required');
+    assert.equal(gate?.cloudflareManagedChallenge, true);
+    assert.equal(result.captchaGate?.solveFailed, undefined);
+    assert.equal(agent._captchaGateStates.get(1)?.key.split('\n')[0], profileUrl);
+  });
+  test(`${build}: leaving a Cloudflare-challenged page for a normal page still clears its gate`, async t => {
+    cloudflareSession(t);
+    const agent = agentFor('act', 'full', false);
+    await agent.observeCloudflareManagedChallengeResponse(cloudflareResponse(profileUrl));
+    const result = {};
+    const gate = agent._clearCaptchaGateAfterNavigation(1, 'navigate', challengedProfileUrl, 'https://social.example/home', result);
+    assert.equal(gate?.status, 'cleared');
+    assert.equal(gate?.clearedByNavigation, true);
+    assert.equal(result.captchaGate?.clearedByNavigation, true);
+    assert.equal(agent._captchaGateStates.has(1), false);
+    assert.equal(agent._captchaGateBlockResult(1, 'click', {}), null);
+    // The normal destination's response retires the signal, so a later page
+    // read does not re-arm the old interstitial.
+    await agent.observeCloudflareManagedChallengeResponse(cloudflareResponse('https://social.example/home', false));
+    assert.equal(agent._activeCloudflareManagedChallengeGate(1), null);
+    // A challenged page whose clean response already landed has nothing left to report.
+    await agent.observeCloudflareManagedChallengeResponse(cloudflareResponse(profileUrl));
+    await agent.observeCloudflareManagedChallengeResponse(cloudflareResponse('https://social.example/home', false));
+    assert.equal(agent._clearCaptchaGateAfterNavigation(1, 'navigate', challengedProfileUrl, 'https://social.example/home', {}), null);
+  });
+  // 500 ms outlasts the loop's 200 ms URL beat, so the gate can be read only
+  // after the queued response transition lands.
+  for (const [label, readDelayMs] of [['settled', 0], ['still settling', 500]]) {
+    test(`${build}: the navigate result and its trusted note name a challenge armed while the tool ran (${label})`, async t => {
+      cloudflareSession(t, { readDelayMs });
+      const agent = agentFor('act', 'full', false);
+      agent._persist = () => {};
+      agent._ensureGateSetting = async () => {};
+      agent._skipPermissionGate = true;
+      agent._checkVerificationChallengeLoop = () => ({ kind: 'none' });
+      let currentUrl = 'https://social.example/home';
+      agent._currentUrl = async () => currentUrl;
+      agent.executeTool = async (tabId, name, args) => {
+        // The background listener does not wait for the transition it queues.
+        agent.observeCloudflareManagedChallengeResponse(cloudflareResponse(args.url));
+        currentUrl = challengedProfileUrl;
+        return { success: true, dispatched: true, verified: true, url: args.url };
+      };
+      const messages = [];
+      await agent._executeToolBatch(1, [
+        { id: 'nav', function: { name: 'navigate', arguments: JSON.stringify({ url: profileUrl }) } },
+      ], messages, () => {}, { supportsVision: false }, '', new Set(['navigate']), 1);
+      const content = messages.find(message => message.role === 'tool')?.content || '';
+      assert.match(content, /"status":\s*"manual_required"/);
+      assert.doesNotMatch(content, /clearedByNavigation|"status":\s*"cleared"/);
+      assert.match(content, /\[TRUSTED CAPTCHA GATE: A response-backed full-page Cloudflare managed challenge is active/);
+      assert.equal(agent._captchaGateStates.get(1)?.cloudflareManagedChallenge, true);
+    });
+  }
 }
