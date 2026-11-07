@@ -8,6 +8,10 @@ Writes web/art/halftone/<slot>.webp: the hero, "The way" and the six feature
 cards. Each is a printer's dot screen whose dots grow with the light. The ink
 colour is written with the dot coverage as alpha, so the crimson and night
 grounds of the page show between the dots.
+
+Also writes hero-yellow.webp, the hero for the yellow top of the page (the
+default; the circle in the nav turns it red): crimson ink whose dots grow with
+the dark, so the saffron ground is the paper.
 """
 
 import math
@@ -24,6 +28,8 @@ OUT = os.path.join(ROOT, 'web', 'art', 'halftone')
 
 GOLD = (217, 174, 85)
 PARCHMENT = (244, 234, 214)
+CRIMSON = (130, 24, 34)
+CRIMSON_INK = (42, 8, 12)
 
 # slot: (source picture, crop box (left, top, right, bottom) in that picture,
 #        output width, aspect (width / height), screen cell in pixels)
@@ -42,6 +48,10 @@ SLOTS = {
 # harder, so their backgrounds fall away into the page colour.
 FIGURE_CURVE = (.2, .92, 1.35)
 CARD_CURVE = (.18, .93, 1.2)
+# Crimson ink on saffron prints the shadows: a softer curve, and never quite
+# solid, so the paper shows through even the darkest grounds.
+DARK_CURVE = (.05, .95, .9)
+DARK_CAP = .85
 
 
 def load(file, box, width, aspect):
@@ -65,12 +75,16 @@ def vignette(h, w, inner, outer, cx=.5, cy=.42):
     return np.clip((outer - d) / (outer - inner), 0, 1) ** 1.4
 
 
-def halftone(rgb, cell, curve, focus=None, angle=45):
+def halftone(rgb, cell, curve, focus=None, angle=45, dark=False):
+    """Light-ink dots that grow with the light or, with `dark`, crimson dots
+    that grow with the shadows."""
     gray = rgb @ np.array([0.2126, 0.7152, 0.0722], np.float32)
     clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(6, 6))
     gray = clahe.apply((gray * 255).astype(np.uint8)).astype(np.float32) / 255
     black, white, gamma = curve
     gray = np.clip((gray - black) / (white - black), 0, 1) ** gamma
+    if dark:
+        gray = (1 - gray) * DARK_CAP
     if focus is not None:
         gray *= focus
 
@@ -87,10 +101,22 @@ def halftone(rgb, cell, curve, focus=None, angle=45):
     dots = (np.sqrt(du * du + dv * dv) < radius).astype(np.float32)
     cover = cv2.resize(dots, (w, h), interpolation=cv2.INTER_AREA)
 
-    # gold in the mid tones, parchment in the lights
-    mix = gray[..., None] ** 2
-    ink = np.array(GOLD, np.float32) * (1 - mix) + np.array(PARCHMENT, np.float32) * mix
+    if dark:
+        # crimson in the mid tones, nearly black in the deepest shadows
+        mix = gray[..., None] ** 1.5
+        ink = np.array(CRIMSON, np.float32) * (1 - mix) + np.array(CRIMSON_INK, np.float32) * mix
+    else:
+        # gold in the mid tones, parchment in the lights
+        mix = gray[..., None] ** 2
+        ink = np.array(GOLD, np.float32) * (1 - mix) + np.array(PARCHMENT, np.float32) * mix
     return np.dstack([ink, cover * 255]).clip(0, 255).astype(np.uint8)
+
+
+def save(rgba, name):
+    path = os.path.join(OUT, f'{name}.webp')
+    Image.fromarray(rgba, 'RGBA').save(path, 'WEBP', quality=82, alpha_quality=90, method=6)
+    h, w = rgba.shape[:2]
+    print(f'{os.path.relpath(path, ROOT)}: {w}x{h}, {os.path.getsize(path) // 1024} KB')
 
 
 def main():
@@ -100,10 +126,9 @@ def main():
         h, w = rgb.shape[:2]
         figure = slot in ('hero', 'way')
         focus = vignette(h, w, .45, 1.0 if slot == 'way' else 1.1) if figure else None
-        rgba = halftone(rgb, cell, FIGURE_CURVE if figure else CARD_CURVE, focus)
-        path = os.path.join(OUT, f'{slot}.webp')
-        Image.fromarray(rgba, 'RGBA').save(path, 'WEBP', quality=82, alpha_quality=90, method=6)
-        print(f'{os.path.relpath(path, ROOT)}: {w}x{h}, {os.path.getsize(path) // 1024} KB')
+        save(halftone(rgb, cell, FIGURE_CURVE if figure else CARD_CURVE, focus), slot)
+        if slot == 'hero':
+            save(halftone(rgb, cell, DARK_CURVE, focus, dark=True), 'hero-yellow')
 
 
 if __name__ == '__main__':

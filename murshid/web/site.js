@@ -60,6 +60,52 @@
     });
   }
 
+  // The circle at the end of the nav turns the top of the page yellow or red
+  // (the rest of the page stays as it is). The <head> script has already
+  // applied a remembered choice; here the button follows it, the other hero
+  // picture is fetched once the page has loaded, and a switch waits for that
+  // picture so the colours and the picture change together.
+  const hue = document.querySelector('[data-hue]');
+  const photo = document.querySelector('.arch .photo');
+  if (hue && photo) {
+    const root = document.documentElement;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const THEME = { yellow: '#e2aa3a', red: '#9e1b2b' };
+    const ready = {};
+    const load = (name) => ready[name] ||= new Promise((resolve) => {
+      const img = new Image();
+      img.src = photo.dataset[name];
+      img.decode().then(resolve, resolve);
+    });
+    const current = () => (root.dataset.hero === 'red' ? 'red' : 'yellow');
+    const sync = () => {
+      const red = current() === 'red';
+      hue.setAttribute('aria-pressed', String(red));
+      hue.title = red ? 'Make the top yellow' : 'Make the top red';
+    };
+    sync();
+    const prefetch = () => setTimeout(() => load(current() === 'red' ? 'yellow' : 'red'), 400);
+    if (document.readyState === 'complete') prefetch();
+    else addEventListener('load', prefetch, { once: true });
+
+    hue.addEventListener('click', async () => {
+      const next = current() === 'red' ? 'yellow' : 'red';
+      await load(next);
+      const apply = () => {
+        root.dataset.hero = next;
+        photo.src = photo.dataset[next];
+        meta?.setAttribute('content', THEME[next]);
+        sync();
+      };
+      try { localStorage.setItem('murshid-hero', next); } catch {}
+      if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.startViewTransition(apply);
+      } else {
+        apply();
+      }
+    });
+  }
+
   document.querySelector(`[data-platform="${os}"]`)?.classList.add('is-you');
 
   // Visitors get their installer straight from the hero

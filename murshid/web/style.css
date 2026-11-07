@@ -31,6 +31,9 @@
   --gold-hi: #f0cd7e;
   --gold-deep: #a87a22;
   --turquoise: #2a9d96;
+  --saffron-hi: #f2c95f;
+  --saffron: #e2aa3a;
+  --saffron-deep: #c0841f;
   --display: "Cormorant", "Cormorant Garamond", Garamond, "Times New Roman", serif;
   --sans: "Plex Sans", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Plex Mono", "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -268,7 +271,82 @@ em { font-style: italic; }
   color: var(--gold-hi);
 }
 .hero-art figcaption .arabic { font-size: 54px; line-height: 1; writing-mode: horizontal-tb; }
-.hero-art figcaption span:last-child { writing-mode: vertical-rl; font: 500 11px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase; color: rgba(244,234,214,.7); }
+.hero-art figcaption span:last-child { writing-mode: vertical-rl; font: 500 11px/1 var(--mono); letter-spacing: .3em; text-transform: uppercase; color: rgba(244,234,214,.85); }
+
+/* ------------------------------------------------------ the yellow top */
+/* The nav and the hero are saffron with crimson ink by default; everything
+   from the border band down keeps the crimson and parchment above. The
+   circle at the end of the nav sets html[data-hero="red"], and the rules
+   above apply again. */
+
+[data-hero="yellow"] .nav { color: var(--crimson-ink); }
+[data-hero="yellow"] :is(.nav, .hero) :focus-visible { outline-color: var(--crimson-ink); }
+[data-hero="yellow"] .hero .terminal :focus-visible { outline-color: var(--gold); }
+[data-hero="yellow"] .nav .brand img { box-shadow: 0 0 0 1px rgba(74, 9, 18, .3), 0 6px 14px -8px rgba(74, 9, 18, .6); }
+[data-hero="yellow"] .nav .brand .badge { border-color: rgba(74, 9, 18, .5); color: var(--crimson-ink); background: rgba(255, 246, 222, .35); }
+[data-hero="yellow"] .links a:hover { border-color: var(--crimson); }
+[data-hero="yellow"] :is(.nav, .hero) .button { background: var(--crimson-ink); color: var(--gold-hi); border-color: var(--crimson-ink); }
+[data-hero="yellow"] :is(.nav, .hero) .button:hover { background: var(--crimson); border-color: var(--crimson); color: var(--parchment); }
+[data-hero="yellow"] .hero .button.ghost { background: transparent; color: var(--crimson-ink); border-color: rgba(74, 9, 18, .45); }
+[data-hero="yellow"] .hero .button.ghost:hover { background: rgba(74, 9, 18, .08); border-color: var(--crimson-ink); color: var(--crimson-ink); }
+
+[data-hero="yellow"] .hero {
+  background: radial-gradient(120% 90% at 78% 40%, var(--saffron-hi) 0%, var(--saffron) 42%, var(--saffron-deep) 100%);
+  color: var(--crimson-ink);
+}
+[data-hero="yellow"] .hero::before {
+  opacity: .08;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%234a0912' stroke-width='1'%3E%3Cpath d='M60 18 72 48 102 60 72 72 60 102 48 72 18 60 48 48Z'/%3E%3Cpath d='M30 30h60v60H30Z' transform='rotate(45 60 60)'/%3E%3Cpath d='M30 30h60v60H30Z'/%3E%3Cpath d='M0 0 30 30M120 0 90 30M0 120l30-30M120 120 90 90'/%3E%3C/g%3E%3C/svg%3E");
+}
+[data-hero="yellow"] .hero-rays { background: repeating-conic-gradient(from 0deg, rgba(255, 248, 226, .34) 0deg .35deg, transparent .35deg 3deg); }
+[data-hero="yellow"] .hero h1 em { color: #8c1626; }
+[data-hero="yellow"] .lede { color: rgba(74, 9, 18, .9); }
+[data-hero="yellow"] .lede strong { color: var(--crimson-ink); }
+/* the terminal stays dark on the yellow, in parchment type */
+[data-hero="yellow"] .terminal { border-color: rgba(74, 9, 18, .55); background: rgba(46, 8, 14, .9); }
+[data-hero="yellow"] .arch {
+  background:
+    radial-gradient(62% 40% at 52% 27%, rgba(255, 246, 214, .5), transparent 70%),
+    linear-gradient(180deg, var(--saffron-hi), var(--saffron-deep));
+  box-shadow: inset 0 0 0 1px rgba(74, 9, 18, .25);
+}
+[data-hero="yellow"] .arch-line path { stroke: var(--crimson-ink); }
+[data-hero="yellow"] .arch-line path.inner { stroke: rgba(74, 9, 18, .45); }
+[data-hero="yellow"] .finial { background: linear-gradient(var(--crimson), var(--crimson-ink)); }
+[data-hero="yellow"] .hero-art figcaption { color: var(--crimson); }
+[data-hero="yellow"] .hero-art figcaption span:last-child { color: rgba(74, 9, 18, .85); }
+
+/* the circle that turns the top yellow or red: half of each, the current
+   colour up and to the left; a 44px target around a 24px disc */
+.hue {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 -10px 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hue span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--crimson) 50%, var(--saffron) 50%);
+  box-shadow: 0 0 0 1.5px currentColor;
+  transition: transform .5s cubic-bezier(.2, .7, .2, 1);
+}
+[data-hero="yellow"] .hue span { transform: rotate(180deg); }
+.hue:hover span { transform: rotate(24deg); }
+[data-hero="yellow"] .hue:hover span { transform: rotate(204deg); }
+.hue:focus-visible { outline: none; }
+.hue:focus-visible span { outline: 2px solid var(--gold); outline-offset: 4px; }
+[data-hero="yellow"] .hue:focus-visible span { outline-color: var(--crimson-ink); }
 
 /* ------------------------------------------------------- iznik border band */
 
@@ -500,5 +578,5 @@ section { position: relative; }
   html { scroll-behavior: auto; }
   .hero-rays, .way-art::before { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
-  .button, .plate .photo { transition: none; }
+  .button, .plate .photo, .hue span { transition: none; }
 }

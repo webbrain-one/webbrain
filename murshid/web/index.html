@@ -1,11 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-hero="yellow">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Murshid (Development Preview) — the browser that knows the way</title>
 <meta name="description" content="Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.">
-<meta name="theme-color" content="#9e1b2b">
+<meta name="theme-color" content="#e2aa3a">
+<script>
+  // The top of the page is yellow unless this visitor chose red with the
+  // circle in the nav (site.js); set it before the first paint.
+  try {
+    if (localStorage.getItem('murshid-hero') === 'red') {
+      document.documentElement.dataset.hero = 'red';
+      document.querySelector('meta[name="theme-color"]').content = '#9e1b2b';
+    }
+  } catch {}
+</script>
 <meta property="og:title" content="Murshid — the browser that knows the way">
 <meta property="og:description" content="A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.">
 <meta property="og:image" content="art/murshid-icon.svg">
@@ -50,6 +60,7 @@
   <div class="nav-end">
     <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid on GitHub"><svg><use href="#i-github"/></svg></a>
     <a class="button small" href="#get">Get Murshid</a>
+    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="Show the top in red" title="Make the top red"><span></span></button>
   </div>
 </header>
 
@@ -90,7 +101,8 @@ cd murshid && npm install && npm start</code></pre>
 
   <figure class="hero-art">
     <div class="arch">
-      <img class="photo" src="art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a gold halftone after Osman Hamdi Bey's painting of 1902.">
+      <img class="photo" src="art/halftone/hero-yellow.webp" data-yellow="art/halftone/hero-yellow.webp" data-red="art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.">
+      <script>if (document.documentElement.dataset.hero === 'red') { const p = document.currentScript.previousElementSibling; p.src = p.dataset.red; }</script>
     </div>
     <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 128 L0 51.2 C0 29.4 16 16.6 34 9 C43 5.1 47 3.8 50 0 C53 3.8 57 5.1 66 9 C84 16.6 100 29.4 100 51.2 L100 128"/>
