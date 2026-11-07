@@ -3,6 +3,10 @@ import fs from 'node:fs';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
 import { createNativeActionMarker } from '../firefox-companion/session.mjs';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled, suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const html = `<!doctype html><style>
 body { margin:0;width:1000px;height:700px; }
@@ -77,10 +81,11 @@ async function validate(page, snapshot, target = { tool: 'type_ax', ref_id: snap
 for (const build of ['chrome', 'firefox']) {
   // Sixty isolated scenarios run sequentially; coverage plus other browser files
   // can exhaust a one-minute collection even when every scenario completes.
-  // Keep individual hangs bounded while budgeting the full collection separately.
-  test(`${build}: heading-free dialogs bind their exact action context`, { timeout: 120000 }, async t => {
-    const scenario = (name, body) => t.test(name, { timeout: 10000 }, body);
-    const browser = await (build === 'chrome' ? chromium : firefox).launch({ headless: true });
+  // Keep individual hangs bounded while budgeting the full collection by its
+  // sixty cases.
+  test(`${build}: heading-free dialogs bind their exact action context`, { timeout: suiteTimeout(60) }, async t => {
+    const scenario = (name, body) => t.test(name, { timeout: scaled(10000) }, body);
+    const browser = await browsers.lease(build === 'chrome' ? chromium : firefox);
     try {
       for (const role of ['dialog', 'alertdialog']) await scenario(`${role}: visible owner and editor are certified without a heading`, async () => {
         const { context, page } = await fixture(browser, build, role);
@@ -537,7 +542,7 @@ test('Chrome and Firefox dialog ownership logic stays byte-identical', () => {
 
 for (const [build, launcher] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: large occluded background remains responsive without acquiring action authority`, async () => {
-    const browser = await launcher.launch({ headless: true });
+    const browser = await browsers.lease(launcher);
     const { context, page } = await fixture(browser, build);
     try {
       await page.evaluate(() => {

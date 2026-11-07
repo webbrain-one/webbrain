@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const monitorSources = new Map(['chrome', 'firefox'].map(build => [build, fs.readFileSync(
   process.env.WEBBRAIN_HIDDEN_DECORATION_BEFORE_SOURCE === '1'
@@ -183,8 +187,9 @@ const changes = [
 ];
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: hidden decorative icon labels preserve fresh native control coverage`, { timeout: 90000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 13 subtests.
+  test(`${build}: hidden decorative icon labels preserve fresh native control coverage`, { timeout: suiteTimeout(13) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const mode of ['initial hidden label', 'hover and focus hidden label update']) {
         await t.test(`${mode} permits one freshly bound native Close`, async () => {
@@ -247,8 +252,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
-  test(`${build}: decorative SVG hits retain the same observed action and reject meaningful changes`, { timeout: 90000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 22 subtests.
+  test(`${build}: decorative SVG hits retain the same observed action and reject meaningful changes`, { timeout: suiteTimeout(22) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       await t.test('React-style aria-hidden SVG replacement retains the exact action through guarded dispatch', async () => {
         const { context, page } = await fixture(browser, build);

@@ -3,6 +3,10 @@ import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
 import { uploadReleaseHtml, stageSequentialReleaseUploads, xComposeUploadHtml, instagramDirectThreadHtml } from './lib/upload-release-fixture.mjs';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const recipientUploadHtml = `<!doctype html><style>
 #binary-widget{display:block;width:400px;padding:10px}input[type=file]{width:1px;height:1px;opacity:0}
@@ -69,8 +73,9 @@ async function attach(page, snapshot, race = null, filename = 'owned.zip') {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: release binary upload has exact widget, recovery and dispatch fences`, { timeout: 120000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 49 subtests, each in its own context.
+  test(`${build}: release binary upload has exact widget, recovery and dispatch fences`, { timeout: suiteTimeout(49) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       const withFixture = async (work, html) => {
         const { context, page } = await fixture(browser, build, html);

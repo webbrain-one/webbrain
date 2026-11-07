@@ -6,6 +6,10 @@ import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
 import { cdpClient } from '../src/chrome/src/cdp/cdp-client.js';
 import { installPageFeedback } from '../src/chrome/src/agent/page-feedback.js';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled, suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 // The production isolated-world monitor, AX reader and content handlers run
 // together. The only substitute is local extension messaging; no website is
@@ -21,8 +25,11 @@ form{padding:20px}#editor{height:60px;width:400px;border:1px solid}
 <label>Private field<input id="private" value="Original private value"></label>
 </form></main><aside id="counter">0</aside>`;
 
+// Each fixture gets its own context in a browser shared by the file; closing
+// f.browser closes that context. Launching a new Firefox for each of the 21
+// vetoes took most of that suite's time.
 async function fixture(engine, build) {
-  const browser = await engine.launch({ headless: true });
+  const browser = await browsers.lease(engine);
   const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
   await context.route('**/*', route => route.request().url().startsWith(url)
     ? route.fulfill({ contentType: 'text/html', body: html }) : route.abort());
@@ -64,8 +71,20 @@ async function fixture(engine, build) {
   return { browser, page, capture, ref_id };
 }
 
+const focusHandlerVetoes = [
+  ['editor value from focus handler', "editor.textContent='Changed draft'", 'semantic_binding_changed'],
+  ['private form value from focus handler', "document.querySelector('#private').value='Changed private value'", 'semantic_binding_changed'],
+  ['recipient from focus handler', "recipient.textContent='Changed recipient'", 'semantic_binding_changed'],
+  ['form destination from focus handler', "editor.closest('form').action='/another-destination'", 'semantic_binding_changed'],
+  ['replacement editor from focus handler', "editor.replaceWith(editor.cloneNode(true))", 'focus_changed'],
+  ['different focus from focus handler', "document.querySelector('#private').focus()", 'focus_changed'],
+];
+const laterVetoes = ['later human click', 'later private value', 'later recipient', 'later page geometry', 'later page focus',
+  'later minor viewport notification', 'later viewport motion', 'later zoom', 'later DPR', 'later viewport dimensions',
+  'changed URL', 'Stop', 'different run', 'different document', 'stale native revision'];
+
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: owned typing focus and scroll preserve exact semantic certificate`, { timeout: 60000 }, async () => {
+  test(`${build}: owned typing focus and scroll preserve exact semantic certificate`, { timeout: scaled(60000) }, async () => {
     const f = await fixture(engine, build);
     try {
       const result = await f.page.evaluate(async ({ ref_id, capture }) => {
@@ -84,15 +103,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await f.browser.close(); }
   });
 
-  test(`${build}: preparation preserves semantic, focus, human and run vetoes`, { timeout: 120000 }, async t => {
-    for (const [name, mutate, expected] of [
-      ['editor value from focus handler', "editor.textContent='Changed draft'", 'semantic_binding_changed'],
-      ['private form value from focus handler', "document.querySelector('#private').value='Changed private value'", 'semantic_binding_changed'],
-      ['recipient from focus handler', "recipient.textContent='Changed recipient'", 'semantic_binding_changed'],
-      ['form destination from focus handler', "editor.closest('form').action='/another-destination'", 'semantic_binding_changed'],
-      ['replacement editor from focus handler', "editor.replaceWith(editor.cloneNode(true))", 'focus_changed'],
-      ['different focus from focus handler', "document.querySelector('#private').focus()", 'focus_changed'],
-    ]) await t.test(name, async () => {
+  test(`${build}: preparation preserves semantic, focus, human and run vetoes`,
+    { timeout: suiteTimeout(focusHandlerVetoes.length + laterVetoes.length) }, async t => {
+    for (const [name, mutate, expected] of focusHandlerVetoes) await t.test(name, async () => {
       const f = await fixture(engine, build);
       try {
         await f.page.evaluate(mutate => editor.addEventListener('focus', () => Function(mutate)(), { once: true }), mutate);
@@ -104,9 +117,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         assert.equal(JSON.stringify(result.preparationVeto).includes('private value'), false);
       } finally { await f.browser.close(); }
     });
-    for (const name of ['later human click', 'later private value', 'later recipient', 'later page geometry', 'later page focus',
-      'later minor viewport notification', 'later viewport motion', 'later zoom', 'later DPR', 'later viewport dimensions',
-      'changed URL', 'Stop', 'different run', 'different document', 'stale native revision']) await t.test(name, async () => {
+    for (const name of laterVetoes) await t.test(name, async () => {
       const f = await fixture(engine, build);
       try {
         await f.page.evaluate(ref_id => qaMessage('type_ax', { ref_id, text: 'Replacement draft', clear: true,
@@ -180,7 +191,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   });
 }
 
-test('Chrome: full type_ax native fallback keeps replacement atomic through owned preparation', { timeout: 60000 }, async t => {
+test('Chrome: full type_ax native fallback keeps replacement atomic through owned preparation', { timeout: scaled(60000) }, async t => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const saved = { chrome: globalThis.chrome, browser: globalThis.browser, attach: cdpClient.attach };
   const storage = { get: async () => ({}), set: async () => {}, remove: async () => {} };

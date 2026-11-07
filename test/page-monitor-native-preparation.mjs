@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 // An empty native control outside a semantic landmark needs a current private
 // read-only adapter proof. AX presence, model flags and an unchanged label do
@@ -39,8 +43,9 @@ for (const build of ['chrome', 'firefox']) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: unnamed controls require current private read-only preparation authority`, { timeout: 120000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 43 subtests.
+  test(`${build}: unnamed controls require current private read-only preparation authority`, { timeout: suiteTimeout(43) }, async t => {
+    const browser = await browsers.lease(engine);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     try {
       await context.route('https://web.telegram.org/**', route => route.fulfill({ contentType: 'text/html', body: html }));

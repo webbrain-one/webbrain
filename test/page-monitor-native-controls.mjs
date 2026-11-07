@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 // These authored controls already appear in the production AX reader and can
 // be clicked by content.js. Their private action context must have the same
@@ -95,8 +99,9 @@ async function dispatch(page, captured) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: observed native and authored controls retain exact context under passive churn`, { timeout: 120000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 19 subtests, each in its own context.
+  test(`${build}: observed native and authored controls retain exact context under passive churn`, { timeout: suiteTimeout(19) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       const withFixture = async work => {
         const { context, page } = await fixture(browser, build);

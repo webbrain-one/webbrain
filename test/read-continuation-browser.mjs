@@ -3,13 +3,17 @@ import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   const { getToolsForMode } = await import(`../src/${build}/src/agent/tools.js`);
 
-  test(`${build}: real expanded-tree continuations and bounded prose requests reach the content handler`, { timeout: 60000 }, async () => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: real expanded-tree continuations and bounded prose requests reach the content handler`, { timeout: scaled(60000) }, async () => {
+    const browser = await browsers.lease(engine);
     const context = await browser.newContext();
     const url = 'https://owned-read.test/document';
     const text = Array.from({ length: 400 }, (_, index) =>
@@ -153,7 +157,7 @@ ${documentRows.map(rowMarkup).join('')}</table>
 ${[['DISTRACTOR-A', '901', '100', 'Different µ'], ['DISTRACTOR-B', '902', '101', 'Never inventory']].map(rowMarkup).join('')}</table>`;
 
 async function withTableDispatch(engine, build, callback) {
-  const browser = await engine.launch({ headless: true });
+  const browser = await browsers.lease(engine);
   try {
     const context = await browser.newContext();
     const url = 'https://owned-table.test/literal-inventory';
@@ -195,7 +199,7 @@ async function withTableDispatch(engine, build, callback) {
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: actual table dispatch preserves all 172 shuffled literal rows and refuses missing requested IDs`,
-    { timeout: 60000 }, () => withTableDispatch(engine, build, async (_page, extract, url) => {
+    { timeout: scaled(60000) }, () => withTableDispatch(engine, build, async (_page, extract, url) => {
       const args = { type: 'tables', caption: 'Inventory exact literals', columns: tableColumns };
       const full = await extract(args);
       assert.equal(full.success, true);
@@ -231,7 +235,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     }));
 
   test(`${build}: table dispatch rejects ambiguous captions and malformed explicit selection`,
-    { timeout: 60000 }, () => withTableDispatch(engine, build, async (page, extract) => {
+    { timeout: scaled(60000) }, () => withTableDispatch(engine, build, async (page, extract) => {
       const args = { type: 'tables', columns: tableColumns };
       const ambiguous = await extract(args);
       assert.equal(ambiguous.success, false);
@@ -254,7 +258,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     }));
 
   test(`${build}: table dispatch refuses complete overlimit snapshots and preserves legacy extraction`,
-    { timeout: 60000 }, () => withTableDispatch(engine, build, async (page, extract) => {
+    { timeout: scaled(60000) }, () => withTableDispatch(engine, build, async (page, extract) => {
       const legacy = await extract({ type: 'tables' });
       assert.equal(legacy.length, 2);
       assert.equal(legacy[0].rows.length, 173);
@@ -290,7 +294,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: real Agent extract_data and done transport recheck exact table references and native secret headers`,
-    { timeout: 60000 }, () => withTableDispatch(engine, build, async (page, _extract, url) => {
+    { timeout: scaled(60000) }, () => withTableDispatch(engine, build, async (page, _extract, url) => {
       const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
       const previousChrome = globalThis.chrome, previousBrowser = globalThis.browser;
       const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
