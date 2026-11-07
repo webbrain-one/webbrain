@@ -6,7 +6,7 @@
 // accessibility tree), so the completion verdict could never certify it. A
 // composer that holds text the run typed still keeps done from succeeding.
 // Page capture, transport and the independent judge are simulated; the
-// Agent's done path, guards and receipts are real.
+// Agent's tool batch, done path, guards and receipts are real.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { test } from 'node:test';
@@ -65,6 +65,60 @@ for (const build of ['chrome', 'firefox']) {
     agent._recordCompletionToolResult(1, 'read_page', {}, { success: true, url: profileUrl, text: 'Profile' });
     agent._resetCompletionForSteeringRevision(1);
     assert.equal(agent._completionFormsUntouchedByRun(1), false);
+  });
+
+  // The real tool batch, with page, permission and guard checks stood in for:
+  // what document a click's receipt is bound to, as it is dispatched.
+  async function dispatchClick(detected) {
+    const tab = 61;
+    const provider = { model: 'owned-offline', supportsVision: false, supportsTools: true, promptTier: 'full',
+      contextWindow: 128000, config: { category: 'local' }, chat() {} };
+    const agent = new Agent({ getActive: () => provider, getProvider: () => provider });
+    agent.conversations.set(tab, [{ role: 'system', content: 'System' }, { role: 'user', content: task }]);
+    agent.conversationModes.set(tab, 'act');
+    agent._progressTaskKeyHash = () => 'owned-task';
+    agent._progressTaskAnchorText = () => task;
+    agent._persist = () => {}; agent._persistNow = async () => ({ ok: true });
+    agent._ensureProgressSessionForCurrentTask = async () => {};
+    agent._currentUrl = async () => profileUrl;
+    Object.assign(agent, { _skipPermissionGate: true, _ensureGateSetting: async () => true,
+      _chromeProtectedPageFailure: async () => null, _captchaMutationPreflight: async () => null, _adoptLiveSocialPublishWorkflow: async () => false,
+      _workflowPreSubmitDispatchBlock: async () => null, _messageRecipientGuardBlock: async () => null, _captureFormValidationState: async () => [],
+      _waitForFormValidationFailure: async () => null, _readControlEffect: async () => {},
+      _withContentActionDeadline: async fn => fn(new AbortController().signal), _preflightRichTextToolbarTarget: async () => ({ block: null }),
+      _socialPublicationPreSubmitBlock: async () => null, _auditRichTextToolbarTarget: async () => {}, _shouldAutoScreenshot: () => false,
+      _resourceMutationPreSubmitBlock: async () => null, _steeringPriorSubmissionBlock: () => null });
+    agent._detectLikelySubmitAction = async () => structuredClone(detected);
+    const seen = { liveReads: 0, atDispatch: null };
+    // The content script's live document identity (field_value_digest).
+    agent._liveTextMutationScope = async () => { seen.liveReads++; return { documentToken: 'native-document-1', pageUrl: profileUrl }; };
+    agent.executeTool = async () => {
+      seen.atDispatch = String(agent._lastAxScopes.get(tab)?.documentToken || '');
+      return { success: true, dispatched: true };
+    };
+    agent._beginCompletionInvariant(tab);
+    agent._startPlanExecutionGuard(tab, 'act', { requestKind: 'execute', requiresStateChange: true, requiresSubmission: true });
+    const call = { id: 'call_confirm', type: 'function', function: { name: 'click', arguments: '{"selector":"#confirm"}' } };
+    const messages = agent.conversations.get(tab);
+    messages.push({ role: 'assistant', content: '', tool_calls: [call] });
+    await agent._executeToolBatch(tab, [call], messages, () => {}, provider, null, new Set(['click']), 1,
+      { beforeConsequentialTool: async () => true });
+    return { ...seen, receipt: agent._completionSubmitStates.get(tab) };
+  }
+
+  test(`${build}: the dispatch path binds a click on a native confirmation to the live document`, async () => {
+    const confirm = { isSubmit: true, semanticCommit: true, mutationKind: 'delete', url: profileUrl,
+      host: 'mastodon.example.test', frameDocumentIdentity: `${profileUrl}|1` };
+    const native = await dispatchClick(confirm);
+    assert.equal(native.receipt?.dispatched, true);
+    assert.equal(native.receipt?.semanticCommit?.documentToken, 'native-document-1', 'The receipt names the document the click was sent in');
+    assert.equal(native.atDispatch, 'native-document-1');
+    assert.equal(native.liveReads, 1, 'The page is asked once, before the click');
+    // An ordinary submit is not a native confirmation: no extra page read.
+    const ordinary = await dispatchClick({ ...confirm, semanticCommit: false, mutationKind: 'submit',
+      validationSubmitEvidence: 'strong', method: 'POST' });
+    assert.equal(ordinary.liveReads, 0);
+    assert.equal(ordinary.receipt?.semanticCommit, null);
   });
 
   async function fixture({ verdict = 'succeeded', composerText = '', typed = false } = {}) {
