@@ -522,7 +522,7 @@ test('native Delete fixture providers honor read-only recovery instead of emitti
     const body = source.slice(start, source.indexOf('    completion =', start));
     assert.ok(start >= 0 && body.includes('const call'), 'Exercise the actual native deletion provider branch');
     const choose = chatInputVM.runInNewContext(`(function(){${body}\nreturn typeof emitted === 'undefined' ? call : emitted;})`, {
-      actionCalls: 9, judgeOutcome: 'succeeded', interruption: '', resource: 'https://owned.fixture.invalid/@qa/200',
+      actionCalls: 9, direct: false, judgeOutcome: 'succeeded', interruption: '', resource: 'https://owned.fixture.invalid/@qa/200',
       input: { tools: [{ type: 'function', function: { name: 'done', parameters: { properties: { outcome: { enum: ['partial', 'failed'] } } } } },
         { type: 'function', function: { name: 'get_accessibility_tree', parameters: {} } }] },
       conformFixtureCompletionCall, completionRecovery: { reads: 0 },
