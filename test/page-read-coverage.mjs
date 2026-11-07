@@ -322,6 +322,80 @@ for (const build of ['chrome', 'firefox']) {
     }
   });
 
+  // Codex review of PR #600: a transcript read for another video, by the
+  // tool's url argument, is no reading of the open page.
+  test(`${build}: a transcript of another video leaves the open page's coverage checked`, async () => {
+    const VIDEO = 'https://www.youtube.com/watch?v=AAAAAAAAAAA';
+    const OTHER = 'https://www.youtube.com/watch?v=BBBBBBBBBBB';
+    const transcript = data => ({ success: true, data: { text: 'The whole transcript of a video.', has_more_text: false, ...data } });
+    const cases = [
+      // The open video, however its address is written.
+      [VIDEO, {}, transcript(), true],
+      [VIDEO, { url: 'https://youtu.be/AAAAAAAAAAA?t=30' }, transcript(), true],
+      [VIDEO, { url: `${VIDEO}&t=30s` }, transcript({ video_id: 'AAAAAAAAAAA' }), true],
+      [VIDEO, { url: 'https://www.youtube.com/shorts/AAAAAAAAAAA' }, transcript(), true],
+      // Another video, named by url or by the provider.
+      [VIDEO, { url: OTHER }, transcript(), false],
+      [VIDEO, { url: 'https://youtu.be/BBBBBBBBBBB' }, transcript({ video_id: 'BBBBBBBBBBB' }), false],
+      [VIDEO, {}, transcript({ video_id: 'BBBBBBBBBBB' }), false],
+      [VIDEO, { url: VIDEO }, transcript({ video_id: 'BBBBBBBBBBB' }), false],
+      // An article that is no video: a video named by url is another page.
+      [PAGE, { url: OTHER }, transcript(), false],
+      [PAGE, {}, transcript({ video_id: 'BBBBBBBBBBB' }), false],
+    ];
+    for (const [page, args, result, covers] of cases) {
+      const state = coverage.createPageReadCoverage({ url: page });
+      coverage.recordPageObservation(state, page, { pageContent: TREE, hasMore: true });
+      coverage.recordPageRead(state, 'read_youtube_transcript', args, result, 8000, { pageUrl: page });
+      assert.equal(coverage.pageReadCoverageGap(state, page) === null, covers,
+        `${build}: on ${page}, read_youtube_transcript(${JSON.stringify(args)}) -> ${JSON.stringify(result.data)}`);
+    }
+
+    // The run: an Ask summary of the open article after a transcript of
+    // another video is still sent back to read the article.
+    const tools = ['done', 'read_page', 'get_accessibility_tree', 'read_youtube_transcript'];
+    const h = await batchAgent(build, { tools, results: { read_youtube_transcript: () => transcript() } });
+    h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    await h.batch([['read_youtube_transcript', { url: OTHER }]]);
+    const sent = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(sent.action, 'continue', `${build}: the open page was not read`);
+    assert.ok(JSON.parse(sent.results[0]).error.includes(`Call read_page(${WHOLE_PAGE_READ}) now`));
+  });
+
+  // Codex review of PR #600: a full-depth tree whose walk left out deeper
+  // content (depthTruncated, accessibility-tree.js) did not read the whole
+  // page, however far its slices reach.
+  test(`${build}: a depth-truncated tree does not complete the page`, async () => {
+    const one = coverage.createPageReadCoverage({ url: PAGE });
+    coverage.recordPageObservation(one, PAGE, { pageContent: TREE, hasMore: true });
+    coverage.recordPageRead(one, 'get_accessibility_tree', { filter: 'all', maxDepth: 15 },
+      { success: true, pageContent: SHORT_TREE, truncated: false, hasMore: false, depthTruncated: true, refScopeUrl: PAGE });
+    assert.deepEqual(coverage.pageReadCoverageGap(one, PAGE)?.nextRead, { tool: 'read_page', args: { includeChrome: false, limit: 6000 } },
+      `${build}: one depth-truncated tree result`);
+
+    const paged = coverage.createPageReadCoverage({ url: PAGE });
+    coverage.recordPageObservation(paged, PAGE, { pageContent: TREE, hasMore: true });
+    const slice = (page, chunkStart, chunkEnd, hasMore) => ({ pageContent: `slice ${page}`, page, chunkStart, chunkEnd,
+      totalChars: 200, hasMore, truncated: hasMore, refScopeUrl: PAGE, depthTruncated: true,
+      continuationArgs: hasMore ? { filter: 'all', maxDepth: 20, maxChars: 100, page: page + 1 } : null });
+    coverage.recordPageRead(paged, 'get_accessibility_tree', { filter: 'all', maxDepth: 20, maxChars: 100 }, slice(1, 0, 99, true));
+    // Following that tree's own pages cannot reach the content it left out.
+    assert.deepEqual(coverage.pageReadCoverageGap(paged, PAGE)?.nextRead, { tool: 'read_page', args: { includeChrome: false, limit: 6000 } },
+      `${build}: the next read is not the depth-truncated tree's next page`);
+    coverage.recordPageRead(paged, 'get_accessibility_tree', { filter: 'all', maxDepth: 20, maxChars: 100, page: 2 }, slice(2, 100, 200, false));
+    assert.ok(coverage.pageReadCoverageGap(paged, PAGE), `${build}: every slice of a depth-truncated tree`);
+
+    // The run: the answer after a depth-truncated full tree is sent back.
+    const h = await batchAgent(build);
+    h.agent.executeTool = async (_tab, name, args) => (name === 'done' ? { done: true, summary: args.summary }
+      : { success: true, pageContent: SHORT_TREE, truncated: false, hasMore: false, depthTruncated: true });
+    h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    await h.batch([['get_accessibility_tree', { filter: 'all', maxDepth: 15 }]]);
+    const sent = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(sent.action, 'continue', `${build}: the tree left out part of the page`);
+    assert.ok(JSON.parse(sent.results[0]).error.includes(`Call read_page(${WHOLE_PAGE_READ}) now`));
+  });
+
   test(`${build}: a request about selected text is not checked against the page`, async () => {
     const h = await batchAgent(build, { task: 'Summarize the selected text.', runOptions: { sourceGrounding: 'selection_only' } });
     h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });

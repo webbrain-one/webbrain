@@ -34,7 +34,14 @@ const MAX_DOCUMENTS = 8;
 // summary of a video written from its transcript is not sent back to read the
 // page around it. Each entry says whether a call reads the open page.
 const PAGE_SOURCE_READERS = Object.freeze({
-  read_youtube_transcript: () => true,
+  // Without a url it reads the tab's own video. A url, and the video_id the
+  // provider reports, must name the open page's video.
+  read_youtube_transcript: (args, page, result) => {
+    const video = youTubeVideoId(page);
+    if (args.url && !(video ? youTubeVideoId(args.url) === video : documentUrl(args.url) === page)) return false;
+    const reported = String(transcriptData(result).video_id ?? result.video_id ?? '').trim();
+    return !reported || reported === video;
+  },
   // Without a url it reads the tab's own PDF.
   read_pdf: (args, page) => !args.url || documentUrl(args.url) === page,
   // The framed documents' text; a selector reads a few controls of them.
@@ -54,6 +61,26 @@ function documentUrl(value) {
   }
 }
 
+// The video a YouTube address shows: youtu.be/<id>, /shorts/<id>, /live/<id>
+// and /embed/<id> carry it in the path, a watch page in ?v=.
+function youTubeVideoId(value) {
+  try {
+    const url = new URL(String(value || ''));
+    const host = url.hostname.toLowerCase().replace(/^(?:www|m|music)\./, '');
+    const path = url.pathname.replace(/\/+$/, '');
+    if (host === 'youtu.be') return path.replace(/^\//, '').split('/')[0] || '';
+    if (host !== 'youtube.com' && host !== 'youtube-nocookie.com') return '';
+    return /^\/(?:shorts|embed|live|v)\/([^/]+)/.exec(path)?.[1] || url.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
+}
+
+// A skill tool's provider body is in `data`.
+function transcriptData(result) {
+  return result.data && typeof result.data === 'object' && !Array.isArray(result.data) ? result.data : result;
+}
+
 function hasText(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
@@ -61,7 +88,7 @@ function hasText(value) {
 // Whether a page-source reader returned any of the page's content.
 function pageSourceContent(toolName, result) {
   if (toolName === 'read_youtube_transcript') {
-    const data = result.data && typeof result.data === 'object' && !Array.isArray(result.data) ? result.data : result;
+    const data = transcriptData(result);
     return hasText(data.text) || (Array.isArray(data.segments) && data.segments.length > 0);
   }
   if (toolName === 'read_pdf') {
@@ -247,7 +274,11 @@ export function recordPageRead(state, toolName, args = {}, result = null, maxCha
   if (cut || paged) entry.partial = true;
   const filter = String(read.filter || 'all');
   const maxDepth = read.maxDepth == null ? 15 : Number(read.maxDepth);
-  if (filter !== 'all' || !Number.isFinite(maxDepth) || maxDepth < 15 || cut) return state;
+  // A walk that left out content below its depth (depthTruncated,
+  // accessibility-tree.js) read less than the page however far its slices
+  // reach, and its next slice cannot reach that content either, so the rest
+  // is read through read_page.
+  if (filter !== 'all' || !Number.isFinite(maxDepth) || maxDepth < 15 || cut || result.depthTruncated === true) return state;
   const sliced = result.page != null || result.chunkStart != null || read.page != null;
   if (!sliced) {
     // The whole full-depth tree in one result.
