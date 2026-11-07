@@ -272,6 +272,23 @@ const waitFor = async (condition) => {
     await waitFor(() => contentFocusCalls > 0);
     newTab.wc.focus = focusContent;
     console.log('New tab focuses an empty address bar after a previous page');
+    const staleTab = w.addTab({});
+    await waitFor(() => w.activeTab === staleTab);
+    const fixturePort = Number(server.address().port);
+    await w.ui.executeJavaScript(`(() => {
+      omni.open = true; omni.itemsFor = 'old query'; omni.userText = 'http://127.0.0.1:' + ${fixturePort} + '/fresh-target';
+      omni.items = [{type:'search',query:'old query'}, {type:'url',url:'http://127.0.0.1:' + ${fixturePort} + '/stale-target'}];
+      omni.selected = 1; els.address.value = omni.userText; accept();
+    })()`);
+    await waitFor(() => staleTab.wc.getURL().endsWith('/fresh-target'));
+    assert.equal(requestHeaders.has('/stale-target'), false, 'stale selected suggestions must not navigate');
+    await w.ui.executeJavaScript(`(() => {
+      omni.open = true; omni.itemsFor = 'current query'; omni.userText = 'current query';
+      omni.items = [{type:'search',query:'current query'}, {type:'url',url:'http://127.0.0.1:' + ${fixturePort} + '/selected-target'}];
+      omni.selected = 1; els.address.value = omni.userText; accept();
+    })()`);
+    await waitFor(() => staleTab.wc.getURL().endsWith('/selected-target'));
+    w.closeTab(staleTab);
     const guarded = w.addTab({ url: `${base}/guarded` });
     await waitFor(() => guarded.wc.getURL() === `${base}/guarded` && !guarded.wc.isLoading());
     await guarded.wc.executeJavaScript("window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; }; document.body.click();", true);

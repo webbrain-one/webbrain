@@ -431,8 +431,9 @@ function endEditing() {
 function accept({ index = omni.selected, newTab = false, wwwCom = false } = {}) {
   const value = els.address.value.trim();
   const item = omni.open ? omni.items[index] : null;
-  // Row 0 is only trustworthy if it was worked out for the text as it is now.
-  const usable = item && (index !== 0 || omni.itemsFor === omni.userText) ? item : null;
+  // Every row must belong to the current input, including a highlighted row
+  // left over while replacement suggestions are still in flight.
+  const usable = item && omni.itemsFor === omni.userText ? item : null;
 
   if (wwwCom) {
     // Ctrl+Enter: "example" → www.example.com
