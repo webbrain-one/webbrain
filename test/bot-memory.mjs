@@ -101,6 +101,57 @@ for (const browser of ['chrome', 'firefox']) {
       await h.session.close();
     }
   });
+  test(`${browser}: a managed native click delivered by its own navigation counts once in the plan counter`, async () => {
+    // The trusted native button reports a press whose own form navigation
+    // opened a new page as delivered (ownNavigation). Both the navigation
+    // reconciliation (a fresh read of that page) and the memory verification
+    // can then credit the same press; it is still one consequential action.
+    const receiptUrl = 'https://example.test/receipt';
+    for (const order of ['verify-later', 'same-read']) {
+      const h = harness(); let navigated = false, verifies = 0;
+      h.agent._persist = () => { };
+      h.agent.conversationModes.set(7, 'act');
+      h.agent._runModeOverrides.set(7, 'act');
+      h.agent.conversations.set(7, [{ role: 'system', content: 'system' },
+        { role: 'user', content: 'Send one reminder for invoice 103, then check its receipt.' }]);
+      const token = h.agent._beginCompletionInvariant(7);
+      const guard = h.agent._startPlanExecutionGuard(7, 'act', { requestKind: 'execute', requiresStateChange: true });
+      h.session.observe = async (_tab, args) => ({ ...observed(args.memoryReadResult), url: navigated ? receiptUrl : target.url });
+      const originalFetch = h.session.fetchImpl;
+      h.session.fetchImpl = async (url, options) => {
+        // verify-later: the callback confirms only the explicit verification.
+        if (JSON.parse(options.body).operation === 'verify' && order === 'verify-later' && verifies++ === 0) {
+          return Response.json({ attempt: { id: 'attempt-1', status: 'dispatched' } });
+        }
+        return originalFetch(url, options);
+      };
+      h.agent._executeToolWithLifecycle = async (_tab, name) => name === 'get_accessibility_tree'
+        ? { success: true, pageContent: 'heading "Receipt for invoice 103"' }
+        : { success: true, method: 'cdp-native-button', initialTrustedNativeButton: true, dispatched: true, trusted: true,
+            verified: false, nativeInputAcknowledged: true, observationInterrupted: true, effectVerificationPending: true,
+            inconclusive: true, outcomeUnknown: true, retryable: false,
+            ownNavigation: true, pageUrlChanged: true, previousUrl: target.url, currentUrl: receiptUrl };
+      h.agent._lastAxScopes.set(7, { documentToken: 'invoice-103', pageUrl: target.url });
+      const click = await h.agent.executeTool(7, 'click_ax', { ref_id: 'ref_5' });
+      h.agent._markPlanExecutionToolCall(7, 'click_ax', click, { consequential: true });
+      h.agent._recordCompletionToolResult(7, 'click_ax', { ref_id: 'ref_5' }, click);
+      navigated = true;
+      h.agent._lastAxScopes.set(7, { documentToken: 'receipt', pageUrl: receiptUrl });
+      const read = await h.agent.executeTool(7, 'get_accessibility_tree', {});
+      h.agent._markPlanExecutionToolCall(7, 'get_accessibility_tree', read);
+      h.agent._recordCompletionToolResult(7, 'get_accessibility_tree', {}, read);
+      assert.equal(guard.successfulConsequentialToolCalls, 1, `${order}: the first read of the new page`);
+      if (order === 'verify-later') {
+        assert.equal(h.session.pending.size, 1, 'the unconfirmed attempt stays pending');
+        await h.agent.executeTool(7, 'bot_memory_verify', { attempt_id: 'attempt-1' });
+        assert.equal(h.session.pending.size, 0, 'the explicit verification confirmed the attempt');
+      }
+      assert.equal(guard.successfulConsequentialToolCalls, 1, `${order}: one press counted twice`);
+      assert.equal(h.agent._executionEvidenceSatisfied(guard), true, `${order}: the press was not counted`);
+      h.agent._clearCompletionInvariant(7, token);
+      await h.session.close();
+    }
+  });
   test(`${browser}: callback fetch keeps the browser global receiver`, async () => {
     const session = new BotMemorySession(config(), { fetchImpl: async function (_url, options) {
       assert.equal(this, globalThis, 'Native browser fetch rejects a session object receiver');
