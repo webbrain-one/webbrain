@@ -227,6 +227,9 @@ for (const build of ['chrome', 'firefox']) {
             assert.equal(result.block?.noDispatch, true, name);
             assert.equal(result.block.targetUnresolved, true, name);
             assert.match(result.block.error, /could not be identified as a link, field, menu item or ordinary button/, name);
+            // No workflow job is bound to this run: the refusal names none.
+            assert.equal(result.block.socialPublicationGuard, true, name);
+            assert.equal(result.block.workflowJob, undefined, name);
           }
           f = await setup('https://x.com/home', '<div role="menu"><div id="t" role="menuitem" tabindex="0">Delete</div></div>', { request: 'Delete my last post.' });
           result = await gate(f, 'click_ax', { ref_id: await ref('t') });
@@ -240,6 +243,103 @@ for (const build of ['chrome', 'firefox']) {
             assert.equal(result.block?.noDispatch, true);
             assert.match(result.block.error, /Enter was not pressed/);
           }
+        });
+
+        // QA P1 (vision, x.com): "Open the third post in this timeline and
+        // bookmark it." Every click on the post's Bookmark button was refused
+        // as an unidentified control that could publish. A model reads a
+        // Bookmark caption as saving the post (a commit), and an app control
+        // whose caption reads as a commit is not ordinary, so the probe
+        // resolved nothing. The app's own name for a Like or Bookmark toggle
+        // says it publishes nothing; publishing controls stay guarded.
+        await t.test('X and Bluesky Like and Bookmark toggles are not refused as controls that could publish', async () => {
+          // What a model may read every caption of the clicked control as.
+          const readEveryCaptionAs = (f, choice) => {
+            const chat = f.agent._chatWithCostAllowance;
+            f.agent._chatWithCostAllowance = async (provider, messages, options, cost, meta) => meta?.generationName === 'semantic_control_effect'
+              ? { content: JSON.stringify({ answers: semanticQuestionOf(f.agent, messages).items
+                .map((item, index) => ({ item: index, choice, evidence: String(item.text) })) }) }
+              : chat(provider, messages, options, cost, meta);
+          };
+          const xPost = button => '<main><article data-testid="tweet"><a href="/example/status/1">1h</a><div data-testid="tweetText">Hello</div>'
+            + `<div role="group"><button type="button" data-testid="reply" aria-label="3 Replies. Reply"><svg width="20" height="20"></svg></button>${button}</div></article></main>`;
+          const bskyPost = button => '<main><div data-testid="feedItem-by-example.bsky.social"><a href="/profile/example.bsky.social/post/3abc">2h</a>'
+            + `<div data-testid="postText">Hi</div>${button}</div></main>`;
+          const toggles = [
+            ['X Bookmark', 'https://x.com/home', xPost('<button id="t" type="button" data-testid="bookmark" aria-label="25 Bookmarks. Bookmark"><div><svg id="icon" width="20" height="20"></svg></div><span>25</span></button>')],
+            ['X Bookmarked', 'https://x.com/home', xPost('<button id="t" type="button" data-testid="removeBookmark" aria-label="26 Bookmarks. Bookmarked"><svg width="20" height="20"></svg><span>26</span></button>')],
+            ['X Like', 'https://x.com/home', xPost('<button id="t" type="button" data-testid="like" aria-label="88 Likes. Like"><svg width="20" height="20"></svg><span>88</span></button>')],
+            ['X Liked', 'https://twitter.com/home', xPost('<button id="t" type="button" data-testid="unlike" aria-label="89 Likes. Liked"><svg width="20" height="20"></svg><span>89</span></button>')],
+            ['X Bookmark without a type', 'https://x.com/home', xPost('<button id="t" data-testid="bookmark" aria-label="Bookmark"><svg width="20" height="20"></svg></button>')],
+            ['Bluesky Like', 'https://bsky.app/', bskyPost('<div id="t" role="button" tabindex="0" data-testid="likeBtn" aria-label="Like (5 likes)"><svg width="20" height="20"></svg></div>')],
+            ['Bluesky Save', 'https://bsky.app/', bskyPost('<button id="t" type="button" data-testid="postBookmarkBtn" aria-label="Add to saved posts"><svg width="20" height="20"></svg></button>')],
+          ];
+          for (const [name, url, html] of toggles) {
+            for (const reading of ['fixture', 'commit']) {
+              const f = await setup(url, html, { request: 'Open the third post in this timeline and bookmark it.' });
+              if (reading === 'commit') readEveryCaptionAs(f, 'commit');
+              const args = { ref_id: await ref('t') };
+              const { detected, block } = await gate(f, 'click_ax', args);
+              assert.equal(block, null, `${name} (${reading})`);
+              assert.equal(detected?.isSubmit, false, name);
+              if (reading === 'commit') {
+                assert.equal(detected.resolvedNonPublishingControl, true, name);
+                assert.notEqual(detected.resolvedOrdinaryActivationTarget, true, `${name}: a commit is not ordinary`);
+              } else {
+                assert.ok(detected.resolvedNonPublishingControl === true || detected.resolvedOrdinaryActivationTarget === true, name);
+              }
+              // Nothing was or could be posted: no publication check, and
+              // the click is not recorded as a possible post.
+              assert.equal(f.agent._cannotPost(detected), true, name);
+              assert.equal(f.agent._socialActivationMayPost('click_ax', args, detected, url), false, name);
+              assert.equal(f.modelCalls.includes('social_publication_authorization'), false, name);
+            }
+          }
+          // A model reads "Bookmark" as saving the post.
+          assert.equal(fixtureControlEffectReading('25 Bookmarks. Bookmark'), 'commit');
+          // The vision click: a point on the Bookmark icon.
+          let f = await setup('https://x.com/home', toggles[0][2], { request: 'Open the third post in this timeline and bookmark it.' });
+          const box = await page.locator('#icon').boundingBox();
+          let result = await gate(f, 'click', { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2), coordinate_space: 'css' });
+          assert.equal(result.detected?.resolvedNonPublishingControl, true, 'vision click on the Bookmark icon');
+          assert.equal(result.block, null, 'vision click on the Bookmark icon');
+          // Not ordinary: after a correction that followed a submission, it
+          // keeps the checks any other commit gets.
+          f = await setup('https://x.com/home', toggles[0][2], { steering: true, request: 'Open the third post in this timeline and bookmark it.' });
+          result = await gate(f, 'click_ax', { ref_id: await ref('t') });
+          assert.equal(result.detected?.resolvedNonPublishingControl, true);
+          assert.equal(result.block?.steeringPriorSubmission, true, 'a correction still holds a bookmark back');
+          // Publishing controls and controls the app does not name as Like or
+          // Bookmark stay refused when their caption reads as a commit or a
+          // publication, as before.
+          for (const [name, url, html] of [
+            ['X Reply', 'https://x.com/home', xPost('').replace('<button type="button" data-testid="reply"', '<button id="t" type="button" data-testid="reply"')],
+            ['X Repost', 'https://x.com/home', xPost('<button id="t" type="button" data-testid="retweet" aria-haspopup="menu" aria-label="5 reposts. Repost"><svg width="20" height="20"></svg></button>')],
+            ['X Repost menu item', 'https://x.com/home', '<div role="menu"><div id="t" role="menuitem" tabindex="0" data-testid="retweetConfirm">Repost</div><a href="/compose/post" role="menuitem">Quote</a></div>'],
+            ['X Like without the app name', 'https://x.com/home', xPost('<button id="t" type="button" aria-label="88 Likes. Like"><svg width="20" height="20"></svg></button>')],
+            ['X unknown app control', 'https://x.com/home', xPost('<button id="t" type="button" data-testid="bookmarkFolder" aria-label="Bookmark to folder"><svg width="20" height="20"></svg></button>')],
+            ['Bluesky Repost', 'https://bsky.app/', bskyPost('<button id="t" type="button" data-testid="repostBtn" aria-label="Repost (1 repost)"><svg width="20" height="20"></svg></button>')],
+          ]) {
+            for (const choice of ['commit', 'publish']) {
+              // An app control id that is not a publish one disproves a
+              // caption read as a publication; only an unnamed one keeps it.
+              if (choice === 'publish' && name !== 'X Like without the app name') continue;
+              f = await setup(url, html, { request: 'Open the third post in this timeline and bookmark it.' });
+              readEveryCaptionAs(f, choice);
+              result = await gate(f, 'click_ax', { ref_id: await ref('t') });
+              assert.notEqual(result.detected?.resolvedNonPublishingControl, true, `${name} (${choice})`);
+              assert.equal(result.block?.noDispatch, true, `${name} (${choice})`);
+              assert.equal(result.block.targetUnresolved, true, `${name} (${choice})`);
+              assert.match(result.block.error, /could not be identified/, `${name} (${choice})`);
+            }
+          }
+          // The composer's Post button is still a publication control.
+          f = await setup('https://x.com/home', '<nav><a data-testid="AppTabBar_Profile_Link" href="/example">Profile</a></nav><div><div data-testid="tweetTextarea_0" contenteditable="true" role="textbox">Hello</div><button id="t" type="button" data-testid="tweetButtonInline">Post</button></div>',
+            { request: 'Open the third post in this timeline and bookmark it.' });
+          readEveryCaptionAs(f, 'commit');
+          result = await gate(f, 'click_ax', { ref_id: await ref('t') });
+          assert.equal(result.detected?.publicationControl, true);
+          assert.equal(result.block?.noDispatch, true);
         });
 
         // X Pro (pro.x.com) has none of the app markers the X adapter reads.

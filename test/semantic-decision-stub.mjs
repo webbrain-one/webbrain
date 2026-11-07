@@ -234,7 +234,8 @@ export function fixtureControlEffectReading(text) {
   if (has('post|post all|publish|reply|tweet|yayınla|yanıtla|paylaş|publier|publicar|veröffentlichen')) return 'publish';
   if (/^add to (?:cart|bag|basket)\b/i.test(value)) return 'commit';
   if (new RegExp(`^(?:add|choose|select|attach|insert|format|bold|italic|ekle|seç)${END}`, 'iu').test(value) || /emoji|gif|sticker/i.test(value)) return 'form_edit';
-  if (has('save|submit|send|confirm|commit|resolve|pay|purchase|buy|checkout|place order|confirm order|complete order|create|update|apply|finish|done|sign up|register|gönder|kaydet|onayla|öde|enviar|guardar|envoyer|enregistrer|senden|speichern|verzenden|invia|zapisz|отправить|إرسال|ارسال|保存|提交') || hasCjk) return 'commit';
+  // "Bookmark" saves the post it belongs to, as a model reads it (QA P1).
+  if (has('save|submit|send|confirm|commit|resolve|pay|purchase|buy|checkout|place order|confirm order|complete order|create|update|apply|finish|done|sign up|register|bookmark|gönder|kaydet|onayla|öde|enviar|guardar|envoyer|enregistrer|senden|speichern|verzenden|invia|zapisz|отправить|إرسال|ارسال|保存|提交') || hasCjk) return 'commit';
   if (/^(?:search|filter|go|ara|suchen|buscar|rechercher|cerca|zoeken|filtrele|検索|搜索)$/iu.test(value)) return 'view';
   return 'unclear';
 }

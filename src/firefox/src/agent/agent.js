@@ -6841,11 +6841,13 @@ export class Agent extends LoopDetector {
   }
 
   // What the page probe proved an action cannot post: an ordinary HTML form,
-  // a deletion, or a control it resolved as a link, a field, a menu item or
-  // another control that submits nothing.
+  // a deletion, a control it resolved as a link, a field, a menu item or
+  // another control that submits nothing, or an X or Bluesky control the app
+  // itself names as one that publishes nothing (a post's Like or Bookmark).
   _cannotPost(detected) {
     if (!detected || typeof detected !== 'object' || detected.publicationControl === true) return false;
     if (detected.publicationControl === false || detected.mutationKind === 'delete') return true;
+    if (detected.isSubmit === false && detected.resolvedNonPublishingControl === true) return true;
     // An ordinary control on X or Bluesky whose caption no model read proves
     // nothing: it may be a Post button.
     if (detected.captionUnread === true) return false;
@@ -23006,8 +23008,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .some(key => typeof key === 'string' && /^(?:enter|return|space|spacebar| )$/i.test(key));
     if (!guard?.enabled || (!this._isFormValidationCandidate(name, args) && !activationKey
         && name !== 'execute_webmcp_tool' && !networkMutation)) return null;
+    // This guard runs on X and Bluesky whatever the task, so its refusal
+    // names a workflow job only when one is bound.
     const blocked = error => ({ success: false, dispatched: false, noDispatch: true, repeatBlocked: true,
-      workflowJob: 'publish-post', error,
+      socialPublicationGuard: true,
+      ...(guard.siteWorkflow?.job?.id ? { workflowJob: guard.siteWorkflow.job.id } : {}), error,
       publicationContract: guard.socialPublication?.contract || null,
       publicationProgress: publicationProgress(guard.socialPublication?.contract, guard.socialPublication?.outcomes),
       ...(guard.socialPublication?.deniedAudit ? { publicationAudit: guard.socialPublication.deniedAudit } : {}),
@@ -23032,8 +23037,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!SOCIAL_PLATFORMS.includes(live?.adapterName)) return null;
     if (detected?.resolvedEditableTarget || detected?.resolvedNavigationTarget || detected?.resolvedNonSubmitTarget) return null;
     // The DOM probe separates preparation from an actual commit. A missing
-    // publication contract says nothing about an independently resolved menu.
-    if (detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true || detected.resolvedPreparatoryTarget === true)
+    // publication contract says nothing about an independently resolved
+    // menu, or about a control the app itself names as one that publishes
+    // nothing (a post's Like or Bookmark). That one still gets the checks
+    // any other commit gets.
+    const resolvedCannotPublish = detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true
+      || detected.resolvedPreparatoryTarget === true || detected.resolvedNonPublishingControl === true);
+    if (resolvedCannotPublish
         && ['click', 'click_ax', 'iframe_click'].includes(name)
         && this._planExecutionGuards.get(tabId) === guard
         && guard.taskKey === this._progressTaskKeyHash(tabId)
@@ -23046,7 +23056,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (detected?.isSubmit !== true) {
       // Say which evidence is missing: a stale task, an unidentified key
       // target, or an unidentified control. None of them is a publication.
-      if (detected?.isSubmit === false && (detected.resolvedOrdinaryActivationTarget === true || detected.resolvedPreparatoryTarget === true)) {
+      if (resolvedCannotPublish) {
         return blocked('The task changed while this control was being checked, so it was not activated. Continue under the latest request and read the page again before retrying.');
       }
       if (name === 'press_keys') return { ...blocked('Enter was not pressed: outside the post editor, a key activation on X or Bluesky could publish. Click the specific control instead; to publish, verify the draft and use the composer\'s Post button.'), targetUnresolved: true };
@@ -31349,6 +31359,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           frameDocumentIdentity: ordinaryActivations[0].frameDocumentIdentity,
           ...(ordinaryActivations[0].actionResource ? { actionResource: ordinaryActivations[0].actionResource } : {}) };
       }
+      // X's or Bluesky's own Like or Bookmark toggle: it cannot publish, but
+      // it is not an ordinary control either. Like the ordinary branch above,
+      // it carries no host or url, so a caller falls back to the page's URL;
+      // a toggle in a frame would need the probe's own url passed on here.
+      const nonPublishingControls = rawResults.filter(item => item?.isSubmit === false
+        && item.resolvedNonPublishingControl === true);
+      if (nonPublishingControls.length === 1 && ['click', 'click_ax', 'iframe_click'].includes(name)) {
+        return { isSubmit: false, resolvedNonPublishingControl: true,
+          appControl: String(nonPublishingControls[0].appControl || '').slice(0, 40),
+          frameDocumentIdentity: nonPublishingControls[0].frameDocumentIdentity };
+      }
       // Explicit negative: the probe resolved the click target to an editable
       // field, proving activation only focuses it. Propagated (not dropped
       // like inconclusive results) so gates can pass proven non-submits while
@@ -33738,18 +33759,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const owner = labelControlFor(el) || el;
         return owner?.closest?.('button,input,[role="button"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],[role="tab"],[role="option"],[role="treeitem"],[role="switch"],[role="checkbox"],[role="radio"],summary') || null;
       };
-      const ordinaryControlEvidence = (ordinary, labels) => {
+      // X and Bluesky name a post's Like and Bookmark toggles: X's like,
+      // unlike, bookmark and removeBookmark test ids, and Bluesky's likeBtn
+      // and postBookmarkBtn. Liking or bookmarking saves something to the
+      // account, so a caption read as a commit still keeps the control from
+      // being ordinary, but the app's own name for it says it publishes
+      // nothing. Share and More open a menu and are not among them.
+      const socialNonPublishingToggle = el => {
+        const testId = String(el?.getAttribute?.('data-testid') || '');
+        const adapterName = socialPublishAdapterName();
+        return adapterName === 'twitter' ? /^(?:like|unlike|bookmark|removeBookmark)$/.test(testId)
+          : adapterName === 'bluesky' && /^(?:likeBtn|postBookmarkBtn)$/.test(testId);
+      };
+      const ordinaryControlEvidence = (ordinary, labels, { commitAllowed = false } = {}) => {
         // An app's own control name decides publication capability on X and
         // Bluesky (socialPublishControlEvidence). A non-publish test id
         // disproves a caption read as a publication, such as Reply or
         // Schedule post, while a caption read as a deletion, send, save or
-        // payment still marks a commit. A popup launcher that only names the
+        // payment still marks a commit (unless the caller allows a commit,
+        // for the toggles above). A popup launcher that only names the
         // post it operates on ("Post actions") reads as opening a menu; one
         // whose caption reads as publishing stays a commit.
         const appNamedNonPublish = !!socialPublishAdapterName() && !!ordinary.getAttribute('data-testid') && !sendMarker(ordinary);
         const captionChoice = captionsReading(labels);
         const consequential = appNamedNonPublish
-          ? captionChoice === 'commit' || deletionReading(captionChoice)
+          ? (captionChoice === 'commit' && !commitAllowed) || deletionReading(captionChoice)
           : commitReading(captionChoice) || deletionReading(captionChoice);
         let uniqueTarget = true;
         if (args.text) {
@@ -33879,6 +33913,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ...(captionsReading(labels) === null && socialSiteHost() && !socialPublishAdapterName() ? { captionUnread: true } : {}),
             frameDocumentIdentity: [url, performance.timeOrigin].join('|'), actionResource,
             popupLauncherToken: popupTarget ? rememberPopupLauncher(control, actionResource) : '' };
+        }
+        // A post's own Like or Bookmark toggle on X or Bluesky, outside any
+        // form, typed or not: identified, and unable to publish even when its
+        // caption reads as a commit. Not ordinary, so it keeps the checks any
+        // other commit gets; only the refusal of a control that could publish
+        // does not apply to it. A caption read as a deletion still leaves it
+        // unresolved here (ordinaryControlEvidence refuses it).
+        const nonPublishingToggle = control && socialNonPublishingToggle(control)
+          && ((tag === 'button' && ['', 'button'].includes(type)) || (!['button', 'input', 'a'].includes(tag) && role === 'button'));
+        if (nonPublishingToggle && isVisible(control) && !control.form && !control.closest('form') && !control.hasAttribute('form')
+            && ordinaryControlEvidence(control, labels, { commitAllowed: true })) {
+          return { isSubmit: false, host, url, resolvedNonPublishingControl: true,
+            appControl: String(control.getAttribute('data-testid') || ''),
+            frameDocumentIdentity: [url, performance.timeOrigin].join('|') };
         }
       }
       // A vision click on plain content: no control, link, field, label or
