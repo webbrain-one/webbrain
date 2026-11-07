@@ -156,19 +156,20 @@ kbd {
 .lang-switch {
   display: inline-flex;
   padding: 3px;
-  text-decoration: none;
 }
-.lang-switch span {
-  min-width: 38px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  text-align: center;
+.lang-switch select {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
   font-size: 12px;
   font-weight: 750;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
 }
-.lang-switch a { color: inherit; text-decoration: none; }
-.lang-switch a:hover span:not(.active) { color: var(--ink); }
-.lang-switch .active { background: var(--brand); color: #fff; }
+.lang-switch:hover { border-color: var(--line-strong); }
+.lang-switch select:hover { color: var(--ink); }
 .icon-button, .sidebar-toggle {
   width: 34px;
   height: 34px;

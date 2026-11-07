@@ -1271,8 +1271,16 @@
   <url>
     <loc>https://webbrain.one/docs/easy-cli-proxy/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
-    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
   </url>
   <url>
@@ -1280,6 +1288,9 @@
   </url>
   <url>
     <loc>https://webbrain.one/docs/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/formats/</loc>
   </url>
   <url>
     <loc>https://webbrain.one/docs/mcp/</loc>
@@ -1302,8 +1313,16 @@
   <url>
     <loc>https://webbrain.one/docs/zh/easy-cli-proxy/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
-    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
   </url>
   <url>
@@ -1336,8 +1355,16 @@
   <url>
     <loc>https://webbrain.one/docs/hi/easy-cli-proxy/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
-    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
   </url>
   <url>
@@ -1357,5 +1384,341 @@
   </url>
   <url>
     <loc>https://webbrain.one/docs/hi/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/fr/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/es/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/de/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/ar/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tr/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/nl/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/id/ollama/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/easy-cli-proxy/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"/>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/apocalypse-mode/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/formats/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/mcp/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/lm-studio/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/tl/ollama/</loc>
   </url>
 </urlset>

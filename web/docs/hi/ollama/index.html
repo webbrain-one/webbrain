@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ollama के साथ WebBrain का उपयोग करें — WebBrain उपयोगकर्ता गाइड</title>
   <meta name="description" content="WebBrain को लोकल Ollama मॉडल से मैनुअल रूप से जोड़ें, या प्रीव्यू लॉन्च हैंडऑफ़ आज़माएँ जो आपके लिए ब्राउज़र एक्सटेंशन अपने आप कॉन्फ़िगर कर देता है।">
-  <link rel="canonical" href="https://webbrain.one/docs/hi/ollama/">
-  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/ollama/">
-  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/ollama/">
-  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/ollama/">
-  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/ollama/">
-  <link rel="icon" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/docs/hi/ollama/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/ollama/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/ollama/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/ollama/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/ollama/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/ollama/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/ollama/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/ollama/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/ollama/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/ollama/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/ollama/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/ollama/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/ollama/"><link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -70,7 +65,7 @@
 </head>
 <body class="doc-page">
   <a class="skip-link" href="#main">मुख्य सामग्री पर जाएँ</a>
-  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">उपयोगकर्ता गाइड</span></a><nav class="top-nav" aria-label="मुख्य नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">दस्तावेज़</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/ollama/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/ollama/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/ollama/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="दस्तावेज़ मेनू खोलें">☰</button></div></div></header>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">उपयोगकर्ता गाइड</span></a><nav class="top-nav" aria-label="मुख्य नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">दस्तावेज़</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="भाषा बदलें"><option value="/docs/ollama/">English</option><option value="/docs/hi/ollama/" selected>हिन्दी</option><option value="/docs/zh/ollama/">中文</option><option value="/docs/ar/ollama/">العربية</option><option value="/docs/nl/ollama/">Nederlands</option><option value="/docs/tl/ollama/">Filipino</option><option value="/docs/fr/ollama/">Français</option><option value="/docs/de/ollama/">Deutsch</option><option value="/docs/id/ollama/">Bahasa Indonesia</option><option value="/docs/es/ollama/">Español</option><option value="/docs/tr/ollama/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="दस्तावेज़ मेनू खोलें">☰</button></div></div></header>
 
   <div class="docs-shell">
     <aside class="docs-sidebar" aria-label="दस्तावेज़ अनुक्रमणिका"><div class="sidebar-group"><div class="sidebar-label">यहाँ से शुरू करें</div><nav><a href="/docs/hi/">अवलोकन</a><a href="/docs/hi/faq/">सामान्य प्रश्न</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग</div><nav><a href="/docs/hi/settings/">सेटिंग्स की व्याख्या</a><a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/safety/">मोड, सुरक्षा और गोपनीयता</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/ollama/" aria-current="page">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Ollama लॉन्च हैंडऑफ़</div><nav><a href="/blog/ollama-launch-handoff/">घोषणा लेख ↗</a><a href="https://github.com/esokullu/ollama/tree/codex/ollama-webbrain-launch-handoff">प्रीव्यू ब्रांच ↗</a><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/providers-and-models.md#ollama-launch-handoff-preview">प्रोवाइडर का आंतरिक कार्य ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">समुदाय</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
@@ -134,6 +129,6 @@ OLLAMA_ORIGINS="chrome-extension://*,moz-extension://*" ./ollama serve</code></p
   </div>
 </footer>
 <!-- Site footer: end -->
-  <script src="/docs/assets/docs.js?v=20261106"></script>
+  <script src="/docs/assets/docs.js?v=20261107"></script>
 </body>
 </html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="tl" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Gabay sa Gumagamit ng WebBrain</title><meta name="description" content="Matutunan ang setup, mga model, permiso sa seguridad, memorya, at mga advanced feature ng WebBrain mula sa unang tanong mo."><link rel="canonical" href="https://webbrain.one/docs/tl/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/"><link rel="icon" href="/favicon.png"><script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script><link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body>
+  <a class="skip-link" href="#main">Lumaktaw sa nilalaman</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">Gabay sa Gumagamit</span></a><nav class="top-nav" aria-label="Pangunahing nabigasyon"><a href="/">Home</a><a href="/docs/tl/" aria-current="page">Mga Dokumento</a><a href="/blog/">Blog</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="Palitan ang wika"><option value="/docs/">English</option><option value="/docs/hi/">हिन्दी</option><option value="/docs/zh/">中文</option><option value="/docs/ar/">العربية</option><option value="/docs/nl/">Nederlands</option><option value="/docs/tl/" selected>Filipino</option><option value="/docs/fr/">Français</option><option value="/docs/de/">Deutsch</option><option value="/docs/id/">Bahasa Indonesia</option><option value="/docs/es/">Español</option><option value="/docs/tr/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="Palitan ang tema">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Buksan ang menu ng dokumentasyon">☰</button></div></div></header>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Talaan ng mga dokumento"><div class="sidebar-group"><div class="sidebar-label">Magsimula dito</div><nav><a href="/docs/tl/" aria-current="page">Pangkalahatang-tanaw</a><a href="/docs/tl/faq/">Mga Karaniwang Tanong</a><a href="#first-run">Simulan ang Paggamit</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Gamitin ang WebBrain</div><nav><a href="/docs/tl/settings/">Paliwanag ng mga Setting</a><a href="/docs/tl/providers/">Mga Provider at Model</a><a href="/companion/">WebBrain Companion</a><a href="/docs/tl/safety/">Mga Mode, Seguridad at Privacy</a><a href="/docs/tl/apocalypse-mode/">Apocalypse Mode</a><a href="/docs/tl/formats/">Mga Export at Workflow</a><a href="/docs/tl/mcp/">MCP Server</a><a href="/docs/tl/lm-studio/">Plugin ng LM Studio</a><a href="/docs/tl/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Mga Developer</div><nav><a href="https://github.com/webbrain-one/webbrain/tree/main/docs">Teknikal na dokumentasyon (Ingles) ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Komunidad</div><nav><a href="https://discord.gg/cgC325ssfw">Suporta sa Discord</a></nav></div></aside>
+    <main class="doc-main" id="main">
+      <section class="doc-hero"><div class="eyebrow">Manliba ng WebBrain</div><h1>Maraming switch ang browser agent mo, pero hindi mo kailangang matutunan ang lahat bago magsimula.</h1><p class="lede">Magbukas muna ng isang web page at magtanong. Ituturo ng gabay na ito ang pinakmaikling daan patungo sa resulta, at ipapaliwanag ang mas malalim na setting kapag kinakailangan na talaga.</p><div class="path-grid"><a class="path-card" href="#first-run"><span class="tab-key">Unang Paggamit</span><h2>Kumpletuhin ang isang task</h2><p>Buksan ang side panel, piliin ang tamang mode, at magsimula kahit walang binabago sa settings.</p><span class="arrow">Simulan ang paggamit →</span></a><a class="path-card" href="/docs/tl/settings/"><span class="tab-key">Kontrolin ang Agent</span><h2>Unawain ang mga Setting</h2><p>Kung ano ang binabago ng bawat tab, aling mga default ang angkop sa karamihan, at alin ang maaaring balewalain muna.</p><span class="arrow">Buksan ang gabay sa settings →</span></a><a class="path-card" href="/docs/tl/providers/"><span class="tab-key">Pumili ng Model</span><h2>I-configure ang provider</h2><p>Gumamit ng WebBrain Compass, cloud API, model routing, o lokal na model.</p><span class="arrow">Pumili ng model →</span></a><a class="path-card" href="/docs/tl/safety/"><span class="tab-key">Manatiling May Kontrol</span><h2>Gumamit nang ligtas ng mode na Act</h2><p>Matutunan ang mga mode na Ask, Act, at Dev, mga pahintulot ng website, hangganan ng memorya, at mga mapanganib na override.</p><span class="arrow">Tingnan ang gabay sa seguridad →</span></a><a class="path-card" href="/docs/tl/formats/"><span class="tab-key">Ilipat ang Nilalaman</span><h2>Mag-export nang walang alalahanin</h2><p>Maunawaan ang pagkakaiba ng mga file ng usapan, trace, settings, at naka-save na workflow, at kung alin ang sensitibo.</p><span class="arrow">Alamin ang mga export format →</span></a></div></section>
+      <section class="doc-section" id="first-run"><div class="eyebrow">Unang Pagpapatakbo</div><h2>Unang 10 minuto</h2><ol class="step-list"><li><strong>Buksan ang web page na gusto mong trabahuhin.</strong> I-click ang icon ng WebBrain para makatabi ang side panel sa page.</li><li><strong>Manatili muna sa mode na Ask.</strong> Halimbawa: "Ibuod ang page na ito", "Ilista ang mga mahahalagang petsa", "Ihambing ang mga plan sa talahanayan". Maaaring magbasa ang Ask, pero hindi ito nagko-click o nagta-type.</li><li><strong>Lumipat sa Act kapag kailangang baguhin ang page.</strong> Halimbawa: "I-type ang wireless headphones sa search box at maghanap". Hihingian ka ng pahintulot ang WebBrain bago ang mga mahahalagang aksyon sa bagong site.</li><li><strong>Bantayan ang proseso.</strong> Maaaring huminto anumang oras gamit ang pindutang Stop o <kbd>Escape</kbd>. Agad huminto kapag may hindi inaasahang navigation, pagta-type, o paulit-ulit na aksyon.</li><li><strong>Buksan ang Settings kapag may tiyak na kinakailangan.</strong> Sapat na ang built-in cloud provider at mga nirerekomendang default na panatilihin ang kaligtasan para sa unang task.</li></ol><div class="callout tip"><strong class="callout-title">Ang mabuting prompt ay nagsasabi ng resulta</strong><p>Mas madaling suriin ang "Hanapin ang patakaran sa refund at sabihin kung sakop ang mga item sa sale" kaysa sa "Tingnan mo itong website". Isulat ang layunin at ang hangganan na hindi dapat lumampas ang WebBrain.</p></div></section>
+      <section class="doc-section" id="modes"><h2>Piliin ang mode bago ang prompt</h2><div class="mode-strip"><div class="mode ask"><strong>Itanong Ask</strong><span>Nagbabasa, nagpapaliwanag, naghahambing, nag-e-extract; walang binabago sa page.</span></div><div class="mode act"><strong>Gumawa Act</strong><span>Nagko-click, nagta-type, nagna-navigate, nagda-download, nag-iiskedyul ng mga task.</span></div><div class="mode dev"><strong>I-develop Dev</strong><span>Nagdagdag ng mga tool para sa source code, estilo, DOM, frame, at debugging.</span></div></div></section>
+      <section class="doc-section" id="settings-map"><div class="eyebrow">Mapa ito, hindi checklist</div><h2>Mga Setting sa isang sulyap</h2><p>Hindi mo kailangang i-configure ang lahat. May sariling page ang mga Provider at Pahintulot; ang iba ay mga tab sa Settings, kasama ang 'Skills', 'CAPTCHA', at 'Bridge' para sa mga partikular na add-on. Ang kulay sa ibaba ng bawat kahon ay nagpapakita kung gaano kadalas ito kailangan ng karaniwang user.</p><div class="settings-map" aria-label="Mapa ng lalim ng mga setting"><div class="setting-node everyday"><strong>Pangkalahatan</strong><span>pag-uugali at karanasan</span></div><div class="setting-node everyday"><strong>Mga Provider</strong><span>model at mga helper model</span></div><div class="setting-node everyday"><strong>Mga Pahintulot</strong><span>mga website na maaaring bigyan ng aksyon</span></div><div class="setting-node sometimes"><strong>Mga Budget</strong><span>gastos, oras at mga hakbang</span></div><div class="setting-node sometimes"><strong>Memorya</strong><span>pangmatagalang impormasyon</span></div><div class="setting-node expert"><strong>Advanced</strong><span>mga switch para sa eksperto</span></div></div><div class="depth-legend"><span>Pang-araw-araw na kontrol</span><span class="sometimes">Gamitin kapag kailangan</span><span class="expert">Advanced na desisyon sa tiwala</span></div><div class="callout"><strong class="callout-title">Ligtas na baseline</strong><p>Panatilihang 'Subukan ang plano' ang 'Plan before Act', gamitin ang confidence threshold sa pagsusuri ng plano, panatilihing nakabukas ang mga kumpirmasyon ng nakaiskedyul na task at ang 'Magtanong bago ang mahahalagang aksyon'. Maaari mong iwanan muna ang ibang opsyon.</p></div></section>
+      <nav class="next-links" aria-label="Mga susunod na gabay"><a href="/docs/tl/settings/"><span>Susunod</span>Paliwanag ng mga Setting →</a><a href="/docs/tl/safety/"><span>Inirerekomenda</span>Mga Mode, Seguridad at Privacy →</a></nav>
+    </main>
+    <aside class="on-this-page" aria-label="Nilalaman ng page na ito"><h2>Nilalaman ng page na ito</h2><a href="#first-run">Unang 10 minuto</a><a href="#modes">Pumili ng mode</a><a href="#settings-map">Mapa ng mga setting</a></aside>
+  </div>
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">Ang misyon namin: gawing mas matalino ang web.</p>
+      <p class="wb-footer-copy">© 2026 WebBrain. Ginawa ni <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> at ng mga <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">kontribyutor</a>.</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/tl/">Browser extension</a>
+        <a href="/websites/">Para sa mga website</a>
+        <a href="/companion/tl/">Desktop Companion</a>
+        <a href="/research/">Pananaliksik</a>
+        <a href="/docs/tl/">Docs</a>
+        <a href="/docs/tl/faq/">FAQ</a>
+        <a href="/blog/">Blog</a>
+        <a href="/privacy">Patakaran sa Privacy</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">Mag-ulat ng Bug</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 License</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">Press</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass Subscription</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="WebBrain sa Mastodon" title="WebBrain sa Mastodon" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="WebBrain sa Bluesky" title="WebBrain sa Bluesky" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="WebBrain sa Discord" title="WebBrain sa Discord" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="WebBrain sa Hugging Face" title="WebBrain sa Hugging Face" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261107"></script>
+</body></html>
