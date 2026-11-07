@@ -472,7 +472,9 @@ CrxBridge.prototype.handlers = {
     // The worker can ask before loadExtension() has resolved, so match by folder too.
     if (!this.isWebBrain(extId)) return {};
     // The WebBrain new tab page is part of Murshid, so it starts switched on.
-    return { newTabEnabled: true };
+    // Murshid starts WebBrain Companion itself, so the new tab's "Get
+    // Companion" promo starts dismissed.
+    return { newTabEnabled: true, wbNewtabCompanionPromoDismissed: Date.now() };
   },
   'murshid.defaultsApplied'({ extId }) {
     if (this.isWebBrain(extId)) this.resolveDefaults?.();
