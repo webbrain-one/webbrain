@@ -12,6 +12,7 @@
  *   Math.sumPrecise                              Chrome 147, Firefox 137
  *   Uint8Array.fromBase64, toBase64, toHex       Chrome 140, Firefox 133
  *   Response.prototype.bytes                     Chrome 132, Firefox 128
+ *   Promise.try
  *
  * Each method is installed only when the browser lacks it. index.mjs loads
  * this file before pdf.mjs in the page, and worker.mjs loads it before
@@ -28,6 +29,10 @@ function defineMissing(target, name, value) {
     configurable: true,
   });
 }
+
+defineMissing(Promise, 'try', function promiseTry(callback, ...args) {
+  return new this((resolve) => resolve(Reflect.apply(callback, undefined, args)));
+});
 
 for (const Collection of [Map, WeakMap]) {
   defineMissing(Collection.prototype, 'getOrInsert', function getOrInsert(key, value) {
