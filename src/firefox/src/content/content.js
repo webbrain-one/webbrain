@@ -3837,6 +3837,47 @@
 
   let _lastTypeFieldIdent = null;
 
+  /**
+   * The <option> of a native select that a typed label names: the exact
+   * label, else the exact value, else the label ignoring case and spacing,
+   * else the one label that contains the text. Two candidates at the step
+   * that matches are ambiguous and name nothing ("Alex" for two contacts
+   * called Alex), as is a disabled option, so a partial label never picks
+   * the first of several options. Returns { option } or { error } (with
+   * `ambiguous` and the candidate labels when it is ambiguous).
+   */
+  function _matchSelectOption(el, text) {
+    const options = Array.from(el?.options || []);
+    const label = option => String(option?.text || '').trim();
+    const fold = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const needle = String(text ?? '').trim();
+    const folded = fold(needle);
+    const list = labels => labels.length > 40 ? `${labels.slice(0, 40).join(', ')}, … (${labels.length - 40} more)` : labels.join(', ');
+    for (const matches of [
+      option => label(option) === needle,
+      option => option.value === needle,
+      option => !!folded && fold(label(option)) === folded,
+      option => !!folded && fold(label(option)).includes(folded),
+    ]) {
+      const found = options.filter(matches);
+      if (found.length > 1) {
+        const candidates = found.map(label);
+        return {
+          ambiguous: true,
+          candidates: candidates.slice(0, 20),
+          error: `"${needle}" matches more than one option (${list(candidates)}). Nothing was selected. Type the full label of the option you mean.`,
+        };
+      }
+      if (!found.length) continue;
+      const option = found[0];
+      if (option.disabled || option.closest?.('optgroup')?.disabled) {
+        return { error: `The option "${label(option)}" is disabled and cannot be chosen. Nothing was selected.` };
+      }
+      return { option };
+    }
+    return { error: `No option matches "${needle}". Nothing was selected. Options: ${list(options.map(label))}` };
+  }
+
   function typeText(params, actionDeadlineExpired = () => false) {
     return _typeTextInner(params, actionDeadlineExpired);
   }
@@ -4299,23 +4340,30 @@
       return _insertContentEditableText(el, typedText, params.clear === true, actionDeadlineExpired);
     }
 
-    // <select>: match by value or option text.
-    // Use native setter to bypass React's value property wrapper.
+    // <select>: the option the label names (_matchSelectOption), chosen with
+    // the native setter to bypass React's value property wrapper.
     if (el instanceof HTMLSelectElement) {
-      const needle = (params.text || '').trim();
-      const byValue = Array.from(el.options).find(o => o.value === needle);
-      const byText = Array.from(el.options).find(o => o.text.trim() === needle)
-        || Array.from(el.options).find(o => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
-      const match = byValue || byText;
-      if (!match) {
-        return noDispatchFailure(`No <option> matching "${params.text}" in select.`);
+      const { option: match, ...unmatched } = _matchSelectOption(el, params.text);
+      if (!match) return noDispatchFailure(unmatched.error, unmatched.ambiguous ? { ambiguous: true, candidates: unmatched.candidates } : {});
+      const label = option => String(option?.text || '').trim();
+      const shows = () => {
+        const selected = el.options[el.selectedIndex];
+        return el.isConnected && !!selected && selected.value === match.value && label(selected) === label(match);
+      };
+      // A person who picks the option already shown changes nothing.
+      if (el.selectedIndex === match.index) {
+        return { success: true, verified: true, dispatched: false, noDispatch: true, noop: true, method: 'select',
+          value: el.value, selectedText: label(match) };
       }
       const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       if (actionDeadlineExpired()) return deadlineFailure();
+      // One selection, with the input and change events a person's choice fires.
       const dispatchResult = withLocalPageDispatch(() => {
         dispatched = true;
         if (nativeSetter) nativeSetter.call(el, match.value);
         else el.value = match.value;
+        // Options that share a value: choose the one the label named.
+        if (el.selectedIndex !== match.index) el.selectedIndex = match.index;
         if (actionDeadlineExpired()) return deadlineFailure();
         el.dispatchEvent(new Event('input', { bubbles: true }));
         if (actionDeadlineExpired()) return deadlineFailure();
@@ -4324,7 +4372,8 @@
       if (dispatchResult) return dispatchResult;
       await new Promise(resolve => setTimeout(resolve, 30));
       if (actionDeadlineExpired()) return deadlineFailure();
-      return { success: true, ...(el.isConnected && el.value === match.value ? { verified: true } : {}), method: 'select', value: el.value };
+      return { success: true, ...(shows() ? { verified: true } : {}), method: 'select', value: el.value,
+        selectedText: label(el.options[el.selectedIndex]) };
     }
 
     // Use input events for React/Vue compatibility
@@ -10057,18 +10106,16 @@
               }
             }
             if (el.tagName === 'SELECT') {
-              // Native <select>: match the requested text against options by
-              // value, then by visible text (exact, then substring). A select's
-              // value can't be set through the INPUT prototype setter used below
-              // (Web IDL brand-check throws "Illegal invocation"), so handle it
-              // here with the HTMLSelectElement setter.
-              const needle = (text || '').trim();
-              const byValue = Array.from(el.options).find((o) => o.value === needle);
-              const byText = Array.from(el.options).find((o) => o.text.trim() === needle)
-                || Array.from(el.options).find((o) => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
-              const match = byValue || byText;
+              // Native <select>: the option the text names (_matchSelectOption:
+              // exact label, exact value, then one label that matches; more
+              // than one candidate selects nothing). A select's value can't
+              // be set through the INPUT prototype setter used below (Web IDL
+              // brand-check throws "Illegal invocation"), so handle it here
+              // with the HTMLSelectElement setter.
+              const { option: match, ...unmatched } = _matchSelectOption(el, text);
               if (!match) {
-                return failure(`No <option> matching "${text}" in select ref_id ${ref_id}.`);
+                return failure(`${unmatched.error} (select ref_id ${ref_id})`,
+                  unmatched.ambiguous ? { ambiguous: true, candidates: unmatched.candidates } : {});
               }
               if (actionDeadlineExpired()) return deadlineFailure();
               window.__wbPageMonitor?.beforeLocalDispatch();

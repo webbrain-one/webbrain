@@ -48056,6 +48056,33 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       throwIfEarlyCdpAborted();
     };
+    // A focused native <select> gets the option its label names in one
+    // selection made in the page (content.js typeText, the way type_ax and
+    // the Firefox build choose options): one input and one change event,
+    // and the chosen option read back. It used to be walked there with one
+    // ArrowDown per option, but each key changed the select the model had
+    // observed, so the page monitor refused the next key as a page change
+    // and the call failed with the select left on an option in between.
+    // A label that names no single option is refused by the page before
+    // anything changes.
+    const selectFocusedOption = async (text, { frameId = 0, binding = null, onSend = null } = {}) => {
+      await beforePageAgentDispatch(globalThis.chrome, tabId, { kind: 'input', frameId, fenceOnly: true });
+      throwIfEarlyCdpAborted();
+      markEarlyCdpDispatched();
+      onSend?.();
+      const deadlineAt = Number(CONTENT_ACTION_SIGNAL_DEADLINES.get(earlyCdpAbortSignal)?.deadlineAt) || 0;
+      const response = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'type',
+        params: { text, ...(binding ? { dispatchBinding: binding } : {}) },
+        ...(deadlineAt > 0 ? { actionDeadlineAt: deadlineAt } : {}),
+      }, { frameId });
+      throwIfEarlyCdpAborted();
+      if (!response || typeof response !== 'object') throw new Error('The dropdown selection returned no response.');
+      // The page says when nothing reached the select.
+      if (response.noDispatch === true && response.dispatched !== true) earlyCdpDispatchState.started = false;
+      return response;
+    };
     args = this._normalizeContinuationToolArgs(name, args);
     if (name === 'calculate') {
       this._rememberPureCalculationAttempt(tabId, args);
@@ -54150,8 +54177,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             this._showAgentTarget(tabId, prepared.rect, 'type_text_focused');
 
             if (prepared.tag === 'SELECT') {
-              const selectInfo = prepared.selectInfo;
-              if (!selectInfo) {
+              if (!prepared.selectInfo) {
                 return {
                   success: false,
                   dispatched: false,
@@ -54159,35 +54185,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                   error: 'Focused select target could not be prepared.',
                 };
               }
-              await dispatchEarlyCdpKeyPress({
-                key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27,
+              // typeText consumes the binding: the select must still be the
+              // focused element this call was checked against.
+              return await selectFocusedOption(args.text ?? '', {
+                frameId, binding: focusedBinding, onSend: () => { tokenConsumed = true; },
               });
-              const delta = selectInfo.targetIndex - selectInfo.currentIndex;
-              const arrowKey = delta > 0 ? 'ArrowDown' : 'ArrowUp';
-              const arrowVK = delta > 0 ? 40 : 38;
-              for (let i = 0; i < Math.abs(delta); i += 1) {
-                await dispatchEarlyCdpKeyPress({
-                  key: arrowKey, code: arrowKey, windowsVirtualKeyCode: arrowVK,
-                });
-              }
-              const verification = await sendFocusedTarget('verify_focused_type_dispatch', {
-                targetText: selectInfo.targetText,
-                targetValue: selectInfo.targetValue,
-              });
-              throwIfEarlyCdpAborted();
-              if (!verification || verification.success !== true) {
-                throw new Error('Focused select verification returned no response.');
-              }
-              tokenConsumed = true;
-              return {
-                success: true,
-                ...(verification?.verified === true ? { verified: true } : {}),
-                method: 'select-keyboard',
-                selectedText: selectInfo.targetText,
-                selectedValue: selectInfo.targetValue,
-                keyPresses: Math.abs(delta),
-                direction: delta > 0 ? 'down' : 'up',
-              };
             }
 
             const typeFieldEpoch = this._captureLastTypeFieldEpoch(tabId);
@@ -54428,98 +54430,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           this._showAgentTarget(tabId, focus.rect, 'type_text_focused');
 
-          // <select> fast-path: use CDP keyboard ArrowDown/ArrowUp events
-          // to change the selected option. This fires native browser events
-          // that React and other frameworks pick up — much more reliable
-          // than setting .value via JS.
-          if (focus.tag === 'SELECT') {
-            const needle = JSON.stringify((args.text || '').trim());
-            const selectInfo = await cdpClient.evaluate(tabId, `
-              (() => {
-                const el = document.activeElement;
-                if (!el || el.tagName !== 'SELECT') return { success: false, error: 'Focused element is not a select' };
-                const needle = ${needle};
-                const opts = Array.from(el.options);
-                const match = opts.find(o => o.value === needle)
-                  || opts.find(o => o.text.trim() === needle)
-                  || opts.find(o => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
-                if (!match) {
-                  const available = opts.map(o => o.text.trim()).join(', ');
-                  return { success: false, error: 'No option matching "' + needle + '". Available: ' + available };
-                }
-                return {
-                  success: true,
-                  currentIndex: el.selectedIndex,
-                  targetIndex: match.index,
-                  targetText: match.text.trim(),
-                  targetValue: match.value,
-                  totalOptions: opts.length,
-                };
-              })()
-            `);
-            throwIfEarlyCdpAborted();
-            const sInfo = selectInfo?.result?.value;
-            if (!sInfo?.success) {
-              return {
-                ...(sInfo || { success: false, error: 'Select interaction failed' }),
-                dispatched: false,
-                noDispatch: true,
-              };
-            }
-
-            // Close any open native dropdown first
-            await dispatchEarlyCdpKeyPress({
-              key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27,
-            });
-            // Re-focus the select (Escape may have blurred it)
-            await cdpClient.evaluate(tabId, `
-              (() => {
-                const el = document.activeElement;
-                if (!el || el.tagName !== 'SELECT') {
-                  const sels = document.querySelectorAll('select');
-                  for (const s of sels) { s.focus(); return; }
-                }
-              })()
-            `);
-            throwIfEarlyCdpAborted();
-
-            // Navigate with ArrowDown/ArrowUp — each key press changes the
-            // selected option and fires native change events.
-            const delta = sInfo.targetIndex - sInfo.currentIndex;
-            const arrowKey = delta > 0 ? 'ArrowDown' : 'ArrowUp';
-            const arrowCode = delta > 0 ? 'ArrowDown' : 'ArrowUp';
-            const arrowVK = delta > 0 ? 40 : 38;
-            for (let i = 0; i < Math.abs(delta); i++) {
-              await dispatchEarlyCdpKeyPress({
-                key: arrowKey, code: arrowCode, windowsVirtualKeyCode: arrowVK,
-              });
-            }
-
-            // Verify the selection actually changed
-            const verify = await cdpClient.evaluate(tabId, `
-              (() => {
-                const el = document.activeElement;
-                if (!el || el.tagName !== 'SELECT') return { verified: false };
-                return { verified: true, selectedText: el.options[el.selectedIndex]?.text?.trim(), selectedValue: el.value };
-              })()
-            `);
-            throwIfEarlyCdpAborted();
-            const v = verify?.result?.value;
-            const verified = v?.verified === true && (
-              v.selectedValue === sInfo.targetValue
-              || v.selectedText === sInfo.targetText
-            );
-
-            return {
-              success: true,
-              ...(verified === true ? { verified: true } : {}),
-              method: 'select-keyboard',
-              selectedText: v?.selectedText || sInfo.targetText,
-              selectedValue: v?.selectedValue || sInfo.targetValue,
-              keyPresses: Math.abs(delta),
-              direction: delta > 0 ? 'down' : 'up',
-            };
-          }
+          // <select>: one selection made in the page (selectFocusedOption).
+          if (focus.tag === 'SELECT') return await selectFocusedOption(args.text ?? '');
 
           const typeFieldEpoch = this._captureLastTypeFieldEpoch(tabId);
           // Empty appends mutate nothing: report a proven no-op without
