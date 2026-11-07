@@ -44177,8 +44177,10 @@ test('new locales are registered in extension and web language dropdowns', () =>
   const webBuild = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
   const webTemplate = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
   const privacy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
+  assert.match(webBuild, /readFile\(new URL\('.\/languages\.json', import\.meta\.url\)/, 'web build should load its locale registry');
+  const webLanguages = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/languages.json'), 'utf8'));
   for (const [code, languageLabel] of addedLocales) {
-    assert.match(webBuild, new RegExp(`\\{ code: '${code}', bcp47:`), `web build: ${code} locale missing`);
+    assert.ok(webLanguages.some(language => language.code === code && language.bcp47 && language.label === languageLabel), `web build: ${code} locale missing`);
     for (const [surface, html] of [['landing template', webTemplate], ['privacy page', privacy]]) {
       const option = `<option value="${code}">${languageLabel}</option>`;
       assert.equal(html.split(option).length - 1, 1, `${surface}: ${code} language option should appear exactly once`);
@@ -44546,15 +44548,15 @@ test('extension language dropdowns pin English and Chinese before alphabetical l
     assert.deepEqual(
       i18n.LANGUAGES.map(({ code }) => code),
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
 
-test('web language dropdowns pin English and Chinese before alphabetical languages', () => {
+test('web language dropdowns pin English, Hindi and Chinese before alphabetical languages', () => {
   const expectedCodes = [
-    'en', 'zh',
-    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko',
+    'en', 'hi', 'zh',
+    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'id', 'ja', 'ko',
     'ms', 'fa', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi',
   ];
 
@@ -44570,7 +44572,7 @@ test('web language dropdowns pin English and Chinese before alphabetical languag
     assert.deepEqual(
       codes,
       expectedCodes,
-      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+      `${label}: language dropdown order should be English, Hindi, Chinese, then alphabetical by English name`,
     );
   }
 });
@@ -45461,7 +45463,7 @@ test('every webbrain.one page shares one footer', () => {
     for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = `${dir}/${entry.name}`;
       if (entry.isDirectory() && entry.name !== 'assets') walk(rel);
-      else if (entry.name === 'index.html' && !rel.startsWith('web/docs/zh/') && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
+      else if (entry.name === 'index.html' && !/\/faq\/index\.html$/.test(rel)) docsPages.push(rel);
     }
   };
   walk('web/docs');
@@ -45476,7 +45478,10 @@ test('every webbrain.one page shares one footer', () => {
     ...blogPosts,
     ...docsPages,
   ]) {
-    assert.equal(footerOf(rel), reference, `${rel}: footer differs from the homepage footer`);
+    const locale = rel.match(/^web\/docs\/([a-z]{2})\//)?.[1];
+    const localizedHome = locale && `web/${locale}/index.html`;
+    const expectedFooter = localizedHome && fs.existsSync(path.join(ROOT, localizedHome)) ? footerOf(localizedHome) : reference;
+    assert.equal(footerOf(rel), expectedFooter, `${rel}: footer differs from its homepage footer`);
   }
   assert.match(footerOf('web/tr/index.html'), /<a href="\/tr\/">/, 'localized footers link to their own homepage for the extension');
   assert.match(reference, /<a href="\/companion\/">Desktop Companion<\/a>/, 'the footer links the desktop Companion');
@@ -49005,7 +49010,7 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /function clearStreamedAssistantText\(textEl\)[\s\S]*?cancelAnimationFrame\(frame\);[\s\S]*?streamedAssistantRenderFrameByEl\.delete\(textEl\);/, `${label}: terminal and tool transitions should cancel pending stream renders`);
     assert.match(panel, /async function flushRenderedTabChat\(\{ allowHidden = false \} = \{\}\)[\s\S]*?flushPendingStreamedAssistantMarkdownRenders\(\);[\s\S]*?const html = messagesEl\.innerHTML;[\s\S]*?return persistTabChat\(tabId, html, \{ allowHidden \}\);/, `${label}: tab switches and visibility handoffs should render a queued frame before serializing its last acknowledged stream chunk`);
     assert.doesNotMatch(panel, /const nextText = textEl\.textContent \+ data\.content;/, `${label}: rendered Markdown must never become the source for later deltas`);
-    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
+    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(code, lang\) : escapeHtml\(code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
     assert.match(panel, /case 'run_complete':[\s\S]*?const streamedText = getStreamedAssistantText\(textEl\);[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const visibleStreamedText = streamedText[\s\S]*?\|\| \(hasStreamedText \? textEl\?\.innerText \|\| textEl\?\.textContent \|\| '' : ''\);[\s\S]*?else if \(textEl && \(hasStreamedText\s*\|\| \(data\.status === 'completed' && textEl\.dataset\.responseIncomplete === 'true'\)\)\)[\s\S]*?const terminalContent = data\.status === 'stopped' \|\| data\.status === 'cancelled'[\s\S]*?\? visibleStreamedText[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, terminalContent, \{[\s\S]*?replace: terminalContent !== streamedText,[\s\S]*?else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored/background streams and incomplete completed replies should receive one enhanced authoritative terminal render while stopped runs preserve visible partial text`);
     const liveStreamBody = panel.slice(panel.indexOf("case 'text_delta':"), panel.indexOf("case 'response_retry':"));
     assert.doesNotMatch(liveStreamBody, /dataset\.streamedAssistantText\s*=/, `${label}: active stream chunks must not duplicate raw text into serialized attributes`);
@@ -49936,6 +49941,7 @@ test('the Providers page LLM tab has a search box beside provider filters', () =
     const rankEnd = settings.indexOf('\n}\n\nfunction ', rankStart);
     const providerSearchRank = vm.runInNewContext(`(${settings.slice(rankStart, rankEnd + 2)})`, {
       normalizeGeneralSearchText: (value) => String(value || '').toLowerCase(),
+      providerDisplayLabel: (id, config) => config.label || id,
     });
     const exactOpenAiRank = providerSearchRank('openai', { label: 'OpenAI', providerName: 'openai' }, 'openai');
     const azureOpenAiRank = providerSearchRank('azure_openai', { label: 'Azure OpenAI', providerName: 'azure-openai' }, 'openai');
@@ -71801,7 +71807,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.doesNotMatch(settingsScript, /data-webgpu-download-action=/,
     'the Apocalypse-style download action block must not be duplicated on Settings');
   assert.doesNotMatch(settingsScript, /saveVisionConfig\(\{\s*type:\s*'webgpu'/);
-  assert.match(settingsScript, /let entries = Object\.entries\(providersData\);/,
+  assert.match(settingsScript, /let entries = Object\.entries\(providersData\)\s*(?:;|\.)/,
     'Settings should render the WebGPU provider card');
   const webgpuSettingsBlock = settingsScript.slice(
     settingsScript.indexOf('    webgpu: {'),

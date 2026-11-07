@@ -255,7 +255,7 @@ try {
     window.relaxedFixtureUpdates = [];
     chrome.runtime.onMessage.addListener(event => { if (event.action === 'agent_update') relaxedFixtureUpdates.push(event); });
     return chrome.storage.local.set({ onboardingComplete: true, pinCoachmarkPending: false, helpImproveWebBrain: false,
-      tracingEnabled: false, autoScreenshot: false, screenshotFallback: false,
+      tracingEnabled: false, autoScreenshot: false, screenshotFallback: false, visionMode: 'off',
       planBeforeActMode: 'off', planBeforeAct: false, planReviewMode: 'never', maxAgentSteps: 12,
       systemOneEnabled: false, agentAllowLocalNetwork: true, askBeforeConsequentialActions: false, openaiAskStreamingEnabled: false });
   });
