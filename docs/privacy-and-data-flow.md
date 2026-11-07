@@ -889,7 +889,7 @@ CDP capture → JPEG/PNG data URL
 | Local feedback diagnostics | Keeps bounded metadata locally when ordinary tracing is off; disabling it clears automatic history. Uploading a feedback attachment requires separate confirmation. |
 | Screenshot fallback | Controls whether page images are sent to the LLM |
 | Auto-screenshot mode | Controls how frequently viewport captures are sent |
-| Strict secret handling | Keeps credentials out of assistant text and completion summaries: an instruction to the model, exact-match redaction of credentials it filled into sensitive fields from its scratchpad and progress-ledger notes, plus exact-match redaction in cloud runs of anything it typed, sent, or read from a labelled field |
+| Strict secret handling | Keeps credentials out of assistant text and completion summaries: an instruction to the model and the planner, exact-match redaction of credentials it filled into sensitive fields from its scratchpad, approved plan and progress-ledger notes, plus exact-match redaction in cloud runs of anything it typed, sent, or read from a labelled field |
 | Profile auto-fill | Controls whether user profile text is sent to the LLM |
 | User memory | Controls whether saved memory records are sent to the LLM |
 | User memory auto-learn | Controls whether post-turn extractor calls run |

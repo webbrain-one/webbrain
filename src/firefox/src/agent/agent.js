@@ -24894,6 +24894,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (gate.approvedScratchpadText) {
+      // Strict secret mode: credentials this conversation already knows are
+      // struck before the plan is pinned, and the run's guard is built from
+      // the same text (one that becomes known later: _scrubKnownCredentialsFromNotes).
+      gate.approvedScratchpadText = this._redactApprovedPlanCredentials(tabId, gate.approvedScratchpadText);
       let scratchText = gate.approvedScratchpadText;
       if (runOptions.steeringRevision != null) {
         const scratchIdx = this._findScratchpadIndex(messages);
@@ -26201,6 +26205,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       plannerClarification: followUpContext.plannerClarification,
       researchEscalationEnabled: this.researchEscalationEnabled,
       siteWorkflow: this._adapterWorkflowRoutingForUrl(tabUrl),
+      strictSecretMode: this._strictCredentialRedactionActive(tabId),
     });
     const plannerStep = 0;
     onUpdate('thinking', { step: plannerStep, note: 'Understanding request…' });
@@ -26500,6 +26505,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       researchEscalationEnabled: this.researchEscalationEnabled,
       siteWorkflow: this._adapterWorkflowRoutingForUrl(tabUrl),
       planReview: this._plannerReviewPromptPolicy(tabId),
+      strictSecretMode: this._strictCredentialRedactionActive(tabId),
     });
     const plannerStep = 0;
 
@@ -48300,10 +48306,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   // Strict secret mode: the known values taken out of notes written before
   // they became known, only from what the model wrote. In the scratchpad, the
-  // app-owned approved plans keep their text and move with it, and the app's
-  // own `[auto]` lines (download ids, attachment names) stay as written, since
-  // a match there would break the handle they carry. Each of the model's
-  // ledger rows gets what its progress_update would get now, except in
+  // app-owned approved plans lose them too and stay app-owned, moved with
+  // their text: the planner writes its plan from the user's request, so a
+  // password the request gave can sit in a step ("Fill the password field
+  // with …"), pinned into every later request (_redactApprovedPlanCredentials).
+  // The run's own copies of the plan follow (_redactApprovedPlanGuardCredentials).
+  // The app's own `[auto]` lines (download ids, attachment names) stay as
+  // written, since a match there would break the handle they carry. Each of
+  // the model's ledger rows gets what its progress_update would get now, except in
   // `target`, `url` and `href`: the runtime may have written those and they
   // identify the row. App-owned rows keep their fields, and row ids stay, as
   // at write time.
@@ -48342,8 +48352,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       let from = 0;
       for (const plan of this._scratchpadApprovedPlanRanges(message)) {
         next += scrubModelText(body.slice(from, plan.start));
-        plans.push({ start: next.length, end: next.length + plan.text.length, text: plan.text });
-        next += plan.text;
+        const text = this._redactApprovedPlanCredentials(tabId, plan.text);
+        plans.push({ start: next.length, end: next.length + text.length, text });
+        next += text;
         from = plan.end;
       }
       next += scrubModelText(body.slice(from));
@@ -48355,6 +48366,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         changed = true;
       }
     }
+    this._redactApprovedPlanGuardCredentials(tabId);
     const rows = this.progressLedgers.get(tabId);
     let rowsChanged = false;
     const nextRows = (Array.isArray(rows) ? rows : []).map(row => {
@@ -48385,6 +48397,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (typeof text !== 'string' || !this._strictCredentialRedactionActive(tabId)) return text;
     const known = this._knownCredentialValues?.get(tabId);
     return known?.length ? redactCredentialValues(text, known) : text;
+  }
+
+  // An approved plan's text with every known credential value struck, in
+  // strict secret mode; otherwise unchanged. Its first line, the app's
+  // `[Approved plan — …]` marker, stays as written: it is what says the
+  // pinned plan is the app's (_hasApprovedExecutionPlan,
+  // _approvedExecutionPlanAnchor), and a short value could match a word in it.
+  _redactApprovedPlanCredentials(tabId, text) {
+    if (typeof text !== 'string' || !text) return text;
+    const marker = text.match(/^\s*\[Approved plan\b[^\]\n]*\]/)?.[0] || '';
+    const rest = text.slice(marker.length);
+    const redacted = this._redactKnownCredentials(tabId, rest);
+    return redacted === rest ? text : marker + redacted;
+  }
+
+  // The run's other copies of the approved plan follow the pinned one: the
+  // execution guard's text, by which steering finds the old plan in the
+  // scratchpad and which decision requests quote, and its anchor, which
+  // recovery prompts repeat; also the pair a Continue carries to the next run.
+  // An anchor cut from the plan is cut again from the struck text, so a value
+  // its 800-character cut split is not left half there.
+  _redactApprovedPlanGuardCredentials(tabId) {
+    for (const state of [this._planExecutionGuards?.get(tabId), this._continuationExecutionEvidence?.get(tabId)]) {
+      if (!state || typeof state !== 'object') continue;
+      const text = typeof state.approvedPlanText === 'string' ? state.approvedPlanText : '';
+      const anchor = typeof state.approvedPlanAnchor === 'string' ? state.approvedPlanAnchor : '';
+      if (!text && !anchor) continue;
+      const nextText = this._redactApprovedPlanCredentials(tabId, text);
+      const nextAnchor = text && anchor === this._approvedExecutionPlanAnchor(text)
+        ? this._approvedExecutionPlanAnchor(nextText)
+        : this._redactKnownCredentials(tabId, anchor);
+      if (nextText !== text) state.approvedPlanText = nextText;
+      if (nextAnchor !== anchor) state.approvedPlanAnchor = nextAnchor;
+    }
   }
 
   // A model's progress_update arguments with credentials taken out, in strict

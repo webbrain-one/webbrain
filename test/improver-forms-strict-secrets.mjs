@@ -340,7 +340,7 @@ for (const build of ['chrome', 'firefox']) {
 
   test(`${build}: a value that becomes known is scrubbed from what the model wrote before the fill`, async () => {
     const agent = fresh(46);
-    // An approved plan the app pinned keeps its own text.
+    // An approved plan the app pinned, holding no credential, stays the app's as written.
     const plan = 'Approved plan: create the account for alice.';
     assert.equal(agent._scratchpadWrite(46, { text: plan }, plan).success, true);
     // The model writes down a password it generated before typing it.
