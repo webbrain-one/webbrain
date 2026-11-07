@@ -289,27 +289,159 @@ export function filledCredentialValuesFromHistory(messages, unwrap = content => 
  * @returns {{name: string, args: object|null, result: object|null}[]}
  */
 export function fillCallsFromHistory(messages, unwrap = content => content) {
+  return toolCallsFromHistory(messages, FILL_TOOLS, unwrap).map(({ name, args, result }) => ({ name, args, result }));
+}
+
+/**
+ * The calls of the named tools in a saved conversation with their results,
+ * oldest first, paired as fillCallsFromHistory pairs them. `content` is the
+ * unwrapped text of the tool message, notes the run loop appended included.
+ *
+ * @param {object[]} messages the conversation
+ * @param {Iterable<string>} toolNames
+ * @param {(content: string) => string} unwrap
+ * @returns {{name: string, args: object|null, result: object|null, content: string}[]}
+ */
+export function toolCallsFromHistory(messages, toolNames, unwrap = content => content) {
+  const names = toolNames instanceof Set ? toolNames : new Set(toolNames);
   const parse = value => {
     if (value && typeof value === 'object') return value;
     try { return JSON.parse(String(value ?? '')); } catch { return null; }
   };
   const parseResult = value => (value && typeof value === 'object' ? value : leadingJsonObject(value));
-  const fills = [];
+  const found = [];
   let calls = new Map();
   for (const message of Array.isArray(messages) ? messages : []) {
     if (message?.role !== 'tool') {
       calls = new Map();
       for (const call of message?.role === 'assistant' && Array.isArray(message.tool_calls) ? message.tool_calls : []) {
-        if (typeof call?.id === 'string' && FILL_TOOLS.has(call.function?.name)) calls.set(call.id, call.function);
+        if (typeof call?.id === 'string' && names.has(call.function?.name)) calls.set(call.id, call.function);
       }
       continue;
     }
     const call = calls.get(message.tool_call_id);
     if (!call) continue;
     calls.delete(message.tool_call_id);
-    fills.push({ name: call.name, args: parse(call.arguments), result: parseResult(unwrap(message.content)) });
+    const content = unwrap(message.content);
+    found.push({ name: call.name, args: parse(call.arguments), result: parseResult(content),
+      content: typeof content === 'string' ? content : JSON.stringify(content ?? '') });
   }
-  return fills;
+  return found;
+}
+
+// A password-type field whose own name or label says it takes a new password
+// (an account's first password, a changed one, or the repeat of either).
+const NEW_PASSWORD_FIELD_RE = /new|confirm|repeat|retype|re-?enter|again|create|choose|sign[-_\s]?up|regist/i;
+// One that says it takes the account's existing password, even in a form that
+// also sets a new one.
+const CURRENT_PASSWORD_FIELD_RE = /current|old|existing/i;
+// Secrets a password-type field holds that are not an account's password: a
+// key or token the user copies from another service into this one.
+const NON_PASSWORD_SECRET_RE = /api[-_\s]?key|token|secret|licen[cs]e|private[-_\s]?key|access[-_\s]?key|webhook/i;
+const PASSWORD_WORD_RE = /pass|pwd/i;
+
+// A field's own name, id and label texts, joined.
+function fieldIdentity(meta) {
+  return ['name', 'id', 'ariaLabel', 'ariaLabelledByText', 'placeholder', 'labelText']
+    .map(key => meta[key])
+    .filter(value => typeof value === 'string' || typeof value === 'number')
+    .map(value => String(value).slice(0, 200))
+    .join(' ');
+}
+
+const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PASSWORD_WORD_RE.test(identity);
+
+/**
+ * Whether a field takes the password of an existing account: the one secret a
+ * sign-in needs that only the user can know, so WebBrain types into it only a
+ * value the user gave (credential-not-provided, see agent.js). Fields that
+ * create or change a password, one-time codes and API keys are left out: a
+ * run may generate a new account's password, read a code from the user's
+ * mailbox, or copy a key the page just issued.
+ *
+ * - autocomplete `current-password`: yes.
+ * - autocomplete `new-password` or `one-time-code`: no.
+ * - any other `<input type="password">`: yes, unless its name, id or label
+ *   names a key or token rather than a password, or a new or repeated
+ *   password, or its form holds more than one visible password field (a new
+ *   password and its confirmation; content.js reports `passwordFields`) and
+ *   the field does not name the current one.
+ *
+ * @param {object} meta field metadata as content.js _fieldMeta reports it
+ * @returns {{guarded: boolean, reason: string|null}}
+ */
+export function isSignInPasswordField(meta) {
+  const no = { guarded: false, reason: null };
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return no;
+  const tokens = String(meta.autocomplete ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.includes('current-password')) return { guarded: true, reason: 'autocomplete=current-password' };
+  if (tokens.includes('new-password') || tokens.includes('one-time-code')) return no;
+  if (String(meta.type ?? '').toLowerCase() !== 'password') return no;
+  const identity = fieldIdentity(meta);
+  if (namesKeyOrToken(identity)) return no;
+  if (!CURRENT_PASSWORD_FIELD_RE.test(identity)) {
+    if (NEW_PASSWORD_FIELD_RE.test(identity)) return no;
+    if (Number(meta.passwordFields) > 1) return no;
+  }
+  return { guarded: true, reason: 'input type=password' };
+}
+
+/**
+ * Whether `value` appears in one of `sources`, compared after Unicode NFC
+ * normalization and case-sensitively, as passwords are. A value that starts
+ * or ends with a letter or digit must not continue a longer word there:
+ * "pass" is not given by a message that says "password", while "hunter2" is
+ * given by "my password is hunter2." An empty value gives nothing away and is
+ * always provided.
+ *
+ * @param {string} value
+ * @param {string[]} sources
+ * @returns {boolean}
+ */
+export function credentialValueProvided(value, sources = []) {
+  const normalize = text => { try { return text.normalize('NFC'); } catch { return text; } };
+  const wanted = normalize(String(value ?? '').trim());
+  if (!wanted) return true;
+  const tokenChar = /[\p{L}\p{N}]/u;
+  const checkStart = tokenChar.test(wanted[0]);
+  const checkEnd = tokenChar.test(wanted[wanted.length - 1]);
+  for (const source of Array.isArray(sources) ? sources : []) {
+    if (typeof source !== 'string') continue;
+    const text = normalize(source);
+    for (let at = text.indexOf(wanted); at >= 0; at = text.indexOf(wanted, at + 1)) {
+      const to = at + wanted.length;
+      if (checkStart && at > 0 && tokenChar.test(text[at - 1])) continue;
+      if (checkEnd && to < text.length && tokenChar.test(text[to])) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The passwords WebBrain typed into new-password fields in a saved
+ * conversation (password-type or `new-password` fields isSignInPasswordField
+ * leaves out, other than keys and tokens): a password it chose for an account
+ * it created, which a later sign-in to that account may need.
+ *
+ * @param {object[]} messages the conversation
+ * @param {(content: string) => string} unwrap
+ * @returns {string[]}
+ */
+export function newPasswordValuesFromHistory(messages, unwrap = content => content) {
+  const values = [];
+  for (const { args, result } of fillCallsFromHistory(messages, unwrap)) {
+    if (!result || typeof result !== 'object' || result.dispatched === false || result.noDispatch === true) continue;
+    const field = [result.fieldMeta, result.focusedField].find(meta => meta && typeof meta === 'object');
+    if (!field || isSignInPasswordField(field).guarded) continue;
+    const tokens = String(field.autocomplete ?? '').toLowerCase().split(/\s+/);
+    const passwordField = tokens.includes('new-password')
+      || (String(field.type ?? '').toLowerCase() === 'password' && !tokens.includes('one-time-code')
+        && !namesKeyOrToken(fieldIdentity(field)));
+    const value = typeof args?.text === 'string' ? args.text.trim() : '';
+    if (passwordField && value) values.push(value);
+  }
+  return values;
 }
 
 /**

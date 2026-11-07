@@ -6303,6 +6303,19 @@
         title: el.getAttribute ? el.getAttribute('title') : null,
         labelText,
       };
+      // How many visible password fields share this one's form (outside a
+      // form, its document or shadow root). Two or more are a new password
+      // and its confirmation, which the agent's sign-in password check
+      // (credential-fields.js isSignInPasswordField) leaves to the run.
+      if (fieldType === 'password') {
+        try {
+          const fields = el.form ? [...el.form.elements]
+            : [...((el.getRootNode?.() || document).querySelectorAll?.('input') || [])];
+          meta.passwordFields = fields.filter(field => field.tagName === 'INPUT'
+            && String(field.type || '').toLowerCase() === 'password'
+            && field.getClientRects().length > 0).length;
+        } catch {}
+      }
       const toolbarCandidate = _richTextToolbarCandidate(el, meta);
       if (toolbarCandidate) meta.toolbarCandidate = toolbarCandidate;
       return meta;

@@ -119,6 +119,30 @@ After every `set_field` / `type_ax` call, `credential-fields.js` checks whether 
 
 The regex: `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credential|recovery[-_\s]?code|backup[-_\s]?code|access[-_\s]?token|refresh[-_\s]?token|client[-_\s]?secret|private[-_\s]?key|seed[-_\s]?phrase|passphrase|pin[-_\s]?code`
 
+### Sign-in passwords the user never gave
+
+WebBrain types into an existing account's password field only a password the
+user gave (guard `credential-not-provided`). The field is one with
+`autocomplete="current-password"`, or a password input whose name, id and
+label do not name a new or repeated password, an API key or a token, and that
+is its form's only visible password field (`credential-fields.js`
+`isSignInPasswordField`). A password counts as given when it appears whole in
+the user's own messages in this conversation (without the page context
+WebBrain adds), a text file they attached, a clarify answer they typed or
+chose, the WebBrain profile when it is enabled, a MemCode recall result, or a
+new-password field WebBrain filled earlier in the conversation (signing in to
+an account it created). Page text is not a source: a page could otherwise
+sign the run in to an account of its choosing. The check runs before
+anything is typed, on calls the model makes through the tool batch (a saved
+workflow's replay of the user's own steps is not checked), against the field
+the typing-target preflight resolved; when nothing tells it the
+target is a password field, the text is typed as before. The refusal tells
+the model to ask for the credentials or end the run as partial, naming them.
+New-password fields, one-time codes and API keys are not checked, since a run
+may create an account's password, read a code from the user's mailbox, or
+copy a key a page issued. A field a password manager filled is not affected:
+the check stops typing, not the click that submits the form.
+
 ### Strict Secret Mode
 
 When enabled (Settings → "Strict secret handling"), the agent:
