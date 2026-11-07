@@ -55,7 +55,7 @@ function murshidPost() {
         } catch { return false; }
       });
     };
-    for (const name of ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived']) {
+    for (const name of ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived', 'onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred']) {
       const native = chrome.webRequest?.[name];
       if (!native) continue;
       const listeners = new Map();

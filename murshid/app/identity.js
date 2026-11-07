@@ -140,7 +140,12 @@ function install(ses, settings, ctx) {
   ses.webRequest.onBeforeRequest((details, callback) => {
     Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback({}));
   });
-  ses.webRequest.onErrorOccurred((details) => ctx.crx?.discardOffscreenRequest(details.id));
+  ses.webRequest.onBeforeRedirect((details) => { Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRedirect', details)).catch(() => {}); });
+  ses.webRequest.onResponseStarted((details) => { Promise.resolve(ctx.crx?.forwardWebRequest('onResponseStarted', details)).catch(() => {}); });
+  ses.webRequest.onErrorOccurred((details) => {
+    Promise.resolve(ctx.crx?.forwardWebRequest('onErrorOccurred', details)).catch(() => {});
+    ctx.crx?.discardOffscreenRequest(details.id);
+  });
 
   ses.webRequest.onHeadersReceived((details, callback) => {
     Promise.resolve(ctx.crx?.forwardWebRequest('onHeadersReceived', details)).catch(() => {}).finally(() => callback({}));

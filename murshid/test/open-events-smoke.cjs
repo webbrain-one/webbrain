@@ -6,6 +6,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { pathToFileURL } = require('node:url');
 const { app } = require('electron');
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP public.example 127.0.0.1');
 const file = path.join(process.env.MURSHID_PROFILE, 'test file.html');
 fs.writeFileSync(file, '<!doctype html><title>isolated fixture</title>');
 const requestHeaders = new Map();
@@ -16,6 +17,8 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/tab-')) res.setHeader('X-Murshid-Fixture', 'ordinary-tab');
   if (req.url === '/download-redirect') { res.writeHead(302, { location: '/download-final', 'Set-Cookie': 'fixture-secret=value; HttpOnly; Secure; SameSite=Lax' }); res.end(); return; }
   if (req.url === '/download-cross-origin') { res.writeHead(302, { location: 'http://example.invalid/other' }); res.end(); return; }
+  if (req.url === '/address-redirect') { res.writeHead(302, { location: '/address-final', 'Access-Control-Allow-Origin': '*' }); res.end(); return; }
+  if (req.url === '/address-error') { req.socket.destroy(); return; }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.end(req.url === '/download-final' ? 'download fixture' : '<!doctype html><title>isolated fixture</title>');
 });
@@ -83,6 +86,45 @@ const waitFor = async (condition) => {
         socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
       });
       const stagingSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/network/download-staging.js'), 'utf8').replace(/^export /gm, '');
+      await evaluate(`(() => {
+        globalThis.addressEvents = [];
+        globalThis.addressListeners = ['onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred'].map(name => {
+          const fn = details => { if (details.url.includes('/address-')) addressEvents.push({ event: name, ...details }); };
+          chrome.webRequest[name].addListener(fn, {urls:['<all_urls>']}); return [name, fn];
+        });
+      })()`);
+      await ordinaryTab.wc.executeJavaScript(`fetch(${JSON.stringify(base + '/address-redirect')}).then(r => r.text())`);
+      await evaluate(`fetch(${JSON.stringify(base + '/address-final')}).then(r => r.text())`);
+      await evaluate(`fetch(${JSON.stringify(base + '/address-error')}).catch(() => {})`);
+      await waitFor(async () => { const e = await evaluate('addressEvents'); return e.filter(x => x.event === 'onResponseStarted').length >= 2 && e.some(x => x.event === 'onErrorOccurred'); });
+      const addressEvents = await evaluate('addressEvents');
+      const tabRedirect = addressEvents.find(e => e.event === 'onBeforeRedirect' && e.tabId === ordinaryTab.id);
+      const tabResponse = addressEvents.find(e => e.event === 'onResponseStarted' && e.tabId === ordinaryTab.id);
+      const workerResponse = addressEvents.find(e => e.event === 'onResponseStarted' && e.tabId === -1);
+      assert.equal(tabRedirect?.ip, '127.0.0.1');
+      assert.equal(tabResponse?.ip, '127.0.0.1');
+      assert.equal(workerResponse?.ip, '127.0.0.1');
+      assert.equal(addressEvents.find(e => e.event === 'onErrorOccurred')?.tabId, -1);
+      assert.equal(tabRedirect.redirectUrl, `${base}/address-final`);
+      await evaluate('addressListeners.forEach(([name, fn]) => chrome.webRequest[name].removeListener(fn))');
+      await evaluate("chrome.storage.local.set({agentAllowLocalNetwork:false})");
+      const publicLookingUrl = `http://public.example:${server.address().port}/address-final`;
+      const networkSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/network/network-tools.js'), 'utf8');
+      const guardSource = networkSource.slice(networkSource.indexOf('export function validateFetchUrl('), networkSource.indexOf('// ─── Same-eTLD+1 cookie policy'))
+        .replace(/^export /gm, '');
+      await evaluate(`(() => { ${guardSource}\n globalThis.testWatchFetchAddresses = watchFetchAddresses; globalThis.testWatchResponseAddresses = watchResponseAddresses; globalThis.testValidateFetchUrl = validateFetchUrl; })()`);
+      assert.equal((await evaluate(`testValidateFetchUrl(${JSON.stringify(publicLookingUrl)}, {allowLocalNetwork:false})`)).ok, true);
+      const blockedAddress = await evaluate(`(async () => { const watcher = testWatchFetchAddresses(${JSON.stringify(publicLookingUrl)}, false); try { await fetch(${JSON.stringify(publicLookingUrl)}); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()`);
+      assert.match(blockedAddress, /blocked address/i, String(blockedAddress));
+      const allowedAddress = await evaluate(`(async () => { const watcher = testWatchFetchAddresses(${JSON.stringify(publicLookingUrl)}, true); try { await fetch(${JSON.stringify(publicLookingUrl)}); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()`);
+      assert.equal(allowedAddress, null);
+      await evaluate("globalThis.testResearchWatcher = testWatchResponseAddresses({types:['main_frame']}, d => d.tabId, false)");
+      const researchTab = ctx.windows[0].addTab({ url: publicLookingUrl, active: false });
+      await waitFor(async () => Boolean(await evaluate(`testResearchWatcher.failure(${researchTab.id})`)));
+      assert.match(await evaluate(`testResearchWatcher.failure(${researchTab.id})`), /blocked address/i);
+      await evaluate('testResearchWatcher.close()');
+      ctx.windows[0].closeTab(researchTab);
+      console.log('Response-address events protect worker fetches and research tabs');
       await evaluate(`(() => {
         globalThis.tabRequestEvents = [];
         globalThis.tabRequestListeners = ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived'].map(name => {

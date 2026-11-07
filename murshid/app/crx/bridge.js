@@ -150,7 +150,20 @@ class CrxBridge {
   // current offscreen document; the worker acknowledges delivery before proceeding.
   async forwardWebRequest(event, details) {
     const tab = this.ctx.windows.flatMap((win) => win.tabs).find((tab) => tab.wc.id === details.webContentsId);
-    if (!tab) return this.forwardOffscreenRequest(event, details);
+    if (!tab) {
+      if (details.initiatorOrigin === `chrome-extension://${this.ctx.webBrainId}` && !details.frame && details.webContentsId == null
+          && details.resourceType === 'xhr' && ['onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred'].includes(event)) {
+        const extId = this.ctx.webBrainId;
+        const manifest = extId && this.ses.extensions.getExtension(extId)?.manifest;
+        if (!this.isWebBrain(extId) || !/^https?:/i.test(details.url)
+            || !manifest?.permissions?.includes('webRequest') || !manifest?.host_permissions?.includes('<all_urls>')) return;
+        return this.deliverWebRequest(extId, event, { requestId: String(details.id), tabId: -1, frameId: -1,
+          parentFrameId: -1, url: details.url, method: details.method, type: 'xmlhttprequest',
+          timeStamp: details.timestamp, initiator: details.initiatorOrigin, ip: details.ip, error: details.error,
+          redirectUrl: details.redirectURL, statusCode: details.statusCode });
+      }
+      return this.forwardOffscreenRequest(event, details);
+    }
     const extId = this.ctx.webBrainId;
     const manifest = extId && this.ses.extensions.getExtension(extId)?.manifest;
     if (tab.wc.isDestroyed() || tab.wc.session !== this.ses || !/^https?:/i.test(details.url)
@@ -179,6 +192,12 @@ class CrxBridge {
       payload.statusCode = details.statusCode;
       payload.statusLine = details.statusLine;
       payload.responseHeaders = Object.entries(details.responseHeaders || {}).flatMap(([name, values]) => [].concat(values).map((value) => ({ name, value })));
+    }
+    if (['onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred'].includes(event)) {
+      payload.ip = details.ip;
+      payload.error = details.error;
+      payload.redirectUrl = details.redirectURL;
+      payload.statusCode = details.statusCode;
     }
     return this.deliverWebRequest(extId, event, payload);
   }
