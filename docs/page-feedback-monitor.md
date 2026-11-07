@@ -515,6 +515,15 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   is delivered and awaits a fresh observation. Before input any route change
   still refuses, and the new route still invalidates the model state bound for
   the next decision.
+- When the press's own form or link navigation replaces the document under
+  observation (a POST answered with a redirect to the saved record), the
+  browser commits it for the navigation that press started, under its dispatch
+  operation. If nothing else changed (same run, call, task and mode, no input
+  from the person, no Stop, steering or Back/Forward) and the address is new,
+  the press is delivered with `ownNavigation`, `pageUrlChanged`, `previousUrl`
+  and `currentUrl` and an unknown outcome; it is not proof. A navigation the
+  press cannot be tied to, a redirect back to the same address, or the
+  person's own navigation keeps the interrupted, failed result.
 - A run's app-owned observations, captures and recovery nudges are removed
   when it ends, so the next request observes the current page instead. Stop
   interrupts page capture and the refresh read.

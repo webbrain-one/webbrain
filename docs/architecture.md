@@ -1689,7 +1689,10 @@ An action such as a submitted search field can lose its original-document
 verification while successfully navigating. When that result is successful,
 verified, marked `outcomeUnknown`, and reports a real URL change, a later
 successful read of the resulting URL can reconcile the generic plan-execution
-counter. A read from before the action, a failed read, or a different document
+counter. A delivered Chrome native button click whose own navigation committed
+the new document (`ownNavigation`, for example a form POST redirected to the
+saved record) is reconciled the same way, though its local effect is not
+verified. A read from before the action, a failed read, or a different document
 cannot do so. This does not satisfy submit/send/publish/payment or site-workflow
 terminal contracts; those still require their existing bound evidence.
 

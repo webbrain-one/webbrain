@@ -39667,8 +39667,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const previousUrl = this._normalizeUrl(result?.previousUrl || '');
       const currentUrl = this._normalizeUrl(result?.currentUrl || result?.pageUrl || result?.url || '');
       const completion = this.completionInvariants.get(tabId);
+      // A verified action whose navigation outcome is unknown, or a delivered
+      // native click whose own navigation committed the new document
+      // (ownNavigation; only the Chrome build's trusted native button sends it).
       const navigatedButUncertain = result?.success === true
-        && result?.verified === true
+        && (result?.verified === true || (result?.ownNavigation === true
+          && result?.nativeInputAcknowledged === true && result?.dispatched === true))
         && result?.outcomeUnknown === true
         && result?.pageUrlChanged === true
         && !!previousUrl

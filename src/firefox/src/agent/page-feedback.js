@@ -691,7 +691,7 @@ export const pageFeedbackMethods = {
       clearGestureLease(run, frameId);
       // A replaced document cannot inherit a click's same-document route marker.
       if (frameId === 0 || run.sameDocumentNavigation?.frameId === frameId) run.sameDocumentNavigation = null;
-      if (frameId === 0) run.agentRoute = null;
+      if (frameId === 0) { run.agentRoute = null; run.agentDocument = null; }
       run.documents.set(frameId, { id: details.documentId || '', url: details.url || '',
         parentFrameId: Number.isSafeInteger(details.parentFrameId) ? details.parentFrameId : undefined });
       if (frameId === 0) {
@@ -730,6 +730,12 @@ export const pageFeedbackMethods = {
     }
     if (agentNavigation) {
       if (frameId === 0 && type !== 'committed') run.agentRoute = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      // A new top document committed for the navigation the agent's own click
+      // or submit started (a form POST answered with a redirect, say). Bound
+      // to that dispatch operation, like agentRoute; any later commit clears it.
+      if (frameId === 0 && type === 'committed') {
+        run.agentDocument = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      }
       return;
     }
     // A route update after the agent's own click in the same frame, before any
@@ -866,6 +872,19 @@ export const pageFeedbackMethods = {
     return !!run?.agentRoute && !!run.url && run.agentRoute.url === run.url && run.agentRoute.at >= since
       && !!operationId && run.agentRoute.operationId === operationId
       && (!proof || !(run.traversedAt >= since));
+  },
+
+  // The current top document is the one the navigation of the action in
+  // flight committed (its dispatch operation), at or after `since`, with no
+  // Back/Forward since, and every other part of the model state the action
+  // was bound to is still current. Only the document and the address that
+  // navigation replaced may differ.
+  _pageFeedbackAgentDocumentCurrent(tabId, run, state, since = 0) {
+    const operationId = dispatchOwners.get(tabId)?.operationId || '';
+    const committed = run?.agentDocument;
+    return !!committed && !!run.url && committed.url === run.url && committed.at >= since
+      && !!operationId && committed.operationId === operationId && !(run.traversedAt >= since)
+      && !!state && this._pageFeedbackStateCurrent(tabId, run, { ...state, url: run.url, frames: new Map() });
   },
 
   // Bounded: each pending traversal attribution settles within its timeout.
