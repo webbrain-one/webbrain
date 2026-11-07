@@ -305,7 +305,7 @@ export function projectTraceEventData(kind, data, { includeContent = false } = {
       const value = data.extra?.[key];
       if (typeof value === 'string' && /^[a-zA-Z0-9_.-]{1,120}$/.test(value)) extra[key] = value;
     }
-    for (const key of ['latencyMs', 'estimatedCostUsd', 'captureMs', 'evaluateMs', 'elapsedMs']) {
+    for (const key of ['latencyMs', 'estimatedCostUsd', 'captureMs', 'evaluateMs', 'elapsedMs', 'timeoutMs']) {
       const value = data.extra?.[key];
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0) extra[key] = value;
     }
