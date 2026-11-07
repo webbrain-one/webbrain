@@ -44177,8 +44177,10 @@ test('new locales are registered in extension and web language dropdowns', () =>
   const webBuild = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
   const webTemplate = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
   const privacy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
+  assert.match(webBuild, /readFile\(new URL\('.\/languages\.json', import\.meta\.url\)/, 'web build should load its locale registry');
+  const webLanguages = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/languages.json'), 'utf8'));
   for (const [code, languageLabel] of addedLocales) {
-    assert.match(webBuild, new RegExp(`\\{ code: '${code}', bcp47:`), `web build: ${code} locale missing`);
+    assert.ok(webLanguages.some(language => language.code === code && language.bcp47 && language.label === languageLabel), `web build: ${code} locale missing`);
     for (const [surface, html] of [['landing template', webTemplate], ['privacy page', privacy]]) {
       const option = `<option value="${code}">${languageLabel}</option>`;
       assert.equal(html.split(option).length - 1, 1, `${surface}: ${code} language option should appear exactly once`);
@@ -49005,7 +49007,7 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /function clearStreamedAssistantText\(textEl\)[\s\S]*?cancelAnimationFrame\(frame\);[\s\S]*?streamedAssistantRenderFrameByEl\.delete\(textEl\);/, `${label}: terminal and tool transitions should cancel pending stream renders`);
     assert.match(panel, /async function flushRenderedTabChat\(\{ allowHidden = false \} = \{\}\)[\s\S]*?flushPendingStreamedAssistantMarkdownRenders\(\);[\s\S]*?const html = messagesEl\.innerHTML;[\s\S]*?return persistTabChat\(tabId, html, \{ allowHidden \}\);/, `${label}: tab switches and visibility handoffs should render a queued frame before serializing its last acknowledged stream chunk`);
     assert.doesNotMatch(panel, /const nextText = textEl\.textContent \+ data\.content;/, `${label}: rendered Markdown must never become the source for later deltas`);
-    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
+    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(code, lang\) : escapeHtml\(code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
     assert.match(panel, /case 'run_complete':[\s\S]*?const streamedText = getStreamedAssistantText\(textEl\);[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const visibleStreamedText = streamedText[\s\S]*?\|\| \(hasStreamedText \? textEl\?\.innerText \|\| textEl\?\.textContent \|\| '' : ''\);[\s\S]*?else if \(textEl && \(hasStreamedText\s*\|\| \(data\.status === 'completed' && textEl\.dataset\.responseIncomplete === 'true'\)\)\)[\s\S]*?const terminalContent = data\.status === 'stopped' \|\| data\.status === 'cancelled'[\s\S]*?\? visibleStreamedText[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, terminalContent, \{[\s\S]*?replace: terminalContent !== streamedText,[\s\S]*?else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored/background streams and incomplete completed replies should receive one enhanced authoritative terminal render while stopped runs preserve visible partial text`);
     const liveStreamBody = panel.slice(panel.indexOf("case 'text_delta':"), panel.indexOf("case 'response_retry':"));
     assert.doesNotMatch(liveStreamBody, /dataset\.streamedAssistantText\s*=/, `${label}: active stream chunks must not duplicate raw text into serialized attributes`);
@@ -49936,6 +49938,7 @@ test('the Providers page LLM tab has a search box beside provider filters', () =
     const rankEnd = settings.indexOf('\n}\n\nfunction ', rankStart);
     const providerSearchRank = vm.runInNewContext(`(${settings.slice(rankStart, rankEnd + 2)})`, {
       normalizeGeneralSearchText: (value) => String(value || '').toLowerCase(),
+      providerDisplayLabel: (id, config) => config.label || id,
     });
     const exactOpenAiRank = providerSearchRank('openai', { label: 'OpenAI', providerName: 'openai' }, 'openai');
     const azureOpenAiRank = providerSearchRank('azure_openai', { label: 'Azure OpenAI', providerName: 'azure-openai' }, 'openai');
@@ -71801,7 +71804,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.doesNotMatch(settingsScript, /data-webgpu-download-action=/,
     'the Apocalypse-style download action block must not be duplicated on Settings');
   assert.doesNotMatch(settingsScript, /saveVisionConfig\(\{\s*type:\s*'webgpu'/);
-  assert.match(settingsScript, /let entries = Object\.entries\(providersData\);/,
+  assert.match(settingsScript, /let entries = Object\.entries\(providersData\)\s*(?:;|\.)/,
     'Settings should render the WebGPU provider card');
   const webgpuSettingsBlock = settingsScript.slice(
     settingsScript.indexOf('    webgpu: {'),
