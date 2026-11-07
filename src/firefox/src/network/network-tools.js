@@ -2337,6 +2337,59 @@ const BACKGROUND_TAB_RETRIEVAL = Object.freeze({
   activeTabChanged: false,
 });
 
+// What a run keeps of its successful fetch_url and research_url reads, from
+// the flags above: how each site was read and how many times. Only the host:
+// a fetched URL's path or query can carry a token. Only a direct GET is a
+// fetch_url read: a HEAD reads no content, and a write (any other method) or
+// a captured API replay, which may be one, is no read.
+// Returns `reads` itself when this result was no such read.
+const BACKGROUND_READ_SITES = 20;
+export function recordBackgroundRead(reads, name, args, result) {
+  if (result?.success !== true || result.activeTabChanged !== false) return reads;
+  const directGet = String(args?.method || 'GET').trim().toUpperCase() === 'GET'
+    && !(args?.replayRequestId || args?.apiReplayRequestId || result.replayContext);
+  const retrieval = name === 'fetch_url' && directGet && result.retrieval === 'background_fetch' && result.visibleTabOpened === false ? 'background_fetch'
+    : name === 'research_url' && result.retrieval === 'background_tab' && result.backgroundTabActivated === false ? 'background_tab' : '';
+  let host = '';
+  try {
+    const url = new URL(String(result.url || ''));
+    if (url.protocol === 'http:' || url.protocol === 'https:') host = url.hostname;
+  } catch {}
+  if (!retrieval || !host) return reads;
+  const list = Array.isArray(reads) ? reads : [];
+  const index = list.findIndex(read => read.retrieval === retrieval && read.host === host);
+  if (index >= 0) return list.map((read, i) => i === index ? { ...read, count: read.count + 1 } : read);
+  return list.length < BACKGROUND_READ_SITES ? [...list, { retrieval, host, count: 1 }] : list;
+}
+
+// The line a final answer gets when the request said how pages were to be
+// opened or read (agent.js, done): what this run's background reads did, by
+// site, in the order the sites were first read. Empty without such a read.
+// A fetch leaves the active tab alone, but the run may not have: the line
+// says so only when the caller knows nothing else in the run may have
+// changed that tab (completion-invariant.js changedRunTab). A research_url
+// tab's close is requested, not confirmed, and the line says just that.
+export function backgroundReadNote(reads, { activeTabUnchanged = false } = {}) {
+  const list = Array.isArray(reads) ? reads : [];
+  const sites = hosts => {
+    const shown = hosts.length > 3 ? [...hosts.slice(0, 2), `${hosts.length - 2} other sites`] : hosts;
+    return shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}` : shown[0];
+  };
+  const fetched = list.filter(read => read?.retrieval === 'background_fetch').map(read => read.host);
+  const tabbed = list.filter(read => read?.retrieval === 'background_tab');
+  const tabs = tabbed.reduce((sum, read) => sum + (Number(read.count) || 1), 0);
+  const lines = [];
+  if (fetched.length) {
+    lines.push(`Read in the background from ${sites(fetched)}: fetched directly, without opening a tab${activeTabUnchanged === true ? ' or changing your active tab' : ''}.`);
+  }
+  if (tabbed.length) {
+    lines.push(tabs === 1
+      ? `Read in a background tab from ${sites(tabbed.map(read => read.host))}, which was never brought to the front and which WebBrain asked the browser to close after reading.`
+      : `Read in background tabs from ${sites(tabbed.map(read => read.host))}, which were never brought to the front and which WebBrain asked the browser to close after reading.`);
+  }
+  return lines.join(' ');
+}
+
 export async function researchUrl(url, opts = {}) {
   if (!url) return { success: false, error: 'url is required' };
   const restricted = firefoxRestrictedDomainFailure(url);

@@ -71,7 +71,7 @@ import { detectProgressAction, progressClickActionContext, progressClickLabels, 
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, isMastodonPageUrl, mastodonHandoffInstruction, mastodonPageLabels, mastodonProgressGuard, mastodonTaskDomains } from './observers/mastodon.js';
 import { PROGRESS_ACTIONS, isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
-import { classifyCompletionForm, completionDoneBlock, completionPlainFinalBlock, completionPlainFinalPartial, consumeCompletionObservation, consumeCompletionObservationResult, createCompletionInvariantState, didCompletionActionExecute, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, isCompletionActionTool, publicationDetailResource, publicationReplyParent, publicationResourceRecordRoot, recordCompletionToolResult } from './completion-invariant.js';
+import { classifyCompletionForm, completionDoneBlock, completionPlainFinalBlock, completionPlainFinalPartial, consumeCompletionObservation, consumeCompletionObservationResult, changedRunTab, createCompletionInvariantState, didCompletionActionExecute, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, isCompletionActionTool, publicationDetailResource, publicationReplyParent, publicationResourceRecordRoot, recordCompletionToolResult } from './completion-invariant.js';
 import { cdpClient, isCdpCommandNotSentError, NATIVE_DATE_INPUT_TYPES } from '../cdp/cdp-client.js';
 import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
 import { formatAdapterWorkflowExecutionPolicy } from './adapter-workflow.js';
@@ -95,6 +95,8 @@ import {
   downloadBasename,
   downloadResourceFromPage,
   downloadFiles,
+  recordBackgroundRead,
+  backgroundReadNote,
 } from '../network/network-tools.js';
 import { offlineAnswerText } from './offline-answer-copy.js';
 import { executeWikipediaSkillTool, formatLocalWikipediaRag, localWikipediaSearchQuery, retrieveLocalWikipediaResultForStandalone, shouldRetrieveLocalWikipedia } from './wikipedia-offline.js';
@@ -2357,6 +2359,12 @@ export class Agent extends LoopDetector {
         && structuredChatBinding.body === this._workflowMessageBody(args.text) ? structuredChatBinding : null);
     const nativeChatReadRepair = this._isOwnedNativeChatReadRepair(tabId, name, args, result, messageRecipientContext);
     const next = recordCompletionToolResult(state, name, completionArgs, result, { chatDeliveryBinding, nativeChatReadRepair });
+    // How this run's fetch_url and research_url reads read their pages, and
+    // whether anything else in the run may have changed its tab, for a
+    // request that says how pages are to be opened or read (see done).
+    const backgroundReads = recordBackgroundRead(state.backgroundReads, name, args, result);
+    if (backgroundReads !== state.backgroundReads) next.backgroundReads = backgroundReads;
+    if (!state.runTabChanged && changedRunTab(name, completionArgs, result)) next.runTabChanged = true;
     this.completionInvariants.set(tabId, next);
     // The completion state does not count an app-owned read repair as an
     // action either: the model did not send it. Nor does the dispatch record
@@ -6815,8 +6823,13 @@ export class Agent extends LoopDetector {
     if (state && !state.verificationDebt && !state.iframeFormVerificationDebt && !state.lastAction?.uncertain) {
       const historyToolCallIdsBeforeRun = new Set((this.conversations.get(tabId) || [])
         .flatMap(message => [message.tool_call_id, ...(message.tool_calls || []).map(call => call.id)]).filter(Boolean));
+      // How this run read pages and whether it changed its tab are facts of
+      // the run, not evidence for the old objective: done reports them under
+      // the revised one too, and never claims an unchanged tab it changed.
       this.completionInvariants.set(tabId, { ...createCompletionInvariantState(state.runToken),
-        sequence: state.sequence, historyToolCallIdsBeforeRun });
+        sequence: state.sequence, historyToolCallIdsBeforeRun,
+        ...(state.backgroundReads ? { backgroundReads: state.backgroundReads } : {}),
+        ...(state.runTabChanged ? { runTabChanged: true } : {}) });
     }
     this._completionVerdicts?.delete(tabId);
     this._doneBlockCount.delete(tabId);
@@ -50359,7 +50372,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             completionWarning,
             screenshotCaptured: !!imageDataUrl,
           });
-          if (completionDecision) verification.decision = { outcome: completionDecision.outcome, engine: completionDecision.engine, modality: completionDecision.modality, model: completionDecision.model, ...(completionDecision.summaryKind ? { summaryKind: completionDecision.summaryKind } : {}) };
+          if (completionDecision) verification.decision = { outcome: completionDecision.outcome, engine: completionDecision.engine, modality: completionDecision.modality, model: completionDecision.model, ...(completionDecision.summaryKind ? { summaryKind: completionDecision.summaryKind } : {}), ...(completionDecision.readMethod ? { readMethod: completionDecision.readMethod } : {}) };
           // If completionWarning fires, DO NOT terminate. Return a regular
           // failed tool result so the agent loop continues and the model
           // must actually submit (and verify) before it can call done again.
@@ -50388,6 +50401,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // only a sure answer adds the note.
           if (!args.data_ref && completionDecision?.outcome === 'succeeded' && completionDecision.laterOutcome === 'asked') {
             args.summary += '\n\nPublication was verified. Future upvotes and moderation outcomes remain unverified.';
+          }
+          // A request that says how pages are to be opened or read (in the
+          // background, without a new tab, keeping this tab) gets what this run's
+          // fetch_url and research_url reads reported doing. The judge is asked
+          // only after such a read, in the same request as its verdict; only a
+          // sure answer adds the line. It says the active tab was left alone only
+          // when nothing else in the run may have changed it.
+          if (!args.data_ref && completionDecision?.readMethod === 'asked') {
+            const readState = this.completionInvariants.get(tabId);
+            const readNote = backgroundReadNote(readState?.backgroundReads, { activeTabUnchanged: !!readState && !readState.runTabChanged });
+            if (readNote) args.summary += `\n\n${readNote}`;
           }
           const runId = this.currentRunId.get(tabId);
           if (imageDataUrl && runId) {

@@ -1030,7 +1030,21 @@ keeping a post up, and whether the candidate summary gives the result, only
 says that an answer was given, or only describes what will be done next. A sure
 "expects later" answer adds the note that publication was verified while later
 votes and moderation remain unverified; a summary read as a claim or a plan is
-sent back once for the actual result. Where no judge runs, a model reads the
+sent back once for the actual result. After a run read a page in the background
+(a successful GET `fetch_url` or a `research_url`; the run keeps the site and
+the `retrieval` flags each reported), the judge also answers whether the
+request says how a page is to be opened or read (in the background, without
+opening a tab, keeping the current tab). A sure "asked" adds one line built
+from those reads, such as "Read in the background from example.org:
+fetched directly, without opening a tab or changing your active tab." The
+words "or changing your active tab" appear only when every other tool of the
+run only read its tab or used no page (`changedRunTab`): after a navigation,
+click, scroll or any tool not known to leave the tab alone, the line stops at
+"without opening a tab". The reads and whether the run changed its tab are
+kept across a steering revision. A `research_url` read says the browser was
+asked to close its background tab, since that close is requested, not
+confirmed. Without such a read the question is not sent. Where no judge runs,
+a model reads the
 summary with the `done_summary` question: a short Ask answer with no structure
 of its own (a colon, line breaks or a list mean it carries content), and an Act
 run's failed or partial summary, which may also blame the agent's own Ask or
