@@ -11,7 +11,9 @@ const { pathToFileURL } = require('node:url');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 
 const paths = require('./paths');
-const { Settings, SEARCH_ENGINES } = require('./settings');
+const { Settings, SEARCH_ENGINES, searchQueryOf } = require('./settings');
+const { History } = require('./history');
+const { Omnibox } = require('./omnibox');
 const { MurshidWindow } = require('./window');
 const { CrxBridge, extIdFromUrl } = require('./crx/bridge');
 const { Downloads } = require('./downloads');
@@ -154,6 +156,7 @@ const ctx = {
 async function start() {
   ctx.userData = app.getPath('userData');
   ctx.settings = new Settings();
+  ctx.history = new History({ searchQueryOf });
   ctx.icon = nativeImage.createFromPath(paths.appIcon());
   if (ctx.icon.isEmpty()) ctx.icon = undefined;
 
@@ -208,6 +211,7 @@ async function start() {
   ses.registerPreloadScript({ id: 'murshid-pages', type: 'frame', filePath: path.join(__dirname, 'pages', 'preload.js') });
 
   ctx.crx = new CrxBridge(ctx);
+  ctx.omnibox = new Omnibox(ctx);
   ctx.downloads = new Downloads(ctx);
   ctx.downloads.on('update', () => ctx.refreshAllWindows());
   ctx.commands = createCommands(ctx);
@@ -287,7 +291,9 @@ function installLogging(ses) {
 // ------------------------------------------------------------------- chrome UI IPC
 
 function installUiIpc() {
-  const windowOf = (sender) => ctx.windows.find((w) => w.ui === sender || w.shield?.webContents === sender);
+  const windowOf = (sender) => ctx.windows.find((w) => w.ui === sender
+    || w.shield?.webContents === sender
+    || w.omniPopup?.owns(sender));
   ipcMain.handle('murshid-ui', (event, command, ...args) => {
     const w = windowOf(event.sender);
     if (!w) return null;
@@ -324,11 +330,59 @@ function installUiIpc() {
         return null;
       }
       case 'navigate': {
-        const url = resolveInput(args[0], (q) => ctx.settings.searchUrl(q));
-        if (tab) tab.load(url);
-        else w.addTab({ url });
-        tab?.wc.focus();
+        // kind: 'input' (typed text), 'url' (a suggestion's address) or 'search' (a query).
+        const [text, options] = args;
+        const raw = String(text || '');
+        const url = options?.kind === 'search'
+          ? ctx.settings.searchUrl(raw.trim())
+          : resolveInput(raw, (q) => ctx.settings.searchUrl(q));
+        w.omniPopup.hide();
+        if (options?.newTab || !tab) {
+          w.addTab({ url, after: tab || undefined }).typedPending = true;
+          return null;
+        }
+        tab.typedPending = true; // the visit this starts counts as typed in history
+        tab.load(url);
+        tab.wc.focus();
         return null;
+      }
+      case 'suggest':
+        return ctx.omnibox.suggest(w, args[0], args[1] || {});
+      case 'omniboxFocus':
+        w.omniPopup.ensure(); // load the list's page before the first keystroke
+        return null;
+      case 'omniboxBlur':
+        // The address bar lost focus. If it went to the suggestion list (a click
+        // there), keep editing; the list hands focus back or picks a row.
+        if (w.omniPopup.isFocused()) return true;
+        w.omniPopup.hide();
+        return false;
+      case 'popupRender':
+        w.omniPopup.show(args[0] || {});
+        return null;
+      case 'popupHide':
+        w.omniPopup.hide();
+        return null;
+      case 'popupPick':
+        w.ui.send('murshid:popup-pick', { index: Number(args[0]) || 0, newTab: Boolean(args[1]?.newTab) });
+        return null;
+      case 'popupRefocus':
+        w.ui.focus();
+        w.ui.send('murshid:omnibox-refocus');
+        return null;
+      case 'switchToTab': {
+        const id = Number(args[0]);
+        const target = ctx.windowForTab(id);
+        const t = target?.getTab(id);
+        w.omniPopup.hide();
+        if (!t) return false;
+        target.selectTab(t);
+        if (target !== w) target.win.focus();
+        return true;
+      }
+      case 'historyRemove': {
+        const { url, query } = args[0] || {};
+        return ctx.history.remove({ url: url ? String(url) : undefined, query: query ? String(query) : undefined });
       }
       case 'back': return ctx.commands.run.back(w);
       case 'forward': return ctx.commands.run.forward(w);
@@ -466,16 +520,21 @@ function installPageIpc() {
         return {
           values: {
             searchEngine: ctx.settings.get('searchEngine'),
+            searchSuggestions: ctx.settings.get('searchSuggestions'),
             startCompanion: ctx.settings.get('startCompanion'),
           },
+          historyCount: ctx.history.count(),
           searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
         };
       case 'setSetting': {
         const [key, value] = args;
         if (key === 'searchEngine' && SEARCH_ENGINES[value]) ctx.settings.set(key, value);
-        if (key === 'startCompanion') ctx.settings.set(key, Boolean(value));
+        if (key === 'startCompanion' || key === 'searchSuggestions') ctx.settings.set(key, Boolean(value));
         return true;
       }
+      case 'clearHistory':
+        ctx.history.clear();
+        return ctx.history.count();
       case 'navigate': {
         const target = resolveInput(String(args[0] || ''), (q) => ctx.settings.searchUrl(q));
         if (tab) tab.load(target);
@@ -500,6 +559,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   ctx.quitting = true;
   ctx.settings?.flush();
+  ctx.history?.flush();
 });
 
 // Keep a handle on extension IDs for debugging from the console.

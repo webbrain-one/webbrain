@@ -18,7 +18,21 @@
 
   // Settings ----------------------------------------------------------------------
   if (page === 'settings' && api) {
-    api.settings().then(({ values, searchEngines }) => {
+    const showHistoryCount = (n) => {
+      $('history-count').textContent = n === 1
+        ? '1 page, used for address bar suggestions. Kept only on this computer.'
+        : `${n} pages, used for address bar suggestions. Kept only on this computer.`;
+      $('clear-history').disabled = n === 0;
+    };
+    api.settings().then(({ values, searchEngines, historyCount }) => {
+      const suggest = $('suggest');
+      suggest.checked = Boolean(values.searchSuggestions);
+      suggest.addEventListener('change', () => api.setSetting('searchSuggestions', suggest.checked));
+      showHistoryCount(historyCount || 0);
+      $('clear-history').addEventListener('click', () => {
+        if (!window.confirm('Clear all browsing history? This cannot be undone.')) return;
+        api.clearHistory().then(showHistoryCount);
+      });
       const select = $('engine');
       for (const engine of searchEngines) {
         const option = document.createElement('option');

@@ -11,6 +11,7 @@ if (typeof location !== 'undefined' && location.protocol === 'murshid:' && windo
     info: () => ipcRenderer.invoke('murshid-page', 'info'),
     settings: () => ipcRenderer.invoke('murshid-page', 'settings'),
     setSetting: (key, value) => ipcRenderer.invoke('murshid-page', 'setSetting', key, value),
+    clearHistory: () => ipcRenderer.invoke('murshid-page', 'clearHistory'),
     navigate: (text) => ipcRenderer.invoke('murshid-page', 'navigate', text),
     openWebBrain: () => ipcRenderer.invoke('murshid-page', 'openWebBrain'),
     companion: () => ipcRenderer.invoke('murshid-page', 'companion'),

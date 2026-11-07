@@ -194,7 +194,10 @@ function renderToolbar() {
   els.reload.title = loading ? 'Stop loading' : 'Reload (Ctrl+R)';
   els.reload.setAttribute('aria-label', loading ? 'Stop' : 'Reload');
 
-  if (!editing && document.activeElement !== els.address) {
+  // The input stays document.activeElement after focus moves to a tab view, so
+  // also check that this page has focus before treating it as in use.
+  const addressInUse = document.hasFocus() && document.activeElement === els.address;
+  if (!editing && !addressInUse) {
     els.address.value = tab ? prettyUrl(tab.displayUrl) : '';
   }
   const isWeb = tab && tab.displayUrl;
@@ -267,33 +270,275 @@ els.caption.addEventListener('click', (event) => {
   if (control) api.invoke('windowControl', control);
 });
 
+// Address bar suggestions ---------------------------------------------------
+//
+// The main process finds the suggestions (app/omnibox.js). The rows are drawn
+// by a separate view laid over the page (app/omnibox-popup.js, popup.js),
+// because the tab views sit above this page. Typing, keys and which row is
+// highlighted stay here.
+
+const omni = {
+  userText: '', // what was typed, without the inline completion
+  inline: null, // { completion } appended to userText and selected
+  items: [],
+  itemsFor: null, // the userText the rows were found for
+  selected: 0,
+  engine: '',
+  open: false,
+  seq: 0,
+  composing: false,
+  popupFocused: false, // a click in the list took focus for a moment
+};
+
+function caretAtEnd() {
+  const a = els.address;
+  return a.selectionStart === a.value.length && a.selectionEnd === a.value.length;
+}
+
+function omniboxRect() {
+  const r = els.omnibox.getBoundingClientRect();
+  return { x: r.left, y: r.top, width: r.width, height: r.height };
+}
+
+function requestSuggestions(allowInline) {
+  const text = omni.userText;
+  if (!text.trim()) {
+    closeSuggestions();
+    return;
+  }
+  const seq = ++omni.seq;
+  api.invoke('suggest', text, { seq, allowInline }).then((result) => {
+    if (!result || result.seq !== omni.seq || document.activeElement !== els.address) return;
+    showSuggestions(result, text, true);
+  });
+}
+
+function showSuggestions(result, text, fresh) {
+  const previousKey = omni.items[omni.selected]?.key;
+  omni.items = result.items || [];
+  omni.itemsFor = text;
+  omni.engine = result.engine || omni.engine;
+  if (fresh) {
+    omni.selected = 0;
+    omni.inline = null;
+    if (result.inline && els.address.value === text && caretAtEnd()) {
+      omni.inline = result.inline;
+      els.address.value = text + result.inline.completion;
+      els.address.setSelectionRange(text.length, els.address.value.length);
+    }
+  } else {
+    // Search suggestions arrived: keep the same row highlighted if it is still there.
+    const kept = previousKey ? omni.items.findIndex((item) => item.key === previousKey) : 0;
+    omni.selected = Math.max(0, kept);
+    if (kept < 0) restoreTyped();
+  }
+  renderSuggestions();
+}
+
+function renderSuggestions() {
+  if (!omni.items.length) {
+    closeSuggestions();
+    return;
+  }
+  omni.open = true;
+  els.omnibox.classList.add('open');
+  api.invoke('popupRender', {
+    items: omni.items,
+    selected: omni.selected,
+    input: omni.userText,
+    engine: omni.engine,
+    rect: omniboxRect(),
+  });
+}
+
+function closeSuggestions() {
+  omni.seq += 1; // answers still on their way are no longer wanted
+  omni.items = [];
+  omni.itemsFor = null;
+  omni.selected = 0;
+  omni.inline = null;
+  if (!omni.open) return;
+  omni.open = false;
+  els.omnibox.classList.remove('open');
+  api.invoke('popupHide');
+}
+
+/** Back to what was typed, with the inline completion (if any) selected after it. */
+function restoreTyped() {
+  const text = omni.userText;
+  els.address.value = text + (omni.inline?.completion || '');
+  els.address.setSelectionRange(text.length, els.address.value.length);
+}
+
+function moveSelection(delta) {
+  if (!omni.open || !omni.items.length) return;
+  const next = Math.max(0, Math.min(omni.items.length - 1, omni.selected + delta));
+  if (next === omni.selected) return;
+  omni.selected = next;
+  if (next === 0) {
+    restoreTyped();
+  } else {
+    els.address.value = omni.items[next].fill;
+    const end = els.address.value.length;
+    els.address.setSelectionRange(end, end);
+  }
+  renderSuggestions();
+}
+
+function endEditing() {
+  editing = false;
+  omni.popupFocused = false;
+  closeSuggestions();
+  if (document.activeElement === els.address) els.address.blur();
+  renderToolbar();
+}
+
+/** Enter, or a click in the list: do what the highlighted row (or the text) says. */
+function accept({ index = omni.selected, newTab = false, wwwCom = false } = {}) {
+  const value = els.address.value.trim();
+  const item = omni.open ? omni.items[index] : null;
+  // Row 0 is only trustworthy if it was worked out for the text as it is now.
+  const usable = item && (index !== 0 || omni.itemsFor === omni.userText) ? item : null;
+
+  if (wwwCom) {
+    // Ctrl+Enter: "example" → www.example.com
+    const word = (omni.userText || value).trim();
+    if (/^[\p{L}\p{N}-]+$/u.test(word)) {
+      endEditing();
+      api.invoke('navigate', `www.${word}.com`, { kind: 'input', newTab });
+      return;
+    }
+  }
+  if (usable?.type === 'tab') {
+    endEditing();
+    api.invoke('switchToTab', usable.tabId);
+    return;
+  }
+  if (usable?.type === 'url') {
+    endEditing();
+    api.invoke('navigate', usable.url, { kind: 'url', newTab });
+    return;
+  }
+  if (usable && usable.query !== undefined) {
+    endEditing();
+    api.invoke('navigate', usable.query, { kind: 'search', newTab });
+    return;
+  }
+  if (!value) return;
+  endEditing();
+  api.invoke('navigate', value, { kind: 'input', newTab });
+}
+
 els.address.addEventListener('focus', () => {
+  if (omni.popupFocused) {
+    // Coming back from a click in the list: carry on where the typing was.
+    omni.popupFocused = false;
+    return;
+  }
+  api.invoke('omniboxFocus');
   const tab = activeTab();
   if (tab && !editing) els.address.value = tab.displayUrl || '';
   requestAnimationFrame(() => els.address.select());
 });
-els.address.addEventListener('input', () => { editing = true; });
-els.address.addEventListener('blur', () => {
-  editing = false;
-  renderToolbar();
+els.address.addEventListener('compositionstart', () => { omni.composing = true; });
+els.address.addEventListener('compositionend', () => { omni.composing = false; });
+els.address.addEventListener('input', (event) => {
+  editing = true;
+  omni.userText = els.address.value;
+  // Only complete inline while typing forwards at the end (not after deleting or pasting).
+  const allowInline = event.inputType === 'insertText' && !event.isComposing && !omni.composing && caretAtEnd();
+  requestSuggestions(allowInline);
 });
+els.address.addEventListener('blur', () => {
+  api.invoke('omniboxBlur').then((keep) => {
+    if (keep) {
+      omni.popupFocused = true;
+      return;
+    }
+    if (document.hasFocus() && document.activeElement === els.address) return;
+    stopEditingAndShowUrl();
+  });
+});
+
+/** Give up what was typed and show the page's address again. */
+function stopEditingAndShowUrl() {
+  editing = false;
+  omni.popupFocused = false;
+  closeSuggestions();
+  renderToolbar();
+}
 els.address.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    editing = false;
-    const tab = activeTab();
-    els.address.value = tab?.displayUrl || '';
-    els.address.select();
-    if (!tab?.isNewTab) api.invoke('focusContent');
+  if (event.isComposing || omni.composing) return;
+  const modified = event.ctrlKey || event.altKey || event.metaKey;
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp':
+      if (modified) return;
+      event.preventDefault();
+      if (omni.open) {
+        moveSelection(event.key === 'ArrowDown' ? 1 : -1);
+      } else if (event.key === 'ArrowDown' && els.address.value.trim()) {
+        editing = true;
+        omni.userText = els.address.value;
+        requestSuggestions(false);
+      }
+      return;
+    case 'Tab':
+      if (!omni.open || modified) return;
+      event.preventDefault();
+      moveSelection(event.shiftKey ? -1 : 1);
+      return;
+    case 'Enter':
+      event.preventDefault();
+      accept({ newTab: event.altKey, wwwCom: event.ctrlKey && !event.altKey });
+      return;
+    case 'Escape': {
+      event.preventDefault();
+      if (omni.open) {
+        // First Esc: close the list and drop the completion or highlighted row.
+        els.address.value = omni.userText;
+        closeSuggestions();
+        return;
+      }
+      editing = false;
+      const tab = activeTab();
+      els.address.value = tab?.displayUrl || '';
+      els.address.select();
+      if (!tab?.isNewTab) api.invoke('focusContent');
+      return;
+    }
+    case 'Delete': {
+      // Shift+Delete forgets the highlighted history row.
+      const item = omni.open && event.shiftKey ? omni.items[omni.selected] : null;
+      if (!item?.removable) return;
+      event.preventDefault();
+      const target = item.type === 'history-search' ? { query: item.query } : { url: item.url };
+      const keep = omni.selected;
+      const hadInline = Boolean(omni.inline);
+      api.invoke('historyRemove', target).then(() => {
+        const seq = ++omni.seq;
+        return api.invoke('suggest', omni.userText, { seq, allowInline: hadInline });
+      }).then((result) => {
+        if (!result || result.seq !== omni.seq) return;
+        // Same list minus the forgotten row, with the highlight staying in place.
+        omni.items = result.items || [];
+        omni.itemsFor = omni.userText;
+        omni.inline = result.inline || null;
+        omni.selected = Math.min(keep, Math.max(0, omni.items.length - 1));
+        if (omni.selected === 0) {
+          restoreTyped();
+        } else {
+          els.address.value = omni.items[omni.selected].fill;
+          els.address.setSelectionRange(els.address.value.length, els.address.value.length);
+        }
+        renderSuggestions();
+      });
+      return;
+    }
+    default:
   }
 });
-els.omnibox.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const text = els.address.value.trim();
-  if (!text) return;
-  editing = false;
-  els.address.blur();
-  api.invoke('navigate', text);
-});
+els.omnibox.addEventListener('submit', (event) => event.preventDefault());
 
 // Side panel resize
 els.splitter.addEventListener('pointerdown', (event) => {
@@ -353,14 +598,43 @@ api.on('murshid:state', (next) => {
   state = next;
   if (switched) {
     editing = false;
+    omni.popupFocused = false;
+    closeSuggestions();
     if (!els.findbar.hidden) closeFind();
   }
   render();
+  if (switched && document.hasFocus() && document.activeElement === els.address) {
+    // Switched tabs with the address bar focused: show the new tab's address.
+    els.address.value = activeTab()?.displayUrl || '';
+    els.address.select();
+  }
 });
 api.on('murshid:focus-omnibox', () => {
   editing = false;
+  omni.popupFocused = false;
+  closeSuggestions();
   els.address.focus();
   els.address.select();
+});
+api.on('murshid:suggest-update', (result) => {
+  if (!result || result.seq !== omni.seq || !omni.open) return;
+  showSuggestions(result, omni.itemsFor ?? omni.userText, false);
+});
+api.on('murshid:popup-pick', ({ index, newTab } = {}) => {
+  accept({ index: Number(index) || 0, newTab: Boolean(newTab) });
+});
+api.on('murshid:omnibox-refocus', () => {
+  // The main process gave this page focus back; the address bar's focus
+  // handler sees popupFocused and leaves the text and caret alone.
+  if (document.activeElement !== els.address) els.address.focus();
+});
+api.on('murshid:omnibox-close', () => {
+  if (document.hasFocus() && document.activeElement === els.address) {
+    omni.popupFocused = false;
+    closeSuggestions();
+  } else {
+    stopEditingAndShowUrl();
+  }
 });
 api.on('murshid:find-open', openFind);
 api.on('murshid:find-step', stepFind);
@@ -376,6 +650,9 @@ new ResizeObserver(() => {
   api.invoke('layout', els.chrome.getBoundingClientRect().height);
   renderPanel();
 }).observe(els.chrome);
-window.addEventListener('resize', () => renderTabs());
+window.addEventListener('resize', () => {
+  renderTabs();
+  if (omni.open) renderSuggestions(); // the list follows the address bar's width
+});
 
 api.invoke('ready');

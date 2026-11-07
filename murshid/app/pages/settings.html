@@ -17,6 +17,14 @@
       <select id="engine"></select>
     </div>
     <div class="row">
+      <label for="suggest">Show search suggestions<small>While you type in the address bar, what you type is sent to your search engine for suggestions. Matches from your history and open tabs never leave this computer.</small></label>
+      <input id="suggest" type="checkbox">
+    </div>
+    <div class="row">
+      <div class="k">Browsing history<small id="history-count">Pages you have visited, used for address bar suggestions. Kept only on this computer.</small></div>
+      <button class="button" id="clear-history" type="button">Clear</button>
+    </div>
+    <div class="row">
       <label for="companion">Start WebBrain Companion with Murshid<small>Starts the tray app in the background if it is installed and not already running.</small></label>
       <input id="companion" type="checkbox">
     </div>

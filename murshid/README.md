@@ -18,6 +18,32 @@ Murshid is a Chromium browser, built on Electron, with WebBrain built in:
 
 The homepage is in `web/`.
 
+## The address bar
+
+The address bar completes as you type, like Chrome's:
+
+- **Inline completion.** Type the start of a site you have typed before, or
+  visited at least twice, and the rest of its address is filled in and
+  selected. Keep typing to replace it, Backspace to drop it, or Enter to go.
+  After a `/` it completes whole pages.
+- **Suggestions.** The list under the address bar holds what Enter will do,
+  then open tabs ("Switch to this tab"), pages from your history, your past
+  searches and the search engine's suggestions. Up/Down and Tab move through
+  it; Esc closes it and puts back what you typed; Shift+Delete removes the
+  highlighted history entry; Alt+Enter opens in a new tab; Ctrl+Enter turns
+  `example` into `www.example.com`.
+
+History is kept in `<profile>/murshid-history.json` (up to 5,000 pages, the
+least used dropped first) and never leaves the computer. Search suggestions
+send what you type to the chosen search engine, without cookies; skipped for
+addresses with a scheme, local and private hosts and file paths, and switched
+off entirely with *Show search suggestions* in Settings, where history can be
+cleared too.
+
+The list is its own small view (`app/omnibox-popup.js`, `app/ui/popup.*`)
+because the tab views are drawn above the browser chrome; matching and
+ranking are in `app/omnibox.js`, the history store in `app/history.js`.
+
 ## Run it
 
 ```sh

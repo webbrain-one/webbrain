@@ -8,17 +8,45 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 
+// `suggest` endpoints all answer in the OpenSearch suggestions format:
+// ["what was typed", ["suggestion", ...]].
 const SEARCH_ENGINES = {
-  google: { name: 'Google', url: 'https://www.google.com/search?q=%s' },
-  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
-  bing: { name: 'Bing', url: 'https://www.bing.com/search?q=%s' },
-  brave: { name: 'Brave Search', url: 'https://search.brave.com/search?q=%s' },
-  startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s' },
-  kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s' },
+  google: {
+    name: 'Google',
+    url: 'https://www.google.com/search?q=%s',
+    suggest: 'https://suggestqueries.google.com/complete/search?client=firefox&ie=utf-8&oe=utf-8&q=%s',
+  },
+  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s', suggest: 'https://duckduckgo.com/ac/?type=list&q=%s' },
+  bing: { name: 'Bing', url: 'https://www.bing.com/search?q=%s', suggest: 'https://www.bing.com/osjson.aspx?query=%s' },
+  brave: { name: 'Brave Search', url: 'https://search.brave.com/search?q=%s', suggest: 'https://search.brave.com/api/suggest?q=%s' },
+  startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s', suggest: 'https://www.startpage.com/osuggestions?q=%s' },
+  kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s', suggest: 'https://kagi.com/api/autosuggest?q=%s' },
 };
+
+// Where each engine's results pages live, to recognise past searches in history.
+const RESULT_PAGES = Object.values(SEARCH_ENGINES).map((engine) => {
+  const u = new URL(engine.url.replace('%s', 'x'));
+  const param = [...u.searchParams.entries()].find(([, v]) => v === 'x')?.[0] || 'q';
+  return { host: u.hostname.replace(/^www./, ''), path: u.pathname, param };
+});
+RESULT_PAGES.push({ host: 'startpage.com', path: '/sp/search', param: 'query' });
+
+/** The query of a search results page from one of the engines, else null. */
+function searchQueryOf(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^www./, '');
+  for (const page of RESULT_PAGES) {
+    if (page.host !== host || page.path !== u.pathname) continue;
+    const query = (u.searchParams.get(page.param) || '').trim();
+    return query || null;
+  }
+  return null;
+}
 
 const DEFAULTS = {
   searchEngine: 'google',
+  searchSuggestions: true,
   startCompanion: true,
   sidePanelWidth: 420,
   restoreLastSession: false,
@@ -70,10 +98,13 @@ class Settings extends EventEmitter {
     }
   }
 
+  engine() {
+    return SEARCH_ENGINES[this.data.searchEngine] || SEARCH_ENGINES.google;
+  }
+
   searchUrl(text) {
-    const engine = SEARCH_ENGINES[this.data.searchEngine] || SEARCH_ENGINES.google;
-    return engine.url.replace('%s', encodeURIComponent(text));
+    return this.engine().url.replace('%s', encodeURIComponent(text));
   }
 }
 
-module.exports = { Settings, SEARCH_ENGINES };
+module.exports = { Settings, SEARCH_ENGINES, searchQueryOf };

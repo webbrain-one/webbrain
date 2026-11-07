@@ -53,7 +53,7 @@ h1 em { color: var(--crimson); }
 .row small { display: block; color: var(--muted); font-weight: 400; }
 .row .v { color: var(--muted); text-align: right; word-break: break-all; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 180px; }
-input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--crimson); }
+input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--crimson); }
 
 .button {
   display: inline-flex; align-items: center; gap: 8px;
@@ -63,6 +63,8 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--crimson)
 }
 .button:hover { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
 .button.primary { background: var(--crimson); border-color: var(--crimson); color: #fbf3e4; }
+.button:disabled { opacity: .45; cursor: default; box-shadow: none; border-color: var(--line); }
+.row .button { flex: none; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .ok { color: #2a8a5f; }
 .warn { color: var(--crimson); }
