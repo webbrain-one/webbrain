@@ -1218,6 +1218,7 @@ export const AGENT_TOOLS = [
                 action: { type: 'string', enum: [...PROGRESS_ACTIONS], description: 'Canonical action taken or planned, e.g. follow, star, collect_email, process_item. Use one of the listed names; any other word is rejected.' },
                 status: { type: 'string', enum: ['pending', 'acted', 'processed', 'skipped', 'failed'], description: 'Current row status.' },
                 fields: { type: 'object', description: 'Collected facts for this item, e.g. {email:"a@b.com"} or {email:null}.' },
+                emptyFields: { type: 'array', items: { type: 'string' }, description: 'Fields you checked that this item has no value for, e.g. ["bio"] for a profile with no bio; they count as recorded (set them to null in fields). Never list a value you could not find, read or reach. A list replaces the row\'s earlier one.' },
                 reason: { type: 'string', description: 'Short reason for skipped/failed, or a useful note.' },
               },
               required: ['id', 'status'],

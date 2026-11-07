@@ -1066,7 +1066,11 @@ follow) are batched: the decision model gets one question per item in chunks of
 of an expected item that only says it is missing ("unknown", "bilinmiyor", "—")
 is found this way once, at a successful done, among values of 40 characters or
 fewer; no sure answer leaves the value counted as given. Missing values are
-otherwise JSON null. Action names in progress rows and requested field names
+otherwise JSON null. A field the item itself has no value for (a profile with
+no bio) is recorded by name: the row lists it in `emptyFields`, it counts as
+answered and is not read. A field that is null or absent and not listed was
+never filled and still blocks success, and the refusal tells the model how to
+list one. Action names in progress rows and requested field names
 are the canonical names the models are given; another word for one is rejected
 (progress_update) or names no field (the requirement stays incomplete).
 

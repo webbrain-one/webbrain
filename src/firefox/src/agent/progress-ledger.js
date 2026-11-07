@@ -56,6 +56,8 @@ function normalizeStatus(value, fallback = 'pending') {
 // A missing value is JSON null (or the literal "null" a model wrote as a
 // string). Whether some other text only says the value is missing, in any
 // language, is read by a model where it matters: the expected-items check.
+// A field the item itself has no value for (a profile with no bio) is told
+// apart by name, in the row's emptyFields, not by its value.
 function sanitizeFieldValue(value) {
   if (value == null) return null;
   if (typeof value === 'string') {
@@ -65,6 +67,25 @@ function sanitizeFieldValue(value) {
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   return undefined;
+}
+
+// The field names a row lists as checked and empty: up to 20 distinct names,
+// never an app-owned field. undefined when the item gives no list, [] for an
+// empty one (which clears the row's list).
+function sanitizeEmptyFieldNames(value) {
+  const list = typeof value === 'string' ? [value] : value;
+  if (!Array.isArray(list)) return undefined;
+  return [...new Set(list
+    .filter(name => typeof name === 'string')
+    .map(name => sanitizeText(name, 80))
+    .filter(name => name && !APP_OWNED_BOOLEAN_FIELD_KEYS.has(name) && !APP_OWNED_INTEGER_FIELD_KEYS.has(name)))]
+    .slice(0, 20);
+}
+
+// Whether a row records `field` as checked on the item and empty: the item
+// has no value for it. A field that is only null or absent was never filled.
+export function ledgerFieldCheckedEmpty(row, field) {
+  return Array.isArray(row?.emptyFields) && row.emptyFields.includes(String(field));
 }
 
 function cleanTarget(value) {
@@ -290,6 +311,7 @@ export function normalizeLedgerItem(item, opts = {}) {
   const pageScope = sanitizeText(item.pageScope || item.page_scope || opts.pageScope || '', 240);
   const taskKey = sanitizeText(item.taskKey || opts.taskKey || '', 240);
   const fields = sanitizeFields(item.fields, { allowAppOwnedFields: source === 'classifier' });
+  const emptyFields = sanitizeEmptyFieldNames(item.emptyFields ?? item.empty_fields);
   const attempts = Number.isFinite(Number(item.attempts))
     ? Math.max(0, Math.floor(Number(item.attempts)))
     : (source === 'auto' ? 1 : 0);
@@ -302,6 +324,8 @@ export function normalizeLedgerItem(item, opts = {}) {
     status,
     ...(action ? { action } : {}),
     ...(fields ? { fields } : {}),
+    // An empty list is kept here so an update can clear a row's list.
+    ...(emptyFields ? { emptyFields } : {}),
     ...(reason ? { reason } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(pageScope ? { pageScope } : {}),
@@ -458,6 +482,10 @@ function mergeCanonicalProgressRows(canonical, duplicate) {
     .map(Number).filter(Number.isFinite);
   const updatedAt = [canonical?.updatedAt, duplicate?.updatedAt]
     .map(Number).filter(Number.isFinite);
+  const emptyFields = sanitizeEmptyFieldNames([
+    ...(Array.isArray(canonical?.emptyFields) ? canonical.emptyFields : []),
+    ...(Array.isArray(duplicate?.emptyFields) ? duplicate.emptyFields : []),
+  ]);
   return {
     ...canonical,
     label: duplicate?.label || canonical?.label,
@@ -474,6 +502,7 @@ function mergeCanonicalProgressRows(canonical, duplicate) {
         ? { classifierTarget: true } : {}),
       ...(Number.isInteger(ordinal) && ordinal > 0 ? { expectedOrdinal: ordinal } : {}),
     },
+    ...(emptyFields.length ? { emptyFields } : {}),
     attempts: Math.max(Number(canonical?.attempts || 0), Number(duplicate?.attempts || 0)),
     ...(firstSeenAt.length ? { firstSeenAt: Math.min(...firstSeenAt) } : {}),
     ...(updatedAt.length ? { updatedAt: Math.max(...updatedAt) } : {}),
@@ -637,6 +666,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
     const key = ledgerRowKey(incoming);
     const existingIdx = indexByKey.get(key);
     if (existingIdx == null) {
+      if (!incoming.emptyFields?.length) delete incoming.emptyFields;
       next.push(incoming);
       indexByKey.set(key, next.length - 1);
       updated.push(incoming);
@@ -657,6 +687,8 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       status: keepTerminal ? existing.status : incoming.status,
       ...(incoming.action ? { action: incoming.action } : {}),
       fields: { ...(existing.fields || {}), ...(incoming.fields || {}) },
+      // A list the update gives replaces the row's; no list keeps it.
+      emptyFields: incoming.emptyFields || existing.emptyFields,
       ...(incoming.reason ? { reason: incoming.reason } : {}),
       sessionId: incoming.sessionId || existing.sessionId,
       pageScope: incoming.pageScope || existing.pageScope,
@@ -669,6 +701,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       updatedAt: now,
     };
     if (!Object.keys(merged.fields || {}).length) delete merged.fields;
+    if (!merged.emptyFields?.length) delete merged.emptyFields;
     if (!merged.sessionId) delete merged.sessionId;
     if (!merged.pageScope) delete merged.pageScope;
     if (!merged.taskKey) delete merged.taskKey;
@@ -699,8 +732,11 @@ export function formatLedgerRow(row) {
       .filter(Boolean)
       .join(', ')
     : '';
+  const emptyFields = Array.isArray(row.emptyFields)
+    ? row.emptyFields.slice(0, 8).map(name => sanitizeText(name, 60)).filter(Boolean).join(', ')
+    : '';
   const reason = sanitizeText(row.reason || '', 240);
-  return `- ${status}${action ? ` ${action}` : ''}: ${label}${id && id !== label ? ` [id: ${id}]` : ''}${fields ? ` (${fields})` : ''}${reason ? ` - ${reason}` : ''}`;
+  return `- ${status}${action ? ` ${action}` : ''}: ${label}${id && id !== label ? ` [id: ${id}]` : ''}${fields ? ` (${fields})` : ''}${emptyFields ? ` [checked empty: ${emptyFields}]` : ''}${reason ? ` - ${reason}` : ''}`;
 }
 
 export function formatLedgerSummary(rows = [], opts = {}) {
