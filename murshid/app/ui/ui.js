@@ -599,11 +599,11 @@ function openFind() {
   els.findInput.select();
   if (els.findInput.value) api.invoke('find', els.findInput.value, { findNext: false });
 }
-function closeFind() {
+function closeFind({ focusContent = true, tabId = null } = {}) {
   els.findbar.hidden = true;
   els.findCount.textContent = '';
   els.findInput.classList.remove('miss');
-  api.invoke('findStop');
+  api.invoke('findStop', 'clear', { focusContent, tabId });
 }
 function stepFind(direction) {
   if (els.findbar.hidden) { openFind(); return; }
@@ -628,6 +628,7 @@ $('find-close').addEventListener('click', closeFind);
 // ------------------------------------------------------------- main process
 
 api.on('murshid:state', (next) => {
+  const previousTabId = state.activeId;
   const switched = next.activeId !== state.activeId;
   state = next;
   if (switched) {
@@ -635,7 +636,7 @@ api.on('murshid:state', (next) => {
     els.address.value = activeTab()?.displayUrl || '';
     omni.popupFocused = false;
     closeSuggestions();
-    if (!els.findbar.hidden) closeFind();
+    if (!els.findbar.hidden) closeFind({ focusContent: false, tabId: previousTabId });
   }
   render();
   if (switched && document.hasFocus() && document.activeElement === els.address) {

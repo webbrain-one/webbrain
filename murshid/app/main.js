@@ -447,10 +447,13 @@ function installUiIpc() {
         tab.wc.findInPage(String(text), { forward: options?.forward !== false, findNext: Boolean(options?.findNext), matchCase: false });
         return null;
       }
-      case 'findStop':
-        tab?.wc.stopFindInPage(args[0] === 'activate' ? 'activateSelection' : 'clearSelection');
-        tab?.wc.focus();
+      case 'findStop': {
+        const options = args[1] || {};
+        const findTab = options.tabId == null ? tab : byId(options.tabId);
+        findTab?.wc.stopFindInPage(args[0] === 'activate' ? 'activateSelection' : 'clearSelection');
+        if (options.focusContent !== false) findTab?.wc.focus();
         return null;
+      }
       case 'focusContent':
         tab?.wc.focus();
         return null;
