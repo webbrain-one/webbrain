@@ -153,7 +153,8 @@ for (const build of ['chrome', 'firefox']) {
     agent.systemOneContext = () => ({ isCurrent: () => true });
     agent.recordSystemOneVerdict = () => {};
     // The content script's live document identity (field_value_digest).
-    agent._liveTextMutationScope = async () => ({ documentToken: h.documentToken, pageUrl: h.url });
+    // `h.liveProbe` stands in for a page that does not answer as usual.
+    agent._liveTextMutationScope = async () => h.liveProbe ? h.liveProbe() : { documentToken: h.documentToken, pageUrl: h.url };
     agent.executeTool = async (_tab, name) => {
       assert.equal(name, 'get_accessibility_tree');
       return { success: true, pageUrl: h.url, pageContent: h.tree };
@@ -219,6 +220,46 @@ for (const build of ['chrome', 'firefox']) {
       const result = await h.done();
       assert.notEqual(h.guard.verifiedSubmissionEvidence, true);
       assert.match(h.planRefusal(result)?.nudge || '', /PLAN EXECUTION BLOCK/);
+    } finally { h.close(); }
+  });
+
+  // A reload at the same URL, before the new document's content script
+  // answers: the verdict looked at a page the agent cannot place, so the
+  // document the deletion was sent in is not known to be the live one.
+  test(`${build}: a page that does not say which document is live at done cannot certify the deletion`, async () => {
+    for (const [name, probe] of [
+      ['no answer', async () => null],
+      ['probe error', async () => { throw new Error('No content receiver'); }],
+      ['no answer in time', () => new Promise(() => {})],
+    ]) {
+      const h = await fixture();
+      try {
+        await h.confirm();
+        h.identityEpoch = 2000; h.documentToken = 'native-document-2'; h.liveProbe = probe;
+        const result = await h.done();
+        assert.equal(h.judges, 1, name);
+        assert.notEqual(h.guard.verifiedSubmissionEvidence, true, name);
+        assert.match(h.planRefusal(result)?.nudge || '', /PLAN EXECUTION BLOCK/, name);
+        assert.equal(await h.agent._refreshLiveDocumentScope(51), false, name);
+      } finally { h.close(); }
+    }
+  });
+
+  test(`${build}: an unanswered live-document read is refused, and done succeeds once the page answers`, async () => {
+    const h = await fixture();
+    try {
+      await h.confirm();
+      // Even on the same document, an unanswered read certifies nothing.
+      h.liveProbe = async () => null;
+      const refused = await h.done();
+      assert.notEqual(h.guard.verifiedSubmissionEvidence, true);
+      assert.match(h.planRefusal(refused)?.nudge || '', /PLAN EXECUTION BLOCK/);
+      h.liveProbe = null;
+      assert.equal(await h.agent._refreshLiveDocumentScope(51), true);
+      const result = await h.done();
+      assert.equal(result.done, true, JSON.stringify(result));
+      assert.equal(h.guard.verifiedSubmissionEvidence, true);
+      assert.equal(h.planRefusal(result), null);
     } finally { h.close(); }
   });
 

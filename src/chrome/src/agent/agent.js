@@ -2864,18 +2864,22 @@ export class Agent extends LoopDetector {
   // completion verdict could never certify it. Ask the page itself, as the
   // text-write guards do (_liveTextMutationScope), before such a commit is
   // sent and again when done relies on it. A page that does not answer in
-  // time keeps the last known document.
+  // time keeps the last known document, and the result says so: true only
+  // when the cached document is the one the page reported just now. Done
+  // certifies nothing on a false result, since a page reloaded at the same
+  // URL may not answer yet while the cache still names the old document.
   async _refreshLiveDocumentScope(tabId) {
     let live = null;
     try {
       live = await withCompletionTimeout(() => this._liveTextMutationScope(tabId, '', {}),
         this._runAbortSignal(tabId), 1500);
-    } catch { return; }
-    if (!live?.documentToken) return;
+    } catch { return false; }
+    if (!live?.documentToken) return false;
     const cached = this._lastAxScopes.get(tabId);
     if (live.documentToken === cached?.documentToken
-        && this._normalizeUrl(live.pageUrl || '') === this._normalizeUrl(cached?.pageUrl || '')) return;
+        && this._normalizeUrl(live.pageUrl || '') === this._normalizeUrl(cached?.pageUrl || '')) return true;
     this._rememberAxScope(tabId, live.documentToken, live.pageUrl || cached?.pageUrl || '');
+    return true;
   }
 
   _completionIframeBinding(tabId) {
@@ -50327,15 +50331,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const genericGuard = this._planExecutionGuards.get(tabId);
           const dispatchedSubmit = this._currentCompletionSubmitState(tabId);
           // The verdict certifies a native confirmation only on the document
-          // it was sent in: read which document is live now.
-          if (completionDecision?.outcome === 'succeeded' && dispatchedSubmit?.semanticCommit) {
-            await this._refreshLiveDocumentScope(tabId);
-          }
+          // it was sent in: read which document is live now. A page that
+          // does not say leaves the commit unverified.
+          const liveDocumentRead = completionDecision?.outcome === 'succeeded' && !!dispatchedSubmit?.semanticCommit
+            && await this._refreshLiveDocumentScope(tabId);
           if (completionDecision?.outcome === 'succeeded'
               && genericGuard?.enabled && !genericGuard.siteWorkflow?.job
               && dispatchedSubmit?.dispatched && dispatchedSubmit.observedAfterSubmit
               && this._normalizeUrl(dispatchedSubmit.currentUrl) === this._normalizeUrl(probe?.url || '')
-              && (!dispatchedSubmit.semanticCommit || this._completionSemanticCommitCurrent(tabId, dispatchedSubmit, probe?.url || ''))
+              && (!dispatchedSubmit.semanticCommit || (liveDocumentRead && this._completionSemanticCommitCurrent(tabId, dispatchedSubmit, probe?.url || '')))
               && !dispatchedSubmit.formValidationFailed) {
             genericGuard.verifiedSubmissionEvidence = true;
             genericGuard.semanticSubmissionVerified = true;
