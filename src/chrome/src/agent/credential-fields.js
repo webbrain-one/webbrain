@@ -351,6 +351,13 @@ function fieldIdentity(meta) {
 
 const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PASSWORD_WORD_RE.test(identity);
 
+// The text of a form's submit control (content.js and the Chrome CDP selector
+// probe report `formSubmitText`) when it creates an account rather than
+// signing in to one: "Create account", "Sign up", "Register", "Join". One that
+// also says sign in or log in ("Sign up or log in") does not count.
+const NEW_ACCOUNT_SUBMIT_RE = /sign[-_\s]?up|regist|create|join|get[-_\s]started|enrol/i;
+const SIGN_IN_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n/i;
+
 /**
  * Whether a field takes the password of an existing account: the one secret a
  * sign-in needs that only the user can know, so WebBrain types into it only a
@@ -362,10 +369,11 @@ const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PA
  * - autocomplete `current-password`: yes.
  * - autocomplete `new-password` or `one-time-code`: no.
  * - any other `<input type="password">`: yes, unless its name, id or label
- *   names a key or token rather than a password, or a new or repeated
- *   password, or its form holds more than one visible password field (a new
- *   password and its confirmation; content.js reports `passwordFields`) and
- *   the field does not name the current one.
+ *   names a key or token rather than a password, or, when the field does not
+ *   name the current password: it names a new or repeated password, its form
+ *   holds more than one visible password field (a new password and its
+ *   confirmation; `passwordFields`), or its form's submit control creates an
+ *   account (`formSubmitText`).
  *
  * @param {object} meta field metadata as content.js _fieldMeta reports it
  * @returns {{guarded: boolean, reason: string|null}}
@@ -382,8 +390,41 @@ export function isSignInPasswordField(meta) {
   if (!CURRENT_PASSWORD_FIELD_RE.test(identity)) {
     if (NEW_PASSWORD_FIELD_RE.test(identity)) return no;
     if (Number(meta.passwordFields) > 1) return no;
+    const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
+    if (NEW_ACCOUNT_SUBMIT_RE.test(submit) && !SIGN_IN_SUBMIT_RE.test(submit)) return no;
   }
   return { guarded: true, reason: 'input type=password' };
+}
+
+// Words people use to talk about credentials, and the stock logins a guess
+// tries first. Both turn up in ordinary sentences ("I don't know the
+// password", "log in to the admin panel"), so a value that is one of them
+// counts as given only where a message sets it as a value (valueOccurrence).
+const CREDENTIAL_WORDS = new Set(['password', 'passwords', 'passwd', 'pwd', 'pass', 'passcode', 'passphrase', 'passwort',
+  'username', 'user', 'login', 'credential', 'credentials', 'secret']);
+const STOCK_LOGIN_WORDS = new Set(['admin', 'administrator', 'root', 'guest', 'test', 'demo', 'default']);
+const QUOTE_CHARS = new Set(['"', "'", '`', '“', '”', '‘', '’', '«', '»']);
+// The text just before a value: "password: x", "pass=x", "it is x", "it's x",
+// "password x", "user x".
+const VALUE_LEAD_RE = /(?:[:=]|\b(?:is|was)|['’]s|\b(?:password|passwd|pwd|pass|passcode|passphrase|passwort|username|user|login))\s*$/i;
+const PAIR_PARTNER_BEFORE_RE = /([\p{L}\p{N}][^\s/]*)\s*\/\s*$/u;
+const PAIR_PARTNER_AFTER_RE = /^\s*\/\s*([\p{L}\p{N}][^\s/]*)/u;
+// The other half of "x/y" when it names a field rather than a value
+// ("username/password", "email/password").
+const PAIR_FIELD_WORDS = new Set([...CREDENTIAL_WORDS, 'email', 'e-mail', 'mail', 'phone', 'account', 'id', 'name', 'code', 'pin', 'key']);
+
+// Whether the occurrence of a word-like value at text[at, to) sets it as a
+// value: the whole message ("admin" as a clarify answer), quoted, after a
+// lead (VALUE_LEAD_RE), or one half of a login pair ("admin/admin") whose
+// other half does not name a field ("username/password").
+function valueOccurrence(text, at, to) {
+  const stripped = text.trim().replace(/^["'`“‘]+|["'`”’.!]+$/g, '');
+  if (stripped === text.slice(at, to)) return true;
+  if (QUOTE_CHARS.has(text[at - 1]) && QUOTE_CHARS.has(text[to])) return true;
+  if (VALUE_LEAD_RE.test(text.slice(Math.max(0, at - 16), at))) return true;
+  const partner = text.slice(Math.max(0, at - 64), at).match(PAIR_PARTNER_BEFORE_RE)?.[1]
+    || text.slice(to, to + 64).match(PAIR_PARTNER_AFTER_RE)?.[1];
+  return !!partner && !PAIR_FIELD_WORDS.has(partner.toLowerCase().replace(/[^\p{L}\p{N}]+$/u, ''));
 }
 
 /**
@@ -391,8 +432,11 @@ export function isSignInPasswordField(meta) {
  * normalization and case-sensitively, as passwords are. A value that starts
  * or ends with a letter or digit must not continue a longer word there:
  * "pass" is not given by a message that says "password", while "hunter2" is
- * given by "my password is hunter2." An empty value gives nothing away and is
- * always provided.
+ * given by "my password is hunter2." A value that is a credential word or a
+ * stock login ("password", "admin") must also be set as a value there
+ * ("password: admin", "admin/admin", a reply that is just "admin"), not only
+ * appear as a word ("I don't know the password"). An empty value gives nothing
+ * away and is always provided.
  *
  * @param {string} value
  * @param {string[]} sources
@@ -405,6 +449,8 @@ export function credentialValueProvided(value, sources = []) {
   const tokenChar = /[\p{L}\p{N}]/u;
   const checkStart = tokenChar.test(wanted[0]);
   const checkEnd = tokenChar.test(wanted[wanted.length - 1]);
+  const lower = wanted.toLowerCase();
+  const wordValue = CREDENTIAL_WORDS.has(lower) || STOCK_LOGIN_WORDS.has(lower);
   for (const source of Array.isArray(sources) ? sources : []) {
     if (typeof source !== 'string') continue;
     const text = normalize(source);
@@ -412,10 +458,40 @@ export function credentialValueProvided(value, sources = []) {
       const to = at + wanted.length;
       if (checkStart && at > 0 && tokenChar.test(text[at - 1])) continue;
       if (checkEnd && to < text.length && tokenChar.test(text[to])) continue;
+      if (wordValue && !valueOccurrence(text, at, to)) continue;
       return true;
     }
   }
   return false;
+}
+
+// A reply that withholds the credentials asked for or declines to sign in:
+// "I don't have them", "no", "I don't know the password", "not sure",
+// "Do not sign in", "Skip". English only; a reply that starts by agreeing
+// ("Yes", "Sign in", "Use the saved one") does not count.
+const WITHHOLDING_REPLY_RES = [
+  /^\W*(?:no|nope|nah|none|never|n\/a)\b(?!\s+(?:problem|worries)\b)/i,
+  /\b(?:do(?:n['’]?t| not)|does(?:n['’]?t| not)|did(?:n['’]?t| not)|have(?:n['’]?t| not)|has(?:n['’]?t| not)|can(?:['’]?t|not)|could(?:n['’]?t| not)|won['’]?t|will not|not)\s+(?:\w+\s+){0,2}?(?:have|got|know|remember|recall|own|sign|log|use|enter|share|give|provide|want|access|sure)\b/i,
+  /\b(?:no|without)\s+(?:\w+\s+)?(?:credentials?|passwords?|logins?|accounts?|usernames?|access|idea|clue)\b/i,
+  /\b(?:forgot|forgotten|lost|unknown|none|skip|cancel|never\s?mind|rather not)\b/i,
+];
+const AGREEING_REPLY_RE = /^\W*(?:yes|yeah|yep|yup|sure|ok|okay|go ahead|please do|sign in|log in|use|approve|allow|proceed|continue|enter)\b/i;
+
+/**
+ * Whether the user's reply to a credentials question withholds them (or
+ * declines the sign-in), rather than giving credentials or approving a source
+ * for them (a saved password, a code from their mailbox). The clarify result
+ * then tells the model to end partial instead of guessing (agent.js). A reply
+ * this does not recognize keeps the ordinary note; credential-not-provided
+ * still refuses a guessed sign-in password whatever the model decides.
+ *
+ * @param {string} answer
+ * @returns {boolean}
+ */
+export function clarifyReplyWithholdsCredentials(answer) {
+  const text = String(answer ?? '').trim().slice(0, 500);
+  if (!text || AGREEING_REPLY_RE.test(text)) return false;
+  return WITHHOLDING_REPLY_RES.some(pattern => pattern.test(text));
 }
 
 /**

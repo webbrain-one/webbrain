@@ -4877,6 +4877,28 @@ export class CDPClient {
             title: el.getAttribute?.('title') || null,
             labelText,
           };
+          // The same password-field facts content.js _fieldMeta reports (keep
+          // the two in step): how many visible password fields share the
+          // form (outside a form, the root), and the text of the form's
+          // first visible submit control. The sign-in password check
+          // (credential-fields.js isSignInPasswordField) tells a sign-up's
+          // new password from a sign-in's by them.
+          if (fieldType === 'password') {
+            try {
+              const fields = el.form ? [...el.form.elements] : [...(root.querySelectorAll?.('input') || [])];
+              fieldMeta.passwordFields = fields.filter(field => field.tagName === 'INPUT'
+                && String(field.type || '').toLowerCase() === 'password'
+                && field.getClientRects().length > 0).length;
+              const submit = el.form ? [...el.form.elements].find(control => control.getClientRects().length > 0
+                && ((control.tagName === 'BUTTON' && String(control.type || 'submit').toLowerCase() === 'submit')
+                  || (control.tagName === 'INPUT' && ['submit', 'image'].includes(String(control.type || '').toLowerCase())))) : null;
+              const submitText = submit
+                ? String((submit.tagName === 'INPUT' ? submit.value || submit.alt : submit.textContent)
+                  || submit.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim().slice(0, 80)
+                : '';
+              if (submitText) fieldMeta.formSubmitText = submitText;
+            } catch {}
+          }
           // Still needed by the payload below, which reports toolbar context
           // even when the element itself does not score as a candidate.
           const semanticToolbar = composedClosest(el, '[role="toolbar"]');

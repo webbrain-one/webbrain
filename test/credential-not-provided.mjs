@@ -74,7 +74,7 @@ function b4Conversation() {
 
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
-  const { isSignInPasswordField, credentialValueProvided, newPasswordValuesFromHistory } =
+  const { isSignInPasswordField, credentialValueProvided, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials } =
     await import(`../src/${build}/src/agent/credential-fields.js`);
 
   const fresh = (tab, messages = b4Conversation()) => {
@@ -106,7 +106,19 @@ for (const build of ['chrome', 'firefox']) {
       { type: 'password', name: 'newPassword' },
       { type: 'password', name: 'password', passwordFields: 2 },
       { type: 'text', name: 'password' },
+      // A single password field in a form whose submit control makes an account.
+      { type: 'password', name: 'password', labelText: 'Password', passwordFields: 1, formSubmitText: 'Create account' },
+      { type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Sign up' },
+      { type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Register' },
+      { type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Join now' },
     ]) assert.equal(guarded(meta), false, JSON.stringify(meta));
+    // A submit control that also signs in, or says neither, leaves a sign-in.
+    for (const formSubmitText of ['Sign in', 'Log in', 'Sign up or log in', 'Next', 'Continue']) {
+      assert.equal(guarded({ type: 'password', name: 'password', passwordFields: 1, formSubmitText }), true, formSubmitText);
+    }
+    // The current password of a change-password form stays a sign-in password.
+    assert.equal(guarded({ type: 'password', name: 'current_password', passwordFields: 1, formSubmitText: 'Create account' }), true);
+    assert.equal(guarded({ type: 'password', autocomplete: 'current-password', formSubmitText: 'Register' }), true);
   });
 
   test(`${build}: a credential counts as given only where the user wrote it whole`, () => {
@@ -125,6 +137,53 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(credentialValueProvided('café', ['café is the password']), true, 'compared after NFC');
     assert.equal(credentialValueProvided('café', ['café']), true, 'a decomposed value matches a composed message');
     assert.equal(credentialValueProvided('admin', [null, 42, 'admin']), true);
+  });
+
+  test(`${build}: a credential word or stock login counts as given only where a message sets it`, () => {
+    const given = (value, text) => credentialValueProvided(value, [text]);
+    // Ordinary sentences name the word without giving it.
+    for (const [value, text] of [
+      ['password', "I don't know the password."],
+      ['password', 'Sign in with my password and check the inbox.'],
+      ['password', 'Enter your username/password, I forgot them.'],
+      ['password', 'I lost my email/password'],
+      ['Password', 'Password reset did not arrive'],
+      ['pass', 'Use the pass you have'],
+      ['admin', 'Log in to my WordPress admin and update the plugin.'],
+      ['test', 'Sign in to the test portal.'],
+      ['demo', 'Open the demo site and sign in.'],
+    ]) assert.equal(given(value, text), false, `${value} | ${text}`);
+    // The ways people set one as a value.
+    for (const [value, text] of [
+      ['password', 'password: password'],
+      ['password', 'the password is password'],
+      ['password', 'use "password" for it'],
+      ['password', 'log in with admin/password'],
+      ['admin', 'log in as admin with password admin'],
+      ['admin', 'use admin/admin'],
+      ['admin', 'use admin / admin'],
+      ['admin', "it's admin"],
+      ['admin', 'username admin, password admin'],
+      ['admin', 'admin'],
+      ['admin', 'admin.'],
+      ['test', 'user test pass test'],
+      ['root', 'pass=root'],
+    ]) assert.equal(given(value, text), true, `${value} | ${text}`);
+    // Other values keep the whole-token rule.
+    assert.equal(given('portal', 'Sign in to the QA portal'), true);
+    assert.equal(given('admin123', 'the admin123 account'), true);
+  });
+
+  test(`${build}: a reply that withholds credentials is told apart from one that gives or approves them`, () => {
+    for (const answer of ["I don't have them.", 'No', 'nope', 'Do not sign in', "I don't know the password", 'not sure',
+      'Skip', 'Cancel', "I'd rather not", 'I forgot it', 'No idea', "I haven't got an account", 'None', 'without a password']) {
+      assert.equal(clarifyReplyWithholdsCredentials(answer), true, answer);
+    }
+    for (const answer of ['Sign in', 'Yes', 'Yes, go ahead', 'OK', 'Use the saved password', 'Enter the code from my email',
+      `It is ${GIVEN_PASSWORD}`, `user: test-account-a, pass: ${GIVEN_PASSWORD}`, 'No problem, go ahead',
+      'Sign in, but do not save the password', 'Continue without signing in', '', null]) {
+      assert.equal(clarifyReplyWithholdsCredentials(answer), false, String(answer));
+    }
   });
 
   test(`${build}: a password WebBrain set for a new account is remembered from the conversation`, () => {
@@ -160,7 +219,16 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(refused.errorCode, 'credential_not_provided');
     assert.match(refused.error, /Never guess, invent or try common or default credentials/);
     assert.match(refused.error, /outcome "partial"/);
+    assert.match(refused.error, /creates a new account instead, ask the user with clarify for the password to set/);
     assert.equal(refused.error.includes('admin'), false, 'the refusal does not repeat the guessed value');
+    assert.deepEqual(typed(), []);
+    // The target the preflight bound for the refused call is released.
+    const binding = { token: 'wbdb_test_binding', frameId: 0 };
+    const bound = await agent.executeTool(41, 'set_field', { ref_id: 'ref_pass', text: 'admin' }, null,
+      { ...modelCall(FIELDS.ref_pass), dispatchBinding: binding });
+    assert.equal(bound.errorCode, 'credential_not_provided');
+    assert.ok(sent.some(message => message.action === 'release_dispatch_binding'
+      && message.params?.dispatchBinding?.token === binding.token), 'the dispatch binding is released');
     assert.deepEqual(typed(), []);
     // Typing into the focused field (vision mode clicks a field, then types)
     // with no preflight answer: the page is asked which field has focus.
@@ -277,17 +345,74 @@ for (const build of ['chrome', 'firefox']) {
 
   test(`${build}: a reply to a credentials question tells the model to stop instead of guessing`, async () => {
     const agent = fresh(47);
-    const ask = (consequence, answer) => agent.executeTool(47, 'clarify', {
-      question: QUESTION, consequence, require_explicit_answer: true,
-    }, (type, data) => { if (type === 'clarify') agent.submitClarifyResponse(47, data.clarifyId, answer, 'text'); });
+    const ask = (consequence, answer, { question = QUESTION, options, source = 'text' } = {}) => agent.executeTool(47, 'clarify', {
+      question, consequence, require_explicit_answer: true, ...(options ? { options } : {}),
+    }, (type, data) => { if (type === 'clarify') agent.submitClarifyResponse(47, data.clarifyId, answer, source); });
     const credentials = await ask('credentials', "I don't have them.");
     assert.equal(credentials.answer, "I don't have them.");
-    assert.match(credentials.note, /do not guess or try common or default credentials/);
+    assert.match(credentials.note, /Do not guess or try common or default credentials/);
     assert.match(credentials.note, /do not submit the sign-in form empty/);
     assert.match(credentials.note, /call done with outcome "partial"/);
     assert.doesNotMatch(credentials.note, /Continue the task/);
+    // Declining an approval question is withholding too.
+    const declined = await ask('credentials', 'Do not sign in', {
+      question: 'Use the saved password to sign in?', options: ['Do not sign in', 'Sign in'], source: 'option' });
+    assert.match(declined.note, /call done with outcome "partial"/);
     const other = await ask('none', 'The blue one.');
     assert.match(other.note, /Continue the task with this answer in mind/);
+  });
+
+  test(`${build}: a reply that gives or approves credentials continues without the stop instruction`, async () => {
+    const agent = fresh(48);
+    const ask = (question, answer, options, source) => agent.executeTool(48, 'clarify', {
+      question, options, consequence: 'credentials', require_explicit_answer: true,
+    }, (type, data) => { if (type === 'clarify') agent.submitClarifyResponse(48, data.clarifyId, answer, source); });
+    for (const [question, answer, options, source] of [
+      // Approval questions: a saved password, a code from the user's mailbox.
+      ['Use the saved password to sign in?', 'Sign in', ['Do not sign in', 'Sign in'], 'option'],
+      ['Enter the code from your email?', 'Yes', ['No', 'Yes'], 'option'],
+      ['Should I use the key the page just issued?', 'Use it', undefined, 'text'],
+      // A reply that gives the credentials.
+      [QUESTION, `user test-account-a, password ${GIVEN_PASSWORD}`, undefined, 'text'],
+    ]) {
+      const result = await ask(question, answer, options, source);
+      assert.equal(result.success, true);
+      assert.doesNotMatch(result.note, /partial/, `${question} -> ${answer}`);
+      assert.match(result.note, /Continue the task with it/);
+      assert.match(result.note, /use the source this reply approves/);
+      assert.match(result.note, /Never guess or try common or default credentials/);
+    }
+  });
+
+  test(`${build}: a password from an early clarify answer still counts after the context is compacted`, async () => {
+    const tab = 49;
+    const provider = { model: 'compaction-fixture', chat: async () => ({ content: 'Earlier observations summarized.' }) };
+    const agent = new Agent({ getActive: () => provider });
+    agent._persist = () => {};
+    agent._persistNow = async () => true;
+    sent.length = 0;
+    const messages = [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: TASK, webbrainUserAuthoredText: TASK }];
+    agent.conversations.set(tab, messages);
+    agent.conversationModes.set(tab, 'act');
+    agent.conversationIds.set(tab, `credential-compaction-${build}`);
+    const answer = `user test-account-a, password ${GIVEN_PASSWORD}`;
+    const clarifyArgs = { question: QUESTION, consequence: 'credentials', require_explicit_answer: true };
+    messages.push({ role: 'assistant', content: '', tool_calls: [{ id: 'clarify_early', type: 'function',
+      function: { name: 'clarify', arguments: JSON.stringify(clarifyArgs) } }] });
+    const reply = await agent.executeTool(tab, 'clarify', clarifyArgs,
+      (type, data) => { if (type === 'clarify') agent.submitClarifyResponse(tab, data.clarifyId, answer, 'text'); });
+    messages.push({ role: 'tool', tool_call_id: 'clarify_early', content: JSON.stringify(reply) });
+    for (let index = 0; index < 35; index++) messages.push({ role: 'assistant', content: 'Observed page content. '.repeat(1200) });
+    const compacted = await agent._manageContext(tab, messages, null, null, { force: true });
+    assert.equal(compacted.compacted, true);
+    assert.equal(messages.some(message => message.tool_call_id === 'clarify_early'), false, 'the clarify result was compacted away');
+    assert.equal(messages.some(message => typeof message.content === 'string' && message.content.includes(GIVEN_PASSWORD)), false,
+      'no message text still holds the answer');
+    assert.deepEqual(messages.find(message => message.role === 'user')?.webbrainTaskClarifications?.map(entry => entry.answer), [answer]);
+    const typedPass = await agent.executeTool(tab, 'set_field', { ref_id: 'ref_pass', text: GIVEN_PASSWORD }, null, modelCall(FIELDS.ref_pass));
+    assert.equal(typedPass.success, true, 'the answer pinned on the task turn is still a source');
+    const guessed = await agent.executeTool(tab, 'set_field', { ref_id: 'ref_pass', text: 'admin' }, null, modelCall(FIELDS.ref_pass));
+    assert.equal(guessed.errorCode, 'credential_not_provided');
   });
 }
 
