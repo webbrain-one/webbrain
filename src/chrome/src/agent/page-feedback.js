@@ -13,6 +13,12 @@ const PAGE_GESTURE_LEASE_MS = 15000;
 const AGENT_SAME_DOCUMENT_NAVIGATION_MS = 3000;
 // A page route update this soon after physical input is the user's.
 const USER_NAVIGATION_PROXIMITY_MS = 2000;
+// A top-level navigation follows its activating click or submit within this window.
+const AGENT_NAVIGATION_MS = 10000;
+// A press's own top-level navigation can replace the observed document before
+// the browser's report of its commit arrives (a read of the old document fails
+// first). How long, in all, that press's observation waits for the report.
+const AGENT_NAVIGATION_COMMIT_WAIT_MS = 300;
 // How long a same-document Back/Forward update waits for its frame monitor's
 // page-initiated reading before the user attribution simply stands.
 const PAGE_TRAVERSAL_ATTRIBUTION_MS = 500;
@@ -491,6 +497,10 @@ function safeAction(tool, args = {}) {
   return { tool, ...target };
 }
 
+function sameOrigin(expected, actual) {
+  try { return new URL(expected).origin === new URL(actual).origin; } catch { return false; }
+}
+
 function sameOriginPath(expected, actual) {
   try {
     const expectedUrl = new URL(expected), actualUrl = new URL(actual);
@@ -746,7 +756,7 @@ export const pageFeedbackMethods = {
       clearGestureLease(run, frameId);
       // A replaced document cannot inherit a click's same-document route marker.
       if (frameId === 0 || run.sameDocumentNavigation?.frameId === frameId) run.sameDocumentNavigation = null;
-      if (frameId === 0) run.agentRoute = null;
+      if (frameId === 0) { run.agentRoute = null; run.agentDocument = null; }
       run.documents.set(frameId, { id: details.documentId || '', url: details.url || '',
         parentFrameId: Number.isSafeInteger(details.parentFrameId) ? details.parentFrameId : undefined });
       if (frameId === 0) {
@@ -772,7 +782,7 @@ export const pageFeedbackMethods = {
       ? redirect && !!navigation.documentId && navigation.documentId === details.documentId
       : (!!navigation?.url && navigation.url === details.url) || firstRedirect || formGetDestination
         || (navigation?.kind === 'navigate' && navigation.history && qualifiers.includes('forward_back'));
-    const agentNavigation = !explicit && navigation && navigation.frameId === frameId && Date.now() - navigation.at < 10000
+    const agentNavigation = !explicit && navigation && navigation.frameId === frameId && Date.now() - navigation.at < AGENT_NAVIGATION_MS
       && (!qualifiers.includes('forward_back') || navigation.history)
       && sameNavigation;
     // A completed click/navigation consumes its marker. Retain it only for a
@@ -785,6 +795,15 @@ export const pageFeedbackMethods = {
     }
     if (agentNavigation) {
       if (frameId === 0 && type !== 'committed') run.agentRoute = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      // A new top document committed for the navigation the agent's own click
+      // or submit started (a form POST answered with a redirect, say). Bound
+      // to that dispatch operation, like agentRoute; any later commit clears it.
+      // A redirect is that press's document only as its form submission or at
+      // its destination's origin, not any redirect within the window.
+      if (frameId === 0 && type === 'committed'
+          && (details.transitionType === 'form_submit' || sameOrigin(navigation.url, details.url))) {
+        run.agentDocument = { at: Date.now(), url: run.url, operationId: navigation.operationId || '' };
+      }
       return;
     }
     // A route update after the agent's own click in the same frame, before any
@@ -921,6 +940,42 @@ export const pageFeedbackMethods = {
     return !!run?.agentRoute && !!run.url && run.agentRoute.url === run.url && run.agentRoute.at >= since
       && !!operationId && run.agentRoute.operationId === operationId
       && (!proof || !(run.traversedAt >= since));
+  },
+
+  // The current top document is the one the navigation of the action in
+  // flight committed (its dispatch operation), at or after `since`, with no
+  // Back/Forward since, and every other part of the model state the action
+  // was bound to is still current. Only the document and the address that
+  // navigation replaced may differ.
+  _pageFeedbackAgentDocumentCurrent(tabId, run, state, since = 0) {
+    const operationId = dispatchOwners.get(tabId)?.operationId || '';
+    const committed = run?.agentDocument;
+    return !!committed && !!run.url && committed.url === run.url && committed.at >= since
+      && !!operationId && committed.operationId === operationId && !(run.traversedAt >= since)
+      && !!state && this._pageFeedbackStateCurrent(tabId, run, { ...state, url: run.url, frames: new Map() });
+  },
+
+  // Bounded wait while the agent's own click or submit in the action in
+  // flight (its dispatch operation, at or after `since`) has started a
+  // top-level navigation whose commit the browser has not reported yet. Ends
+  // early on that report or on anything else that ends the expectation:
+  // another commit or route update, input from the person, a new action, the
+  // end of the run, or Stop. Sends nothing and decides nothing; the caller
+  // checks ownership again afterwards. Every wait of one action shares its
+  // `budget`, so that action waits AGENT_NAVIGATION_COMMIT_WAIT_MS at most.
+  async _pageFeedbackAgentNavigationSettled(tabId, run, since = 0, signal = null, budget = {}) {
+    const pending = () => {
+      const navigation = run?.navigation, operationId = dispatchOwners.get(tabId)?.operationId || '';
+      return this._pageFeedbackRuns?.get(tabId) === run && !!navigation && navigation.frameId === 0
+        && ['click', 'submit'].includes(navigation.kind) && !!navigation.url && !navigation.redirectChain
+        && navigation.at >= since && Date.now() - navigation.at < AGENT_NAVIGATION_MS
+        && !!operationId && navigation.operationId === operationId;
+    };
+    while (pending()) {
+      budget.until ||= Date.now() + AGENT_NAVIGATION_COMMIT_WAIT_MS;
+      if (Date.now() >= budget.until) return;
+      await untilAborted(new Promise(resolve => setTimeout(resolve, 20)), signal);
+    }
   },
 
   // Bounded: each pending traversal attribution settles within its timeout.

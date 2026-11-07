@@ -39765,8 +39765,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const previousUrl = this._normalizeUrl(result?.previousUrl || '');
       const currentUrl = this._normalizeUrl(result?.currentUrl || result?.pageUrl || result?.url || '');
       const completion = this.completionInvariants.get(tabId);
+      // A verified action whose navigation outcome is unknown, or a delivered
+      // native click whose own navigation committed the new document
+      // (ownNavigation; only the Chrome build's trusted native button sends it).
       const navigatedButUncertain = result?.success === true
-        && result?.verified === true
+        && (result?.verified === true || (result?.ownNavigation === true
+          && result?.nativeInputAcknowledged === true && result?.dispatched === true))
         && result?.outcomeUnknown === true
         && result?.pageUrlChanged === true
         && !!previousUrl
@@ -39778,6 +39782,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             currentUrl,
             previousDocument: String(this._lastAxScopes.get(tabId)?.documentToken || ''),
             taskKey: state.taskKey,
+            // A managed bot-memory action is also reconciled by its own
+            // verification (executeTool). Both credits use its key: one count.
+            ...(result?.memoryAttemptId ? { memoryKey: `bot-memory:${result.memoryAttemptId}` } : {}),
           }
         : null;
     }
@@ -39817,7 +39824,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // missing execution evidence. This only reconciles the generic plan
       // counter; submission, publication, messaging, payment and workflow
       // contracts below still require their own terminal evidence.
-      state.successfulConsequentialToolCalls += 1;
+      const counted = state.successfulConsequentialActionKeys instanceof Set ? state.successfulConsequentialActionKeys : new Set();
+      if (!pendingNavigation.memoryKey || !counted.has(pendingNavigation.memoryKey)) state.successfulConsequentialToolCalls += 1;
+      if (pendingNavigation.memoryKey) {
+        counted.add(pendingNavigation.memoryKey);
+        state.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
+      }
       state.pendingNavigatedConsequentialAction = null;
     }
     if (contentRead && observationUrl && state.workflowRequiredJobEvidence) {

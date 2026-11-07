@@ -121868,6 +121868,75 @@ test('post-navigation document reads reconcile uncertain generic action evidence
   }
 });
 
+test('a delivered native click whose own navigation opened a new page is reconciled only by a fresh read of that page', () => {
+  // The Chrome trusted native button reports a form POST answered with a
+  // redirect as a delivered click with an unknown outcome (ownNavigation).
+  // Both builds share the reconciliation; only a fresh read of the new page
+  // counts it, and a click that did not navigate by itself is never counted.
+  const editUrl = 'https://records.example.com/record/42/edit';
+  const savedUrl = 'https://records.example.com/record/42';
+  const delivered = {
+    success: true, method: 'cdp-native-button', initialTrustedNativeButton: true, dispatched: true,
+    trusted: true, verified: false, nativeInputAcknowledged: true, observationInterrupted: true,
+    effectVerificationPending: true, inconclusive: true, outcomeUnknown: true, retryable: false,
+    ownNavigation: true, pageUrlChanged: true, previousUrl: editUrl, currentUrl: savedUrl,
+  };
+  const savedRead = { success: true, pageContent: 'heading "Saved record"\nstatus "Record saved"' };
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    let nextTab = label === 'chrome' ? 9561 : 9581;
+    const runClick = (click, { requiresSubmission = false, readUrl = savedUrl } = {}) => {
+      const tabId = nextTab++;
+      const agent = new AgentClass({ getActive: () => ({ promptTier: 'full', supportsVision: false }) });
+      agent._persist = () => { };
+      agent.conversationModes.set(tabId, 'act');
+      agent._runModeOverrides.set(tabId, 'act');
+      agent.conversations.set(tabId, [
+        { role: 'system', content: 'system' },
+        { role: 'user', content: 'Save record 42 once using its form, then check the saved record.' },
+      ]);
+      const token = agent._beginCompletionInvariant(tabId);
+      const guard = agent._startPlanExecutionGuard(tabId, 'act', {
+        requestKind: 'execute', requiresStateChange: true, requiresSubmission,
+      });
+      agent._lastAxScopes.set(tabId, { documentToken: 'record-edit', pageUrl: editUrl });
+      agent._markPlanExecutionToolCall(tabId, 'click_ax', click, { consequential: true });
+      agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'ref_save' }, click);
+      const afterClick = guard.successfulConsequentialToolCalls;
+      agent._lastAxScopes.set(tabId, { documentToken: 'record-saved', pageUrl: readUrl });
+      agent._markPlanExecutionToolCall(tabId, 'get_accessibility_tree', savedRead);
+      agent._recordCompletionToolResult(tabId, 'get_accessibility_tree', {}, savedRead);
+      const counted = { afterClick, afterRead: guard.successfulConsequentialToolCalls,
+        satisfied: agent._executionEvidenceSatisfied(guard) };
+      agent._clearCompletionInvariant(tabId, token);
+      return counted;
+    };
+
+    assert.deepEqual(runClick(delivered), { afterClick: 0, afterRead: 1, satisfied: true },
+      `${label}: a fresh read of the page the click opened did not reconcile it`);
+    assert.deepEqual(runClick(delivered, { readUrl: editUrl }), { afterClick: 0, afterRead: 0, satisfied: false },
+      `${label}: a read of another page reconciled the click`);
+    const submitted = runClick(delivered, { requiresSubmission: true });
+    assert.equal(submitted.afterRead, 1, `${label}: the generic counter was not reconciled for a submission task`);
+    assert.equal(submitted.satisfied, false, `${label}: the generic reconciliation bypassed required submission evidence`);
+
+    // The same delivered click without its own navigation (observation merely
+    // unavailable), an interrupted click reported as a failure, and a click
+    // that stayed on its address are never counted by the later read.
+    const { ownNavigation: _own, ...withoutOwnNavigation } = delivered;
+    for (const [name, click] of [
+      ['without its own navigation', withoutOwnNavigation],
+      ['reported as an interrupted failure', { ...withoutOwnNavigation, success: false, trusted: false,
+        effectVerificationPending: undefined, inconclusive: undefined,
+        error: 'Observation interrupted after native input acknowledgements completed.' }],
+      ['whose input was not acknowledged', { ...delivered, nativeInputAcknowledged: false }],
+      ['that stayed on its address', { ...delivered, currentUrl: editUrl }],
+    ]) {
+      assert.deepEqual(runClick(click), { afterClick: 0, afterRead: 0, satisfied: false },
+        `${label}: a click ${name} was reconciled`);
+    }
+  }
+});
+
 test('planner gate: retries reasoning-only planner responses for final JSON', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {

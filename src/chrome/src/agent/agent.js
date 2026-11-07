@@ -21799,6 +21799,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // other change of run, call, steering, Stop, mode or document still
     // interrupts, and before input the route may not change at all.
     const ownRoute = () => this._pageFeedbackAgentRouteCurrent(tabId, run, baseline.startedAt);
+    // The press's own form or link navigation can replace the observed
+    // document before the browser's report of its commit arrives: a read of
+    // the old document fails first. Wait, bounded, for that report, so the
+    // owner check that follows sees the new page, not an unavailable one. One
+    // budget for the press: every failed read shares it.
+    const ownNavigationBudget = {};
+    const ownNavigationSettled = () => this._pageFeedbackAgentNavigationSettled(tabId, run, baseline.startedAt,
+      this._runAbortSignal?.(tabId), ownNavigationBudget);
     const assertObservedOwner = async () => {
       await this._pageFeedbackTraversalSettled(run, this._runAbortSignal?.(tabId));
       assertNotAborted();
@@ -21952,7 +21960,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const target = await this._resolveClickAxFallbackTarget(tabId, args.ref_id, abortSignal, { observeOnly: true });
         await assertObservationCurrent();
         if (target?.success !== true || target.tag !== 'button' || target.ref_id !== args.ref_id
-            || target.documentToken !== prepared.documentToken || target.refScopeUrl !== prepared.refScopeUrl) return null;
+            || target.documentToken !== prepared.documentToken || target.refScopeUrl !== prepared.refScopeUrl) {
+          await ownNavigationSettled();
+          await assertObservationCurrent();
+          return null;
+        }
         return (!!prepared.buttonStrongState && !!target.fallbackStrongState
           && prepared.buttonStrongState !== target.fallbackStrongState)
           || (typeof prepared.buttonDisabled === 'boolean' && typeof target.fallbackNativeButtonDisabled === 'boolean'
@@ -22018,7 +22030,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (observationInterrupted) {
         // A failed read cannot erase completed input delivery. Preserve the
         // pending lock while the ordinary execution loop obtains fresh proof.
+        // A read can fail because the press's own navigation is replacing the
+        // document; once its commit is reported it is read as that (below).
         try {
+          await assertObservedOwner();
+          await ownNavigationSettled();
           await assertObservedOwner();
           if (run.lastUserAt === clickUserAt
               && ![...run.events.values()].some(event => event.source === 'user')) {
@@ -22030,7 +22046,36 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 ? 'operation_expired' : 'observation_unavailable' },
               warning: 'The click was delivered. Its effect needs a fresh observation; do not repeat this input.' };
           }
-        } catch { /* Stop, intervention, document or task replacement retain uncertainty. */ }
+        } catch {
+          // The press's own form or link navigation replaced the observed
+          // document (a POST answered with a redirect to the saved record,
+          // say). The browser committed that navigation for this dispatch
+          // operation, and nothing else changed: same run, call, task and
+          // mode, no input from the person, no Stop or steering. The new page
+          // is not proof of the effect; a fresh read of it is (see
+          // _markPlanExecutionToolCall). Any other change stays uncertain.
+          try {
+            await this._pageFeedbackTraversalSettled(run, this._runAbortSignal?.(tabId));
+            assertNotAborted();
+            const previousUrl = String(dispatchCall.modelState?.url || '');
+            const currentUrl = String(run.url || '');
+            if (this._pageFeedbackRuns?.get(tabId) === run && run.dispatchCall === dispatchCall
+                && !this._hasPendingSteering(tabId) && !this._checkAbort(tabId)
+                && run.lastUserAt === clickUserAt && ![...run.events.values()].some(event => event.source === 'user')
+                && this._pageFeedbackAgentDocumentCurrent(tabId, run, dispatchCall.modelState, baseline.startedAt)
+                && previousUrl && currentUrl && urlWithoutFragment(previousUrl) !== urlWithoutFragment(currentUrl)) {
+              // Diagnostics only: the owner change was this press's own navigation.
+              if (timing?.preparationVeto) timing.preparationVeto.ownNavigation = true;
+              return { success: true, method: 'cdp-native-button', initialTrustedNativeButton: true,
+                ref_id: args.ref_id, dispatched: true, trusted: true, verified: false,
+                nativeInputAcknowledged: true, observationInterrupted: true,
+                effectVerificationPending: true, inconclusive: true, outcomeUnknown: true, retryable: false,
+                ownNavigation: true, pageUrlChanged: true, previousUrl, currentUrl,
+                observationDiagnostic: { predicate: 'own_navigation' },
+                warning: 'The click was delivered and opened a new page. Read that page to verify the effect; do not repeat this input.' };
+            }
+          } catch { /* Stop, intervention, document or task replacement retain uncertainty. */ }
+        }
       }
       return failure(observationInterrupted
         ? 'Observation interrupted after native input acknowledgements completed. The final page effect is unverified; do not repeat this input. Read this control and its owning dialog or section before any further action. Preserve any staged preview and inspect the original task-authorized Save/Submit/Commit controls; do not reopen the chooser or switch upload fields just because observation was interrupted. Acknowledged input does not prove a remote save.'
@@ -43439,8 +43484,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const previousUrl = this._normalizeUrl(result?.previousUrl || '');
       const currentUrl = this._normalizeUrl(result?.currentUrl || result?.pageUrl || result?.url || '');
       const completion = this.completionInvariants.get(tabId);
+      // A verified action whose navigation outcome is unknown, or a delivered
+      // native click whose own navigation committed the new document
+      // (ownNavigation, _dispatchInitialTrustedNativeButton).
       const navigatedButUncertain = result?.success === true
-        && result?.verified === true
+        && (result?.verified === true || (result?.ownNavigation === true
+          && result?.nativeInputAcknowledged === true && result?.dispatched === true))
         && result?.outcomeUnknown === true
         && result?.pageUrlChanged === true
         && !!previousUrl
@@ -43452,6 +43501,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             currentUrl,
             previousDocument: String(this._lastAxScopes.get(tabId)?.documentToken || ''),
             taskKey: state.taskKey,
+            // A managed bot-memory action is also reconciled by its own
+            // verification (executeTool). Both credits use its key: one count.
+            ...(result?.memoryAttemptId ? { memoryKey: `bot-memory:${result.memoryAttemptId}` } : {}),
           }
         : null;
     }
@@ -43491,7 +43543,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // missing execution evidence. This only reconciles the generic plan
       // counter; submission, publication, messaging, payment and workflow
       // contracts below still require their own terminal evidence.
-      state.successfulConsequentialToolCalls += 1;
+      const counted = state.successfulConsequentialActionKeys instanceof Set ? state.successfulConsequentialActionKeys : new Set();
+      if (!pendingNavigation.memoryKey || !counted.has(pendingNavigation.memoryKey)) state.successfulConsequentialToolCalls += 1;
+      if (pendingNavigation.memoryKey) {
+        counted.add(pendingNavigation.memoryKey);
+        state.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
+      }
       state.pendingNavigatedConsequentialAction = null;
     }
     if (contentRead && observationUrl && state.workflowRequiredJobEvidence) {
