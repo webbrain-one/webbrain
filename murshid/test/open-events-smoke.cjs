@@ -13,7 +13,7 @@ const server = http.createServer((req, res) => {
   requestHeaders.set(req.url, req.headers);
   if (req.url === '/download-abort') { req.socket.destroy(); return; }
   if (req.url === '/early') res.setHeader('Accept-CH', 'Sec-CH-UA-Arch');
-  if (req.url === '/download-redirect') { res.writeHead(302, { location: '/download-final', 'Set-Cookie': 'fixture-secret=value' }); res.end(); return; }
+  if (req.url === '/download-redirect') { res.writeHead(302, { location: '/download-final', 'Set-Cookie': 'fixture-secret=value; HttpOnly; Secure; SameSite=Lax' }); res.end(); return; }
   if (req.url === '/download-cross-origin') { res.writeHead(302, { location: 'http://example.invalid/other' }); res.end(); return; }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.end(req.url === '/download-final' ? 'download fixture' : '<!doctype html><title>isolated fixture</title>');
@@ -115,6 +115,10 @@ const waitFor = async (condition) => {
       assert.equal(redirected.download?.state, 'complete', JSON.stringify(redirected.download));
       assert.equal(fs.readFileSync(redirected.download.filename, 'utf8'), 'download fixture');
       assert.match(requestHeaders.get('/download-final')?.cookie || '', /fixture-secret=value/);
+      assert.equal(await ordinaryTab.wc.executeJavaScript("document.cookie.includes('fixture-secret=')"), false,
+        'the download fixture cookie must not be exposed to page scripts');
+      const [fixtureCookie] = await ctx.ses.cookies.get({ url: base, name: 'fixture-secret' });
+      assert.equal(fixtureCookie?.secure, true, 'Chromium should retain the Secure cookie flag');
       const redirectHeaders = attempt.observedEvents.find(e => e.event === 'headers' && e.url.endsWith('/download-redirect'));
       assert(redirectHeaders.responseHeaders.every(h => h.name.toLowerCase() === 'location'));
       assert.equal(attempt.observedEvents.filter(e => e.event === 'before' && e.url.endsWith('/download-redirect')).length, 1,
