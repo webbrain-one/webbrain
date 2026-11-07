@@ -529,8 +529,10 @@ try {
         for (const clarifyId of pending) {
           if (answered.has(clarifyId)) continue;
           answered.add(clarifyId);
-          if (!clarifyId.startsWith('deletion_')) { current.otherQuestions.push(clarifyId); continue; }
-          current.deletionCards.push(clarifyId);
+          if (!clarifyId.startsWith('deletion_')) current.otherQuestions.push(clarifyId);
+          else current.deletionCards.push(clarifyId);
+          // Deny every unexpected card so the run finishes and the assertion
+          // below reports it instead of hanging indefinitely.
           await message('clarify_response', { tabId: current.tabId, clarifyId, answer: 'deny', source: 'option' });
         }
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -555,7 +557,16 @@ try {
     let error;
     try {
       assert.deepEqual(worlds, { isolated: 'function', main: 'undefined' }, 'The manifest installs AX only in the isolated content world.');
-      assert.deepEqual(current.otherQuestions, [], 'No question other than WebBrain\'s deletion card is expected.');
+      if (current.deleteOnly) {
+        assert.equal(current.otherQuestions.length, 1, 'An unauthorized replacement must request explicit approval once.');
+        const card = (result.updates || []).find(event => event.type === 'clarify'
+          && event.data?.clarifyId === current.otherQuestions[0]);
+        assert.equal(card?.data?.unverifiedStepConfirmation?.guardId, 'social-publication-authorization-guard');
+        assert.equal(card?.data?.unverifiedStepConfirmation?.hard, true);
+        assert.equal(card?.data?.unverifiedStepConfirmation?.action, 'publish');
+      } else {
+        assert.deepEqual(current.otherQuestions, [], 'No question other than WebBrain\'s deletion card is expected.');
+      }
       if (!current.unrelatedRecord && !current.resourceDrift && !current.accountDrift) {
         assert.deepEqual(current.deletionCards, [], 'A deletion the request binds needs no card.');
       }
