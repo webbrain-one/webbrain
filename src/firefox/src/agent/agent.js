@@ -43185,11 +43185,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'recall_memcode') return { success: false, noDispatch: true, dispatched: false,
       error: 'Profile memory recall is unavailable for managed bot runs.' };
     const linked = this._linkAbortSignals(executionContext?._contentActionAbortSignal, this._runAbortSignal(tabId));
+    const recordReconciled = actions => {
+      const guard = this._planExecutionGuards.get(tabId);
+      for (const action of actions || []) {
+        if (!guard?.enabled || guard !== action.guard || guard.taskDrifted || !guard.taskKey || action.taskKey !== guard.taskKey
+            || this._progressTaskKeyHash(tabId) !== guard.taskKey) continue;
+        const counted = guard.successfulConsequentialActionKeys instanceof Set ? guard.successfulConsequentialActionKeys : new Set();
+        const key = `bot-memory:${action.attemptId}`;
+        if (counted.has(key)) continue;
+        counted.add(key);
+        guard.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
+        guard.successfulConsequentialToolCalls = Number(guard.successfulConsequentialToolCalls || 0) + 1;
+        guard.evidenceTaskKey = guard.taskKey;
+      }
+    };
     try {
       this._throwIfAborted(linked.signal);
       if (name.startsWith('bot_memory_')) {
-        try { return await memory.tool(tabId, name, args || {}); }
-        catch { return { success: false, botMemory: true, noDispatch: true, error: 'Bot memory could not confirm this request.' }; }
+        try {
+          const attemptId = name === 'bot_memory_verify' ? String(args?.attempt_id || '') : '';
+          const pending = attemptId ? memory.pending.get(attemptId) : null;
+          const result = await memory.tool(tabId, name, args || {});
+          const action = pending && memory.reconciledAction(attemptId, pending, result);
+          if (action) recordReconciled([action]);
+          return result;
+        } catch { return { success: false, botMemory: true, noDispatch: true, error: 'Bot memory could not confirm this request.' }; }
       }
       args = this._normalizeContinuationToolArgs(name, args);
       const coordinates = this._prepareClickCoordinates(tabId, name, args || {});
@@ -43231,18 +43251,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const result = await this._executeToolWithLifecycle(tabId, name, args, onUpdate, executionContext);
       try {
         const reconciled = await memory.afterTool(tabId, name, args || {}, result, prepared);
-        const guard = this._planExecutionGuards.get(tabId);
-        for (const action of reconciled || []) {
-          if (!guard?.enabled || guard !== action.guard || guard.taskDrifted || !guard.taskKey || action.taskKey !== guard.taskKey
-              || this._progressTaskKeyHash(tabId) !== guard.taskKey) continue;
-          const counted = guard.successfulConsequentialActionKeys instanceof Set ? guard.successfulConsequentialActionKeys : new Set();
-          const key = `bot-memory:${action.attemptId}`;
-          if (counted.has(key)) continue;
-          counted.add(key);
-          guard.successfulConsequentialActionKeys = new Set([...counted].slice(-200));
-          guard.successfulConsequentialToolCalls = Number(guard.successfulConsequentialToolCalls || 0) + 1;
-          guard.evidenceTaskKey = guard.taskKey;
-        }
+        recordReconciled(reconciled);
       } catch { if (result && typeof result === 'object') result.botMemoryWarning = 'Action history could not be reconciled; its outcome remains uncertain.'; }
       if (prepared.reservation && result && typeof result === 'object') result.memoryAttemptId = prepared.reservation.attemptId;
       return result;

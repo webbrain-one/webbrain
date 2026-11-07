@@ -69,7 +69,7 @@ for (const browser of ['chrome', 'firefox']) {
     assert.equal(h.session.pending.size, 0);
   });
   test(`${browser}: reconciles only the current acknowledged and independently verified native navigation`, async () => {
-    for (const scenario of ['verified', 'missing-ack', 'no-navigation-proof', 'same-url', 'wrong-page', 'different-task', 'new-run', 'unverified', 'wrong-attempt']) {
+    for (const method of ['read_page', 'bot_memory_verify']) for (const scenario of ['verified', 'missing-ack', 'no-navigation-proof', 'same-url', 'wrong-page', 'different-task', 'new-run', 'unverified', 'wrong-attempt']) {
       const h = harness(); let taskKey = 'task-1'; let navigated = false;
       const guard = { enabled: true, taskKey, successfulConsequentialToolCalls: 0,
         successfulConsequentialActionKeys: new Set(), requiresSubmission: true, verifiedSubmissionEvidence: false };
@@ -95,8 +95,8 @@ for (const browser of ['chrome', 'firefox']) {
       navigated = true;
       if (scenario === 'different-task') taskKey = 'task-2';
       if (scenario === 'new-run') h.agent._planExecutionGuards.set(7, { ...guard, successfulConsequentialActionKeys: new Set() });
-      await h.agent.executeTool(7, 'read_page', {});
-      assert.equal(h.agent._planExecutionGuards.get(7).successfulConsequentialToolCalls, scenario === 'verified' ? 1 : 0, scenario);
+      await h.agent.executeTool(7, method, method === 'bot_memory_verify' ? { attempt_id: 'attempt-1' } : {});
+      assert.equal(h.agent._planExecutionGuards.get(7).successfulConsequentialToolCalls, scenario === 'verified' ? 1 : 0, `${method}: ${scenario}`);
       assert.equal(guard.verifiedSubmissionEvidence, false, 'memory reconciliation cannot satisfy a separate submission contract');
       await h.session.close();
     }

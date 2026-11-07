@@ -537,20 +537,23 @@ export class BotMemorySession {
     if (OBSERVATION_TOOLS.has(name) && result && result.success !== false && !result.error) {
       for (const [attemptId, pending] of this.pending) {
         const verification = await this.verify(tabId, attemptId, name, result);
-        const verified = verification?.verified === true || verification?.status === 'verified' || verification?.attempt?.status === 'verified';
-        const action = pending.executionEvidence?.result;
-        if (verified && action?.pageUrlChanged === true && typeof action.previousUrl === 'string'
-            && typeof action.currentUrl === 'string' && action.previousUrl !== action.currentUrl
-            && this.lastObservation?.url === action.currentUrl
-            && (!verification?.attempt?.id || verification.attempt.id === attemptId)) {
-          reconciledActions.push({ attemptId, taskKey: pending.executionEvidence.taskKey, guard: pending.executionEvidence.guard });
-        }
+        const action = this.reconciledAction(attemptId, pending, verification);
+        if (action) reconciledActions.push(action);
       }
     }
     if (name === 'scratchpad_write' && typeof args?.text === 'string') {
       await this.call('scratchpad', { text: compact(args.text, 4000), replace: args.replace === true });
     }
     return reconciledActions;
+  }
+  reconciledAction(attemptId, pending, verification) {
+    const verified = verification?.verified === true || verification?.status === 'verified' || verification?.attempt?.status === 'verified';
+    const action = pending?.executionEvidence?.result;
+    if (!verified || action?.pageUrlChanged !== true || typeof action.previousUrl !== 'string'
+        || typeof action.currentUrl !== 'string' || action.previousUrl === action.currentUrl
+        || this.lastObservation?.url !== action.currentUrl
+        || (verification?.attempt?.id && verification.attempt.id !== attemptId)) return null;
+    return { attemptId, taskKey: pending.executionEvidence.taskKey, guard: pending.executionEvidence.guard };
   }
   async verify(tabId, attemptId, name = 'bot_memory_verify', toolResult = null) {
     const pending = this.pending.get(attemptId) || this.knownAttempts.get(attemptId);
