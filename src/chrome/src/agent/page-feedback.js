@@ -298,6 +298,10 @@ function preparationVetoError(cause, monitorVeto = null, ownerPendingAfter = fal
   return error;
 }
 
+// The embedded frames each operation was prepared in as the receiver of its
+// native input (beforePageAgentDispatch), by the operation's frame set.
+const receiverPreparations = new WeakMap();
+
 /** Called at the transport boundary, not while a selector/permission is being prepared. */
 export async function beforePageAgentDispatch(api, tabId, details = {}) {
   const owner = dispatchOwners.get(tabId);
@@ -335,7 +339,37 @@ export async function beforePageAgentDispatch(api, tabId, details = {}) {
       error.code = 'page_feedback_pending'; error.pagePreparationVeto = { cause: 'receiver_frame_changed' }; throw error;
     }
   }
-  owner.operationFrames.get(owner.operationId)?.add(Number(details.frameId) || 0);
+  // A vision operation is prepared in the top document, at its point. Chrome
+  // delivers trusted input at that point into the document under it, an
+  // embedded frame's included, whose monitor then fences every command but
+  // never saw the preparation: it let the first command through unfenced and
+  // refused the next one as a change (QA B2). Prepare the operation there
+  // before its first command, bound to the node the browser's hit test marked
+  // (nativeTarget), not to the top document's coordinates.
+  const receiverFrameId = Number(details.frameId) || 0;
+  const operationFrames = operationId === owner.operationId ? owner.operationFrames.get(operationId) : null;
+  const frameReceiver = !details.release && details.nativeInput === true && receiverFrameId > 0 && operationFrames
+    && !receiverPreparations.get(operationFrames)?.has(receiverFrameId) ? owner.frameReceiver?.() : null;
+  if (frameReceiver) {
+    let prepared;
+    try {
+      prepared = await api.tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare', params: {
+        ...frameReceiver, frameReceiver: true, runToken: owner.runToken, operationId,
+        allowPassiveRebase: owner.allowPassiveRebase?.() === true,
+        ...(typeof details.nativeTarget === 'string' ? { nativeTarget: details.nativeTarget } : {}),
+      } }, { frameId: receiverFrameId });
+    } catch { /* A frame without a monitor answers no dispatch fence either. */ }
+    if (dispatchOwners.get(tabId) !== owner) {
+      const error = new Error('Browser run ended before dispatch'); error.name = 'AbortError';
+      error.pagePreparationVeto = { cause: 'owner_ended' }; throw error;
+    }
+    // Once only: preparing again between two commands would reset the fence.
+    if (prepared?.ready === true) {
+      if (!receiverPreparations.has(operationFrames)) receiverPreparations.set(operationFrames, new Set());
+      receiverPreparations.get(operationFrames).add(receiverFrameId);
+    }
+  }
+  owner.operationFrames.get(owner.operationId)?.add(receiverFrameId);
   const monitorParams = { ...dispatchDetails, runToken: owner.runToken, operationId };
   let acknowledgement;
   let preparationAcknowledgement;
@@ -496,6 +530,9 @@ export const pageFeedbackMethods = {
       tool: () => run.dispatchCall?.name || '',
       // The current call acts on a certified node of the top document.
       modelBound: () => !!run.dispatchCall?.expectedModelSnapshot,
+      // The current call's vision binding (a point, the field its click
+      // focused, or a wheel), for a frame its native input reaches.
+      frameReceiver: () => run.dispatchCall?.frameReceiver || null,
       pending: () => this._pageFeedbackBlocksCall(tabId, run.dispatchCall?.policyName || run.dispatchCall?.name,
         run.dispatchCall?.args, run.dispatchCall?.blockOptions),
       allowPassiveRebase: () => run.dispatchCall?.allowPassiveRebase === true,
@@ -2009,9 +2046,20 @@ export function installPageFeedback(Agent) {
     let commitBrowserBatchInput = false;
     const expectedModelSnapshot = modelBound ? modelState.actionBinding.snapshotToken : undefined;
     const relaxedMonitorGrantToken = expectedModelSnapshot && this._monitoringRetryCurrent(tabId, run)?.grantToken;
+    // The monitor rebases these over passive churn while the element at the
+    // CSS point (or the focused field) stays the same; a wheel binds no
+    // element. A person's input still voids all three. A native hover_at /
+    // drag_at gives its point as monitorPoint.
+    const visionPoint = policy.kind === 'vision_point' ? vision?.cssPoint || vision?.monitorPoint || null : null;
+    const visionBinding = { ...(visionPoint ? { visionPoint: true } : {}), ...(focusFollowUp ? { visionFocusFollowUp: true } : {}),
+      ...(name === 'scroll_at' ? { visionWheel: true } : {}) };
+    // The top document holds that point. Native input at it can reach an
+    // embedded frame's document, whose monitor gets the same binding when
+    // the input first arrives there (beforePageAgentDispatch).
+    const frameReceiver = Object.keys(visionBinding).length ? { tool: name, ...visionBinding } : null;
     if (run) run.dispatchCall = { name, args, allowPassiveRebase: false, dispatchState, expectedModelSnapshot, modelState, mutation, batchId,
       ...(policyName !== name ? { policyName } : {}), ...(focusFollowUp ? { blockOptions } : {}),
-      ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}) };
+      ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}), ...(frameReceiver ? { frameReceiver } : {}) };
     if (run && mutation && owner) {
       owner.operationId = operationId;
       owner.operationFrames.set(operationId, new Set([0]));
@@ -2021,14 +2069,7 @@ export function installPageFeedback(Agent) {
         const modelHeldMs = expectedModelSnapshot ? this._pageFeedbackModelHeldMs(modelState) : 0;
         prepared = await apiFor().tabs.sendMessage(tabId, { target: 'content', action: 'page_monitor_prepare',
           params: { ...safeAction(name, args), runToken: run.token, operationId, allowPassiveRebase: allowPassiveRebase === true,
-            // The monitor rebases these over passive churn while the element
-            // at the CSS point (or the focused field) stays the same; a wheel
-            // binds no element. A person's input still voids all three. A
-            // native hover_at / drag_at gives its point as monitorPoint.
-            ...(policy.kind === 'vision_point' && (vision?.cssPoint || vision?.monitorPoint)
-              ? { visionPoint: true, x: (vision.cssPoint || vision.monitorPoint).x, y: (vision.cssPoint || vision.monitorPoint).y } : {}),
-            ...(focusFollowUp ? { visionFocusFollowUp: true } : {}),
-            ...(name === 'scroll_at' ? { visionWheel: true } : {}),
+            ...visionBinding, ...(visionPoint ? { x: visionPoint.x, y: visionPoint.y } : {}),
             ...(batchId ? { batchId } : {}),
             ...(relaxedMonitorGrantToken ? { relaxedMonitorGrantToken } : {}),
             ...(expectedModelSnapshot ? { expectedModelSnapshot } : {}),

@@ -2709,6 +2709,23 @@
     return !(op.coordinateTargetAtPoint && (!target?.isConnected || !previousRect || !currentRect
       || ['x', 'y', 'width', 'height'].some(key => Math.abs(previousRect[key] - currentRect[key]) > 2)));
   }
+  // The same for a point of the top document whose native input the browser
+  // routes into this frame (agent page-feedback.js beforePageAgentDispatch).
+  // That point is not one of this document's, so each command's own mark
+  // (nativeTarget, the node the browser's hit test found under it) must name
+  // the node first hit here, or one inside it, and that node must not have
+  // moved.
+  function frameReceiverUnchanged(op, params = {}) {
+    const initialHit = op.frameReceiverHit;
+    const currentHit = typeof params.nativeTarget === 'string' && params.nativeTarget
+      ? resolveTarget({ nativeTarget: params.nativeTarget }) : null;
+    if (!initialHit?.isConnected || !currentHit) return false;
+    if (initialHit !== currentHit && (initialHit === document.body || initialHit === document.documentElement
+      || !initialHit.contains(currentHit))) return false;
+    const previousRect = op.frameReceiverRect, currentRect = rectFor(initialHit);
+    return !!previousRect && !!currentRect
+      && ['x', 'y', 'width', 'height'].every(key => Math.abs(previousRect[key] - currentRect[key]) <= 2);
+  }
   function rebaseVisionPreparation(op, params = {}) {
     // Like a certified target or a scroll, only a person's intervention is an
     // authority change here (authorityChanged): DOM churn of unknown origin
@@ -2716,7 +2733,8 @@
     if (!active || !op || op.allowPassiveRebase !== true || op.layoutInvalidated || op.until < Date.now()
         || authorityChanged(op) || (params.documentToken && params.documentToken !== documentToken)) return false;
     if (op.visionPoint === true) {
-      if (!op.coordinateSensitive || !coordinateTargetUnchanged(op)) return false;
+      if (op.frameReceiver === true ? !frameReceiverUnchanged(op, params)
+        : !op.coordinateSensitive || !coordinateTargetUnchanged(op)) return false;
     } else if (op.visionFocusFollowUp === true) {
       if (!op.focusTarget || deepActiveElement() !== op.focusTarget) return false;
     }
@@ -3640,6 +3658,10 @@
       coordinateSensitive, coordinateTarget, coordinateHit, coordinateTargetAtPoint,
       coordinatePoint: coordinateSensitive ? { x: params.x, y: params.y } : null,
       coordinateRect: rectFor(coordinateTarget),
+      // A vision point in the top document whose input reaches this frame
+      // (frameReceiverUnchanged): the node the browser hit when it first did.
+      ...(params.frameReceiver === true && params.visionPoint === true
+        ? { frameReceiverHit: target, frameReceiverRect: rectFor(target) } : {}),
       until: Date.now() + 30000, dispatched: false, pointerPreparationOnly: false, selectorPreparationOnly: false, consequentialInputPending: false, userAt: lastUserAt, preparedRevision: revision });
     return proofRequired ? { modelBindingValid: !!certified,
       ...(certified?.relaxed ? { relaxed: true, bindingKind: 'relaxed_target' } : {}),
