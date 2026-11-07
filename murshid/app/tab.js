@@ -104,10 +104,12 @@ class Tab {
     const wc = this.wc;
     wc.on('page-title-updated', (_event, title) => {
       this.title = title;
+      this.ctx.history?.setTitle(this.url, title);
       this.changed();
     });
     wc.on('page-favicon-updated', (_event, favicons) => {
       this.favicon = favicons?.find((href) => /^(https?|data):/i.test(href)) || null;
+      if (this.favicon) this.ctx.history?.setFavicon(this.url, this.favicon);
       this.changed();
     });
     wc.on('did-start-loading', () => {
@@ -124,9 +126,22 @@ class Tab {
         this.favicon = null;
       }
     });
-    wc.on('did-navigate', () => { this.initialUrl = ''; this.changed(); });
-    wc.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
-      if (isMainFrame) this.changed();
+    wc.on('did-navigate', (_event, url, httpResponseCode) => {
+      this.initialUrl = '';
+      // typedPending is set by the address bar; the first commit after it is the typed visit.
+      const typed = Boolean(this.typedPending);
+      this.typedPending = false;
+      if (!(httpResponseCode >= 400)) this.ctx.history?.recordVisit(url, { typed });
+      this.lastVisitUrl = url;
+      this.changed();
+    });
+    wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      if (!isMainFrame) return;
+      // Single-page apps change the URL without loading; a new #fragment alone is not a visit.
+      const withoutHash = (u) => String(u || '').split('#')[0];
+      if (withoutHash(url) !== withoutHash(this.lastVisitUrl)) this.ctx.history?.recordVisit(url, { title: this.title });
+      this.lastVisitUrl = url;
+      this.changed();
     });
     wc.on('audio-state-changed', (event) => {
       this.audible = Boolean(event.audible);

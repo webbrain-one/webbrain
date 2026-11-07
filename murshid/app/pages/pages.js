@@ -24,7 +24,14 @@
 
   // Settings ----------------------------------------------------------------------
   if (page === 'settings' && api) {
-    api.settings().then(({ values, searchEngines, languages }) => {
+    const count = new Intl.NumberFormat(api.i18n?.locale || 'en');
+    const showHistoryCount = (n) => {
+      $('history-count').textContent = n === 1
+        ? t('page.settings.historyCountOne')
+        : t('page.settings.historyCount', { count: count.format(n) });
+      $('clear-history').disabled = n === 0;
+    };
+    api.settings().then(({ values, searchEngines, languages, historyCount }) => {
       const language = $('language');
       for (const entry of languages || []) {
         const option = document.createElement('option');
@@ -35,6 +42,14 @@
       }
       language.value = values.language || 'auto';
       language.addEventListener('change', () => api.setSetting('language', language.value));
+      const suggest = $('suggest');
+      suggest.checked = Boolean(values.searchSuggestions);
+      suggest.addEventListener('change', () => api.setSetting('searchSuggestions', suggest.checked));
+      showHistoryCount(historyCount || 0);
+      $('clear-history').addEventListener('click', () => {
+        if (!window.confirm(t('page.settings.clearHistoryConfirm'))) return;
+        api.clearHistory().then(showHistoryCount);
+      });
       const select = $('engine');
       for (const engine of searchEngines) {
         const option = document.createElement('option');

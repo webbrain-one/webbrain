@@ -10,6 +10,11 @@ const CHANNELS = new Set([
   'murshid:find-open',
   'murshid:find-step',
   'murshid:find-result',
+  'murshid:suggest-update',
+  'murshid:popup-pick',
+  'murshid:omnibox-refocus',
+  'murshid:omnibox-close',
+  'murshid:popup', // to the suggestion list view (popup.js)
 ]);
 
 // The interface language and its strings (app/i18n.js), asked for once and

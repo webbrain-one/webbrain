@@ -63,6 +63,8 @@ input[type="checkbox"] { flex: none; width: 20px; height: 20px; accent-color: va
 }
 .button:hover { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
 .button.primary { background: var(--crimson); border-color: var(--crimson); color: #fbf3e4; }
+.button:disabled { opacity: .45; cursor: default; box-shadow: none; border-color: var(--line); }
+.row .button { flex: none; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .ok { color: #2a8a5f; }
 .warn { color: var(--crimson); }

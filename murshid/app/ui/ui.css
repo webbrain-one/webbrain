@@ -275,6 +275,15 @@ html[dir="rtl"] .tab .title { mask-image: linear-gradient(270deg, #000 calc(100%
   border-color: var(--gold);
   box-shadow: 0 0 0 3px var(--gold-soft);
 }
+#omnibox.open {
+  /* the suggestion list (popup.css) continues the box downwards */
+  background: var(--omni-focus);
+  border-color: var(--gold);
+  border-bottom-color: transparent;
+  border-radius: 16px 16px 0 0;
+  box-shadow: none;
+  transition: none;
+}
 #site { display: grid; place-items: center; color: var(--muted); }
 #site svg { width: 15px; height: 15px; }
 #site.secure { color: var(--gold); }
@@ -292,7 +301,8 @@ html[dir="rtl"] .tab .title { mask-image: linear-gradient(270deg, #000 calc(100%
   -webkit-user-select: text;
 }
 #address::placeholder { color: var(--muted); }
-#address::selection { background: var(--gold-soft); }
+/* strong enough to see that an inline completion is selected (and will be replaced) */
+#address::selection { background: color-mix(in srgb, var(--gold) 36%, transparent); }
 #zoom-chip {
   font-size: 11px;
   color: var(--muted);

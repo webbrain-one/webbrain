@@ -7,6 +7,7 @@
 const { BrowserWindow, WebContentsView, nativeTheme, screen } = require('electron');
 const path = require('node:path');
 const { Tab } = require('./tab');
+const { OmniboxPopup } = require('./omnibox-popup');
 const { displayUrl } = require('./url');
 const i18n = require('./i18n');
 
@@ -41,6 +42,7 @@ class MurshidWindow {
     this.closedTabs = [];
     this.stateTimer = null;
     this.uiReady = false;
+    this.omniPopup = new OmniboxPopup(this);
 
     const isMac = process.platform === 'darwin';
     const colors = themeColors();
@@ -158,6 +160,7 @@ class MurshidWindow {
   selectTab(tab) {
     if (!tab || !this.tabs.includes(tab)) return;
     const previous = this.activeTab;
+    if (previous !== tab) this.closeOmnibox();
     this.activeTab = tab;
     if (previous && previous !== tab && !previous.wc.isDestroyed()) {
       try { this.win.contentView.removeChildView(previous.view); } catch {}
@@ -318,6 +321,7 @@ class MurshidWindow {
     if (this.visiblePanelKey !== want.key) {
       this.win.contentView.addChildView(entry.view);
       this.visiblePanelKey = want.key;
+      this.omniPopup.raise();
     }
     this.layout();
     this.scheduleState();
@@ -355,6 +359,13 @@ class MurshidWindow {
   }
 
   // ------------------------------------------------------------- UI state
+
+  /** Close the address bar's suggestion list, if it is open. */
+  closeOmnibox() {
+    if (!this.omniPopup.open) return;
+    this.omniPopup.hide();
+    if (this.uiReady) this.ui.send('murshid:omnibox-close');
+  }
 
   focusOmnibox() {
     if (!this.uiReady) {
@@ -412,6 +423,7 @@ class MurshidWindow {
       tab.destroy();
     }
     for (const key of [...this.panelViews.keys()]) this.destroyPanel(key);
+    this.omniPopup.destroy();
     this.tabs = [];
     this.ctx.onWindowClosed(this);
   }
