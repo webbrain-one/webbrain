@@ -1,0 +1,400 @@
+{
+  "lang": "ar",
+  "dir": "rtl",
+  "locale": "ar_AR",
+  "preload": "fonts/amiri-arabic-400-normal.woff2",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "ar": "المتصفح الذي يعرف الطريق — Murshid (معاينة تطويرية)"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "ar": "معاينة تطويرية. Murshid متصفح مبني على Chromium ومدمج فيه وكيل WebBrain: اسأل عن أي صفحة، وكلّفه بمهمة، ودَع اشتراكاتك في الذكاء الاصطناعي تنفّذها من علبة النظام. مفتوح المصدر."
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "ar": "المتصفح الذي يعرف الطريق — Murshid"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "ar": "متصفح Chromium مدمج فيه WebBrain. اسأل، وخطّط، ونفّذ — في علامات تبويبك أنت."
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "ar": "انتقل إلى المحتوى"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "ar": "الصفحة الرئيسية لـ Murshid"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "ar": "Murshid في مرحلة المعاينة التطويرية"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "ar": "معاينة"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "ar": "الأقسام"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "ar": "المتصفح"
+    },
+    "nav.way": {
+      "en": "The way",
+      "ar": "الطريق"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "ar": "Companion"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "ar": "التنزيل"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "ar": "Murshid على GitHub"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "ar": "نزّل Murshid"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "ar": "اللغة: العربية"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "ar": "اعرض الجزء العلوي بالأحمر"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "ar": "اجعل الجزء العلوي أحمر"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "ar": "اجعل الجزء العلوي أصفر"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "ar": "المتصفح<br>الذي يعرف<br><em>الطريق.</em>"
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "ar": "Murshid متصفح مبني على Chromium وفي داخله <strong>WebBrain</strong>. اسأل عن الصفحة التي أمامك، أو كلّفه بمهمة. يقرأ وينقر ويكتب في علامات تبويبك أنت وأنت تراقب، ويعمل باشتراكات الذكاء الاصطناعي التي تدفع ثمنها أصلًا."
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "ar": "نزّل لنظام Windows"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "ar": "نزّل لنظام macOS"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "ar": "نزّل لنظام Linux"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "ar": "نزّل Murshid"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "ar": "تعرّف على WebBrain"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "ar": "نظامك"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "ar": "شغّله من المصدر"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "ar": "استبعد الملفات الثنائية"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "ar": "انسخ الأوامر"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "ar": "تم النسخ"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "ar": "آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار."
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "ar": "عالِم عثماني بعمامة بيضاء، يسند رأسه إلى يده ويقرأ القرآن: صورة نقطية (هافتون) مأخوذة عن لوحة عثمان حمدي بك لعام 1902."
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "ar": "مُرشِد · الدليل"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "ar": "Murshid أثناء العمل"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "ar": "متصفح Murshid على Windows. في علامة تبويب مقالة ويكيبيديا الإنجليزية عن الطريقة المولوية، وإلى جانبها اللوحة الجانبية لـ WebBrain وقد قرأت الصفحة كاملة وهي تجيب عن &quot;Summarize this page&quot; (لخّص هذه الصفحة) بملخّص في نقاط."
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "ar": "لقطة حقيقية لـ Murshid على Windows، وقد طُلب منه تلخيص الصفحة المفتوحة فيه. إصدار معاينة تطويرية، على ملف تعريف جديد بلا أي حسابات."
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "ar": "في جعبة المرشد"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "ar": "متصفح كامل،<br><em>وعقلٌ يديره.</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "ar": "كل ما تنتظره من Chrome، مع وكيل WebBrain منسوجًا في داخله، لا مُلصقًا عليه."
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "ar": "#1 تصفّح"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "ar": "Chromium، بعلامات تبويب"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "ar": "علامات تبويب تسحبها وتعيد فتحها، وشريط عنوان يبحث أيضًا، وتنزيلات، وبحث في الصفحة، وتكبير، وأدوات المطوّر، والاختصارات التي تعرفها يداك."
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "ar": "#2 اسأل ونفّذ"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "ar": "WebBrain في اللوحة الجانبية"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "ar": "اسأل عن أي صفحة أو ملف PDF أو نص تحدّده. أو أخبره بما تريد إنجازه، فيملأ النماذج ويمضي في الخطوات نقرةً نقرة ويقارن علامات التبويب نيابةً عنك."
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "ar": "#3 علبة النظام"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "ar": "اشتراكاتك في الذكاء الاصطناعي، من علبة النظام"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "ar": "يقيم WebBrain Companion في علبة النظام، ويقدّم اشتراكاتك في Claude وChatGPT وGemini وGrok وKimi وMuse وDevin إلى WebBrain على 127.0.0.1. بلا مفاتيح API."
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "ar": "#4 تبويب جديد"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "ar": "علامة تبويب جديدة تُصغي إليك"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "ar": "كل علامة تبويب جديدة تُفتح على صفحة WebBrain: اكتب سؤالًا أو مهمة أو بحثًا، فيذهب مباشرةً إلى اللوحة. مثبّتة مسبقًا ومفعّلة."
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "ar": "#5 محلي"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "ar": "نماذج على جهازك أنت"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "ar": "يستطيع Companion تشغيل <bdi>Bonsai 2 27B</bdi> من PrismML ونموذج القرار d1 من WebBrain محليًا، بحجم يناسب بطاقة الرسوميات لديك، مع التحقق منهما بـ <bdi>SHA-256</bdi>."
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "ar": "#6 مفتوح"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "ar": "مفتوح حتى آخر سطر"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "ar": "برخصة <bdi>GPL-3.0</bdi>، ويُبنى علنًا مع WebBrain. لا يرسل المتصفح أي بيانات قياس عن بُعد. اقرأ كل سطر يلمس صفحاتك."
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "ar": "الطريق"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "ar": "المريد يسأل.<br>والمرشد يدلّ.<br><em>ثم تسيران معًا.</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "ar": "أ"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "ar": "اسأل"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "ar": "اسأل عن الصفحة التي أمامك. يقرؤها WebBrain — النصوص والجداول والنماذج وملفات PDF، بل وما يظهر على الشاشة فقط — ويجيب إلى جانبها."
+    },
+    "way.step2.num": {
+      "en": "II",
+      "ar": "ب"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "ar": "اطّلع على الخطة"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "ar": "في كل ما يتطلّب نقرًا أو كتابة، تعرض ميزة «<bdi>Plan before Act</bdi>» (الخطة قبل التنفيذ) الخطوات أولًا. وافق عليها، أو عدّلها، أو أوقفها."
+    },
+    "way.step3.num": {
+      "en": "III",
+      "ar": "ج"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "ar": "امضِ"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "ar": "ثم يعمل في علامات تبويبك الحقيقية، بتسجيلات دخولك الحقيقية. كل خطوة ظاهرة أمامك، ويمكنك أن تمسك المقود في أي لحظة."
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "ar": "في علبة النظام"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "ar": "اشتراكاتك المدفوعة أصلًا،<br><em>تُصبّ في WebBrain.</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "ar": "يشغّل Murshid تطبيق WebBrain Companion حين يبدأ. سجّل الدخول مرة واحدة في تطبيق علبة النظام الصغير، فتصبح اشتراكاتك نقطة اتصال محلية واحدة لا يصل إليها إلا هذا الحاسوب، مع نظرة سريعة على ما تبقّى من كل اشتراك."
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "ar": "الاشتراكات التي يقدّمها Companion"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "ar": "<bdi>Bonsai 2 27B</bdi> · محلي"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "ar": "d1 · محلي"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "ar": "نقطة اتصال Companion"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "ar": "احصل على Murshid"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "ar": "خُذ المرشد <em>معك.</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "ar": "Murshid في مرحلة المعاينة التطويرية. لأنظمة Windows وmacOS وLinux برامج تثبيت تتضمّن WebBrain Companion. ويأتي WebBrain وصفحة علامة التبويب الجديدة الخاصة به مثبّتَين مسبقًا."
+    },
+    "get.yours": {
+      "en": "Your system",
+      "ar": "نظامك"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "ar": "الإصداران 10 و11، x64. أما Arm64 فيعمل من المصدر."
+    },
+    "get.download": {
+      "en": "Download installer",
+      "ar": "نزّل برنامج التثبيت"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "ar": "0.1.0 · x64 · ‏150 ميغابايت"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "ar": "لم يُوقَّع رقميًا بعد، لذا قد يوقفه Windows SmartScreen: اختر <b>مزيد من المعلومات</b>، ثم <b>تشغيل على أي حال</b>."
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "ar": "الإصدار 12 Monterey وما بعده، Apple Silicon وIntel."
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "ar": "0.1.0 · Apple Silicon وIntel · ‏294 ميغابايت"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "ar": "لم تصادق عليه Apple بعد (notarization): انقر بزر الفأرة الأيمن على التطبيق واختر <b>فتح</b>، أو استخدم <b>إعدادات النظام &gt; الخصوصية والأمن &gt; فتح على أي حال</b>."
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "ar": "x64. أما Arm64 فيعمل من المصدر."
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "ar": "0.1.0 · x64 · ‏171 ميغابايت · 135 ميغابايت"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "ar": "AppImage: اجعله قابلًا للتنفيذ ثم شغّله. على Debian أو Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "ar": "المصدر على GitHub"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "ar": "مجاميع التحقق <bdi>SHA-256</bdi>"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "ar": "خصوصية مدروسة"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "ar": "الخصوصية<br><em>حيث تهمّ.</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "ar": "لا يحفظ Murshid قائمة بسجلّ التصفح. أما ملفات تعريف الارتباط وتسجيلات الدخول وبيانات المواقع فتبقى محفوظة افتراضيًا، فتجد جلساتك جاهزة حين تعود."
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "ar": "التذييل"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "ar": "الخصوصية"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "ar": "<bdi>GPL-3.0-or-later</bdi> · الخطوط بموجب رخصة SIL Open Font License · <span>الصور مأخوذة عن أعمال في الملك العام: لوحات عثمان حمدي بك <i>عالِم دين إسلامي</i> (1902) و<i>مروّض السلاحف</i> (1906) و<i>كاتب العرائض</i> (1910)؛ ودرويش مولوي من سلسلة فانمور (1700–1737)؛ وصور فوتوغرافية لدراويش مولويين في القسطنطينية نحو 1870–1910، إحداها لاستوديو Sébah &amp; Joaillier. الدرويش والصور محفوظة في متحف رايكس (Rijksmuseum). رسم الخصوصية: معالَج بالذكاء الاصطناعي عن <i>Dame Turque</i>، عبر Open Culture.</span>"
+    }
+  }
+}

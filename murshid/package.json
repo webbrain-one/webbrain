@@ -19,6 +19,7 @@
     "art:icons": "node scripts/art/icon.mjs && node scripts/build-icons.mjs && node scripts/copy-art.mjs",
     "fonts": "node scripts/copy-fonts.mjs",
     "web": "node scripts/serve.mjs",
+    "web:i18n": "node scripts/i18n/build.mjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
@@ -26,10 +27,12 @@
     "electron-chrome-extensions": "4.10.0"
   },
   "devDependencies": {
+    "@fontsource/amiri": "^5.3.0",
     "@fontsource/aref-ruqaa": "^5.3.0",
     "@fontsource/cormorant-garamond": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
     "electron": "45.2.3",
     "electron-builder": "26.18.0"

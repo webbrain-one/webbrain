@@ -20,8 +20,12 @@ createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     let file = normalize(join(root, decodeURIComponent(url.pathname)));
     if (!file.startsWith(root)) throw new Error('outside');
-    if ((await stat(file).catch(() => null))?.isDirectory()) file = join(file, 'index.html');
     if (url.pathname === '/') { res.writeHead(302, { location: '/web/' }); res.end(); return; }
+    if ((await stat(file).catch(() => null))?.isDirectory()) {
+      // /web/tr → /web/tr/, so the page's relative links resolve
+      if (!url.pathname.endsWith('/')) { res.writeHead(301, { location: `${url.pathname}/${url.search}` }); res.end(); return; }
+      file = join(file, 'index.html');
+    }
     const body = await readFile(file);
     res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
     res.end(body);
