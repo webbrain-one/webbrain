@@ -381,7 +381,12 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const { context, page } = await fixture(browser, build, { feedbackDelay: 40 });
         try {
           await message(page, 'page_monitor_prepare', { operationId: 'typing', tool: 'type_text', selector: '#field' });
-          await message(page, 'page_monitor_dispatch', { operationId: 'typing', kind: 'input', selector: '#field', eventTypes: ['beforeinput', 'input', 'change'] });
+          // Playwright's Firefox insertText commits a composition: trusted
+          // compositionstart and compositionend come with its beforeinput and
+          // input. They are this typing's own events, so they are declared too.
+          // (Chrome's Input.insertText fires no composition events.)
+          const eventTypes = ['beforeinput', 'input', 'change', ...(build === 'firefox' ? ['compositionstart', 'compositionend'] : [])];
+          await message(page, 'page_monitor_dispatch', { operationId: 'typing', kind: 'input', selector: '#field', eventTypes });
           await page.keyboard.insertText('hello');
           const atFinish = await page.evaluate(async () => {
             // The page renders its reaction in a later task, inside the operation
@@ -389,9 +394,11 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
             document.getElementById('status').textContent = 'chars 5';
             await new Promise(resolve => setTimeout(resolve, 0));
             const response = await deliver('page_monitor_finish', { operationId: 'typing' });
-            return { response, delivered: delivered.map(event => `${event.kind}/${event.source}`) };
+            const label = event => `${event.kind}/${event.source}`;
+            return { response, sent: feedback.map(label), delivered: delivered.map(label) };
           });
           assert.equal(atFinish.response?.ready, true);
+          assert.equal(atFinish.sent.some(event => event.endsWith('/user')), false, `The typing is the agent's, not the user's: ${atFinish.sent}`);
           assert.ok(atFinish.delivered.includes('dom/unknown'), `The reaction reached the background before finish replied: ${atFinish.delivered}`);
         } finally { await context.close(); }
       });
