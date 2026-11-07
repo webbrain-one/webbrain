@@ -10,19 +10,38 @@
 // list) and the rest was not read, the answer is sent back once with the
 // exact read that continues it (read-coverage-incomplete in guard-policy.js);
 // an answer given again without reading on ends with a note that only part of
-// the page was read. Short pages, whose content is never cut, and questions
-// about one part of a page are not affected.
+// the page was read. Short pages, whose content is never cut, questions about
+// one part of a page, and pages whose content was read through a reader of
+// its own source (a video's transcript, a PDF) are not affected.
 //
 // Shared byte for byte by the Chrome and Firefox builds.
-import { fitReadPageWindowResult, isReadPageWindowResult } from './read-page-window.js';
+import { READ_PAGE_MAX_LIMIT, fitReadPageWindowResult, isReadPageWindowResult } from './read-page-window.js';
 
 // Ends page content that was cut to fit a tool result or an observation.
 export const PAGE_CONTENT_TRUNCATED_MARKER = '[...page content truncated]';
-// The first read_page window of a page's text, as the Summarize this page
-// action reads it.
-export const WHOLE_PAGE_READ_ARGS = Object.freeze({ includeChrome: false });
+// The first read_page window of a page's text, in the largest windows
+// read_page returns, so a long page takes as few reads as it can.
+export const WHOLE_PAGE_READ_ARGS = Object.freeze({ includeChrome: false, limit: READ_PAGE_MAX_LIMIT });
 export const PAGE_COVERAGE_CAVEAT = 'Only part of the page was read, so this answer may leave out later parts of it.';
 const MAX_DOCUMENTS = 8;
+
+// Readers of what a page shows from its own source rather than from the
+// page's text: the video's transcript, the PDF, the documents framed in the
+// page, the page's own address fetched directly. Each says by its own fields
+// (has_more_text, hasMore, truncated) how far it read and how to read on, and
+// the page text's coverage is no measure of what they read. Once one has read
+// content of the open page, that page's text coverage is not checked: a
+// summary of a video written from its transcript is not sent back to read the
+// page around it. Each entry says whether a call reads the open page.
+const PAGE_SOURCE_READERS = Object.freeze({
+  read_youtube_transcript: () => true,
+  // Without a url it reads the tab's own PDF.
+  read_pdf: (args, page) => !args.url || documentUrl(args.url) === page,
+  // The framed documents' text; a selector reads a few controls of them.
+  iframe_read: args => !args.selector || String(args.selector).trim() === 'body',
+  fetch_url: (args, page, result) => [args.url, result.url, result.finalUrl].some(url => documentUrl(url) === page),
+  research_url: (args, page, result) => [args.url, result.url, result.finalUrl].some(url => documentUrl(url) === page),
+});
 
 function documentUrl(value) {
   try {
@@ -33,6 +52,28 @@ function documentUrl(value) {
   } catch {
     return '';
   }
+}
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+// Whether a page-source reader returned any of the page's content.
+function pageSourceContent(toolName, result) {
+  if (toolName === 'read_youtube_transcript') {
+    const data = result.data && typeof result.data === 'object' && !Array.isArray(result.data) ? result.data : result;
+    return hasText(data.text) || (Array.isArray(data.segments) && data.segments.length > 0);
+  }
+  if (toolName === 'read_pdf') {
+    return !!result._attachDocument || (Array.isArray(result.pages) && result.pages.some(hasText));
+  }
+  if (toolName === 'iframe_read') return Array.isArray(result.frames) && result.frames.some(frame => hasText(frame?.text));
+  return hasText(result.text);
+}
+
+/** True for a tool that can read the open page's content from its own source. */
+export function readsPageSource(toolName) {
+  return Object.prototype.hasOwnProperty.call(PAGE_SOURCE_READERS, toolName);
 }
 
 function serializedLength(value) {
@@ -52,14 +93,22 @@ function prefixAtLine(content, limit) {
  * A page-content result (a tree read, a gated article's text, a page
  * observation) too large for a tool result of `maxChars`, with its
  * pageContent cut so the whole result stays valid JSON. Every other field is
- * kept except the tree's own continuation, which would skip the text cut
- * here; `notice` names the read that covers the whole page instead. Null when
- * there is no pageContent or not even an empty one fits.
+ * kept except the tree's own continuation and the slice's end, which would
+ * skip or misplace the text cut here; `notice` names the read that covers
+ * the rest instead: read_page for the page, or the same element read in
+ * smaller pages for a subtree (`args` of a read by ref_id). Null when there is
+ * no pageContent or not even an empty one fits.
  */
-export function fitPageContentResult(result, maxChars = 8000) {
+export function fitPageContentResult(result, maxChars = 8000, { args = null } = {}) {
   if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.pageContent !== 'string') return null;
   const content = result.pageContent;
-  const { continuationArgs: _continuationArgs, nextPage: _nextPage, notice: _notice, ...rest } = result;
+  const { continuationArgs, nextPage: _nextPage, notice: _notice, chunkEnd: _chunkEnd, ...rest } = result;
+  const refId = [flatArgs(args).ref_id, continuationArgs?.ref_id].find(value => typeof value === 'string' && value.trim());
+  const readOn = refId
+    ? `To read the rest of it, call get_accessibility_tree again with ref_id ${JSON.stringify(refId)} and a smaller `
+      + 'maxChars, and follow each returned continuationArgs until hasMore is false.'
+    : `To read the whole page, call read_page(${JSON.stringify(WHOLE_PAGE_READ_ARGS)}) and repeat with each returned `
+      + 'continuationArgs until hasMore is false.';
   const build = limit => {
     const shown = prefixAtLine(content, limit);
     return {
@@ -68,9 +117,8 @@ export function fitPageContentResult(result, maxChars = 8000) {
       truncated: true,
       hasMore: true,
       pageContentTruncated: true,
-      notice: `Only the first ${shown.length} of ${content.length} characters of this page content fit in the result. `
-        + `To read the whole page, call read_page(${JSON.stringify(WHOLE_PAGE_READ_ARGS)}) and repeat with each returned `
-        + 'continuationArgs until hasMore is false.',
+      notice: `Only the first ${shown.length} of ${content.length} characters of this ${refId ? 'part of the page' : 'page content'} `
+        + `fit in the result. ${readOn}`,
     };
   };
   let best = build(0);
@@ -96,11 +144,16 @@ export function pageContentDeliveredInPart(result, maxChars = 8000) {
   return result.hasMore === true || result.truncated === true || serializedLength(result) > maxChars;
 }
 
-export function createPageReadCoverage({ url = '', wholePage = false } = {}) {
+/**
+ * `scope` is known in advance for a request that is about the whole page or
+ * one part of it by construction (a recommended action); otherwise it is
+ * asked when needed (page_read_scope).
+ */
+export function createPageReadCoverage({ url = '', scope = null } = {}) {
   return {
     url: documentUrl(url),
     // 'whole_page' or 'part' once decided, 'unknown' when no sure answer came.
-    scope: wholePage === true ? 'whole_page' : null,
+    scope: scope === 'whole_page' || scope === 'part' ? scope : null,
     documents: new Map(),
     gap: null,
   };
@@ -110,7 +163,7 @@ function documentEntry(state, url) {
   const key = documentUrl(url) || state.url;
   let entry = state.documents.get(key);
   if (!entry && state.documents.size < MAX_DOCUMENTS) {
-    entry = { partial: false, complete: false, texts: new Map(), tree: null, treeNext: null };
+    entry = { partial: false, complete: false, sourceRead: false, texts: new Map(), tree: null, treeNext: null };
     state.documents.set(key, entry);
   }
   return entry || null;
@@ -150,10 +203,18 @@ export function recordPageObservation(state, url, result, maxChars = 8000) {
  * A read tool's result, as the model was shown it in a tool result of
  * `maxChars`. read_page windows that join up from the start of the page text
  * to its end, or full-depth tree slices of the whole document that do, complete
- * the page.
+ * the page. A page-source reader's content of the open page (`pageUrl`, the
+ * run's page when unknown) leaves that page unchecked.
  */
-export function recordPageRead(state, toolName, args = {}, result = null, maxChars = 8000) {
+export function recordPageRead(state, toolName, args = {}, result = null, maxChars = 8000, { pageUrl = '' } = {}) {
   if (!state || !result || typeof result !== 'object' || result.error || result.success === false) return state;
+  if (readsPageSource(toolName)) {
+    const page = documentUrl(result.pageUrl) || documentUrl(pageUrl) || state.url;
+    if (!page || !PAGE_SOURCE_READERS[toolName](flatArgs(args), page, result) || !pageSourceContent(toolName, result)) return state;
+    const entry = documentEntry(state, page);
+    if (entry) entry.sourceRead = true;
+    return state;
+  }
   if (toolName === 'read_page') {
     if (!isReadPageWindowResult(result)) return state;
     const delivered = fitReadPageWindowResult(result, maxChars);
@@ -164,13 +225,11 @@ export function recordPageRead(state, toolName, args = {}, result = null, maxCha
     const entry = documentEntry(state, delivered.url);
     if (!entry) return state;
     const includeChrome = delivered.includeChrome === true;
-    const text = entry.texts.get(includeChrome) || { ranges: [], length, limit: null };
+    const text = entry.texts.get(includeChrome) || { ranges: [], length };
     // Live pages change length as counters and timestamps update; the latest
     // reading's length is the one the next window is read against.
     text.length = length;
     text.ranges = end > start ? mergeRange(text.ranges, start, end) : text.ranges;
-    const limit = Number(delivered.textLimit);
-    text.limit = Number.isSafeInteger(limit) && limit > 0 ? limit : text.limit;
     entry.texts.set(includeChrome, text);
     if (delivered.hasMore === true) entry.partial = true;
     const first = text.ranges[0];
@@ -218,8 +277,8 @@ function nextRead(entry, tools) {
     const first = text.ranges[0];
     const offset = first && first[0] === 0 ? first[1] : 0;
     return { tool: 'read_page', args: offset > 0
-      ? { offset, ...(text.limit ? { limit: text.limit } : {}), includeChrome }
-      : { includeChrome } };
+      ? { offset, limit: READ_PAGE_MAX_LIMIT, includeChrome }
+      : { includeChrome, limit: READ_PAGE_MAX_LIMIT } };
   }
   if (entry.treeNext && available('get_accessibility_tree')) return { tool: 'get_accessibility_tree', args: entry.treeNext };
   if (available('read_page')) return { tool: 'read_page', args: { ...WHOLE_PAGE_READ_ARGS } };
@@ -228,13 +287,14 @@ function nextRead(entry, tools) {
 
 /**
  * The unread rest of the page at `url` (the run's page when unknown): null
- * when nothing shown was cut off, a read reached the end, or none of the
- * `tools` can read further. Otherwise `{ nextRead: { tool, args } }`.
+ * when nothing shown was cut off, a read reached the end, a page-source reader
+ * read it, or none of the `tools` can read further. Otherwise
+ * `{ nextRead: { tool, args } }`.
  */
 export function pageReadCoverageGap(state, url = '', { tools = null } = {}) {
   if (!state?.documents?.size) return null;
   const entry = state.documents.get(documentUrl(url) || state.url) || null;
-  if (!entry?.partial || entry.complete) return null;
+  if (!entry?.partial || entry.complete || entry.sourceRead) return null;
   const read = nextRead(entry, tools);
   return read ? { nextRead: read } : null;
 }

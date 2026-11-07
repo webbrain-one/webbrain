@@ -43,7 +43,7 @@ import { STANDARD_TOOL_RESULT_CHARS, createReadCompletenessState, isCommunicatio
 import { LoopDetector } from './loop-detector.js';
 import { recordCollectionReadProgress } from './collection-read-progress.js';
 import { recordDocumentReadProgress } from './document-read-progress.js';
-import { PAGE_COVERAGE_CAVEAT, createPageReadCoverage, fitPageContentResult, pageReadCoverageBlock, pageReadCoverageGap, recordPageObservation, recordPageRead } from './page-read-coverage.js';
+import { PAGE_COVERAGE_CAVEAT, createPageReadCoverage, fitPageContentResult, pageReadCoverageBlock, pageReadCoverageGap, readsPageSource, recordPageObservation, recordPageRead } from './page-read-coverage.js';
 import { parseToolCallsFromText } from './tool-call-parser.js';
 import { IMAGE_BUDGET, estimateImageTokens, fitImageDimensions } from './image-budget.js';
 import { BROWSER_MUTATION_TOOLS, STATE_CHANGE_TOOLS as SHARED_STATE_CHANGE_TOOLS } from './mutation-tools.js';
@@ -1108,13 +1108,24 @@ export class Agent extends LoopDetector {
     const required = requiresCompleteThreadRead(userMessage, runOptions, { communicationThread });
     this.readCompletenessStates.set(tabId, createReadCompletenessState(token, required, communicationThread, adapterName));
     // A conversation's whole-thread read is checked above; any other page's
-    // coverage is recorded here. The Summarize this page action asks for the
-    // whole page in its own words.
-    if (!communicationThread) {
+    // coverage is recorded here. A request about selected text is about the
+    // selection, not the page.
+    if (!communicationThread && !isSelectionSourceGrounding(runOptions?.sourceGrounding)) {
       this.pageReadCoverage.set(tabId, createPageReadCoverage({ url: pageUrl,
-        wholePage: String(runOptions?.recommendedAction?.id || '') === 'summarize-page' }));
+        scope: this._recommendedActionPageReadScope(runOptions) }));
     }
     return token;
+  }
+
+  // What a recommended action reads, by construction: Summarize this page
+  // asks for the whole page in its own words, and an action whose first read
+  // is not of the page's text (a video's transcript, a screenshot) is about
+  // what that read returns. Null for a typed request (page_read_scope).
+  _recommendedActionPageReadScope(runOptions = {}) {
+    const id = String(runOptions?.recommendedAction?.id || '');
+    if (id === 'summarize-page') return 'whole_page';
+    const firstTools = this.constructor.RECOMMENDED_ACTION_FIRST_TOOLS[id];
+    return firstTools && !firstTools.has('read_page') && !firstTools.has('get_accessibility_tree') ? 'part' : null;
   }
 
   _clearReadCompleteness(tabId, runToken = '') {
@@ -1129,10 +1140,17 @@ export class Agent extends LoopDetector {
   // Page content the model is shown: its own read tools' results, as a
   // tool result of `maxChars` (applied as _limitToolResult applies it)
   // delivers them, and page observations the runtime attaches
-  // (page-feedback.js). See page-read-coverage.js.
-  _recordPageReadCoverage(tabId, toolName, args, result, maxChars) {
+  // (page-feedback.js). A reader of the page's own source (a transcript, a
+  // PDF) reads the open page without naming it. See page-read-coverage.js.
+  async _recordPageReadCoverage(tabId, toolName, args, result, maxChars) {
     const state = this.pageReadCoverage?.get(tabId);
-    if (state) recordPageRead(state, toolName, args, result, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
+    if (!state) return;
+    let pageUrl = '';
+    if (readsPageSource(toolName)) {
+      try { pageUrl = await this._currentUrl(tabId); } catch {}
+      if (this.pageReadCoverage.get(tabId) !== state) return;
+    }
+    recordPageRead(state, toolName, args, result, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS, { pageUrl });
   }
 
   _notePageObservationCoverage(tabId, url, page, maxChars = STANDARD_TOOL_RESULT_CHARS) {
@@ -16050,9 +16068,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             });
           }
           onUpdate('warning', { message: this._readCoverageWarning(tabId) });
+          const skippedError = this._pageReadCoverageRefusal(tabId)
+            ? 'skipped: read the rest of the page before answering'
+            : 'skipped: complete the whole-thread read before answering';
           this._appendSyntheticToolResults(
             tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
-            () => ({ success: false, skipped: true, error: 'skipped: complete the whole-thread read before answering' })
+            () => ({ success: false, skipped: true, error: skippedError })
           );
           this._persist(tabId);
           return { action: 'continue', completionRecovery: 'release' };
@@ -17040,10 +17061,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (tc._browserBatch && tc._browserBatch.index < tc._browserBatch.total - 1) {
         modelResultChars = Math.min(modelResultChars, BATCH_INTERMEDIATE_RESULT_CHARS);
       }
-      this._recordPageReadCoverage(tabId, fnName, fnArgs, toolResult, modelResultChars);
+      await this._recordPageReadCoverage(tabId, fnName, fnArgs, toolResult, modelResultChars);
       let resultContent = this._wrapUntrusted(
         resultTrustName,
-        this._limitToolResult(toolResult, modelResultChars),
+        this._limitToolResult(toolResult, modelResultChars, { args: fnArgs }),
       );
       // A navigation that landed on a challenge gets the same trusted
       // manual-completion note as a page read of it would.
@@ -41521,9 +41542,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   /**
    * Limit tool result size to avoid blowing up the context.
-   * Page text in particular can be huge.
+   * Page text in particular can be huge. `args` are the model's call: a
+   * cut of page content names the read that covers the rest of what it asked for.
    */
-  _limitToolResult(result, maxResultChars = STANDARD_TOOL_RESULT_CHARS) {
+  _limitToolResult(result, maxResultChars = STANDARD_TOOL_RESULT_CHARS, { args = null } = {}) {
     maxResultChars = Number(maxResultChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS;
     // Inline media is rendered for the user; base64 bytes have no value in model context.
     // The model never sees the media, so it may report only what WebBrain knows.
@@ -41642,7 +41664,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Page content (a tree read, a gated article's text, a page observation)
     // is cut inside pageContent, so the result stays JSON and says how to
     // read the whole page; a chopped one hides where the page goes on.
-    const pageContentFit = fitPageContentResult(safeResult, maxResultChars);
+    const pageContentFit = fitPageContentResult(safeResult, maxResultChars, { args });
     if (pageContentFit) return JSON.stringify(pageContentFit);
 
     // If still too big, just chop the JSON

@@ -144,8 +144,9 @@ export const SEMANTIC_QUESTIONS = Object.freeze({
     choices: Object.freeze({
       whole_page: 'It asks about the page as a whole: a summary, overview, outline or review of the page, everything '
         + 'or every item on it, its main points, or how it ends.',
-      part: 'It asks about one part, item, section, fact or value of the page, or about what is visible now, or it does '
-        + 'not need the page\'s content at all.',
+      part: 'It asks about one part, item, section, fact or value of the page, or about what is visible now, or about a '
+        + 'video, recording, PDF or other file the page shows or plays rather than the page\'s own text, or it does not '
+        + 'need the page\'s content at all.',
       unclear: 'It is unclear which.',
     }),
     // A sure "whole_page" sends the answer back once to read further; it

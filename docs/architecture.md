@@ -1057,19 +1057,24 @@ An Ask answer can be written from the start of a long page only: a page
 observation cut to fit the context, a first tree page or a first read_page
 window. A page-content result too large for its tool result is cut inside
 `pageContent`, so it stays JSON, ends with `[...page content truncated]` and
-its `notice` names `read_page({"includeChrome":false})` for the whole page.
-`page-read-coverage.js` records, per run, whether the page content the model
-was shown was cut off and whether read_page windows or full-depth tree slices
-later joined up to the end of the page. When an Ask answer (done or a plain
-final) arrives while the rest is unread, the `page_read_scope` question reads
-the request once per run (the Summarize this page action is the whole page by
-construction): a sure `whole_page` sends the answer back once
+its `notice` names `read_page({"includeChrome":false,"limit":6000})` for the
+whole page (or, for a subtree read by `ref_id`, the same element in smaller
+pages). `page-read-coverage.js` records, per run, whether the page content the
+model was shown was cut off and whether read_page windows or full-depth tree
+slices later joined up to the end of the page. When an Ask answer (done or a
+plain final) arrives while the rest is unread, the `page_read_scope` question
+reads the request once per run: a sure `whole_page` sends the answer back once
 (`read-coverage-incomplete`) with the exact call that continues the read, such
-as the next read_page window's `continuationArgs`. An answer given again
-without reading on is accepted as partial with the note that only part of the
-page was read. Short pages, a question about one part of the page, unsure
-readings, Act runs and conversations (their own whole-thread check) are not
-affected.
+as the next read_page window in the largest windows read_page returns. A
+recommended action decides it by construction: Summarize this page is the
+whole page, and an action whose first read is not of the page text (a video's
+transcript) is not. An answer given again without reading on is accepted as
+partial with the note that only part of the page was read. Short pages, a
+question about one part of the page, unsure readings, requests about selected
+text, pages whose content was read through a reader of its own source (a
+video's transcript, the tab's PDF, the framed documents, the page's own
+address fetched), Act runs and conversations (their own whole-thread check) are
+not affected.
 
 When the model request fails after an Act run sent a submission, WebBrain reads
 the page itself and completes the run only while that submission is still the

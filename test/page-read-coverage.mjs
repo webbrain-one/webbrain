@@ -5,7 +5,9 @@
 // Ask answer about the whole page written before the rest was read is sent
 // back once with the exact read that continues it, and an answer given again
 // without reading on ends with a note that only part of the page was read.
-// Short pages and questions about one part of a page are not affected.
+// Short pages, questions about one part of a page, selected text, and pages
+// read through a reader of their own source (a video's transcript, a PDF) are
+// not affected.
 // Real Agent batches and run loops with mocked browser APIs, both builds.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,6 +39,8 @@ const ARTICLE = Array.from({ length: 40 }, (_, index) => `Section ${index + 1}. 
 const TREE = Array.from({ length: 220 }, (_, index) => `paragraph "Era ${index + 1}: placeholder text of the long article" [ref_${index + 10}]`).join('\n');
 const SHORT_TREE = 'main [ref_1]\n heading "Short note" [ref_2]\n paragraph "One line of text." [ref_3]';
 const SUMMARY = 'The article surveys every era from the first section to the last.';
+// The read the notes name for the whole page: read_page in its largest windows.
+const WHOLE_PAGE_READ = '{"includeChrome":false,"limit":6000}';
 let nextTab = 9700;
 let nextCall = 1;
 
@@ -50,7 +54,7 @@ function readPageWindow(applyReadPageWindow, args = {}) {
 // One tool batch the way the run loop executes it, for an Ask (or Act)
 // agent whose page tools are stubbed. `decide` answers page_read_scope.
 async function batchAgent(build, { mode = 'ask', task = 'Summarize this page.', strict = false, decide = () => 'whole_page',
-  runOptions = {} } = {}) {
+  runOptions = {}, tools = ['done', 'read_page', 'get_accessibility_tree'], results = {} } = {}) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   const { applyReadPageWindow } = await import(`../src/${build}/src/agent/read-page-window.js`);
   const tab = nextTab++;
@@ -68,6 +72,7 @@ async function batchAgent(build, { mode = 'ask', task = 'Summarize this page.', 
     if (name === 'done') return { done: true, summary: args.summary, outcome: args.outcome };
     if (name === 'read_page') return readPageWindow(applyReadPageWindow, args);
     if (name === 'get_accessibility_tree') return { success: true, pageContent: TREE, truncated: false, hasMore: false };
+    if (results[name]) return results[name](args);
     return { success: true };
   };
   await agent._beginReadCompleteness(tab, task, runOptions);
@@ -76,7 +81,7 @@ async function batchAgent(build, { mode = 'ask', task = 'Summarize this page.', 
     const messages = agent.conversations.get(tab);
     messages.push({ role: 'assistant', content: null, tool_calls: toolCalls });
     const result = await agent._executeToolBatch(tab, toolCalls, messages, (type, data) => updates.push({ type, data }),
-      provider, null, new Set(['done', 'read_page', 'get_accessibility_tree']), 1, {}, null);
+      provider, null, new Set(tools), 1, {}, null);
     const results = toolCalls.map(call => messages.find(message => message.role === 'tool' && message.tool_call_id === call.id)?.content || '');
     return { ...result, results };
   };
@@ -111,11 +116,15 @@ for (const build of ['chrome', 'firefox']) {
       assert.ok(shown.pageContent.length > 4000, `${build}: as much content as fits is kept`);
       assert.equal(shown.hasMore, true);
       assert.equal(shown.pageContentTruncated, true);
-      assert.match(shown.notice, /To read the whole page, call read_page\(\{"includeChrome":false\}\) and repeat with each returned continuationArgs until hasMore is false\./);
+      assert.ok(shown.notice.endsWith(`To read the whole page, call read_page(${WHOLE_PAGE_READ}) and repeat with each returned continuationArgs until hasMore is false.`),
+        shown.notice);
       // The tree's own continuation would skip the text cut here.
       assert.equal(shown.continuationArgs, undefined);
       assert.equal(shown.nextPage, undefined);
+      // The slice now ends before its old end.
+      assert.equal(shown.chunkEnd, undefined);
     }
+    assert.equal(JSON.parse(Agent.prototype._limitToolResult(tree)).chunkStart, tree.chunkStart, `${build}: where the slice starts is kept`);
     assert.deepEqual(JSON.parse(Agent.prototype._limitToolResult(gated)).pageGate, gated.pageGate, `${build}: other fields are kept`);
     const small = { success: true, pageContent: SHORT_TREE, hasMore: false };
     assert.deepEqual(JSON.parse(Agent.prototype._limitToolResult(small)), small, `${build}: a page that fits is unchanged`);
@@ -143,7 +152,7 @@ for (const build of ['chrome', 'firefox']) {
     coverage.recordPageObservation(unread, PAGE, { pageContent: TREE });
     assert.equal(coverage.pageReadCoverageGap(unread, PAGE, { tools: new Set(['done']) }), null);
     assert.deepEqual(coverage.pageReadCoverageGap(unread, PAGE, { tools: new Set(['done', 'read_page']) }).nextRead,
-      { tool: 'read_page', args: { includeChrome: false } });
+      { tool: 'read_page', args: { includeChrome: false, limit: 6000 } });
   });
 
   // ── Done-time coverage in Ask mode ─────────────────────────────────────
@@ -157,7 +166,7 @@ for (const build of ['chrome', 'firefox']) {
       const note = JSON.parse(first.results[0]);
       assert.equal(note.blockedDone, true);
       assert.match(note.error, /^\[WHOLE PAGE NOT READ: /);
-      assert.ok(note.error.includes('Call read_page({"includeChrome":false}) now and repeat with each returned continuationArgs while hasMore is true'),
+      assert.ok(note.error.includes(`Call read_page(${WHOLE_PAGE_READ}) now and repeat with each returned continuationArgs while hasMore is true`),
         `${build}: the note names the exact read: ${note.error}`);
       assert.ok(updates.some(update => update.type === 'warning' && /Whole-page answer sent back/.test(update.data.message)));
       assert.deepEqual(h.questions.map(question => [question.kind, question.request]), [['page_read_scope', 'Summarize this page.']]);
@@ -186,9 +195,10 @@ for (const build of ['chrome', 'firefox']) {
       windows += 1;
       const shown = JSON.parse(h.agent._unwrapUntrusted(read.results[0]));
       if (!shown.hasMore) break;
-      // Stopping here, the note would name exactly the window that follows.
+      // Stopping here, the note would name the window that follows, in the
+      // largest windows read_page returns.
       await h.agent._preparePageReadCoverage(h.tab, new Set(['done', 'read_page']));
-      assert.ok(h.agent._readCompletenessBlock(h.tab).includes(`Call read_page(${JSON.stringify(shown.continuationArgs)}) now`),
+      assert.ok(h.agent._readCompletenessBlock(h.tab).includes(`Call read_page(${JSON.stringify({ ...shown.continuationArgs, limit: 6000 })}) now`),
         `${build}: the next read continues where window ${windows} ends`);
       args = shown.continuationArgs;
     }
@@ -236,7 +246,7 @@ for (const build of ['chrome', 'firefox']) {
     await h.batch([['read_page', { includeChrome: false }]]);
     const first = await h.batch([['done', { summary: SUMMARY }]]);
     assert.equal(first.action, 'continue');
-    assert.match(JSON.parse(first.results[0]).error, /Call read_page\(\{"offset":\d+,"limit":4000,"includeChrome":false\}\) now/);
+    assert.match(JSON.parse(first.results[0]).error, /Call read_page\(\{"offset":\d+,"limit":6000,"includeChrome":false\}\) now/);
     assert.equal(h.questions.length, 0);
   });
 
@@ -246,6 +256,90 @@ for (const build of ['chrome', 'firefox']) {
     const done = await h.batch([['done', { summary: SUMMARY, outcome: 'success' }]]);
     assert.doesNotMatch(String(done.results[0]), /WHOLE PAGE NOT READ/);
     assert.equal(h.questions.length, 0);
+  });
+
+  test(`${build}: calls after a sent-back answer are skipped with the page's own reason`, async () => {
+    const h = await batchAgent(build);
+    h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    const sent = await h.batch([['done', { summary: SUMMARY }], ['read_page', { includeChrome: false }]]);
+    assert.equal(sent.action, 'continue');
+    assert.equal(JSON.parse(sent.results[1]).error, 'skipped: read the rest of the page before answering');
+  });
+
+  // ── Content read from the page's own source ────────────────────────────
+  // A video page's tree is long, so its observation is cut off; the video's
+  // content is its transcript, not the page text around it.
+  const TRANSCRIPT = { success: true, data: { text: 'The whole transcript of the video, from its start to its end.', has_more_text: false } };
+  const VIDEO_SUMMARY = 'The video explains its topic from the first minute to the last.';
+  test(`${build}: a video summary written from its transcript is accepted without reading the page around it`, async () => {
+    const tools = ['done', 'read_page', 'get_accessibility_tree', 'read_youtube_transcript'];
+    const h = await batchAgent(build, { task: 'Summarize this video.', tools, results: { read_youtube_transcript: () => TRANSCRIPT } });
+    h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    await h.batch([['read_youtube_transcript', {}]]);
+    const updates = [];
+    const done = await h.batch([['done', { summary: VIDEO_SUMMARY }]], updates);
+    assert.equal(done.action, 'return', `${build}: the answer is not sent back`);
+    assert.equal(done.value, VIDEO_SUMMARY, `${build}: and it gets no caveat`);
+    assert.notEqual(h.lastDone(updates)?.outcome, 'partial');
+    assert.equal(h.questions.length, 0, `${build}: nothing is asked about the request`);
+
+    // A transcript that could not be read is no reading of the video.
+    const failed = await batchAgent(build, { task: 'Summarize this page.', tools,
+      results: { read_youtube_transcript: () => ({ success: false, error: 'No transcript is available for this video.' }) } });
+    failed.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    await failed.batch([['read_youtube_transcript', {}]]);
+    assert.equal((await failed.batch([['done', { summary: SUMMARY }]])).action, 'continue');
+
+    // The Summarize video action reads the transcript first by construction.
+    const action = await batchAgent(build, { task: 'Summarize this video.', tools, decide: () => 'whole_page',
+      runOptions: { recommendedAction: { id: 'summarize-youtube-video', tool: 'read_youtube_transcript' } } });
+    action.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    const answered = await action.batch([['done', { summary: VIDEO_SUMMARY }]]);
+    assert.equal(answered.value, VIDEO_SUMMARY);
+    assert.equal(action.questions.length, 0, `${build}: the action's request is not asked about`);
+  });
+
+  test(`${build}: page-source readers of the open page leave its text coverage unchecked`, () => {
+    const cases = [
+      ['read_pdf', {}, { success: true, pages: ['First page of the document.'], hasExtractableText: true }, true],
+      ['read_pdf', { url: 'https://docs.example.test/other.pdf' }, { success: true, pages: ['Another document.'] }, false],
+      ['read_pdf', {}, { success: true, pages: [''], hasExtractableText: false }, false],
+      ['iframe_read', {}, { success: true, pageUrl: PAGE, frameCount: 1, frames: [{ ok: true, url: 'https://embed.example.test/doc', text: 'The framed document.' }] }, true],
+      ['iframe_read', { selector: 'input, textarea' }, { success: true, frames: [{ ok: true, text: 'A form field.' }] }, false],
+      ['fetch_url', { url: `${PAGE}#history` }, { success: true, url: `${PAGE}#history`, text: 'The page text as served.', hasMore: true }, true],
+      ['fetch_url', { url: 'https://other.example.test/' }, { success: true, text: 'Another page.' }, false],
+      ['read_youtube_transcript', {}, { success: true, data: { text: '', segments: [{ start: 0, text: 'Opening line.' }] } }, true],
+      ['read_youtube_transcript', {}, { success: true, data: { text: '  ' } }, false],
+      ['read_youtube_transcript', {}, { success: false, error: 'No transcript.' }, false],
+      // A table, a heading list: parts of the page, as an article's tables are.
+      ['extract_data', { type: 'tables' }, [{ caption: 'Eras', rows: [['1', 'First era']] }], false],
+    ];
+    for (const [tool, args, result, covers] of cases) {
+      const state = coverage.createPageReadCoverage({ url: PAGE });
+      coverage.recordPageObservation(state, PAGE, { pageContent: TREE, hasMore: true });
+      coverage.recordPageRead(state, tool, args, result, 8000, { pageUrl: PAGE });
+      assert.equal(coverage.pageReadCoverageGap(state, PAGE) === null, covers, `${build}: ${tool}(${JSON.stringify(args)})`);
+    }
+  });
+
+  test(`${build}: a request about selected text is not checked against the page`, async () => {
+    const h = await batchAgent(build, { task: 'Summarize the selected text.', runOptions: { sourceGrounding: 'selection_only' } });
+    h.observe({ success: true, pageContent: TREE, truncated: true, hasMore: true, page: 1 });
+    const answer = 'The selected passage describes one era.';
+    assert.equal((await h.batch([['done', { summary: answer }]])).value, answer);
+    assert.equal(h.questions.length, 0);
+  });
+
+  test(`${build}: a cut subtree names a smaller read of the same element`, () => {
+    const subtree = { success: true, pageContent: TREE, truncated: false, hasMore: false, refScopeUrl: PAGE };
+    for (const [result, args] of [[subtree, { ref_id: 'ref_7', filter: 'all' }],
+      [{ ...subtree, hasMore: true, continuationArgs: { ref_id: 'ref_7', filter: 'all', maxDepth: 15, maxChars: 12000, page: 2 } }, null]]) {
+      const shown = JSON.parse(Agent.prototype._limitToolResult(result, 8000, { args }));
+      assert.ok(shown.pageContent.endsWith(coverage.PAGE_CONTENT_TRUNCATED_MARKER));
+      assert.match(shown.notice, /of this part of the page fit in the result\. To read the rest of it, call get_accessibility_tree again with ref_id "ref_7" and a smaller maxChars/);
+      assert.doesNotMatch(shown.notice, /read_page/, `${build}: read_page reads the whole page, not this element`);
+      assert.equal(shown.continuationArgs, undefined);
+    }
   });
 
   // ── The whole run, as in G7 ────────────────────────────────────────────
@@ -277,7 +371,11 @@ for (const build of ['chrome', 'firefox']) {
         if (text.includes('WHOLE PAGE NOT READ')) {
           assert.equal(last.role, answerWith === 'done' ? 'tool' : 'user');
           if (!readsOn) return answer('A summary of the opening sections.');
-          return { toolCalls: [{ id: 'read-1', function: { name: 'read_page', arguments: JSON.stringify({ includeChrome: false }) } }] };
+          // The model makes the read the note names.
+          const note = last.role === 'tool' ? JSON.parse(text).error : text;
+          const named = note.match(/Call read_page\((\{[^\n]*?\})\) now/);
+          assert.ok(named, note);
+          return { toolCalls: [{ id: 'read-1', function: { name: 'read_page', arguments: named[1] } }] };
         }
         assert.equal(last.role, 'tool');
         const shown = JSON.parse(text);
@@ -336,12 +434,12 @@ for (const build of ['chrome', 'firefox']) {
       }
       assert.equal(result, SUMMARY, `${build}: the summary is given after reading the whole page`);
       assert.ok(reads.length > 3, `${build}: the page was read to its end (${reads.length} windows)`);
-      assert.deepEqual(reads[0], { includeChrome: false });
+      assert.deepEqual(reads[0], { includeChrome: false, limit: 6000 });
       // The observation the first answer was written from marks its cut and
       // names the read for the whole page.
       assert.equal(typeof observed, 'object', `${build}: the observation must stay JSON: ${String(observed).slice(-200)}`);
       assert.ok(observed.pageContent.endsWith(coverage.PAGE_CONTENT_TRUNCATED_MARKER), `${build}: the observation marks its cut`);
-      assert.match(observed.notice, /call read_page\(\{"includeChrome":false\}\)/);
+      assert.ok(observed.notice.includes(`call read_page(${WHOLE_PAGE_READ})`), observed.notice);
     });
   }
 }

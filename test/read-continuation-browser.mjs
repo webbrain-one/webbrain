@@ -92,8 +92,10 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const named = note.match(/Call (read_page|get_accessibility_tree)\((\{[^\n]*?\})\) now/);
         assert.ok(named, note);
         assert.equal(named[1], expectedTool, note);
-        // The named read is exactly the continuation the first result returned.
-        assert.deepEqual(JSON.parse(named[2]), first.continuationArgs, note);
+        // The named read is the continuation the first result returned: the
+        // tree's own, or the next read_page window in the largest windows.
+        assert.deepEqual(JSON.parse(named[2]), expectedTool === 'read_page'
+          ? { ...first.continuationArgs, limit: 6000 } : first.continuationArgs, note);
         let tool = named[1];
         let args = JSON.parse(named[2]);
         let content = first.text ?? first.pageContent;
