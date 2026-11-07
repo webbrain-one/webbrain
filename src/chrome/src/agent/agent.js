@@ -34726,7 +34726,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           ...(ordinaryActivations[0].actionResource ? { actionResource: ordinaryActivations[0].actionResource } : {}) };
       }
       // X's or Bluesky's own Like or Bookmark toggle: it cannot publish, but
-      // it is not an ordinary control either.
+      // it is not an ordinary control either. Like the ordinary branch above,
+      // it carries no host or url, so a caller falls back to the page's URL;
+      // a toggle in a frame would need the probe's own url passed on here.
       const nonPublishingControls = rawResults.filter(item => item?.isSubmit === false
         && item.resolvedNonPublishingControl === true);
       if (nonPublishingControls.length === 1 && ['click', 'click_ax', 'iframe_click'].includes(name)) {
@@ -37483,10 +37485,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             popupLauncherToken: popupTarget ? rememberPopupLauncher(control, actionResource) : '' };
         }
         // A post's own Like or Bookmark toggle on X or Bluesky, outside any
-        // form, typed or not: identified, and unable to publish whatever its
-        // caption reads as. Not ordinary, so it keeps the checks any other
-        // commit gets; only the refusal of a control that could publish
-        // does not apply to it.
+        // form, typed or not: identified, and unable to publish even when its
+        // caption reads as a commit. Not ordinary, so it keeps the checks any
+        // other commit gets; only the refusal of a control that could publish
+        // does not apply to it. A caption read as a deletion still leaves it
+        // unresolved here (ordinaryControlEvidence refuses it).
         const nonPublishingToggle = control && socialNonPublishingToggle(control)
           && ((tag === 'button' && ['', 'button'].includes(type)) || (!['button', 'input', 'a'].includes(tag) && role === 'button'));
         if (nonPublishingToggle && isVisible(control) && !control.form && !control.closest('form') && !control.hasAttribute('form')
