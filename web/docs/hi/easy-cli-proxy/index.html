@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EasyCLIProxyAPI के ज़रिए अकाउंट सब्सक्रिप्शन का उपयोग — WebBrain यूज़र गाइड</title>
   <meta name="description" content="WebBrain को EasyCLIProxyAPI के लोकल OpenAI-कम्पैटिबल एंडपॉइंट से कनेक्ट करें, और एग्ज़िक्यूटेबल, OAuth, अकाउंट व नेटवर्क जोखिम की सीमाओं को समझें।">
-  <link rel="canonical" href="https://webbrain.one/docs/hi/easy-cli-proxy/">
-  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/">
-  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/">
-  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/">
-  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/">
-  <link rel="icon" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/docs/hi/easy-cli-proxy/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/easy-cli-proxy/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/easy-cli-proxy/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/easy-cli-proxy/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/easy-cli-proxy/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/easy-cli-proxy/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/easy-cli-proxy/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/easy-cli-proxy/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/easy-cli-proxy/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/easy-cli-proxy/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/easy-cli-proxy/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/easy-cli-proxy/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/easy-cli-proxy/"><link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -70,7 +65,7 @@
 </head>
 <body class="doc-page">
   <a class="skip-link" href="#main">मुख्य सामग्री पर जाएँ</a>
-  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">यूज़र गाइड</span></a><nav class="top-nav" aria-label="प्राथमिक नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">डॉक्यूमेंटेशन</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="भाषा बदलें"><a href="/docs/easy-cli-proxy/" aria-label="Read in English"><span>EN</span></a><a href="/docs/hi/easy-cli-proxy/" aria-label="हिन्दी में पढ़ें"><span class="active">हिन्दी</span></a><a href="/docs/zh/easy-cli-proxy/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="डॉक्यूमेंटेशन मेनू खोलें">☰</button></div></div></header>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">यूज़र गाइड</span></a><nav class="top-nav" aria-label="प्राथमिक नेविगेशन"><a href="/">होम</a><a href="/docs/hi/" aria-current="page">डॉक्यूमेंटेशन</a><a href="/blog/">ब्लॉग</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="भाषा बदलें"><option value="/docs/easy-cli-proxy/">English</option><option value="/docs/hi/easy-cli-proxy/" selected>हिन्दी</option><option value="/docs/zh/easy-cli-proxy/">中文</option><option value="/docs/ar/easy-cli-proxy/">العربية</option><option value="/docs/nl/easy-cli-proxy/">Nederlands</option><option value="/docs/tl/easy-cli-proxy/">Filipino</option><option value="/docs/fr/easy-cli-proxy/">Français</option><option value="/docs/de/easy-cli-proxy/">Deutsch</option><option value="/docs/id/easy-cli-proxy/">Bahasa Indonesia</option><option value="/docs/es/easy-cli-proxy/">Español</option><option value="/docs/tr/easy-cli-proxy/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="थीम बदलें">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="डॉक्यूमेंटेशन मेनू खोलें">☰</button></div></div></header>
   <div class="docs-shell">
     <aside class="docs-sidebar" aria-label="डॉक्यूमेंटेशन अनुक्रमणिका"><div class="sidebar-group"><div class="sidebar-label">यहाँ से शुरू करें</div><nav><a href="/docs/hi/">अवलोकन</a><a href="/docs/hi/faq/">अक्सर पूछे जाने वाले प्रश्न</a></nav></div><div class="sidebar-group"><div class="sidebar-label">WebBrain का उपयोग</div><nav><a href="/docs/hi/settings/">सेटिंग्स की व्याख्या</a><a href="/docs/hi/providers/">प्रोवाइडर और मॉडल</a><a href="/companion/">WebBrain Companion</a><a href="/docs/hi/easy-cli-proxy/" aria-current="page">सब्सक्रिप्शन प्रॉक्सी</a><a href="/docs/hi/safety/">मोड, सुरक्षा और निजता</a><a href="/docs/hi/apocalypse-mode/">Apocalypse मोड</a><a href="/docs/hi/formats/">एक्सपोर्ट और वर्कफ़्लो</a><a href="/docs/hi/mcp/">MCP सर्वर</a><a href="/docs/hi/lm-studio/">LM Studio प्लगइन</a><a href="/docs/hi/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">डेवलपर्स</div><nav><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/providers-and-models.md">प्रोवाइडर की आंतरिक कार्यप्रणाली ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">कम्युनिटी</div><nav><a href="https://discord.gg/cgC325ssfw">Discord सहायता</a></nav></div></aside>
     <main class="doc-main" id="main">
@@ -136,6 +131,6 @@
     </div>
   </div>
 </footer>
-<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261106"></script>
+<!-- Site footer: end --><script src="/docs/assets/docs.js?v=20261107"></script>
 </body>
 </html>

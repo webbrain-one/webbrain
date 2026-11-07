@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Use WebBrain with MCP — WebBrain User Guide</title>
   <meta name="description" content="Connect Codex, Claude Code, Hermes Agent, OpenClaw, Cursor, OpenCode, or another local stdio MCP client to WebBrain in your real signed-in Chromium browser, with verified setup commands and practical use cases.">
-  <link rel="canonical" href="https://webbrain.one/docs/mcp/">
-  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/mcp/">
-  <link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/mcp/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/mcp/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/mcp/">
-  <link rel="icon" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/docs/mcp/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/mcp/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/mcp/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/mcp/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/mcp/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/mcp/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/mcp/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/mcp/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/mcp/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/mcp/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/mcp/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/mcp/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/mcp/"><link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261106">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -68,7 +65,7 @@
 </head>
 <body class="doc-page">
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">User guide</span></a><nav class="top-nav" aria-label="Primary"><a href="/">Home</a><a href="/docs/" aria-current="page">Docs</a><a href="/blog/">Blog</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><span class="lang-switch" role="group" aria-label="Switch language"><a href="/docs/mcp/" aria-label="Read in English"><span class="active">EN</span></a><a href="/docs/hi/mcp/" aria-label="Read in Hindi"><span>हिन्दी</span></a><a href="/docs/zh/mcp/" aria-label="Read in Chinese"><span>中文</span></a></span><button class="icon-button" type="button" data-theme-toggle aria-label="Use light theme">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Open documentation menu">☰</button></div></div></header>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">User guide</span></a><nav class="top-nav" aria-label="Primary"><a href="/">Home</a><a href="/docs/" aria-current="page">Docs</a><a href="/blog/">Blog</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="Switch language"><option value="/docs/mcp/" selected>English</option><option value="/docs/hi/mcp/">हिन्दी</option><option value="/docs/zh/mcp/">中文</option><option value="/docs/ar/mcp/">العربية</option><option value="/docs/nl/mcp/">Nederlands</option><option value="/docs/tl/mcp/">Filipino</option><option value="/docs/fr/mcp/">Français</option><option value="/docs/de/mcp/">Deutsch</option><option value="/docs/id/mcp/">Bahasa Indonesia</option><option value="/docs/es/mcp/">Español</option><option value="/docs/tr/mcp/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="Use light theme">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Open documentation menu">☰</button></div></div></header>
 
   <div class="docs-shell">
     <aside class="docs-sidebar" aria-label="Documentation"><div class="sidebar-group"><div class="sidebar-label">Start here</div><nav><a href="/docs/">Overview</a><a href="/docs/faq/">FAQ</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Use WebBrain</div><nav><a href="/docs/settings/">Settings, explained</a><a href="/docs/providers/">Providers & models</a><a href="/companion/">WebBrain Companion</a><a href="/docs/safety/">Modes, safety & privacy</a><a href="/docs/apocalypse-mode/">Apocalypse Mode</a><a href="/docs/formats/">Exports & workflows</a><a href="/docs/mcp/" aria-current="page">MCP server</a><a href="/docs/lm-studio/">LM Studio plugin</a><a href="/docs/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">On your website</div><nav><a href="/docs/websites/">WebBrain for websites</a></nav></div><div class="sidebar-group"><div class="sidebar-label">MCP source</div><nav><a href="https://github.com/webbrain-one/webbrain/tree/main/mcp-server">Server package ↗</a><a href="https://www.npmjs.com/package/@webbrain/mcp-server">npm package ↗</a><a href="/blog/mcp-server-introduction">Launch article ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Community</div><nav><a href="https://discord.gg/cgC325ssfw">Discord Support</a></nav></div></aside>
@@ -239,6 +236,6 @@ webbrain_status(run_id: "mcp_…")</code></pre><p>A WebBrain run timeout returns
   </div>
 </footer>
 <!-- Site footer: end -->
-  <script src="/docs/assets/docs.js?v=20261106"></script>
+  <script src="/docs/assets/docs.js?v=20261107"></script>
 </body>
 </html>
