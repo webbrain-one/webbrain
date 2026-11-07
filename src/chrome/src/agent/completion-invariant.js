@@ -85,6 +85,24 @@ const OBSERVATION_TOOLS = new Set([
 // that implementation-level mutation as verification would let it clear debt
 // without observing the requested post-action state.
 
+// Executed actions that cannot themselves put text into a page field: a
+// click, a checkbox, a navigation, a download, a network request, a schedule.
+// Any other executed action may have (typing, keys, a script, a drag, a
+// captcha token), so after one the run counts as having entered text
+// (fieldTextEntered), and a form it left empty may still be one it wrote in.
+const NON_TEXT_ENTRY_ACTION_TOOLS = new Set([
+  'click',
+  'click_ax',
+  'iframe_click',
+  'set_checked',
+  'fetch_url',
+  'research_url',
+  'schedule_resume',
+  'schedule_task',
+  ...NAVIGATION_ACTION_TOOLS,
+  ...DOWNLOAD_ACTION_TOOLS,
+]);
+
 const DONE_OUTCOMES = new Set(['success', 'partial', 'failed']);
 
 function normalizedMethod(args = {}) {
@@ -184,6 +202,9 @@ export function classifyCompletionForm({
   submits = [],
   submitReadings = {},
   fieldReadings = {},
+  // The agent's fact that this run typed into no field and sent no ordinary
+  // form (Agent._completionFormsUntouchedByRun).
+  untouchedByRun = false,
 } = {}) {
   const fields = Array.isArray(editable) ? editable : [];
   const submitControls = Array.isArray(submits) ? submits : [];
@@ -288,6 +309,23 @@ export function classifyCompletionForm({
     && !onlyField.required
     && !onlyField.focused
   );
+  // A form whose every field is an empty text field, on a run that typed
+  // into no field and sent no ordinary form, holds nothing this run wrote and
+  // nothing it left unsent: Mastodon's always-present composer after a
+  // deletion is one. Any text in a field (a typed draft, a prefilled reply)
+  // keeps the form, as does a field whose state an empty value cannot show
+  // (a checkbox, a select, a file or date input) and a dialog's form.
+  const textEntryField = field => field.tag === 'textarea'
+    || (field.tag === 'input' && ['', 'text', 'search', 'email', 'url', 'tel', 'number', 'password'].includes(field.type))
+    // A contenteditable editor reports its own element's tag.
+    || (!!field.tag && !['input', 'select', 'textarea', 'button'].includes(field.tag));
+  const untouchedEmpty = !!(
+    untouchedByRun === true
+    && !insideDialog
+    && normalizedFields.length > 0
+    && normalizedFields.every(field => textEntryField(field)
+      && !field.value.replace(/[\u200b-\u200d\u2060\ufeff]/g, '').trim())
+  );
 
   const utilityReason = utilityRegion
     ? 'utility_region'
@@ -295,7 +333,9 @@ export function classifyCompletionForm({
       ? searchReason
       : passiveUtilityShell
         ? 'passive_utility_shell'
-        : null;
+        : untouchedEmpty
+          ? 'untouched_empty'
+          : null;
   const utility = utilityReason !== null;
   return {
     label: String(label || '').trim().slice(0, 80),
@@ -968,6 +1008,7 @@ export function recordCompletionToolResult(state, name, args = {}, result, { cha
     const downloadAction = DOWNLOAD_ACTION_TOOLS.has(name)
       || args?.__completionDownloadAction === true;
     next.hadAction = true;
+    if (!NON_TEXT_ENTRY_ACTION_TOOLS.has(name)) next.fieldTextEntered = true;
     // A persisted scheduler result proves its own mutation, but it must never
     // erase verification debt opened by an earlier page action.
     if (selfVerified && current.verificationDebt) {
