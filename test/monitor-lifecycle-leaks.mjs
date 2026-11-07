@@ -6,6 +6,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const html = `<!doctype html><main><h1>Feed</h1><p id="clock">0</p><input id="field"><button id="send" type="button">Send</button></main>`;
 
@@ -59,8 +63,8 @@ async function fixture(browser, build) {
 const tick = page => page.evaluate(() => { const clock = document.getElementById('clock'); clock.textContent = String(Number(clock.textContent) + 1); });
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: an orphaned monitor stops on a stale-observation reply`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: an orphaned monitor stops on a stale-observation reply`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       await t.test('the run is gone: stop observing and stop waking the background', async () => {
         const { context, page } = await fixture(browser, build);
@@ -96,8 +100,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
-  test(`${build}: run-scoped listeners and local operations do not outlive their owner`, { timeout: 90000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: run-scoped listeners and local operations do not outlive their owner`, { timeout: scaled(90000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       await t.test('disposal removes the BFCache pageshow listener', async () => {
         const { context, page } = await fixture(browser, build);

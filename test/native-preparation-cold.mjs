@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const owner = 'owned-cold-read:task-one:provider-one';
 const html = `<!doctype html><style>body{margin:0;font:18px sans-serif}.chat{margin-left:300px;width:700px}.topbar{height:70px}.user-title{display:inline-block;min-width:100px;height:40px}.bubbles-scrollable{height:350px;overflow-y:auto}.input-message-input{width:600px;min-height:36px}button{width:50px;height:36px}#column-left{position:absolute;left:0;top:0;width:280px}.sidebar-header{height:64px}</style>
@@ -13,8 +17,8 @@ const html = `<!doctype html><style>body{margin:0;font:18px sans-serif}.chat{mar
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   const sources = await Promise.all(['rich-text-toolbar-heuristic.js','accessibility-tree.js','chat-observation.js','page-monitor.js','content.js']
     .map(file => readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8')));
-  test(`${build}: cold private owner is initialized only by a current pre-inference capture`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: cold private owner is initialized only by a current pre-inference capture`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     try {
       await context.route('https://web.telegram.org/**', route => route.fulfill({ contentType: 'text/html', body: html }));
