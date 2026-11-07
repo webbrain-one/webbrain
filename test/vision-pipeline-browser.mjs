@@ -235,6 +235,8 @@ test('a vision capture of a right-to-left page wider than the window shows the s
     const context = await browser.newContext({ viewport: null });
     const page = await context.newPage();
     await page.goto(`${origin}/rtl`);
+    // Reserve classic-scrollbar layout space even with macOS overlay scrollbars.
+    await page.addStyleTag({ content: '::-webkit-scrollbar { width: 16px; height: 16px; }' });
     const cdp = await context.newCDPSession(page);
     const { cssVisualViewport: vv } = await cdp.send('Page.getLayoutMetrics');
     const scrollbar = await page.evaluate(() => innerWidth - document.documentElement.clientWidth);
