@@ -30,17 +30,24 @@ async function listHtmlFiles(dir) {
 }
 
 // Guide navigation and footer per translated docs set. English pages live at
-// the /docs/ root; Chinese and Hindi mirror it under /docs/zh/ and /docs/hi/.
+// the /docs/ root; each translated set mirrors it under /docs/<code>/.
 const GUIDE_LANGUAGES = {
   zh: { overview: '/docs/zh/', faq: '/docs/zh/faq/', faqLabel: '常见问题' },
   hi: { overview: '/docs/hi/', faq: '/docs/hi/faq/', faqLabel: 'अक्सर पूछे जाने वाले सवाल' },
+  fr: { overview: '/docs/fr/', faq: '/docs/fr/faq/', faqLabel: 'FAQ' },
+  es: { overview: '/docs/es/', faq: '/docs/es/faq/', faqLabel: 'Preguntas frecuentes' },
+  de: { overview: '/docs/de/', faq: '/docs/de/faq/', faqLabel: 'FAQ' },
+  ar: { overview: '/docs/ar/', faq: '/docs/ar/faq/', faqLabel: 'الأسئلة الشائعة' },
+  tr: { overview: '/docs/tr/', faq: '/docs/tr/faq/', faqLabel: 'SSS' },
+  nl: { overview: '/docs/nl/', faq: '/docs/nl/faq/', faqLabel: 'FAQ' },
+  id: { overview: '/docs/id/', faq: '/docs/id/faq/', faqLabel: 'FAQ' },
+  tl: { overview: '/docs/tl/', faq: '/docs/tl/faq/', faqLabel: 'FAQ' },
   en: { overview: '/docs/', faq: '/docs/faq/', faqLabel: 'FAQ' },
 };
 
 function guideLanguageFor(normalizedPath) {
-  if (normalizedPath.includes('/web/docs/zh/')) return 'zh';
-  if (normalizedPath.includes('/web/docs/hi/')) return 'hi';
-  return 'en';
+  const match = normalizedPath.match(/\/web\/docs\/([a-z]{2})\//);
+  return match && GUIDE_LANGUAGES[match[1]] ? match[1] : 'en';
 }
 
 function withGuideNavigation(html, file) {
@@ -130,15 +137,18 @@ function withDocsFooter(html, file, dictionaries) {
 
 async function main() {
   const en = JSON.parse(await readFile(path.join(LOCALES_DIR, 'en.json'), 'utf8'));
-  const zh = { ...en, ...JSON.parse(await readFile(path.join(LOCALES_DIR, 'zh.json'), 'utf8')) };
-  const hi = { ...en, ...JSON.parse(await readFile(path.join(LOCALES_DIR, 'hi.json'), 'utf8')) };
+  const dictionaries = { en };
+  for (const code of Object.keys(GUIDE_LANGUAGES)) {
+    if (code === 'en') continue;
+    dictionaries[code] = { ...en, ...JSON.parse(await readFile(path.join(LOCALES_DIR, `${code}.json`), 'utf8')) };
+  }
   const files = await listHtmlFiles(DOCS_DIR);
   for (const file of files) {
     const original = await readFile(file, 'utf8');
     const generated = withDocsFooter(
       withGuideNavigation(withPlausibleAnalytics(original), file),
       file,
-      { en, zh, hi },
+      dictionaries,
     );
     const occurrences = generated.split(PLAUSIBLE_SCRIPT_URL).length - 1;
     if (occurrences !== 1) {
