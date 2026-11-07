@@ -495,29 +495,79 @@ export function clarifyReplyWithholdsCredentials(answer) {
 }
 
 /**
+ * The password a fill tool call typed into a new-password field (a
+ * password-type or `new-password` field isSignInPasswordField leaves out,
+ * other than keys and tokens), trimmed, or null: a password WebBrain chose for
+ * an account it created, which a later sign-in to that account may need. A
+ * live result and the copy saved in a conversation give the same answer.
+ *
+ * @param {string} toolName
+ * @param {object} args the tool call's arguments
+ * @param {object} result the tool result
+ * @returns {string|null}
+ */
+export function newPasswordValue(toolName, args, result) {
+  if (!FILL_TOOLS.has(toolName) || !result || typeof result !== 'object' || Array.isArray(result)
+      || result.dispatched === false || result.noDispatch === true) return null;
+  const field = [result.fieldMeta, result.focusedField].find(meta => meta && typeof meta === 'object');
+  if (!field || isSignInPasswordField(field).guarded) return null;
+  const tokens = String(field.autocomplete ?? '').toLowerCase().split(/\s+/);
+  const passwordField = tokens.includes('new-password')
+    || (String(field.type ?? '').toLowerCase() === 'password' && !tokens.includes('one-time-code')
+      && !namesKeyOrToken(fieldIdentity(field)));
+  const value = typeof args?.text === 'string' ? args.text.trim() : '';
+  return passwordField && value ? value : null;
+}
+
+/**
+ * The fill calls inside the folded browser_batch answers of a saved
+ * conversation (browser-batch.js foldBrowserBatchMessages), oldest first:
+ * each child action's tool name and input from the parent call, and the
+ * result object its section of the answer starts with. A section is read only
+ * inside its own untrusted-content box, whose tags text a page wrote cannot
+ * contain (the agent's _wrapUntrusted strips them), so a page cannot make one
+ * child's result pass for another's.
+ *
+ * @param {object[]} messages the conversation
+ * @returns {{name: string, args: object|null, result: object|null}[]}
+ */
+export function browserBatchFillCallsFromHistory(messages) {
+  const found = [];
+  for (const { args, content } of toolCallsFromHistory(messages, ['browser_batch'], content => content)) {
+    if (!Array.isArray(args?.actions) || !content.startsWith('[browser_batch] ')) continue;
+    let from = 0;
+    for (const [index, action] of args.actions.entries()) {
+      if (!FILL_TOOLS.has(action?.name)) continue;
+      const header = `\nactions[${index}] ${action.name} → ran\n<untrusted_page_content id="`;
+      const at = content.indexOf(header, from);
+      const nonce = at < 0 ? null : content.slice(at + header.length).match(/^([a-z0-9]+)">\n/)?.[1];
+      if (!nonce) continue;
+      const start = at + header.length + nonce.length + 3;
+      const end = content.indexOf(`\n</untrusted_page_content id="${nonce}">`, start);
+      if (end < 0) continue;
+      found.push({ name: action.name, args: action.input && typeof action.input === 'object' ? action.input : null,
+        result: leadingJsonObject(content.slice(start, end)) });
+      from = end;
+    }
+  }
+  return found;
+}
+
+/**
  * The passwords WebBrain typed into new-password fields in a saved
- * conversation (password-type or `new-password` fields isSignInPasswordField
- * leaves out, other than keys and tokens): a password it chose for an account
- * it created, which a later sign-in to that account may need.
+ * conversation, alone or in a browser_batch (newPasswordValue of each fill
+ * call). The agent also keeps them in memory for the tab, since compacting the
+ * context replaces older calls with a summary; this rebuilds them for a
+ * conversation restored after its worker stopped.
  *
  * @param {object[]} messages the conversation
  * @param {(content: string) => string} unwrap
  * @returns {string[]}
  */
 export function newPasswordValuesFromHistory(messages, unwrap = content => content) {
-  const values = [];
-  for (const { args, result } of fillCallsFromHistory(messages, unwrap)) {
-    if (!result || typeof result !== 'object' || result.dispatched === false || result.noDispatch === true) continue;
-    const field = [result.fieldMeta, result.focusedField].find(meta => meta && typeof meta === 'object');
-    if (!field || isSignInPasswordField(field).guarded) continue;
-    const tokens = String(field.autocomplete ?? '').toLowerCase().split(/\s+/);
-    const passwordField = tokens.includes('new-password')
-      || (String(field.type ?? '').toLowerCase() === 'password' && !tokens.includes('one-time-code')
-        && !namesKeyOrToken(fieldIdentity(field)));
-    const value = typeof args?.text === 'string' ? args.text.trim() : '';
-    if (passwordField && value) values.push(value);
-  }
-  return values;
+  return [...fillCallsFromHistory(messages, unwrap), ...browserBatchFillCallsFromHistory(messages)]
+    .map(({ name, args, result }) => newPasswordValue(name, args, result))
+    .filter(Boolean);
 }
 
 /**

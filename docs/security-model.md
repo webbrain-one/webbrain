@@ -139,7 +139,11 @@ A password counts as given when it appears whole in the user's own messages
 in this conversation (without the page context WebBrain adds), a text file
 they attached, a clarify answer they typed or chose, the WebBrain profile
 when it is enabled, a MemCode recall result, or a new-password field WebBrain
-filled earlier in the conversation (signing in to an account it created). A
+filled earlier in the conversation (signing in to an account it created). The
+agent keeps the passwords it set this way in memory for the tab, whether typed
+alone or in a `browser_batch`, so compacting the context does not drop them; a
+conversation restored after the extension restarted reads them from its
+history, folded `browser_batch` answers included. A
 value that is a credential word or a stock login ("password", "pass",
 "username", "admin", "root", "test", "demo", ...) counts only where a message
 sets it as a value: quoted, after ":", "=" or "is", after a word such as
