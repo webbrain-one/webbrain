@@ -382,7 +382,15 @@
 
   const languageSelect = document.querySelector('[data-docs-language]');
   languageSelect?.addEventListener('change', function () {
-    if (languageSelect.value) window.location.assign(languageSelect.value);
+    const value = languageSelect.value;
+    if (!value) return;
+
+    try {
+      const url = new URL(value, window.location.origin);
+      const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+      if (!isHttp || url.origin !== window.location.origin) return;
+      window.location.assign(url.pathname + url.search + url.hash);
+    } catch (_) {}
   });
 
   sidebarButton?.addEventListener('click', function () {
