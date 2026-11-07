@@ -72,9 +72,19 @@ async function testPdfjsCompatFillsMissingBuiltIns() {
     delete Uint8Array.prototype.toBase64;
     delete Uint8Array.prototype.toHex;
     delete Response.prototype.bytes;
+    delete Promise.try;
     const existing = function getOrInsert() { return 'existing'; };
     Map.prototype.getOrInsert = existing;
     await import(${JSON.stringify(compatUrl)});
+
+    let called = false;
+    const promise = Promise.try((a, b) => { called = true; return a + b; }, 2, 3);
+    assert.equal(called, true);
+    assert.equal(await promise, 5);
+    await assert.rejects(Promise.try(() => { throw new Error('fixture'); }), /fixture/);
+    await assert.rejects(Promise.try(null), TypeError);
+    class DerivedPromise extends Promise {}
+    assert.ok(DerivedPromise.try(() => 1) instanceof DerivedPromise);
 
     assert.equal(Map.prototype.getOrInsert, existing, 'compat must not replace a method the browser has');
     assert.equal(Object.getOwnPropertyDescriptor(Math, 'sumPrecise').enumerable, false);

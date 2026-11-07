@@ -524,7 +524,7 @@ export default {
   'sp.permissions.gate_off': 'বন্ধ: WebBrain জিজ্ঞাসা না করেই প্রতিটি সাইটে কাজ করে।',
   'sp.permissions.manage': 'সাইটের অনুমতি পরিচালনা করুন',
   'sp.permissions.enabled': 'অনুমতি প্রম্পট আবার চালু হয়েছে।',
-  "sp.help.shortcuts_html": "<strong>কীবোর্ড শর্টকাট</strong><br><code>Ctrl/Cmd+/</code> - ইনপুট ফোকাস করুন<br><code>Ctrl/Cmd+Shift+A</code> — আস্ক মোডে স্যুইচ করুন<br><code>Ctrl/Cmd+Shift+X</code> — অ্যাক্ট মোডে স্যুইচ করুন<br><code>Ctrl/Cmd+Shift+D</code> — ডেভ মোডে স্যুইচ করুন<br><code>Escape</code> - সক্রিয় রান বন্ধ করুন<br><code>1</code>–<code>9</code> — সেই নম্বরের উত্তরটি বেছে নিন",
+  "sp.help.shortcuts_html": "<strong>কীবোর্ড শর্টকাট</strong><br><code>Ctrl/Cmd+/</code> - ইনপুট ফোকাস করুন<br><code>Ctrl/Cmd+Shift+A</code> — আস্ক মোডে স্যুইচ করুন<br><code>Ctrl/Cmd+Shift+X</code> — অ্যাক্ট মোডে স্যুইচ করুন<br><code>Ctrl/Cmd+Shift+D</code> — ডেভ মোডে স্যুইচ করুন<br><code>Escape</code> - সক্রিয় রান বন্ধ করুন<br><code>1</code>–<code>9</code> — WebBrain জিজ্ঞেস করলে সেই নম্বরের উত্তরটি বেছে নিন",
   "sp.slash.record_transcribe": "থামার পরে একটি হুইস্পার প্রতিলিপি রেকর্ড করুন এবং সংরক্ষণ করুন",
   "sp.slash.unknown_command": "অজানা স্ল্যাশ কমান্ড {command}। উপলব্ধ কমান্ড দেখতে /help ব্যবহার করুন।",
   "sp.slash.invalid_usage": "অবৈধ স্ল্যাশ কমান্ড সিনট্যাক্স। ব্যবহার: {usage}",

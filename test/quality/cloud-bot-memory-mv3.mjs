@@ -187,6 +187,11 @@ try {
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
     if (url.origin === origin || url.protocol === 'chrome-extension:') return route.continue();
+    if (url.origin === 'http://127.0.0.1:8327' && route.request().method() === 'GET'
+        && ['/v1/models', '/models'].includes(url.pathname)) {
+      // Keep automatic Companion discovery inside this disposable fixture.
+      startupIntercepts.push(url.href); return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    }
     if (url.origin === 'https://webbrain.one' && route.request().method() === 'GET'
         && (route.request().isNavigationRequest() || url.pathname === '/apocalypse-comm.html')) {
       // Fresh installs and Settings can request welcome/announcement pages.
