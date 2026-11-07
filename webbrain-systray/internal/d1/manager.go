@@ -1,7 +1,8 @@
-// Package d1 hosts WebBrain's on-device decision model
-// (webbrain-one/d1-browser-decision-fp32) natively: it downloads the pinned
-// ONNX graphs and an ONNX Runtime build, then answers the same
-// {state, images, questions} requests as the extension's WebGPU adapter.
+// Package d1 hosts WebBrain's on-device decision models natively: Compass
+// VLD v6 2B (webbrain-one/webbrain-compass-vld-v6-2b-onnx, the default) and
+// d1 (webbrain-one/d1-browser-decision-fp32). It downloads the pinned ONNX
+// graphs and an ONNX Runtime build, then answers the same
+// {state, images, questions} requests as the extension's in-browser adapters.
 package d1
 
 import (
@@ -85,8 +86,7 @@ func ortForPlatform() (ortAsset, bool) {
 	return ortAsset{}, false
 }
 
-func modelDir() string { return filepath.Join(paths.Models(), ModelName) }
-func ortDir() string   { return filepath.Join(paths.Runtimes(), "onnxruntime-"+ortVersion) }
+func ortDir() string { return filepath.Join(paths.Runtimes(), "onnxruntime-"+ortVersion) }
 
 func ortLibPath() string {
 	a, ok := ortForPlatform()
@@ -104,8 +104,23 @@ type ortMarker struct {
 
 func ortMarkerPath() string { return filepath.Join(ortDir(), ".installed") }
 
+// ModelInfo describes one decision model for switching between them.
+type ModelInfo struct {
+	ID            string `json:"id"`
+	Model         string `json:"model"`
+	Active        bool   `json:"active"`
+	Installed     bool   `json:"installed"`
+	DiskBytes     int64  `json:"disk_bytes"`
+	DownloadBytes int64  `json:"download_bytes"`
+}
+
 type Status struct {
+	// Model is the decision model in use (ID: "compass" or "d1"); the other
+	// fields describe it.
 	Model         string             `json:"model"`
+	ID            string             `json:"id"`
+	DefaultID     string             `json:"default_id"`
+	Models        []ModelInfo        `json:"models"`
 	Phase         string             `json:"phase"`
 	Step          string             `json:"step,omitempty"`
 	Progress      *download.Progress `json:"progress,omitempty"`
@@ -134,7 +149,8 @@ type Manager struct {
 	installDone chan struct{}
 	removing    bool
 	closing     bool
-	eng         *engine
+	eng         evaluator
+	engSpec     *modelSpec
 	evalMu      sync.Mutex
 	verified    download.Verifier
 	requests    int64
@@ -203,35 +219,76 @@ func (m *Manager) markORT(asset ortAsset) error {
 	return os.Rename(tmp, ortMarkerPath())
 }
 
-// Installed reports whether the model files and runtime are present.
-func (m *Manager) Installed() bool {
-	asset, ok := ortForPlatform()
-	if !ok || !m.ortReady(asset) {
-		return false
+func (m *Manager) choice() string {
+	if m.store == nil {
+		return ""
 	}
-	for _, f := range modelFiles {
-		if !m.validFile(filepath.Join(modelDir(), filepath.FromSlash(f.name)), f.size, f.sha) {
+	return m.store.Get().Decision.Model
+}
+
+// active is the decision model in use: the user's choice, else the default,
+// else d1 while only d1 is installed (an existing d1 install keeps working
+// without a new download).
+func (m *Manager) active() *modelSpec {
+	if s := specByID(m.choice()); s != nil {
+		return s
+	}
+	def := specByID(DefaultModel)
+	if !m.modelInstalled(def) {
+		for _, s := range specs {
+			if s != def && m.modelInstalled(s) {
+				return s
+			}
+		}
+	}
+	return def
+}
+
+// modelInstalled reports whether a model's files are present and verified.
+func (m *Manager) modelInstalled(s *modelSpec) bool {
+	for _, f := range s.files {
+		if !m.validFile(s.path(f), f.size, f.sha) {
 			return false
 		}
 	}
 	return true
 }
 
-func (m *Manager) Status() Status {
-	_, supported := ortForPlatform()
-	st := Status{Model: ModelName, Supported: supported, Installed: m.Installed(), Enabled: m.store.Get().Decision.Enabled,
-		License: "LFM Open License v1.0"}
-	for _, f := range modelFiles {
-		p := filepath.Join(modelDir(), filepath.FromSlash(f.name))
+// modelBytes is what a model holds on disk and what is left to download.
+func (m *Manager) modelBytes(s *modelSpec) (disk, remaining int64) {
+	for _, f := range s.files {
+		p := s.path(f)
 		if m.validFile(p, f.size, f.sha) {
-			st.DiskBytes += f.size
+			disk += f.size
 			continue
 		}
 		rem := f.size
-		if s, err := os.Stat(p + ".part"); err == nil && s.Size() < f.size {
-			rem -= s.Size()
+		if st, err := os.Stat(p + ".part"); err == nil && st.Size() < f.size {
+			rem -= st.Size()
 		}
-		st.DownloadBytes += rem
+		remaining += rem
+	}
+	return disk, remaining
+}
+
+// Installed reports whether the active model's files and the runtime are present.
+func (m *Manager) Installed() bool {
+	asset, ok := ortForPlatform()
+	if !ok || !m.ortReady(asset) {
+		return false
+	}
+	return m.modelInstalled(m.active())
+}
+
+func (m *Manager) Status() Status {
+	_, supported := ortForPlatform()
+	spec := m.active()
+	st := Status{Model: spec.name, ID: spec.id, DefaultID: DefaultModel, Supported: supported, Installed: m.Installed(),
+		Enabled: m.store.Get().Decision.Enabled, License: "LFM Open License v1.0"}
+	st.DiskBytes, st.DownloadBytes = m.modelBytes(spec)
+	for _, s := range specs {
+		disk, rem := m.modelBytes(s)
+		st.Models = append(st.Models, ModelInfo{ID: s.id, Model: s.name, Active: s == spec, Installed: rem == 0, DiskBytes: disk, DownloadBytes: rem})
 	}
 	if a, ok := ortForPlatform(); ok {
 		if !m.ortReady(a) {
@@ -244,8 +301,8 @@ func (m *Manager) Status() Status {
 		p := *m.progress
 		st.Progress = &p
 	}
-	if m.eng != nil {
-		st.Runtime = "ONNX Runtime " + m.eng.ort.version + " on the CPU"
+	if m.eng != nil && m.engSpec == spec {
+		st.Runtime = "ONNX Runtime " + m.eng.runtimeVersion() + " on the CPU"
 	}
 	st.Requests, st.LastLatencyMs = m.requests, m.latency
 	m.mu.Unlock()
@@ -288,10 +345,11 @@ func (m *Manager) Install() error {
 	m.phase, m.step, m.err, m.progress = PhaseDownloading, "Preparing the decision model", "", nil
 	m.mu.Unlock()
 	m.changed()
+	spec := m.active()
 	go func() {
 		defer cancel()
 		defer close(done)
-		if err := m.install(ctx, asset); err != nil {
+		if err := m.install(ctx, asset, spec); err != nil {
 			if errors.Is(err, context.Canceled) {
 				m.set(PhaseIdle, "", nil)
 				return
@@ -339,16 +397,16 @@ func (m *Manager) BeginShutdown() {
 	}
 }
 
-func (m *Manager) install(ctx context.Context, asset ortAsset) error {
+func (m *Manager) install(ctx context.Context, asset ortAsset, spec *modelSpec) error {
 	type item struct {
 		label, url, dest string
 		size             int64
 		sha              string
 	}
 	var items []item
-	for _, f := range modelFiles {
-		items = append(items, item{"d1 decision model", fmt.Sprintf("https://huggingface.co/%s/resolve/%s/%s", repo, revision, f.name),
-			filepath.Join(modelDir(), filepath.FromSlash(f.name)), f.size, f.sha})
+	for _, f := range spec.files {
+		items = append(items, item{spec.label, fmt.Sprintf("https://huggingface.co/%s/resolve/%s/%s", spec.repo, spec.revision, f.name),
+			spec.path(f), f.size, f.sha})
 	}
 	archive := filepath.Join(paths.Runtimes(), "_downloads", asset.archive)
 	needORT := !m.ortReady(asset)
@@ -413,7 +471,7 @@ func (m *Manager) install(ctx context.Context, asset ortAsset) error {
 	return nil
 }
 
-// Load creates the ONNX Runtime sessions (about 2 GB of memory).
+// Load creates the active model's ONNX Runtime sessions (2 to 3.5 GB of memory).
 func (m *Manager) Load() error {
 	m.evalMu.Lock()
 	defer m.evalMu.Unlock()
@@ -421,6 +479,7 @@ func (m *Manager) Load() error {
 }
 
 // load requires evalMu so sessions cannot be replaced or released during use.
+// A loaded engine of the other model is released first.
 func (m *Manager) load() error {
 	m.mu.Lock()
 	closing := m.closing
@@ -431,24 +490,27 @@ func (m *Manager) load() error {
 	if !m.Installed() {
 		return ErrNotReady
 	}
+	spec := m.active()
 	m.mu.Lock()
-	if m.eng != nil {
-		m.mu.Unlock()
+	loaded, current := m.eng != nil, m.engSpec
+	m.mu.Unlock()
+	if loaded && current == spec {
 		return nil
 	}
-	m.mu.Unlock()
+	if loaded {
+		m.unload()
+	}
 	m.set(PhaseLoading, "Loading graphs", nil)
-	threads := m.store.Get().Decision.Threads
-	eng, err := loadEngine(modelDir(), ortLibPath(), threads)
+	eng, err := spec.open(spec.dir(), ortLibPath(), m.store.Get().Decision)
 	if err != nil {
 		m.set(PhaseError, "", err)
 		return err
 	}
 	m.mu.Lock()
-	m.eng = eng
+	m.eng, m.engSpec = eng, spec
 	m.mu.Unlock()
 	m.set(PhaseReady, "", nil)
-	logx.Printf("decision model ready (ONNX Runtime %s)", eng.ort.version)
+	logx.Printf("decision model %s ready (ONNX Runtime %s)", spec.name, eng.runtimeVersion())
 	return nil
 }
 
@@ -463,7 +525,7 @@ func (m *Manager) Unload() {
 func (m *Manager) unload() {
 	m.mu.Lock()
 	eng := m.eng
-	m.eng = nil
+	m.eng, m.engSpec = nil, nil
 	if m.phase == PhaseReady {
 		m.phase = PhaseIdle
 	}
@@ -474,8 +536,46 @@ func (m *Manager) unload() {
 	m.changed()
 }
 
-// Remove deletes the model files.
+// SetModel picks the decision model ("compass" or "d1"). The other model's
+// sessions are released; the caller loads the new one if wanted.
+func (m *Manager) SetModel(id string) error {
+	if specByID(id) == nil {
+		return errors.New("unknown decision model")
+	}
+	m.mu.Lock()
+	busy := m.removing || m.phase == PhaseDownloading || m.phase == PhaseInstalling || m.phase == PhaseLoading
+	m.mu.Unlock()
+	if busy {
+		return errors.New("wait until the decision model has finished installing or loading")
+	}
+	if _, err := m.store.Update(func(s *settings.Settings) { s.Decision.Model = id }); err != nil {
+		return err
+	}
+	m.evalMu.Lock()
+	defer m.evalMu.Unlock()
+	m.mu.Lock()
+	stale := m.eng != nil && m.engSpec.id != id
+	m.mu.Unlock()
+	if stale {
+		m.unload()
+	}
+	m.mu.Lock()
+	if m.phase == PhaseError {
+		m.phase, m.err = PhaseIdle, ""
+	}
+	m.mu.Unlock()
+	m.changed()
+	return nil
+}
+
+// Remove deletes the active model's files.
 func (m *Manager) Remove() error {
+	return m.RemoveModel("")
+}
+
+// RemoveModel deletes one model's files ("" is the active model). Removing
+// the active model also turns decisions off.
+func (m *Manager) RemoveModel(id string) error {
 	m.mu.Lock()
 	if m.removing {
 		m.mu.Unlock()
@@ -490,45 +590,64 @@ func (m *Manager) Remove() error {
 		m.removing = false
 		m.mu.Unlock()
 	}()
-	if cancel != nil {
-		cancel()
+	spec := m.active()
+	if id != "" {
+		if spec = specByID(id); spec == nil {
+			return errors.New("unknown decision model")
+		}
 	}
-	if done != nil {
-		<-done
-	}
-	if _, err := m.store.Update(func(s *settings.Settings) { s.Decision.Enabled = false }); err != nil {
-		return err
+	active := spec == m.active()
+	if active {
+		if cancel != nil {
+			cancel()
+		}
+		if done != nil {
+			<-done
+		}
+		if _, err := m.store.Update(func(s *settings.Settings) { s.Decision.Enabled = false }); err != nil {
+			return err
+		}
 	}
 	m.evalMu.Lock()
 	defer m.evalMu.Unlock()
-	m.unload()
-	if err := os.RemoveAll(modelDir()); err != nil {
+	m.mu.Lock()
+	loaded := m.eng != nil && m.engSpec == spec
+	m.mu.Unlock()
+	if loaded {
+		m.unload()
+	}
+	if err := os.RemoveAll(spec.dir()); err != nil {
 		return err
 	}
-	m.set(PhaseIdle, "", nil)
+	if active {
+		m.set(PhaseIdle, "", nil)
+	} else {
+		m.changed()
+	}
 	return nil
 }
 
 // engine requires evalMu to keep the returned sessions alive for the caller.
-func (m *Manager) engine() (*engine, error) {
+func (m *Manager) engine() (evaluator, *modelSpec, error) {
+	spec := m.active()
 	m.mu.Lock()
-	eng := m.eng
+	eng, current := m.eng, m.engSpec
 	m.mu.Unlock()
-	if eng != nil {
-		return eng, nil
+	if eng != nil && current == spec {
+		return eng, spec, nil
 	}
 	if !m.Installed() {
-		return nil, ErrNotReady
+		return nil, nil, ErrNotReady
 	}
 	if err := m.load(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.eng == nil {
-		return nil, ErrNotReady
+		return nil, nil, ErrNotReady
 	}
-	return m.eng, nil
+	return m.eng, m.engSpec, nil
 }
 
 // EvaluateJSON answers one {state, images, questions} request.
@@ -539,12 +658,12 @@ func (m *Manager) EvaluateJSON(ctx context.Context, body []byte) (any, error) {
 	}
 	m.evalMu.Lock()
 	defer m.evalMu.Unlock()
-	eng, err := m.engine()
+	eng, spec, err := m.engine()
 	if err != nil {
 		return nil, err
 	}
 	start := time.Now()
-	res, err := eng.evaluate(ctx, req, ModelName)
+	res, err := eng.evaluate(ctx, req, spec.name)
 	if err != nil {
 		return nil, err
 	}

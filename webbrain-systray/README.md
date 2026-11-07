@@ -3,7 +3,7 @@
 A small tray app for Windows, macOS and Linux that serves your AI subscriptions
 to [WebBrain](https://webbrain.one) on `127.0.0.1`, shows how much of each one
 you have left, can run PrismML's Bonsai 2 27B on your own machine, and hosts
-WebBrain's d1 decision model natively.
+WebBrain's decision model (Compass VLD v6 2B, or d1) natively.
 
 - **Subscriptions on localhost.** Sign in with Claude, ChatGPT (Codex), Google
   (Antigravity), Grok, Kimi, Meta Muse or Devin. They become one OpenAI-,
@@ -20,9 +20,12 @@ WebBrain's d1 decision model natively.
   vision projector through PrismML's llama.cpp fork, or the MLX 2-bit pack on
   Apple Silicon. The companion sizes it to your machine and decides whether the
   vision projector runs on the GPU, on the CPU, or not at all.
-- **d1 decision model.** `webbrain-one/d1-browser-decision-fp32` on ONNX Runtime,
-  answering the same requests as WebBrain's in-browser WebGPU adapter on
-  Windows, Linux and Apple Silicon Macs. The Intel Mac build does not include d1.
+- **Decision model.** Compass VLD v6 2B
+  (`webbrain-one/webbrain-compass-vld-v6-2b-onnx`, the model the extension
+  prefers for decisions) on ONNX Runtime, or the older d1
+  (`webbrain-one/d1-browser-decision-fp32`). Both answer the same requests as
+  WebBrain's in-browser adapters on Windows, Linux and Apple Silicon Macs. The
+  Intel Mac build includes neither.
 
 ## Install
 
@@ -40,7 +43,7 @@ language, network access, the port, the log file and *Quit*.
 | System | Package | First start |
 |---|---|---|
 | Windows 10/11 (x64, Arm64) | `WebBrain-Companion-*-windows-setup.exe` | One installer for both architectures. It installs for the current user (no administrator prompt) into `%LOCALAPPDATA%\Programs\WebBrain Companion`, adds a Start menu entry and an uninstaller in *Settings, Apps*. Until it is code-signed, SmartScreen says *Windows protected your PC*: *More info*, *Run anyway*. |
-| macOS 12+ (Apple Silicon and Intel; d1 requires Apple Silicon) | `WebBrain-Companion-*-macos-universal.zip` | Move *WebBrain Companion.app* to Applications first (run from Downloads, macOS uses a temporary copy and start at login cannot work). The build is ad-hoc signed, not notarized: allow it once in *System Settings, Privacy & Security* (*Open Anyway*); on macOS 14 and earlier Control-click it and choose *Open*. If the menu bar is full, macOS hides the icon; the panel says so, and opening the app again always brings the panel back. |
+| macOS 12+ (Apple Silicon and Intel; the decision model requires Apple Silicon) | `WebBrain-Companion-*-macos-universal.zip` | Move *WebBrain Companion.app* to Applications first (run from Downloads, macOS uses a temporary copy and start at login cannot work). The build is ad-hoc signed, not notarized: allow it once in *System Settings, Privacy & Security* (*Open Anyway*); on macOS 14 and earlier Control-click it and choose *Open*. If the menu bar is full, macOS hides the icon; the panel says so, and opening the app again always brings the panel back. |
 | Linux (x64, Arm64) | `WebBrain-Companion-*-linux-*.tar.gz` | Run `webbrain-companion`. The tray uses StatusNotifierItem (KDE, XFCE, GNOME with the AppIndicator extension). |
 
 `--headless` runs the proxy and APIs without a tray icon, `--background` starts
@@ -135,12 +138,12 @@ accepts images.
 Downloads are pinned to exact Hugging Face revisions and checked against
 SHA-256; interrupted downloads resume.
 
-## Decision model (d1)
+## Decision model
 
-The native d1 model is available on Windows and Linux (x64 and Arm64) and on
-Apple Silicon Macs. The Intel Mac app runs the proxy, tray and local Bonsai
-model, but cannot install d1 because the pinned ONNX Runtime release has no
-Intel macOS archive.
+The native decision model is available on Windows and Linux (x64 and Arm64)
+and on Apple Silicon Macs. The Intel Mac app runs the proxy, tray and local
+Bonsai model, but cannot install a decision model because the pinned ONNX
+Runtime release has no Intel macOS archive.
 
 ```bash
 curl http://127.0.0.1:8327/companion/v1/decide \
@@ -150,12 +153,38 @@ curl http://127.0.0.1:8327/companion/v1/decide \
        "not_completed":"Failed or unfinished","unknown":"Not established"}}}}'
 ```
 
-Requests and answers match the adapter's `evaluate({state, images, questions})`
-(`choice`, `noul` and `score` questions, up to four inline PNG/JPEG/WebP
-screenshots). The Go port was checked against the JavaScript adapter on the same
-graphs: identical tokens, layouts and probabilities. Text-only rows are capped
-at 4,096 tokens on the CPU runtime. The model is under the LFM Open License
-v1.0; check its commercial terms before commercial use.
+Requests and answers have d1's shape (`choice`, `noul` and `score` questions,
+up to four inline PNG/JPEG/WebP screenshots, in `images` or as `image_url`
+parts of the state); `model` and `provider` say which model answered.
+
+- **Compass VLD v6 2B** (the default, 2.4 GB download, up to about 4 GB of
+  memory while deciding with a screenshot; d1 takes 3.7 GB). The extension's decision protocol on its own model: the page
+  state and screenshots are prefilled once, each option is asked as "Proposed
+  answer: ... Is the proposed answer correct?", and the options are scored by
+  their Yes-minus-No margins (the bundle's cost-sensitive probe). The Go port
+  of `compass-vld-v6-runtime.js` (the LFM3-VL image processor with Pillow's
+  bicubic resampling, the FP16 vision encoder, the Q8 decoder with its conv
+  states and KV caches) was checked against the extension's JavaScript on the
+  same graphs: identical prompts, tokens, image layouts, pixel values, image
+  features, logits and probabilities. JPEG and WebP screenshots are decoded by
+  Go's decoders, whose pixels differ slightly from Chrome's. The check is
+  `scripts/models/compass-vld/` in the repository root (fixtures, the
+  extension's runtime on onnxruntime-node, comparison) with
+  `go run ./tools/d1check -engine compass -trace`.
+- **d1** (1.9 GB). An installed d1 keeps answering until Compass is installed;
+  the panel switches between them and deletes the other one's files. Text-only
+  rows are capped at 4,096 tokens on the CPU runtime.
+
+Both run on the CPU. A decision with a 1280x800 screenshot takes about 15
+seconds on a fast desktop processor with either model; a text-only decision
+takes 1.5 to 3 seconds on Compass and under half a second on d1. Two optional
+settings in `companion.json` under `decision`: `threads` (ONNX Runtime threads;
+on CPUs with efficiency cores the physical performance-core count is often
+fastest) and `max_pixels` (Compass only: a smaller screenshot budget than the
+extension's, for example `262144`, which makes a 1280x800 screenshot 240
+image tokens instead of 1,000 and the decision about three times faster, at
+some cost in detail). Both models are under the LFM Open License v1.0; check
+its commercial terms before commercial use.
 
 `GET /companion/v1/info` describes the running companion (endpoints, models,
 decision status, whether network access is on) for the WebBrain extension. It
@@ -227,6 +256,8 @@ own tags.
 
 `go test ./...` covers the memory planner (which machines get the vision
 projector where), the JavaScript-compatible JSON formatting of the d1 port,
+the Compass image processor, prompts and answers against the extension's
+values, which decision model is in use,
 archive extraction and who may use the endpoints (keyless local apps,
 extensions, refused web pages, DNS rebinding, network access with the key).
 

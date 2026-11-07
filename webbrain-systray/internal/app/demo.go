@@ -93,8 +93,13 @@ func applyDemo(s *Snapshot) {
 	s.Decision.Phase = d1.PhaseReady
 	s.Decision.Runtime = "ONNX Runtime 1.31.0 on the CPU"
 	s.Decision.Requests = 214
-	s.Decision.LastLatencyMs = 182
-	s.Decision.DiskBytes = 1904015195
+	s.Decision.LastLatencyMs = 2870
+	s.Decision.Model, s.Decision.ID = d1.CompassModelName, d1.ModelCompass
+	s.Decision.DiskBytes = 2354064615
+	s.Decision.Models = []d1.ModelInfo{
+		{ID: d1.ModelCompass, Model: d1.CompassModelName, Active: true, Installed: true, DiskBytes: 2354064615},
+		{ID: d1.ModelD1, Model: d1.ModelName, Installed: true, DiskBytes: 1904015195},
+	}
 	s.Decision.Error = ""
 	s.Autostart = true
 }
