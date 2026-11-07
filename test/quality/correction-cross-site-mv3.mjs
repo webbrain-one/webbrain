@@ -477,8 +477,32 @@ async function runVariant(variant, script) {
       assert.equal(workerRestarted, true, 'The worker actually restarted');
       await fresh.evaluate(() => { crossSiteFixtureAgent.clarifyTimeoutSec = -1; });
       run.continued = true;
-      const continued = await message('chat', { tabId, text: 'continue', mode: 'act', requestId: 'owned-cross-site-continue', locale: 'en' });
-
+      // The existing duplicate-publication guard may ask for a one-time hard
+      // approval. Deny it as the owner and assert the exact card below.
+      const deniedCards = [];
+      let answering = variant === 'x-then-restart';
+      const answerer = (async () => {
+        const seen = new Set();
+        while (answering) {
+          const ids = await fresh.evaluate(id => [...(crossSiteFixtureAgent._pendingClarifications.get(id)?.keys() || [])], tabId);
+          for (const id of ids) if (!seen.has(id)) {
+            seen.add(id); deniedCards.push(id);
+            await message('clarify_response', { tabId, clarifyId: id, answer: 'deny', source: 'option' });
+          }
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      })();
+      let continued;
+      try { continued = await message('chat', { tabId, text: 'continue', mode: 'act', requestId: 'owned-cross-site-continue', locale: 'en' }); }
+      finally { answering = false; await answerer; }
+      if (variant === 'x-then-restart') {
+        assert.equal(deniedCards.length, 1, 'The uncertain repeated publication needs one explicit decision.');
+        const card = (continued.updates || []).find(event => event.type === 'clarify' && event.data?.clarifyId === deniedCards[0])?.data?.unverifiedStepConfirmation;
+        assert.equal(card?.guardId, 'social-publication-authorization-guard');
+        assert.equal(card?.hard, true);
+        assert.equal(card?.action, 'publish');
+        assert.equal(card?.reason, 'repeat_unverified');
+      }
       continuedResults = resultsOf(continued);
       continuedReply = String(continued?.content || '').slice(0, 400);
     }
