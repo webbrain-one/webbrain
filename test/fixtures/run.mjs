@@ -3551,6 +3551,79 @@ test('Chrome Agent: modal auto-select ignores background/hidden clickables and k
   }
 });
 
+// A typed label chooses the native <select> option it names, through each
+// content path that chooses one (focused and selector type_text, type_ax):
+// the exact label, a label in another case, or one option's unique part, with
+// one input and one change event. A part that fits several options ("Alex"),
+// a label no option has and a disabled option select nothing and fire no
+// event; the option already shown is a no-op.
+async function assertNativeSelectChoices(page, browserKind) {
+  const html = `<!doctype html>
+    <label for="size">Size</label><select id="size"><option value="">Choose...</option><option>Small</option>
+      <option>Medium</option><option>Large</option><option>X-Large</option><option disabled>XX-Large (sold out)</option></select>
+    <label for="to">To</label><select id="to"><option value="">Choose a contact...</option>
+      <option value="c1">Alex Kaya (test contact)</option><option value="c2">Alex Demir (test contact)</option>
+      <option value="c3">Sam Yilmaz (test contact)</option></select>
+    <script>
+      window.selectEvents = [];
+      for (const id of ['size', 'to']) for (const type of ['input', 'change']) {
+        document.getElementById(id).addEventListener(type, event => window.selectEvents.push(id + ':' + type + ':' + event.target.value));
+      }
+    </script>`;
+  const cases = [
+    { select: 'size', text: 'Large', value: 'Large' },
+    { select: 'size', text: 'medium', value: 'Medium' },
+    { select: 'to', text: 'Sam Yilmaz', value: 'c3' },
+    { select: 'to', text: 'c2', value: 'c2' },
+    { select: 'to', text: 'Alex', error: /more than one option[\s\S]*Alex Kaya[\s\S]*Alex Demir/ },
+    { select: 'size', text: 'Purple', error: /No option matches "Purple"[\s\S]*Options: Choose\.\.\., Small/ },
+    { select: 'size', text: 'XX-Large', error: /disabled/ },
+    { select: 'size', text: 'arge', error: /more than one option/ },
+  ];
+  const paths = {
+    focused: async (select, text) => { await page.focus(`#${select}`); return call(page, 'type', { text }); },
+    selector: (select, text) => call(page, 'type', { selector: `#${select}`, text }),
+    type_ax: async (select, text) => call(page, 'type_ax', {
+      ref_id: await page.evaluate(id => window.__wb_ax_ref(document.getElementById(id)), select), text,
+    }),
+  };
+  for (const [pathName, choose] of Object.entries(paths)) {
+    for (const item of cases) {
+      await setupContentHtml(page, html, browserKind);
+      const result = await choose(item.select, item.text);
+      const state = await page.evaluate(id => ({ value: document.getElementById(id).value, events: window.selectEvents }), item.select);
+      const detail = `${browserKind} ${pathName} "${item.text}": ${JSON.stringify({ result, state })}`;
+      if (item.error) {
+        if (result?.success !== false || result.noDispatch !== true || result.dispatched === true
+            || !item.error.test(String(result.error || '')) || state.value !== '' || state.events.length) {
+          throw new Error(`a label that names no single enabled option must change nothing: ${detail}`);
+        }
+        continue;
+      }
+      if (result?.success !== true || result.verified !== true || state.value !== item.value
+          || JSON.stringify(state.events) !== JSON.stringify([`${item.select}:input:${item.value}`, `${item.select}:change:${item.value}`])) {
+        throw new Error(`the named option must be chosen with one input and one change: ${detail}`);
+      }
+    }
+  }
+  // Choosing the option already shown changes nothing.
+  await setupContentHtml(page, html, browserKind);
+  await page.selectOption('#size', 'Medium');
+  await page.evaluate(() => { window.selectEvents.length = 0; });
+  await page.focus('#size');
+  const same = await call(page, 'type', { text: 'Medium' });
+  const after = await page.evaluate(() => ({ value: document.getElementById('size').value, events: window.selectEvents }));
+  if (same?.success !== true || same.verified !== true || same.noop !== true || same.noDispatch !== true
+      || after.value !== 'Medium' || after.events.length) {
+    throw new Error(`${browserKind}: choosing the shown option must be a no-op: ${JSON.stringify({ same, after })}`);
+  }
+}
+
+test('Chrome: a typed label chooses exactly the native select option it names', page =>
+  assertNativeSelectChoices(page, 'chrome'));
+firefoxTest('Firefox: a typed label chooses exactly the native select option it names', page =>
+  assertNativeSelectChoices(page, 'firefox'));
+
 // ─── occlusion ────────────────────────────────────────────────────────────
 async function assertDockedControlsKeepScroll(page, browserKind) {
   for (const position of ['fixed', 'sticky']) {
