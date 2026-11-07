@@ -444,7 +444,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'type_text',
-      description: 'Type text into an input field. TWO WAYS to use it: (1) CSS selector, or (2) ONLY text (no selector) to type into the currently focused element — use this RIGHT AFTER clicking a field. The second form is most reliable for forms with weird selectors (GitHub release[name], Stripe nested inputs). DO NOT pass index. With clear:true, WebBrain must prove the field empty before inserting; if that proof fails, it inserts nothing and blocks blind retries.',
+      description: 'Type text into an input field. TWO WAYS to use it: (1) CSS selector, or (2) ONLY text (no selector) to type into the currently focused element — use this RIGHT AFTER clicking a field. The second form is most reliable for forms with weird selectors (GitHub release[name], Stripe nested inputs). DO NOT pass index. With clear:true, WebBrain must prove the field empty before inserting; if that proof fails, it inserts nothing and blocks blind retries. A native date or time field (a calendar or clock picker) takes one ISO value instead: YYYY-MM-DD, HH:MM (24-hour), YYYY-MM-DDTHH:MM, YYYY-MM or YYYY-Www.',
       parameters: {
         type: 'object',
         properties: {

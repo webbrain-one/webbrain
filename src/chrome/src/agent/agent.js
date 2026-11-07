@@ -72,7 +72,7 @@ import { buildGithubStargazerProgressItems } from './observers/github-stargazers
 import { analyzeMastodonPage, isMastodonPageUrl, mastodonHandoffInstruction, mastodonPageLabels, mastodonProgressGuard, mastodonTaskDomains } from './observers/mastodon.js';
 import { PROGRESS_ACTIONS, isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
 import { classifyCompletionForm, completionDoneBlock, completionPlainFinalBlock, completionPlainFinalPartial, consumeCompletionObservation, consumeCompletionObservationResult, createCompletionInvariantState, didCompletionActionExecute, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, isCompletionActionTool, publicationDetailResource, publicationReplyParent, publicationResourceRecordRoot, recordCompletionToolResult } from './completion-invariant.js';
-import { cdpClient, isCdpCommandNotSentError } from '../cdp/cdp-client.js';
+import { cdpClient, isCdpCommandNotSentError, NATIVE_DATE_INPUT_TYPES } from '../cdp/cdp-client.js';
 import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
 import { formatAdapterWorkflowExecutionPolicy } from './adapter-workflow.js';
 import {
@@ -54100,7 +54100,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     }
 
-    if (name === 'type_text') {
+    // A native date or time field leaves this trusted typing (break
+    // trustedTypeText) for the content action below, which sets its value
+    // (content.js _fillNativeDateInput): inserted text never reaches the
+    // segments such a field draws in the browser's locale.
+    trustedTypeText: if (name === 'type_text') {
       try {
         await cdpClient.attach(tabId);
         throwIfEarlyCdpAborted();
@@ -54190,6 +54194,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               return await selectFocusedOption(args.text ?? '', {
                 frameId, binding: focusedBinding, onSend: () => { tokenConsumed = true; },
               });
+            }
+            if (prepared.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(prepared.type)) {
+              // The content action consumes this binding on the same field.
+              tokenConsumed = true;
+              break trustedTypeText;
             }
 
             const typeFieldEpoch = this._captureLastTypeFieldEpoch(tabId);
@@ -54378,6 +54387,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 : `Type failed before selector dispatch: ${error?.message || String(error)}`,
             };
           }
+          if (result?.nativeDateInput && result.noDispatch === true && !earlyCdpDispatchState.started) {
+            break trustedTypeText;
+          }
           if (result.success) this._showAgentTarget(tabId, result.rect || result, 'type_text_selector');
           // Track field for duplicate-typing detection
           if (result.success) {
@@ -54428,6 +54440,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               focusedElement: focus || null,
             };
           }
+          if (focus.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(focus.type)) break trustedTypeText;
           this._showAgentTarget(tabId, focus.rect, 'type_text_focused');
 
           // <select>: one selection made in the page (selectFocusedOption).
