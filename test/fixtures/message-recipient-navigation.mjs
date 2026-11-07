@@ -111,7 +111,8 @@ export function registerMessageRecipientNavigationFixtures({
           <div role="textbox" contenteditable="true">Existing draft</div>
           <button id="recover" type="button" aria-label="${label}"><span id="recover-label">${label}</span></button>
           <button id="publish" type="button" data-testid="${publishId}">Post</button>
-          <button id="unknown" type="button">Other action</button>
+          <button id="draft-tool" type="button">Other action</button>
+          <button id="unknown" data-testid="composerOtherAction">Other action</button>
         </div>`, kind);
         await page.evaluate(() => {
           window.recoveryClicks = 0; window.publishClicks = 0;
@@ -142,9 +143,23 @@ export function registerMessageRecipientNavigationFixtures({
           assert.equal(agent._steeringPriorSubmissionBlock(1, tool, args, detected), null, `${label}/${tool}`);
           assert.equal((await call(page, tool, args)).success, true);
         }
-        for (const selector of ['#publish', '#unknown', '#missing']) {
+        // A plain type=button tool of the app-identified composer (one editor,
+        // a strong publish control beside it) only edits the unsent draft, so
+        // it cannot repeat the earlier submission.
+        const toolArgs = { selector: '#draft-tool' };
+        const tool = await probe('click', toolArgs);
+        assert.equal(tool?.resolvedDraftControl, true, `${label}: composer tool is draft-local`);
+        assert.equal(agent._steeringPriorSubmissionBlock(1, 'click', toolArgs, tool), null, `${label}: composer tool`);
+        // Publishing again waits for the earlier post to be reconciled. A
+        // typeless button with an app test id the probe does not know, and a
+        // selector that matches nothing, are unidentified targets.
+        for (const [selector, reason] of [
+          ['#publish', 'prior_effect_unreconciled'], ['#unknown', 'target_unresolved'], ['#missing', 'target_unresolved'],
+        ]) {
           const args = { selector };
-          assert.equal(agent._steeringPriorSubmissionBlock(1, 'click', args, await probe('click', args))?.noDispatch, true, selector);
+          const block = agent._steeringPriorSubmissionBlock(1, 'click', args, await probe('click', args));
+          assert.equal(block?.noDispatch, true, `${label}: ${selector}`);
+          assert.equal(block.actionGuard?.reason, reason, `${label}: ${selector}`);
         }
         assert.deepEqual(await page.evaluate(() => [window.recoveryClicks, window.publishClicks]), [4, 0]);
       }
