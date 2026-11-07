@@ -28,7 +28,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           input.addEventListener('keydown',event=>{if(event.key==='Enter')enters++;});
           input.addEventListener('input',event=>{if(event.isTrusted)trustedDraftInputs++;});
           // Create enough real history for one native pixel of overflow.
-          for(let i=0;i<8;i++)row('Owned old history '+i);
+          for(let i=0;i<20;i++)row('Owned old history '+i);
+          const historyPane=document.querySelector('.bubbles-scrollable');
+          if(historyPane.scrollHeight <= historyPane.clientHeight + 1)throw new Error('Native chat fixture must have scrollable history');
           input.addEventListener('input',()=>{
             if(window.draftWindowArmed||!input.textContent)return;
             window.draftWindowArmed=true;

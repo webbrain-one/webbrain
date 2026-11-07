@@ -205,6 +205,7 @@ const waitFor = async (condition) => {
     console.log('Native offscreen identity changes on reload and rejects stale registrations');
     const w = ctx.windows[0];
     await waitFor(() => w.uiReady);
+    w.selectTab(ordinaryTab);
     const readAddress = () => w.ui.executeJavaScript("document.getElementById('address').value");
     await waitFor(async () => (await readAddress()).includes('/late'));
     w.focusOmnibox();

@@ -287,7 +287,7 @@ for (const build of ['chrome', 'firefox']) {
     // The tree cannot be installed: no list, rather than raw labels.
     const injected = [];
     assert.deepEqual(await screenshotElements(build, page, async files => { injected.push(...files); }), []);
-    assert.deepEqual(injected, ['src/content/accessibility-tree.js']);
+    assert.deepEqual(injected.map(file => file.replace(/^\/+/, '')), ['src/content/accessibility-tree.js']);
     // Once installed, the list is read with its names.
     const elements = await screenshotElements(build, page, installTree(build, page));
     assert.ok(elements.some(entry => entry.text === 'Google account'), JSON.stringify(elements));
