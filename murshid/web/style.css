@@ -430,7 +430,7 @@ section { position: relative; }
 
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .shot {
-  padding: clamp(40px, 6vw, 88px) var(--gutter) 0;
+  padding: clamp(40px, 6vw, 88px) var(--gutter) clamp(24px, 3vw, 40px);
   background:
     radial-gradient(60% 50% at 50% 0%, rgba(158, 27, 43, .1), transparent 70%),
     var(--parchment);
@@ -521,11 +521,16 @@ section { position: relative; }
 /* ----------------------------------------------------------------- privacy */
 
 .privacy {
-  padding: clamp(64px, 8vw, 112px) 0;
-  background: var(--parchment-2);
-  border-top: 1px solid var(--parchment-3);
+  overflow: hidden;
+  padding: clamp(56px, 7vw, 96px) 0;
+  background: var(--crimson-deep);
 }
-.privacy .section-head > p:last-child { max-width: 640px; }
+.privacy-inner { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); display: grid; grid-template-columns: 1fr 1.1fr; gap: clamp(24px, 4vw, 64px); align-items: center; }
+.privacy-copy { padding: 0; }
+.privacy-copy h2 { color: var(--parchment); }
+.privacy-copy h2 em { color: var(--gold-hi); }
+.privacy-copy > p:last-child { max-width: 480px; color: rgba(244, 234, 214, .85); }
+.privacy-art img { width: 100%; height: auto; }
 
 /* ------------------------------------------------------------------ footer */
 
@@ -559,6 +564,8 @@ section { position: relative; }
   .way { grid-template-columns: 1fr; }
   .way-art .photo { max-width: 340px; }
   .tray-inner { grid-template-columns: 1fr; }
+  .privacy-inner { grid-template-columns: 1fr; }
+  .privacy-art { width: min(100%, 560px); margin: 0 auto; }
   .platforms { grid-template-columns: 1fr; max-width: 520px; }
   .footer-row { grid-template-columns: 1fr; }
   .footer nav { justify-self: start; }
