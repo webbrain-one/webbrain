@@ -846,6 +846,30 @@ export function didCompletionActionExecute(name, args = {}, result) {
   return true;
 }
 
+// Tools that use no page, or only read the run's tab, besides the
+// observations above. The read line done adds after a background read
+// (network-tools.js backgroundReadNote) says the active tab was not changed
+// only while every tool of the run was one of these or a fetch_url or
+// research_url read; anything else, a tool added later included, drops that
+// claim.
+const RUN_TAB_NEUTRAL_TOOLS = new Set([
+  'done', 'done_json', 'clarify', 'calculate', 'scratchpad_write', 'progress_read', 'progress_update',
+  'recall_memcode', 'wait', 'wait_for_stable', 'take_screenshot', 'get_window_info', 'get_selection',
+  'list_webmcp_tools',
+]);
+
+// Whether this call may have changed the run's tab: an action that ran (as
+// the completion state counts it), or any unlisted tool (scroll, hover,
+// find_text, carousel_navigate, a Tab or Escape key) unless its result says
+// it never ran.
+export function changedRunTab(name, args = {}, result) {
+  if (name === 'fetch_url' || name === 'research_url') return MUTATION_METHODS.has(normalizedMethod(args));
+  if (OBSERVATION_TOOLS.has(name) || RUN_TAB_NEUTRAL_TOOLS.has(name)) return false;
+  if (isCompletionActionTool(name, args)) return didCompletionActionExecute(name, args, result);
+  return !(result && (result.denied || result.skipped || result.cancelled
+    || result.noDispatch === true || result.dispatched === false));
+}
+
 function validNativeChatBinding(binding) {
   const telegram = /^dom:telegram:[ak]:-?\d+:0$/.test(binding?.threadKey || '');
   const whatsapp = /^dom:whatsapp:phone:[a-f0-9]{32}$/.test(binding?.threadKey || '');
