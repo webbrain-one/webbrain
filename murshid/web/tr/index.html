@@ -107,13 +107,13 @@
       <div class="terminal-body">
         <div class="terminal-head">
           <span class="terminal-label">Kaynaktan çalıştırın</span>
-          <label class="switch"><input type="checkbox" data-fast checked> <span>İkili dosyalar hariç</span></label>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>İkili dosyalar hariç</span></label>
         </div>
-        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
-cd webbrain && git sparse-checkout set murshid src/chrome
-cd murshid && npm install && npm start</code></pre>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
         <button class="copy" type="button" aria-label="Komutları kopyala" data-copied="Kopyalandı"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note>Yalnızca son commit ve yalnızca <code>murshid/</code> ile onun yüklediği WebBrain eklentisi: geçmiş, sürüm zip'leri, videolar ya da test dosyaları inmez.</p>
+        <p class="terminal-note" data-fast-note hidden>Yalnızca son commit ve yalnızca <code>murshid/</code> ile onun yüklediği WebBrain eklentisi: geçmiş, sürüm zip'leri, videolar ya da test dosyaları inmez.</p>
       </div>
     </div>
   </div>

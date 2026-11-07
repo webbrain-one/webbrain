@@ -106,13 +106,13 @@
       <div class="terminal-body">
         <div class="terminal-head">
           <span class="terminal-label" data-i18n="hero.terminal.label">Run from source</span>
-          <label class="switch"><input type="checkbox" data-fast checked> <span data-i18n="hero.terminal.fast">Exclude binaries</span></label>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span data-i18n="hero.terminal.fast">Exclude binaries</span></label>
         </div>
-        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
-cd webbrain && git sparse-checkout set murshid src/chrome
-cd murshid && npm install && npm start</code></pre>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
         <button class="copy" type="button" aria-label="Copy commands" data-i18n-aria-label="hero.terminal.copy" data-copied="Copied" data-i18n-data-copied="hero.terminal.copied"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note data-i18n="hero.terminal.note">Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.</p>
+        <p class="terminal-note" data-fast-note hidden data-i18n="hero.terminal.note">Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.</p>
       </div>
     </div>
   </div>

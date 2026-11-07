@@ -107,13 +107,13 @@
       <div class="terminal-body">
         <div class="terminal-head">
           <span class="terminal-label">شغّله من المصدر</span>
-          <label class="switch"><input type="checkbox" data-fast checked> <span>استبعد الملفات الثنائية</span></label>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>استبعد الملفات الثنائية</span></label>
         </div>
-        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
-cd webbrain && git sparse-checkout set murshid src/chrome
-cd murshid && npm install && npm start</code></pre>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
         <button class="copy" type="button" aria-label="انسخ الأوامر" data-copied="تم النسخ"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note>آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار.</p>
+        <p class="terminal-note" data-fast-note hidden>آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار.</p>
       </div>
     </div>
   </div>

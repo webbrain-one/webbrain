@@ -107,13 +107,13 @@
       <div class="terminal-body">
         <div class="terminal-head">
           <span class="terminal-label">اجرا از کد منبع</span>
-          <label class="switch"><input type="checkbox" data-fast checked> <span>بدون فایل‌های باینری</span></label>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>بدون فایل‌های باینری</span></label>
         </div>
-        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
-cd webbrain && git sparse-checkout set murshid src/chrome
-cd murshid && npm install && npm start</code></pre>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
         <button class="copy" type="button" aria-label="کپی فرمان‌ها" data-copied="کپی شد"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note>فقط آخرین کامیت، و فقط <code>murshid/</code> و افزونهٔ WebBrain که بارگذاری می‌کند: بدون تاریخچه، فایل‌های zip نسخه‌ها، ویدیوها یا داده‌های آزمایشی.</p>
+        <p class="terminal-note" data-fast-note hidden>فقط آخرین کامیت، و فقط <code>murshid/</code> و افزونهٔ WebBrain که بارگذاری می‌کند: بدون تاریخچه، فایل‌های zip نسخه‌ها، ویدیوها یا داده‌های آزمایشی.</p>
       </div>
     </div>
   </div>
