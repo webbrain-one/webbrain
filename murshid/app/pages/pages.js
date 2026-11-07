@@ -34,6 +34,9 @@
       const asChrome = $('as-chrome');
       asChrome.checked = Boolean(values.identifyAsChrome);
       asChrome.addEventListener('change', () => api.setSetting('identifyAsChrome', asChrome.checked));
+      const persistSession = $('persist-session');
+      persistSession.checked = values.persistBrowserSession !== false;
+      persistSession.addEventListener('change', () => api.setSetting('persistBrowserSession', persistSession.checked));
     });
     $('open-companion').addEventListener('click', () => api.companion());
   }

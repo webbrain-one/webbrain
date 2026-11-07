@@ -25,7 +25,8 @@ const { resolveInput } = require('./url');
 const { urlsFromArgs } = require('./open-arguments');
 const identity = require('./identity');
 
-const PARTITION = 'persist:murshid';
+const PERSISTENT_PARTITION = 'persist:murshid';
+const TEMPORARY_PARTITION = 'murshid-temporary';
 const DEBUG = process.argv.includes('--murshid-devtools') || process.env.MURSHID_DEBUG === '1';
 
 app.setName('Murshid');
@@ -162,7 +163,8 @@ async function start() {
   ctx.icon = nativeImage.createFromPath(paths.appIcon());
   if (ctx.icon.isEmpty()) ctx.icon = undefined;
 
-  const ses = session.fromPartition(PARTITION);
+  const ses = session.fromPartition(ctx.settings.get('persistBrowserSession') === false
+    ? TEMPORARY_PARTITION : PERSISTENT_PARTITION);
   ctx.ses = ses;
   ses.setUserAgent(app.userAgentFallback);
   identity.install(ses, ctx.settings, ctx);
@@ -224,7 +226,8 @@ async function start() {
   installPageIpc();
   installLogging(ses);
 
-  await loadWebBrain(ses);
+  // Electron only supports extensions in persistent sessions.
+  if (ctx.settings.get('persistBrowserSession') !== false) await loadWebBrain(ses);
   if (ctx.webBrainId) await Promise.race([ctx.crx.defaultsReady, new Promise((r) => setTimeout(r, 2500))]);
 
   const urls = [...urlsFromArgs(process.argv), ...pendingUrls.splice(0)];
@@ -477,6 +480,7 @@ function installPageIpc() {
             searchEngine: ctx.settings.get('searchEngine'),
             startCompanion: ctx.settings.get('startCompanion'),
             identifyAsChrome: ctx.settings.get('identifyAsChrome'),
+            persistBrowserSession: ctx.settings.get('persistBrowserSession'),
           },
           searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
         };
@@ -485,6 +489,10 @@ function installPageIpc() {
         if (key === 'searchEngine' && SEARCH_ENGINES[value]) ctx.settings.set(key, value);
         if (key === 'startCompanion') ctx.settings.set(key, Boolean(value));
         if (key === 'identifyAsChrome') ctx.settings.set(key, Boolean(value));
+        if (key === 'persistBrowserSession' && typeof value === 'boolean') {
+          ctx.settings.set(key, value);
+          ctx.settings.flush();
+        }
         return true;
       }
       case 'navigate': {

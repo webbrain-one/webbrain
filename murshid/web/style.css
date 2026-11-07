@@ -440,6 +440,15 @@ section { position: relative; }
 .platform .fine { margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: #6e5a4b; }
 .get-cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 44px; padding: 0 var(--gutter); }
 
+/* ----------------------------------------------------------------- privacy */
+
+.privacy {
+  padding: clamp(64px, 8vw, 112px) 0;
+  background: var(--parchment-2);
+  border-top: 1px solid var(--parchment-3);
+}
+.privacy .section-head > p:last-child { max-width: 640px; }
+
 /* ------------------------------------------------------------------ footer */
 
 .footer { position: relative; overflow: hidden; background: var(--crimson-ink); color: rgba(244, 234, 214, .78); padding: 64px var(--gutter) 40px; }
