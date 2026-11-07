@@ -101,7 +101,6 @@ async function fixture(browserInstance, options) {
   });
   page = await context.newPage();
   const agent = new Agent({ getActive: () => ({ model: 'delivery-model' }) });
-  agent._runningTabs.add(17);
   await page.exposeFunction('qaBackground', message => {
     const sender = { tab: { id: 17 }, frameId: 0, documentId: 'delivery-route-document', url: page.url() };
     if (message.action === 'get_page_monitor_state') return agent.pageMonitorState(sender, message.documentToken);
@@ -159,7 +158,9 @@ async function fixture(browserInstance, options) {
       transitionType: traversal ? 'typed' : 'link', transitionQualifiers: traversal ? ['forward_back'] : [] },
     fragment ? 'fragment' : 'history');
   });
-  await agent._beginPageFeedbackRun(17, 'neutral');
+  // Claimed the way a real run starts, with its run AbortController, so Stop
+  // aborts what waits on the run signal (a pending traversal reading too).
+  await agent._claimRunEntry(17, 'interactive');
   await page.waitForFunction(() => window.__wbPageMonitor?.active);
   await page.mouse.move(5, 690);
   await page.waitForTimeout(180);
@@ -185,7 +186,8 @@ async function fixture(browserInstance, options) {
   agent._recordInteractionRect = () => {};
   agent._clearUploadSelectorRecoveryAfterInspection = () => {};
   agent._lastAxScopes.set(17, { documentToken: axScope.documentToken, pageUrl: axScope.refScopeUrl });
-  return { context, agent, run, ref };
+  const close = async () => { try { agent._releaseRunEntry(17); } finally { await context.close(); } };
+  return { context, agent, run, ref, close };
 }
 
 const presses = () => commands.filter(call => call.method === 'Input.dispatchMouseEvent' && call.type === 'mousePressed');
@@ -231,7 +233,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.equal(f.agent._pageFeedbackAgentRouteCurrent(17, f.run, 0), false, 'No later action can claim that route');
         assert.equal(f.agent._pageFeedbackStateCurrent(17, f.run, f.run.modelState), false,
           'The route still invalidates the bound model state for the next decision');
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
     await t.test('a page traversal reading is answered once', async () => {
@@ -245,7 +247,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.equal(again.ready, true);
         assert.equal(again.pageInitiated, false, 'A consumed reading cannot certify a later traversal');
         assert.deepEqual(Object.keys(again).sort(), ['documentToken', 'pageInitiated', 'ready', 'runToken'], 'Value-free reply');
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
     await t.test('a hash-only change is tolerated but is not proof', async () => {
@@ -258,7 +260,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.notEqual(result.observedEffects?.includes('url'), true, JSON.stringify(result));
         assert.equal(routeOf(), '/current#section-2');
         assert.equal(presses().length, 1);
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
     // Only a route recorded for this press's own dispatch operation, at or
@@ -286,7 +288,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
             assert.equal(result.outcomeUnknown, true, `${variant}: ${JSON.stringify(result)}`);
             assert.equal(result.observationInterrupted, true, `${variant}: ${JSON.stringify(result)}`);
           }
-        } finally { hooks.afterRelease = null; await f.context.close(); }
+        } finally { hooks.afterRelease = null; await f.close(); }
       }
     });
 
@@ -303,7 +305,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.equal(result.outcomeUnknown, true, JSON.stringify(result));
         assert.equal(result.observationInterrupted, true, JSON.stringify(result));
         assert.equal(navigationSource(f.run), 'user');
-      } finally { hooks.afterRelease = null; await f.context.close(); }
+      } finally { hooks.afterRelease = null; await f.close(); }
     });
 
     await t.test('a monitor injected after page scripts never certifies a page traversal', async () => {
@@ -315,7 +317,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.notEqual(result.verified, true, JSON.stringify(result));
         assert.equal(result.outcomeUnknown, true, JSON.stringify(result));
         assert.equal(navigationSource(f.run), 'user', 'It cannot rule out a Back the page hid from it');
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
     await t.test('a monitor re-injected while the document still loads never certifies a page traversal', async () => {
@@ -327,7 +329,7 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.notEqual(result.verified, true, JSON.stringify(result));
         assert.equal(result.outcomeUnknown, true, JSON.stringify(result));
         assert.equal(navigationSource(f.run), 'user', 'Page scripts ran before it and could have hidden a Back from it');
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
     // A reading that misses its deadline keeps the browser-UI attribution.
@@ -340,22 +342,34 @@ test('Chrome: a native button\'s own route change is its effect; the browser\'s 
         assert.notEqual(result.verified, true, JSON.stringify(result));
         assert.equal(result.outcomeUnknown, true, JSON.stringify(result));
         assert.equal(navigationSource(f.run), 'user');
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
 
+    // The page goes back 300 ms after the click, inside the press's 500 ms
+    // file-input settle window, so when the observation first checks its
+    // owner the delayed reading still has about 250 ms to go (the agent caps
+    // a reading at 500 ms). Stop is sent the moment the observation waits on
+    // that pending reading: a Stop that waited for it would return only when
+    // the reading settles.
     await t.test('Stop while a traversal is read ends the observation at once', async () => {
-      const f = await fixture(browserInstance, { script: 'window.qaOnClick=()=>setTimeout(()=>history.back(),100);' });
+      const f = await fixture(browserInstance, { script: 'window.qaOnClick=()=>setTimeout(()=>history.back(),300);' });
       try {
         hooks.traversalReadingDelayMs = 450;
         let stoppedAt = 0;
-        hooks.afterRelease = () => new Promise(resolve => setTimeout(resolve, 300)).then(() => { stoppedAt = Date.now(); f.agent.abort(17); });
+        const settled = f.agent._pageFeedbackTraversalSettled;
+        f.agent._pageFeedbackTraversalSettled = function (run, signal) {
+          const waiting = settled.call(this, run, signal);
+          if (run.traversalAttribution && !stoppedAt) { stoppedAt = Date.now(); this.abort(17); }
+          return waiting;
+        };
         const result = await f.agent.executeTool(17, 'click_ax', { ref_id: f.ref });
         const returnedAt = Date.now();
-        assert.ok(stoppedAt > 0, JSON.stringify(result));
-        assert.ok(returnedAt - stoppedAt < 300, `returned ${returnedAt - stoppedAt} ms after Stop`);
+        assert.ok(stoppedAt > 0, `The observation waited on a pending traversal reading: ${JSON.stringify(result)}`);
+        assert.ok(returnedAt - stoppedAt < 150, `returned ${returnedAt - stoppedAt} ms after Stop`);
+        assert.ok(f.run.traversalAttribution, 'Stop did not wait for the traversal reading to settle');
         assert.notEqual(result.verified, true, JSON.stringify(result));
         assert.equal(presses().length, 1);
-      } finally { await f.context.close(); }
+      } finally { await f.close(); }
     });
   } finally {
     cdpClient.attach = cdpAttach;
