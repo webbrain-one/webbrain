@@ -6,6 +6,8 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { telegramLab, telegramRaceLab } from './native-chat-fixture.mjs';
 import { fixturePageTextReply } from '../semantic-decision-stub.mjs';
+import { scaled } from '../lib/time-budget.mjs';
+import { writeTimeoutEvidence } from './native-chat-timeout-evidence.mjs';
 
 // Whole installed background -> intent planner -> Agent -> native content
 // dispatch -> completion. Only the provider is deterministic; no Agent gate,
@@ -13,6 +15,11 @@ import { fixturePageTextReply } from '../semantic-decision-stub.mjs';
 const out = path.resolve(process.env.WEBBRAIN_QUALITY_ARTIFACTS
   || 'ci/artifacts/quality-audit-2026-10-07/native-chat-mv3');
 await fs.mkdir(out, { recursive: true });
+// Each path must finish its chat run, alongside the paths running with it, in
+// time. In passing QA runs the slowest path took about 51 s; under heavier load
+// paths missed the former 60 s budget. This one leaves room for that and scales
+// with WEBBRAIN_TEST_TIMEOUT_SCALE.
+const PATH_BUDGET_MS = scaled(120000);
 const fixtureUrl = 'https://web.telegram.org/k/#123456';
 const task = 'This is an isolated QA dialogue with WebBrain QA Bot, the only intended recipient in the currently open conversation. You are authorized to generate and send brief useful replies about browser-agent quality within this conversation. Answer its six questions, one reply per question, using your own wording. Observe each new incoming question and verify delivery after each send. Stop when the bot confirms all six replies were recorded. Keep the conversation on this page.';
 const replies = [
@@ -305,8 +312,12 @@ try {
       chrome.runtime.sendMessage({ target: 'background', action: 'chat', tabId, text, mode: 'act', requestId, locale: 'en' })
         .then(result => { run.result = result; run.finished = true; }, error => { run.result = { error: error.message }; run.finished = true; });
     }, { tabId, text: `${taskFor(dispatchPath)}\n${marker}`, requestId });
-    try { await harness.waitForFunction(id => nativeRuns[id]?.finished, requestId, { timeout: 60000 }); }
-    catch (error) { await message('abort', { tabId }); throw error; }
+    try { await harness.waitForFunction(id => nativeRuns[id]?.finished, requestId, { timeout: PATH_BUDGET_MS }); }
+    catch (error) {
+      await writeTimeoutEvidence({ out, dispatchPath, started, budgetMs: PATH_BUDGET_MS, error, harness, page, worker, message, tabId, requestId, current })
+        .catch(failure => console.error(`Could not save ${dispatchPath} timeout evidence: ${failure.message}`));
+      await message('abort', { tabId }); throw error;
+    }
     const run = await harness.evaluate(id => nativeRuns[id], requestId);
     const actualReplies = await page.evaluate(() => qaReplies);
     const outgoingBodies = await page.locator('.bubble.is-out .message').evaluateAll(nodes => nodes.map(node =>

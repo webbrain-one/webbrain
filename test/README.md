@@ -74,6 +74,30 @@ It also exercises actual installed-MV3 native chat, one-use registration rules,
 PNG/PDF download bytes and a PDF attachment POST, plus a 20-row task stopped and
 continued through a blocked row and an HTTP 429 inference retry.
 
+### Time budgets on a busy machine
+
+Browser suites run slower when the machine is busy, and on a loaded runner a
+fixed budget can expire after every subtest has passed. Their budgets come from
+`test/lib/time-budget.mjs`: a long parent test gets a budget that grows with its
+number of subtests (`suiteTimeout`), and other budgets and waits for page
+events go through `scaled()`. Set `WEBBRAIN_TEST_TIMEOUT_SCALE` to stretch all
+of them at once, for example when several browser suites run in parallel:
+
+```bash
+WEBBRAIN_TEST_TIMEOUT_SCALE=2 node --test test/page-monitor-dialog.mjs
+WEBBRAIN_TEST_TIMEOUT_SCALE=2 node test/quality/native-chat-mv3.mjs
+```
+
+It defaults to 1 and must be a positive number. Waits whose expiry is the
+expected result, and bounds that are themselves the behaviour under test, are
+not scaled. Suites that lease their browsers from `test/lib/shared-browsers.mjs`
+launch them in a before hook and close them in an after hook, each with its
+own timeout, so browser startup and shutdown count against no test's budget. A
+shared browser is replaced once it has served 25 contexts, because Firefox gets
+slower with every context it serves.
+When a native chat quality path misses its budget, the harness saves
+`<path>-timeout-evidence.json` with the run's events and state before aborting.
+
 ## 1. Unit — `npm test`
 
 `test/run.js`. Pure-JS tests covering loop detection, adapter routing, provider parity, permission gates, tool classifications, planner logic, skills, slash commands, credential fields, and context management. No browser, no network. Run the complete unit suite with `npm test`.
