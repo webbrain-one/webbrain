@@ -557,13 +557,21 @@ try {
     let error;
     try {
       assert.deepEqual(worlds, { isolated: 'function', main: 'undefined' }, 'The manifest installs AX only in the isolated content world.');
-      if (current.deleteOnly) {
-        assert.equal(current.otherQuestions.length, 1, 'An unauthorized replacement must request explicit approval once.');
+      const expectedHardCard = {
+        'x-post-correction-delete-only': ['social-publication-authorization-guard', 'publish', 'step_unverified'],
+        'x-duplicate-original-after-correction': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-virtualized-prior-effect': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-archived-publication-replay': ['social-publication-authorization-guard', 'publish', 'repeat_unverified'],
+        'x-toolbar-save-consequential': ['steer-post-correction-commit-guard', 'submit', 'step_unverified'],
+      }[current.id];
+      if (expectedHardCard) {
+        assert.equal(current.otherQuestions.length, 1, 'The unverified action must require one explicit approval.');
         const card = (result.updates || []).find(event => event.type === 'clarify'
-          && event.data?.clarifyId === current.otherQuestions[0]);
-        assert.equal(card?.data?.unverifiedStepConfirmation?.guardId, 'social-publication-authorization-guard');
-        assert.equal(card?.data?.unverifiedStepConfirmation?.hard, true);
-        assert.equal(card?.data?.unverifiedStepConfirmation?.action, 'publish');
+          && event.data?.clarifyId === current.otherQuestions[0])?.data?.unverifiedStepConfirmation;
+        assert.equal(card?.guardId, expectedHardCard[0]);
+        assert.equal(card?.action, expectedHardCard[1]);
+        assert.equal(card?.reason, expectedHardCard[2]);
+        assert.equal(card?.hard, true);
       } else {
         assert.deepEqual(current.otherQuestions, [], 'No question other than WebBrain\'s deletion card is expected.');
       }
