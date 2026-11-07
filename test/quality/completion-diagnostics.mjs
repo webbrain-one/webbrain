@@ -8,7 +8,7 @@ export function installCompletionDiagnostics(Agent) {
     'get_accessibility_tree', 'read_page', 'verify_form', 'iframe_read', 'iframe_click', 'fetch_url', 'done']);
   const outcomes = new Set(['succeeded', 'pending', 'failed', 'uncertain', 'success', 'partial']);
   const engines = new Set(['llm', 'legacy', 'freshness', 'local', 'typesafe', 'openrouter', 'compass']);
-  const reasons = new Set(['unavailable', 'capture_unavailable', 'verifier_unavailable',
+  const reasons = new Set(['unavailable', 'timeout', 'invalid_response', 'capture_unavailable', 'verifier_unavailable',
     'verifiers_unavailable_or_uncertain', 'evidence_changed', 'insufficient_evidence', 'judged', 'time_budget']);
   const reasonClass = value => reasons.has(value) || /^http_[1-5]\d{2}$/.test(String(value || ''))
     ? value : value ? 'other' : null;

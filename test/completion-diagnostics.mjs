@@ -59,6 +59,14 @@ test('optional completion diagnostics preserve method ownership, argument identi
   assert.match(completionDiagnosticModuleSource(), /^import \{ Agent \} from '\.\/agent\/agent\.js';/);
 });
 
+test('judge attempts keep the reasons the verifier reports and class any other reason as other', () => {
+  const { agent } = fixture();
+  const reasons = ['timeout', 'invalid_response', 'unavailable', 'time_budget', 'http_503', 'COMPLETION_TIMEOUT'];
+  for (const reason of reasons) agent.recordSystemOneVerdict(1, { phase: 'done_verification', engine: 'llm', modality: 'ax', outcome: 'uncertain', reason });
+  const rows = globalThis.webbrainCompletionDiagnostics.records.filter(row => row.phase === 'judge_attempt').slice(-reasons.length);
+  assert.deepEqual(rows.map(row => row.reasonClass), ['timeout', 'invalid_response', 'unavailable', 'time_budget', 'http_503', 'other']);
+});
+
 test('diagnostic failures and evaluator exceptions cannot change original results, exceptions or abort signals', async () => {
   const { agent, result, secret } = fixture();
   const controller = new AbortController(); controller.abort();

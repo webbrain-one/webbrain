@@ -561,7 +561,7 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
   if (refreshOnly) return { outcome: 'uncertain', engine: 'freshness', reason: 'evidence_changed' };
   const online = globalThis.navigator?.onLine !== false;
   const sidecar = decisionFeatureEnabled(config, 'done') && (config.local || online) ? {
-    name: config.provider, supportsVision: config.supportsVision,
+    name: config.provider, model: config.model, supportsVision: config.supportsVision,
     requiresIndependentSuccessConfirmation: config.requiresIndependentSuccessConfirmation === true,
     evaluate: async evidence => {
       const headers = compass ? { 'X-WebBrain-Device-Id': compass.deviceGuid || '', 'X-WebBrain-Client': 'extension', 'X-WebBrain-Help-Improve': compass.helpImproveWebBrain === false ? '0' : '1' } : {};
@@ -579,7 +579,7 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
   // These switches outsource checks to the decision sidecar. The approved
   // routing still uses the active LLM when that sidecar is off/unconfigured.
   const llm = typeof provider.chat === 'function' && (online || provider.config?.category === 'local') ? {
-    name: 'llm', supportsVision: provider.supportsVision,
+    name: 'llm', model: provider.model, supportsVision: provider.supportsVision,
     evaluate: async (evidence, modality, { timeoutMs = 10000 } = {}) => {
       const judged = evidence.llmState || evidence.state;
       const [info, observation] = judged;
@@ -592,7 +592,9 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
       ], { temperature: 0, maxTokens: 4096, signal: requestSignal }, context.costState || agent._newCostRunState(), { tabId, generationName: 'completion_verification' }), signal,
       Math.max(1, Math.min(10000, Number(timeoutMs) || 10000)));
       if (result.costAllowanceMessage) throw agent._costAllowanceError(result.costAllowanceMessage);
-      return { ...llmCompletionVerdict(result.content), model: provider.model };
+      // Its token counts go to the trace with the verdict, as the decision
+      // model's do: a slow judge that spent its output on reasoning shows.
+      return { ...llmCompletionVerdict(result.content), model: provider.model, ...(result.usage ? { usage: result.usage } : {}) };
     },
   } : null;
   // When the sidecar's copy of the request or plan lost every line naming a
@@ -609,7 +611,7 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
       phase: 'done_verification', ...metadata,
       // A model's own words never reach the trace: a sure verdict is recorded
       // as judged, an unsure one as insufficient evidence.
-      ...(reason ? { reason: /^(?:capture_unavailable|unavailable|time_budget|COMPLETION_VISUAL_CHANGED|http_\d{3}|JEV_[A-Z_]+)$/.test(reason) ? reason
+      ...(reason ? { reason: /^(?:capture_unavailable|unavailable|timeout|invalid_response|time_budget|COMPLETION_VISUAL_CHANGED|http_\d{3}|JEV_[A-Z_]+)$/.test(reason) ? reason
         : metadata.outcome && metadata.outcome !== 'uncertain' ? 'judged' : 'insufficient_evidence' } : {}),
     }, context) });
   const accepted = { ...verdict, scope, ...(captures.get(verdict.modality)?.submittedFrameStamp

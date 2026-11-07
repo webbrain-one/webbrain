@@ -242,6 +242,36 @@ for (const build of ['chrome', 'firefox']) {
       assert.equal(result.outcome, unsupportedImage ? 'failed' : 'uncertain');
     }
   });
+  // An attempt that ends without a verdict says why, with its judge's model:
+  // a request that ran out of time is a timeout with the time it had, a reply
+  // that is not a verdict is an invalid response, and only a judge that could
+  // not answer at all is unavailable.
+  test(`${build}: a judge attempt without a verdict is labelled timeout, invalid_response, http_NNN or unavailable`, async () => {
+    const fields = { engine: 'llm', model: 'owned-model', modality: 'ax', outcome: 'uncertain' };
+    const attemptOf = async (evaluate, model = fields.model) => {
+      const attempts = [];
+      const result = await verifier.verifyCompletion({ llm: { name: 'llm', model, evaluate }, capture: async () => ({ identity: 'fresh' }),
+        isCurrent: () => true, onAttempt: item => attempts.push(item) });
+      assert.equal(result.engine, 'legacy'); assert.equal(attempts.length, 1);
+      const { elapsedMs, ...attempt } = attempts[0];
+      assert.ok(Number.isFinite(elapsedMs) && elapsedMs >= 0);
+      return attempt;
+    };
+    assert.deepEqual(await attemptOf(() => verifier.withCompletionTimeout(() => new Promise(() => {}), null, 25)),
+      { ...fields, reason: 'timeout', timeoutMs: 25 });
+    for (const content of ['', 'The post looks staged.', '```json\n{"outcome":"succeeded"', 'null', '{"outcome":"success","reason":"staged"}', '{"outcome":"succeeded"}']) {
+      assert.deepEqual(await attemptOf(async () => verifier.llmCompletionVerdict(content)), { ...fields, reason: 'invalid_response' }, JSON.stringify(content));
+    }
+    assert.deepEqual(await attemptOf(async () => verifier.decisionCompletionVerdict({ answers: { task_outcome: { choice: 'done' } } })),
+      { ...fields, reason: 'invalid_response' });
+    assert.deepEqual(await attemptOf(async () => { throw Object.assign(new Error('HTTP'), { status: 503 }); }), { ...fields, reason: 'http_503' });
+    for (const error of [new TypeError('Failed to fetch'), new Error('Provider returned nothing.')]) {
+      assert.deepEqual(await attemptOf(async () => { throw error; }), { ...fields, reason: 'unavailable' }, error.message);
+    }
+    // An app code still names itself, and a judge without a model adds none.
+    assert.deepEqual(await attemptOf(async () => { throw Object.assign(new Error('JEV'), { code: 'JEV_INVALID_CHOICE' }); }, null),
+      { engine: 'llm', modality: 'ax', outcome: 'uncertain', reason: 'JEV_INVALID_CHOICE' });
+  });
   test(`${build}: quota, cancellation, budget and stale evidence never fall through`, async () => {
     for (const error of [Object.assign(new Error('quota'), { status: 402 }), Object.assign(new Error('budget'), { code: 'WB_COST_ALLOWANCE' })]) {
       let llmCalls = 0;
@@ -251,7 +281,8 @@ for (const build of ['chrome', 'firefox']) {
     await assert.rejects(verifier.verifyCompletion({ decision: { name: 'decision', evaluate: async () => ({ outcome: 'succeeded' }) }, capture: async () => ({}), isCurrent: () => false }), e => e.code === 'STALE_COMPLETION');
     const controller = new AbortController(); controller.abort(new Error('Stopped'));
     await assert.rejects(verifier.verifyCompletion({ signal: controller.signal, decision: { name: 'decision' }, capture: async () => ({}), isCurrent: () => true }), /Stopped/);
-    await assert.rejects(verifier.withCompletionTimeout(() => new Promise(() => {}), null, 5), /timed out/);
+    await assert.rejects(verifier.withCompletionTimeout(() => new Promise(() => {}), null, 5),
+      error => /timed out/.test(error.message) && error.code === verifier.COMPLETION_TIMEOUT && error.timeoutMs === 5);
   });
   test(`${build}: LLM enum/shape validation and observable requirements`, () => {
     assert.throws(() => verifier.llmCompletionVerdict('{"outcome":"success","reason":"yes"}'));
@@ -929,4 +960,56 @@ for (const build of ['chrome', 'firefox']) {
     assert.match(observation.observation, /^textbox "PIN" \[ref_7\] type="text" value="\[credential omitted\]\[credential omitted\]"$/m);
     assert.match(info.candidate_summary_not_proof, /Set the PIN to \[credential omitted\] \[credential omitted\]\./);
   }, {}));
+  // A staged field the decision model is unsure of gets the active model's
+  // bounded second look. When that look runs out of time the trace says
+  // timeout, with its budget and the model, not that the judge is unavailable.
+  const stagedGuard = () => ({ enabled: true, requiresSubmission: false, requiresStateChange: true });
+  const llmAttempts = attempts => attempts.filter(item => item.engine === 'llm');
+  test(`${build}: a second look that runs out of time is traced as a timeout with its budget and model`, { timeout: 20000 }, async t => withDecisionRuntime(async () => {
+    const { projectTraceEventData } = await import(`../src/${build}/src/trace/privacy.js`);
+    const attempts = [];
+    let started;
+    const asked = new Promise(resolve => { started = resolve; });
+    const agent = stagedFormAgent({ messages: [], attempts, captures: { count: 0 }, guard: stagedGuard(), onDecision: () => {}, onChat: () => {} });
+    agent._chatWithCostAllowance = (_provider, _messages, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+      started();
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    let verdict;
+    try {
+      const verifying = runtime.verifyBrowserCompletion(agent, 1, { pageUrl: 'https://forms.example/signup' });
+      await asked;
+      t.mock.timers.tick(verifier.COMPLETION_SECOND_LOOK_MS);
+      verdict = await verifying;
+    } finally { t.mock.timers.reset(); }
+    assert.equal(verdict.outcome, 'uncertain'); assert.equal(verdict.engine, 'legacy');
+    assert.deepEqual(attempts.map(item => [item.engine, item.modality, item.outcome]), [['local', 'ax', 'uncertain'], ['llm', 'ax', 'uncertain']]);
+    const [timedOut] = llmAttempts(attempts);
+    assert.equal(timedOut.reason, 'timeout'); assert.equal(timedOut.model, 'active');
+    assert.ok(timedOut.timeoutMs > verifier.COMPLETION_SECOND_LOOK_MS - 1500 && timedOut.timeoutMs <= verifier.COMPLETION_SECOND_LOOK_MS, String(timedOut.timeoutMs));
+    // The trace keeps the label, the budget, the time spent and the model.
+    const traced = projectTraceEventData('note', { step: 0, note: 'system_one', extra: timedOut }, {}).extra;
+    assert.deepEqual(traced, { phase: 'done_verification', engine: 'llm', model: 'active', modality: 'ax', outcome: 'uncertain', reason: 'timeout',
+      elapsedMs: timedOut.elapsedMs, timeoutMs: timedOut.timeoutMs });
+  })());
+  test(`${build}: a second-look reply that is not a verdict is an invalid response; an unreachable judge is unavailable; a verdict keeps its model and tokens`, withDecisionRuntime(async () => {
+    const usage = { prompt_tokens: 900, completion_tokens: 40 };
+    for (const [reply, expected] of [
+      [() => ({ content: 'The fields look filled in.', usage }), { outcome: 'uncertain', reason: 'invalid_response' }],
+      [() => ({ content: '{"outcome":"done","reason":"x"}', usage }), { outcome: 'uncertain', reason: 'invalid_response' }],
+      [() => { throw new TypeError('Failed to fetch'); }, { outcome: 'uncertain', reason: 'unavailable' }],
+      [() => ({ content: '{"outcome":"succeeded","reason":"Fields hold the requested values."}', usage }), { outcome: 'succeeded', reason: 'judged', usage }],
+    ]) {
+      const attempts = [];
+      const agent = stagedFormAgent({ messages: [], attempts, captures: { count: 0 }, guard: stagedGuard(), onDecision: () => {}, onChat: reply });
+      const verdict = await runtime.verifyBrowserCompletion(agent, 1, { pageUrl: 'https://forms.example/signup' });
+      assert.equal(verdict.outcome, expected.outcome, expected.reason);
+      const [attempt] = llmAttempts(attempts);
+      assert.equal(attempt.model, 'active', expected.reason);
+      assert.equal(attempt.reason, expected.reason);
+      assert.deepEqual(attempt.usage, expected.usage, expected.reason);
+      assert.equal(attempt.timeoutMs, undefined, 'only a timeout reports its budget');
+    }
+  }));
 }
