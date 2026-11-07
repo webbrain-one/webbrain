@@ -313,6 +313,31 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         assert.equal((await check(current, fresh.selector, 'inventory-2')).inventoried, true, 'the fresh inventory lists the new node');
         assert.equal((await check(current, fresh.selector, 'inventory-1')).inventoried, undefined, 'the older inventory is spent');
       }, instagramDirectThreadHtml()));
+      // A vision run's upload handoff (vision-runtime.js): the blocked
+      // click_at's result named the input by selector, and the monitor keeps
+      // the node that selector names when the handoff starts, under the
+      // agent's token, as an inventory would.
+      await t.test('a handoff\'s blocked input is known by the node its selector named when the handoff started', () => withFixture(async page => {
+        const selector = 'input[type="file"][accept="audio/*,.mp4,.mov,.png,.jpg,.jpeg"][multiple]';
+        const record = params => page.evaluate(params => deliver('page_monitor_record_upload_targets', params), params);
+        const check = (snapshot, selector, fileInventoryToken) => page.evaluate(params => deliver('page_monitor_validate_model',
+          { tool: 'upload_file', ...params }), { selector, snapshotToken: snapshot.snapshotToken, fileInventoryToken });
+        // Only a selector naming one file input is kept.
+        const recorded = await record({ token: 'handoff-1', selectors: [selector, 'input[type="file"].missing', '[role="textbox"]'] });
+        assert.deepEqual(recorded.recorded, [selector], JSON.stringify(recorded));
+        assert.equal(recorded.runToken, 'upload-release-run');
+        const snapshot = await capture(page, { uploadTargets: [selector] });
+        const listed = await check(snapshot, selector, 'handoff-1');
+        assert.equal(listed.reason, 'target_uncovered', JSON.stringify(listed));
+        assert.equal(listed.inventoried, true, JSON.stringify(listed));
+        assert.equal((await check(snapshot, 'input[type=file]', 'handoff-1')).inventoried, undefined, 'a guessed selector for the same node');
+        assert.deepEqual((await record({ token: 'handoff-2', selectors: [selector], runToken: 'another-run' })).recorded, [], 'another run records nothing');
+        assert.equal((await check(snapshot, selector, 'handoff-1')).inventoried, true, 'and leaves the handoff\'s record');
+        await page.evaluate(() => window.rerenderComposerInput());
+        const remounted = await check(await capture(page, { uploadTargets: [selector] }), selector, 'handoff-1');
+        assert.equal(remounted.reason, 'target_uncovered', JSON.stringify(remounted));
+        assert.equal(remounted.inventoried, undefined, `a re-mounted input was never named: ${JSON.stringify(remounted)}`);
+      }, instagramDirectThreadHtml()));
       for (const authority of ['user', 'Stop', 'run', 'document']) await t.test(`${authority} revokes upload authority`, () => withFixture(async page => {
         const snapshot = await capture(page);
         const attached = await attach(page, snapshot, async page => {

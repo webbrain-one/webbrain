@@ -524,7 +524,7 @@ export default {
   'sp.permissions.gate_off': 'خاموش: WebBrain بدون پرسیدن در همهٔ سایت‌ها اقدام می‌کند.',
   'sp.permissions.manage': 'مدیریت مجوزهای سایت',
   'sp.permissions.enabled': 'درخواست‌های مجوز دوباره روشن شدند.',
-  "sp.help.shortcuts_html": "<strong>میانبرهای صفحه کلید</strong><br><code>Ctrl/Cmd+/</code> - روی ورودی تمرکز کنید<br><code>Ctrl/Cmd+Shift+A</code> - به حالت سؤال بروید<br><code>Ctrl/Cmd+Shift+X</code> - به حالت Act تغییر دهید<br><code>Ctrl/Cmd+Shift+D</code> - به حالت Dev بروید<br><code>Escape</code> - اجرای فعال را متوقف کنید<br><code>1</code>–<code>9</code> - انتخاب پاسخی که آن شماره را دارد",
+  "sp.help.shortcuts_html": "<strong>میانبرهای صفحه کلید</strong><br><code>Ctrl/Cmd+/</code> - روی ورودی تمرکز کنید<br><code>Ctrl/Cmd+Shift+A</code> - به حالت سؤال بروید<br><code>Ctrl/Cmd+Shift+X</code> - به حالت Act تغییر دهید<br><code>Ctrl/Cmd+Shift+D</code> - به حالت Dev بروید<br><code>Escape</code> - اجرای فعال را متوقف کنید<br><code>1</code>–<code>9</code> - انتخاب پاسخ با آن شماره هنگام پرسش WebBrain",
   "sp.slash.record_transcribe": "پس از توقف، رونوشت Whisper را ضبط و ذخیره کنید",
   "sp.slash.unknown_command": "دستور اسلش نامشخص {command}. از /help برای دیدن دستورات موجود استفاده کنید.",
   "sp.slash.invalid_usage": "دستور دستور اسلش نامعتبر است. استفاده: {usage}",

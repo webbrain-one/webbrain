@@ -85,20 +85,66 @@
   function initializeDocsSearch() {
     if (!sidebar) return;
 
-    const isChinese = document.documentElement.lang.toLowerCase().startsWith('zh');
-    const copy = isChinese ? {
-      label: '搜索文档',
-      placeholder: '搜索文档…',
-      clear: '清除',
-      loading: '正在建立索引…',
-      empty: '没有匹配结果。请尝试其他关键词。',
-      count: function (shown, total) { return shown < total ? `显示 ${shown} / ${total} 个结果` : `找到 ${total} 个结果`; },
-    } : {
+    const lang = document.documentElement.lang.toLowerCase();
+    const SEARCH_COPY = {
+      zh: {
+        label: '搜索文档', placeholder: '搜索文档…', clear: '清除', loading: '正在建立索引…',
+        empty: '没有匹配结果。请尝试其他关键词。', page: '文档',
+        count: function (shown, total) { return shown < total ? `显示 ${shown} / ${total} 个结果` : `找到 ${total} 个结果`; },
+      },
+      hi: {
+        label: 'दस्तावेज़ खोजें', placeholder: 'दस्तावेज़ खोजें…', clear: 'साफ़ करें', loading: 'इंडेक्स तैयार हो रहा है…',
+        empty: 'कोई परिणाम नहीं मिला। कोई दूसरा शब्द आज़माएँ।', page: 'गाइड',
+        count: function (shown, total) { return shown < total ? `${total} में से ${shown} परिणाम दिख रहे हैं` : `${total} परिणाम मिले`; },
+      },
+      fr: {
+        label: 'Rechercher dans la documentation', placeholder: 'Rechercher…', clear: 'Effacer', loading: 'Indexation du guide…',
+        empty: 'Aucun résultat. Essayez un autre terme.', page: 'Guide',
+        count: function (shown, total) { return shown < total ? `${shown} résultats sur ${total}` : `${total} résultats`; },
+      },
+      es: {
+        label: 'Buscar en la documentación', placeholder: 'Buscar…', clear: 'Borrar', loading: 'Indexando la guía…',
+        empty: 'Sin resultados. Pruebe con otro término.', page: 'Guía',
+        count: function (shown, total) { return shown < total ? `Mostrando ${shown} de ${total} resultados` : `${total} resultado${total === 1 ? '' : 's'}`; },
+      },
+      de: {
+        label: 'Dokumentation durchsuchen', placeholder: 'Suchen…', clear: 'Löschen', loading: 'Handbuch wird indexiert…',
+        empty: 'Keine Treffer. Versuchen Sie einen anderen Begriff.', page: 'Handbuch',
+        count: function (shown, total) { return shown < total ? `${shown} von ${total} Ergebnissen` : `${total} Ergebnisse`; },
+      },
+      ar: {
+        label: 'ابحث في الوثائق', placeholder: 'ابحث…', clear: 'مسح', loading: 'جارٍ فهرسة الدليل…',
+        empty: 'لا نتائج. جرّب كلمة أخرى.', page: 'دليل',
+        count: function (shown, total) { return shown < total ? `عرض ${shown} من ${total} نتيجة` : `${total} نتيجة`; },
+      },
+      tr: {
+        label: 'Belgelerde ara', placeholder: 'Ara…', clear: 'Temizle', loading: 'Rehber indeksleniyor…',
+        empty: 'Sonuç yok. Başka bir terim deneyin.', page: 'Rehber',
+        count: function (shown, total) { return shown < total ? `${total} sonuçtan ${shown} gösteriliyor` : `${total} sonuç bulundu`; },
+      },
+      id: {
+        label: 'Cari dokumentasi', placeholder: 'Cari…', clear: 'Hapus', loading: 'Mem indeks panduan…',
+        empty: 'Tidak ada hasil. Coba istilah lain.', page: 'Panduan',
+        count: function (shown, total) { return shown < total ? `Menampilkan ${shown} dari ${total} hasil` : `${total} hasil ditemukan`; },
+      },
+      tl: {
+        label: 'Maghanap sa mga dokumento', placeholder: 'Maghanap…', clear: 'Burahin', loading: 'Ini-index ang gabay…',
+        empty: 'Walang resultang nahanap. Subukan ang ibang salita.', page: 'Gabay',
+        count: function (shown, total) { return shown < total ? `Ipinapakita ang ${shown} sa ${total} resulta` : `${total} resultang nahanap`; },
+      },
+      nl: {
+        label: 'Documentatie doorzoeken', placeholder: 'Zoeken…', clear: 'Wissen', loading: 'De gids wordt geïndexeerd…',
+        empty: 'Geen resultaten. Probeer een andere term.', page: 'Gids',
+        count: function (shown, total) { return shown < total ? `${shown} van ${total} resultaten` : `${total} resultaten`; },
+      },
+    };
+    const copy = SEARCH_COPY[lang.split('-')[0]] || {
       label: 'Search docs',
       placeholder: 'Search docs…',
       clear: 'Clear',
       loading: 'Indexing the guide…',
       empty: 'No matches. Try another term.',
+      page: 'Guide',
       count: function (shown, total) { return shown < total ? `Showing ${shown} of ${total} results` : `${total} result${total === 1 ? '' : 's'}`; },
     };
 
@@ -144,7 +190,7 @@
       const description = doc.querySelector('meta[name="description"]')?.content || '';
       const entries = [{
         title: pageName,
-        page: isChinese ? '文档' : 'Guide',
+        page: copy.page,
         detail: h1?.textContent.trim() || description,
         url: pagePath,
         text: `${pageName} ${description} ${main.textContent}`,
@@ -333,6 +379,19 @@
   }
 
   initializeDocsSearch();
+
+  const languageSelect = document.querySelector('[data-docs-language]');
+  languageSelect?.addEventListener('change', function () {
+    const value = languageSelect.value;
+    if (!value) return;
+
+    try {
+      const url = new URL(value, window.location.origin);
+      const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+      if (!isHttp || url.origin !== window.location.origin) return;
+      window.location.assign(url.pathname + url.search + url.hash);
+    } catch (_) {}
+  });
 
   sidebarButton?.addEventListener('click', function () {
     const open = document.body.classList.toggle('sidebar-open');

@@ -253,6 +253,49 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       });
     });
   }
+  // From a trace: the contact's name held an emoji. WhatsApp draws a
+  // name's emoji as an <img> inside the name, and the drawer check wanted a
+  // name with no child elements, so it never captured the drawer and blocked
+  // its Close button, the very step the guard names. Emoji images in a name
+  // are still its plain text; any other markup there is not.
+  const EMOJI = '<img class="emoji" alt="🧚‍♂️" data-plain-text="🧚‍♂️" draggable="false" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">';
+  for (const [shape, subtitle, accepted] of [
+    ['an emoji image', `Fixture ${EMOJI} Mom`, true],
+    ['another element', 'Fixture <b>Mom</b>', false],
+    ['an image whose text is not emoji', 'Fixture <img class="emoji" alt="Dad"> Mom', false],
+  ]) {
+    test(`${build}: a contact drawer name holding ${shape} ${accepted ? 'confirms' : 'never confirms'} the contact`, async () => {
+      await fixture(async ({ page, call, observe, click, ownerFor }) => {
+        await page.evaluate(({ name, subtitle }) => {
+          for (const selector of ['[data-testid="cell-frame-title"]', '[data-testid="conversation-info-header-chat-title-name"]']) {
+            document.querySelector(selector).innerHTML = name;
+          }
+          document.querySelector('[data-testid="conversation-info-header"]').onclick = () => {
+            fixtureDrawer();
+            document.querySelector('[data-testid="chat-info-drawer"] [data-testid="contact-info-subtitle selectable-text"]').innerHTML = subtitle;
+          };
+        }, { name: `Fixture ${EMOJI} Mom`, subtitle });
+        const CLOSE = '[data-testid="chat-info-drawer"] header button[aria-label="Close"]';
+        assert.equal((await observe()).success, false);
+        assert.equal((await click('[data-testid="conversation-info-header"]')).success, true);
+        await page.locator('[data-testid="chat-info-drawer"]').waitFor(); await page.waitForTimeout(30);
+        // The agent's recipient probe right before the Close click.
+        await call('get_accessibility_tree', { filter: 'all' });
+        const closeRef = await page.locator(CLOSE).evaluate(node => __wb_ax_ref(node));
+        const probe = await guardProbeWithReadings(params => call('probe_message_recipient_guard', params), {
+          tool: 'click_ax', args: { ref_id: closeRef }, adapterName: 'generic-messaging', bindDispatch: true, _nativeChatOwner: ownerFor() });
+        if (accepted) assert.equal(probe.nativeWhatsappRepair, true, JSON.stringify(probe));
+        else assert.equal(probe.reasonCode, 'native_whatsapp_contact_binding_required', JSON.stringify(probe));
+        await click(CLOSE);
+        const after = await observe();
+        assert.equal(after.success, accepted, JSON.stringify(after));
+        if (accepted) {
+          assert.equal(after.conversationId, 'whatsapp:phone:' + createHash('sha256').update('+905550000001').digest('hex').slice(0,32));
+          assert.equal(after.conversationIdentity, 'Fixture Mom');
+        }
+      });
+    });
+  }
   for (const order of ['observer-first','monitor-first']) {
     test(`${build}: production monitor ${order} rejects stale Stop but revokes pending floor before Continue`, async () => {
       await fixture(async ({ page, bind, observe, setOwner, setRestore, ownerFor, authority }) => {

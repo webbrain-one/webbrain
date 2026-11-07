@@ -15,6 +15,7 @@ following components, each under its own license.
 | [atotto/clipboard](https://github.com/atotto/clipboard) | BSD-3-Clause | Copy from the tray menu |
 | [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) | SIL OFL 1.1 | Panel typeface (`internal/panel/assets/fonts/OFL-BricolageGrotesque.txt`) |
 | WebBrain d1 runtime adapter (`d1-runtime.js`, `d1-preprocess.js`) | GPL-3.0-or-later | Ported to Go in `internal/d1` |
+| WebBrain Compass VLD v6 runtime (`compass-vld-v6-runtime.js`, `compass-vld-runtime.js`, `webgpu-decisions.js`, `compass-vld-decision-probe.js`) | GPL-3.0-or-later | Ported to Go in `internal/d1` (`compass*.go`) |
 
 Go module licenses for the full dependency graph are listed by
 `go-licenses report ./...`.
@@ -26,5 +27,6 @@ Go module licenses for the full dependency graph are listed by
 | [Ternary Bonsai 2 27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) GGUF / [MLX](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-mlx-2bit) (PrismML) | Apache-2.0 | Pinned revisions, SHA-256 verified |
 | [PrismML llama.cpp fork](https://github.com/PrismML-Eng/llama.cpp) release `prism-b10787-73bfe6c` | MIT | Needed for PTQ1_0; stock llama.cpp rejects it |
 | MLX, mlx-vlm, mlx-lm, transformers (PyPI, via [uv](https://github.com/astral-sh/uv)) | MIT / Apache-2.0 | Apple Silicon MLX path only |
+| [webbrain-compass-vld-v6-2b-onnx](https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-onnx) | LFM Open License v1.0 (`lfm1.0`) | Fine-tune of LiquidAI LFM3-VL-2B; same terms as d1, including the US$10M revenue threshold for commercial use |
 | [d1-browser-decision-fp32](https://huggingface.co/webbrain-one/d1-browser-decision-fp32) | LFM Open License v1.0 | Derived from LiquidAI d1-omni; commercial-use terms include a US$10M revenue threshold |
-| [ONNX Runtime](https://github.com/microsoft/onnxruntime) 1.31.0 | MIT | CPU runtime for the decision model, SHA-256 verified |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) 1.31.0 | MIT | CPU runtime for the decision models, SHA-256 verified |

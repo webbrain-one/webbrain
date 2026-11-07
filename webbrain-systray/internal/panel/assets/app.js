@@ -54,6 +54,13 @@
       close: "Close",
       models: "Local models",
       d1Name: "d1 decision model",
+      compassName: "Compass VLD v6 2B decision model",
+      modelShortCompass: "Compass VLD v6 2B",
+      modelShortD1: "d1",
+      decisionModel: "Model",
+      useModel: "Use {name} instead",
+      deleteOther: "Delete {name} files ({size})",
+      deleteOtherConfirm: "Delete {size} of {name} files?",
       runningAs: "Running as {id}",
       installedSize: "Installed, {size}",
       downloadSize: "{size} download",
@@ -106,7 +113,7 @@
       removeFiles: "Delete downloaded files",
       removeFilesConfirm: "Delete {size} of model files?",
       delete: "Delete",
-      decisionLede: "WebBrain's d1 model answers yes/no, choice and score questions about a page, here instead of in the browser.",
+      decisionLede: "WebBrain's decision model answers yes/no, choice and score questions about a page, here instead of in the browser.",
       endpoint: "Endpoint",
       served: "Served",
       servedValue: "{n} decisions, last in {ms} ms",
@@ -216,6 +223,13 @@
       close: "Kapat",
       models: "Yerel modeller",
       d1Name: "d1 karar modeli",
+      compassName: "Compass VLD v6 2B karar modeli",
+      modelShortCompass: "Compass VLD v6 2B",
+      modelShortD1: "d1",
+      decisionModel: "Model",
+      useModel: "Bunun yerine {name} kullan",
+      deleteOther: "{name} dosyalarını sil ({size})",
+      deleteOtherConfirm: "{size} {name} dosyası silinsin mi?",
       runningAs: "{id} olarak çalışıyor",
       installedSize: "Kurulu, {size}",
       downloadSize: "{size} indirme",
@@ -268,7 +282,7 @@
       removeFiles: "İndirilen dosyaları sil",
       removeFilesConfirm: "{size} model dosyası silinsin mi?",
       delete: "Sil",
-      decisionLede: "WebBrain'in d1 modeli sayfa hakkındaki evet/hayır, seçim ve puan sorularını tarayıcı yerine burada yanıtlar.",
+      decisionLede: "WebBrain'in karar modeli sayfa hakkındaki evet/hayır, seçim ve puan sorularını tarayıcı yerine burada yanıtlar.",
       endpoint: "Uç nokta",
       served: "Verilen",
       servedValue: "{n} karar, sonuncusu {ms} ms",
@@ -359,6 +373,7 @@
     [/^Installing MLX and mlx-vlm$/, () => "MLX ve mlx-vlm kuruluyor"],
     [/^Checking the native Bonsai loader$/, () => "Bonsai yükleyicisi denetleniyor"],
     [/^d1 decision model$/, () => "d1 karar modeli"],
+    [/^Compass VLD v6 2B$/, () => "Compass VLD v6 2B"],
     [/^Unpacking ONNX Runtime$/, () => "ONNX Runtime açılıyor"],
     [/^(.+) with (\d+) GB unified memory$/, (m) => `${m[1]}, ${m[2]} GB birleşik bellek`],
     [/^(.+) \((\d+) GB\) and (\d+) GB RAM$/, (m) => `${m[1]} (${m[2]} GB), ${m[3]} GB RAM`],
@@ -653,6 +668,10 @@
     return { text: t("downloadSize", { size: gb(L.download_bytes) }) + (warn ? `. ${t("maySlow")}` : ""), tone: warn ? "warn" : "", act: ["local-install", t("install"), !canInstall(L)] };
   }
 
+  // The decision model in use ("compass" or "d1") and the other one.
+  const decisionName = (D) => t(D.id === "d1" ? "d1Name" : "compassName");
+  const modelShort = (id) => t(id === "d1" ? "modelShortD1" : "modelShortCompass");
+
   function d1Info(D) {
     if (!D.supported) return { text: t("notSupported") };
     switch (D.phase) {
@@ -686,7 +705,7 @@
       <div class="sec-head"><h2 id="h-models">${t("models")}</h2></div>
       <ul class="rows">
         ${modelRow("row-local", "local-open", "B", "--h:150;--s:42%;--l:34%", state.local.model_name, localInfo(state.local))}
-        ${modelRow("row-d1", "d1-open", "d1", "--h:336;--s:58%;--l:46%", t("d1Name"), d1Info(state.decision))}
+        ${modelRow("row-d1", "d1-open", state.decision.id === "d1" ? "d1" : "C", "--h:336;--s:58%;--l:46%", decisionName(state.decision), d1Info(state.decision))}
       </ul>
     </section>`;
   }
@@ -859,9 +878,18 @@
         ${ui.test && ui.test !== "running" ? `<span class="result">${esc(ui.test)}</span>` : ""}</div>`;
     }
     const busy = ["downloading", "installing", "loading"].includes(D.phase);
-    return sheetHead(esc(t("d1Name")), t("decisionLede"))
+    const other = (D.models || []).find((m) => !m.active);
+    let otherFiles = "";
+    if (other && other.disk_bytes > 0) {
+      const vars = { name: modelShort(other.id), size: gb(other.disk_bytes) };
+      otherFiles = confirming("d1-remove-other")
+        ? confirmRow(t("deleteOtherConfirm", vars), "d1-remove-other", t("delete"), `data-model="${esc(other.id)}"`)
+        : `<div class="sheet-actions end"><button class="btn small quiet" data-act="ask-d1-remove-other" ${busy ? "disabled" : ""}>${esc(t("deleteOther", vars))}</button></div>`;
+    }
+    return sheetHead(esc(decisionName(D)), t("decisionLede"))
       + statusBlock(info) + test
       + `<dl class="facts">
+        <dt>${t("decisionModel")}</dt><dd>${esc(modelShort(D.id))}${other ? ` <button class="btn small quiet" data-act="d1-model" data-model="${esc(other.id)}" ${busy ? "disabled" : ""}>${esc(t("useModel", { name: modelShort(other.id) }))}</button>` : ""}</dd>
         <dt>${t("endpoint")}</dt><dd><button class="chip-code" data-act="copy" data-text="${esc(D.endpoint)}" title="${t("copy")}">POST /companion/v1/decide</button></dd>
         ${D.runtime ? `<dt>${t("runtime")}</dt><dd>${esc(goText(D.runtime))}</dd>` : ""}
         ${D.requests ? `<dt>${t("served")}</dt><dd>${esc(t("servedValue", { n: num(D.requests), ms: Math.round(D.last_latency_ms || 0) }))}</dd>` : ""}
@@ -870,7 +898,8 @@
       </dl>
       ${D.installed ? (confirming("d1-remove")
         ? confirmRow(t("removeFilesConfirm", { size: gb(D.disk_bytes) }), "d1-remove", t("delete"))
-        : `<div class="sheet-actions end"><button class="btn small danger" data-act="ask-d1-remove" ${busy ? "disabled" : ""}>${t("removeFiles")}</button></div>`) : ""}`;
+        : `<div class="sheet-actions end"><button class="btn small danger" data-act="ask-d1-remove" ${busy ? "disabled" : ""}>${t("removeFiles")}</button></div>`) : ""}
+      ${otherFiles}`;
   }
 
   // Updates: the automatic-install switch, where the update stands, and a
@@ -1141,6 +1170,9 @@
       case "d1-unload": ui.test = null; run(api("POST", "/decision/unload")); break;
       case "ask-d1-remove": ui.confirm = { type: "d1-remove" }; reRender(); break;
       case "d1-remove": ui.confirm = null; run(api("POST", "/decision/remove")); reRender(); break;
+      case "d1-model": ui.test = null; run(api("POST", "/decision/model", { model: el.dataset.model })); break;
+      case "ask-d1-remove-other": ui.confirm = { type: "d1-remove-other" }; reRender(); break;
+      case "d1-remove-other": ui.confirm = null; run(api("POST", "/decision/remove", { model: el.dataset.model })); reRender(); break;
       case "d1-test": {
         ui.test = "running"; reRender();
         try {

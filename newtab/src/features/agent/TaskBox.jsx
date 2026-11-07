@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MdArrowForward, MdChatBubbleOutline, MdSearch, MdSmartToy } from 'react-icons/md';
 import { wbT } from 'lib/wb-strings';
-import { canSearch, isHandoffPending, pendingHandoffText, primeCurrentTab, runSearch, submitTask, whenClaimed } from './handoff';
+import { canSearch, isHandoffPending, openAskChat, pendingHandoffText, primeCurrentTab, runSearch, submitTask, whenClaimed } from './handoff';
 
 import './taskbox.scss';
 
@@ -65,7 +65,9 @@ function TaskBox() {
     }
     submittingRef.current = true;
     setWaiting(true);
-    submitTask({ text: value, mode })
+    // Ask becomes a full-page chat in this tab; Act opens the side panel beside it.
+    const handOver = mode === 'ask' ? openAskChat : submitTask;
+    handOver({ text: value, mode })
       .then(() => {
         setText('');
         // Stays locked until the panel has taken the task.

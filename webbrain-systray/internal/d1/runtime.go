@@ -106,7 +106,8 @@ func (e *engine) close() {
 var imageURLRe = dataURLRe
 
 type request struct {
-	stateText string
+	stateText string // d1: the state as the adapter's Python-style JSON
+	stateJS   string // Compass: the state as JSON.stringify writes it
 	images    []string
 	questions []Question
 }
@@ -174,9 +175,12 @@ func parseRequest(body []byte) (request, error) {
 		return req, errors.New("D1 input exceeds 8 MiB.")
 	}
 	if text.K == kStr {
-		req.stateText = text.S
-	} else if req.stateText, err = pyJSON(text); err != nil {
-		return req, err
+		req.stateText, req.stateJS = text.S, text.S
+	} else {
+		if req.stateText, err = pyJSON(text); err != nil {
+			return req, err
+		}
+		req.stateJS = jsStringify(text)
 	}
 	req.images = media
 

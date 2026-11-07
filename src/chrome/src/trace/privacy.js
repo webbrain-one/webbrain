@@ -31,7 +31,7 @@ const STREAMING_METADATA_FIELDS = [
   'textChars', 'firstDeltaMs', 'durationMs', 'toolCallCount',
 ];
 
-const STEP_METADATA_FIELDS = ['step', 'ok', 'status', 'code', 'durationMs', 'reason', 'handoffOutcome'];
+const STEP_METADATA_FIELDS = ['step', 'ok', 'status', 'code', 'durationMs', 'reason', 'handoffOutcome', 'outputLimited'];
 
 const NOTE_METADATA_FIELDS = [
   'attempt', 'delayMs', 'code', 'status', 'progress', 'loaded', 'total',

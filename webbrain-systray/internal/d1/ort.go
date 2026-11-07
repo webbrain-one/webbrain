@@ -6,8 +6,10 @@ package d1
 // they are stable across ORT releases).
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"unicode/utf16"
@@ -31,8 +33,11 @@ const (
 	fnSessionGetOutputCount          = 31
 	fnSessionGetInputName            = 36
 	fnSessionGetOutputName           = 37
+	fnCreateRunOptions               = 39
+	fnRunOptionsSetTerminate         = 46
 	fnCreateTensorWithDataAsOrtValue = 49
 	fnGetTensorMutableData           = 51
+	fnGetTensorElementType           = 60
 	fnGetDimensionsCount             = 61
 	fnGetDimensions                  = 62
 	fnGetTensorShapeElementCount     = 64
@@ -45,15 +50,17 @@ const (
 	fnReleaseMemoryInfo              = 94
 	fnReleaseSession                 = 95
 	fnReleaseValue                   = 96
+	fnReleaseRunOptions              = 97
 	fnReleaseTensorTypeAndShapeInfo  = 99
 	fnReleaseSessionOptions          = 100
 )
 
 // ONNX tensor element types.
 const (
-	elemFloat = 1
-	elemInt64 = 7
-	elemBool  = 9
+	elemFloat   = 1
+	elemInt64   = 7
+	elemBool    = 9
+	elemFloat16 = 10
 )
 
 type ortLib struct {
@@ -169,7 +176,17 @@ type session struct {
 	outputs []string
 }
 
+// Graph optimization levels (GraphOptimizationLevel).
+const (
+	optExtended = 2  // ORT_ENABLE_EXTENDED: fusions without layout transforms
+	optAll      = 99 // ORT_ENABLE_ALL
+)
+
 func (o *ortLib) newSession(modelPath string, threads int) (*session, error) {
+	return o.newSessionLevel(modelPath, threads, optExtended)
+}
+
+func (o *ortLib) newSessionLevel(modelPath string, threads, level int) (*session, error) {
 	var opts uintptr
 	if err := o.check(o.call(fnCreateSessionOptions, uintptr(unsafe.Pointer(&opts)))); err != nil {
 		return nil, err
@@ -183,8 +200,7 @@ func (o *ortLib) newSession(modelPath string, threads int) (*session, error) {
 	if err := o.check(o.call(fnSetInterOpNumThreads, opts, 1)); err != nil {
 		return nil, err
 	}
-	// ORT_ENABLE_EXTENDED: fusions without layout transforms.
-	if err := o.check(o.call(fnSetSessionGraphOptimization, opts, 2)); err != nil {
+	if err := o.check(o.call(fnSetSessionGraphOptimization, opts, uintptr(level))); err != nil {
 		return nil, err
 	}
 	p, keep := ortPath(modelPath)
@@ -264,45 +280,102 @@ func boolTensor(data []bool, shape ...int64) tensor {
 	return tensor{elemBool, shape, p, uintptr(len(data)), [2]any{data, &dummy}}
 }
 
+func float16Tensor(data []uint16, shape ...int64) tensor {
+	var dummy [1]uint16
+	p := unsafe.Pointer(&dummy[0])
+	if len(data) > 0 {
+		p = unsafe.Pointer(&data[0])
+	}
+	return tensor{elemFloat16, shape, p, uintptr(len(data) * 2), [2]any{data, &dummy}}
+}
+
 // output is a float32 result copied out of ORT memory.
 type output struct {
 	data  []float32
 	shape []int64
 }
 
+// value is a tensor ORT allocated (a run's output). It stays valid until
+// released and can be fed to later runs as is, as a decoder cache is.
+type value struct {
+	o   *ortLib
+	ptr uintptr
+}
+
+func (v *value) release() {
+	if v != nil && v.ptr != 0 {
+		v.o.call(fnReleaseValue, v.ptr)
+		v.ptr = 0
+	}
+}
+
+func releaseValues(vals map[string]*value) {
+	for _, v := range vals {
+		v.release()
+	}
+}
+
 // run feeds named inputs and returns the requested float outputs.
 func (s *session) run(inputs map[string]tensor, outputs ...string) (map[string]output, error) {
+	vals, err := s.runValues(context.Background(), inputs, nil, outputs)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseValues(vals)
+	res := make(map[string]output, len(outputs))
+	for _, name := range outputs {
+		out, err := vals[name].floats()
+		if err != nil {
+			return nil, fmt.Errorf("output %s: %w", name, err)
+		}
+		res[name] = out
+	}
+	return res, nil
+}
+
+// runValues feeds every session input, from Go memory (inputs) or from
+// values of earlier runs (kept, which the run does not release), and returns
+// the requested outputs, which the caller releases. Cancelling ctx stops the
+// run inside ORT.
+func (s *session) runValues(ctx context.Context, inputs map[string]tensor, kept map[string]*value, outputs []string) (map[string]*value, error) {
 	o := s.o
-	names := make([][]byte, 0, len(inputs))
-	namePtrs := make([]uintptr, 0, len(inputs))
-	values := make([]uintptr, 0, len(inputs))
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	names := make([][]byte, 0, len(s.inputs))
+	namePtrs := make([]uintptr, 0, len(s.inputs))
+	values := make([]uintptr, 0, len(s.inputs))
+	var created []uintptr
 	keep := make([]any, 0, len(inputs))
 	defer func() {
-		for _, v := range values {
+		for _, v := range created {
 			o.call(fnReleaseValue, v)
 		}
 		runtime.KeepAlive(keep)
 		runtime.KeepAlive(names)
 	}()
 	for _, name := range s.inputs {
-		t, ok := inputs[name]
-		if !ok {
-			return nil, fmt.Errorf("missing input %q", name)
-		}
 		var v uintptr
-		shape := t.shape
-		if len(shape) == 0 {
-			shape = []int64{}
-		}
-		var shapePtr uintptr
-		if len(shape) > 0 {
-			shapePtr = uintptr(unsafe.Pointer(&shape[0]))
-		}
-		err := o.check(o.call(fnCreateTensorWithDataAsOrtValue, o.memInfo, uintptr(t.data), t.bytes,
-			shapePtr, uintptr(len(shape)), uintptr(t.elem), uintptr(unsafe.Pointer(&v))))
-		keep = append(keep, t.keep, shape)
-		if err != nil {
-			return nil, fmt.Errorf("input %s: %w", name, err)
+		if kv, ok := kept[name]; ok && kv != nil && kv.ptr != 0 {
+			v = kv.ptr
+		} else if t, ok := inputs[name]; ok {
+			shape := t.shape
+			if len(shape) == 0 {
+				shape = []int64{}
+			}
+			var shapePtr uintptr
+			if len(shape) > 0 {
+				shapePtr = uintptr(unsafe.Pointer(&shape[0]))
+			}
+			err := o.check(o.call(fnCreateTensorWithDataAsOrtValue, o.memInfo, uintptr(t.data), t.bytes,
+				shapePtr, uintptr(len(shape)), uintptr(t.elem), uintptr(unsafe.Pointer(&v))))
+			keep = append(keep, t.keep, shape)
+			if err != nil {
+				return nil, fmt.Errorf("input %s: %w", name, err)
+			}
+			created = append(created, v)
+		} else {
+			return nil, fmt.Errorf("missing input %q", name)
 		}
 		values = append(values, v)
 		n := cString(name)
@@ -320,7 +393,31 @@ func (s *session) run(inputs map[string]tensor, outputs ...string) (map[string]o
 	if len(namePtrs) > 0 {
 		inPtr, valPtr = uintptr(unsafe.Pointer(&namePtrs[0])), uintptr(unsafe.Pointer(&values[0]))
 	}
-	err := o.check(o.call(fnRun, s.ptr, 0, inPtr, valPtr, uintptr(len(values)),
+	var runOpts uintptr
+	if ctx.Done() != nil {
+		if err := o.check(o.call(fnCreateRunOptions, uintptr(unsafe.Pointer(&runOpts)))); err != nil {
+			return nil, err
+		}
+		// The terminate callback may run concurrently with the end of the run;
+		// the lock keeps it from using the options after they are released.
+		var mu sync.Mutex
+		live := true
+		stop := context.AfterFunc(ctx, func() {
+			mu.Lock()
+			if live {
+				o.call(fnRunOptionsSetTerminate, runOpts)
+			}
+			mu.Unlock()
+		})
+		defer func() {
+			stop()
+			mu.Lock()
+			live = false
+			o.call(fnReleaseRunOptions, runOpts)
+			mu.Unlock()
+		}()
+	}
+	err := o.check(o.call(fnRun, s.ptr, runOpts, inPtr, valPtr, uintptr(len(values)),
 		uintptr(unsafe.Pointer(&outPtrs[0])), uintptr(len(outputs)), uintptr(unsafe.Pointer(&outVals[0]))))
 	runtime.KeepAlive(namePtrs)
 	runtime.KeepAlive(outNames)
@@ -331,27 +428,33 @@ func (s *session) run(inputs map[string]tensor, outputs ...string) (map[string]o
 				o.call(fnReleaseValue, v)
 			}
 		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, err
 	}
-	res := make(map[string]output, len(outputs))
+	res := make(map[string]*value, len(outputs))
 	for i, name := range outputs {
-		v := outVals[i]
-		out, err := o.readFloat(v)
-		o.call(fnReleaseValue, v)
-		if err != nil {
-			return nil, fmt.Errorf("output %s: %w", name, err)
-		}
-		res[name] = out
+		res[name] = &value{o: o, ptr: outVals[i]}
 	}
 	return res, nil
 }
 
-func (o *ortLib) readFloat(v uintptr) (output, error) {
+// floats copies a float32 or float16 tensor out as float32.
+func (v *value) floats() (output, error) {
+	o := v.o
 	var info uintptr
-	if err := o.check(o.call(fnGetTensorTypeAndShape, v, uintptr(unsafe.Pointer(&info)))); err != nil {
+	if err := o.check(o.call(fnGetTensorTypeAndShape, v.ptr, uintptr(unsafe.Pointer(&info)))); err != nil {
 		return output{}, err
 	}
 	defer o.call(fnReleaseTensorTypeAndShapeInfo, info)
+	var elem uintptr
+	if err := o.check(o.call(fnGetTensorElementType, info, uintptr(unsafe.Pointer(&elem)))); err != nil {
+		return output{}, err
+	}
+	if elem != elemFloat && elem != elemFloat16 {
+		return output{}, fmt.Errorf("unexpected tensor element type %d", elem)
+	}
 	var dims uintptr
 	if err := o.check(o.call(fnGetDimensionsCount, info, uintptr(unsafe.Pointer(&dims)))); err != nil {
 		return output{}, err
@@ -367,12 +470,40 @@ func (o *ortLib) readFloat(v uintptr) (output, error) {
 		return output{}, err
 	}
 	var p uintptr
-	if err := o.check(o.call(fnGetTensorMutableData, v, uintptr(unsafe.Pointer(&p)))); err != nil {
+	if err := o.check(o.call(fnGetTensorMutableData, v.ptr, uintptr(unsafe.Pointer(&p)))); err != nil {
 		return output{}, err
 	}
 	data := make([]float32, count)
 	if count > 0 && p != 0 {
-		copy(data, unsafe.Slice((*float32)(cptr(p)), count))
+		if elem == elemFloat {
+			copy(data, unsafe.Slice((*float32)(cptr(p)), count))
+		} else {
+			for i, h := range unsafe.Slice((*uint16)(cptr(p)), count) {
+				data[i] = f16ToF32(h)
+			}
+		}
 	}
 	return output{data: data, shape: shape}, nil
+}
+
+// f16ToF32 converts an IEEE 754 half exactly.
+func f16ToF32(h uint16) float32 {
+	sign := uint32(h>>15) << 31
+	exp := uint32(h>>10) & 0x1f
+	man := uint32(h) & 0x3ff
+	switch {
+	case exp == 0x1f:
+		return math.Float32frombits(sign | 0x7f800000 | man<<13)
+	case exp != 0:
+		return math.Float32frombits(sign | (exp+112)<<23 | man<<13)
+	case man == 0:
+		return math.Float32frombits(sign)
+	}
+	// Subnormal: normalize the mantissa.
+	e := uint32(113)
+	for man&0x400 == 0 {
+		man <<= 1
+		e--
+	}
+	return math.Float32frombits(sign | e<<23 | (man&0x3ff)<<13)
 }

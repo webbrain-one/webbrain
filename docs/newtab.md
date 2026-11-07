@@ -44,7 +44,7 @@ back to Firefox's page.
 
 | Mode | What happens |
 |------|--------------|
-| Ask | The text is handed to the side panel and **sent** (Ask is read-only). |
+| Ask | The tab turns into WebBrain's **full-page chat** (`src/ui/sidepanel.html?mode=ask&standalone=true&tab=1`) and the text is **sent** there (Ask is read-only). A new tab has no page for a side panel to sit beside, so the chat takes the whole tab; Back returns to the new tab. |
 | Act | The panel opens in Act and the text is **sent immediately**, like Ask. The box shows a warning that Act starts working right away. If **Plan before Act** is on in WebBrain, the plan is still shown for approval before anything is done. |
 | Search | A URL is opened (http/https only); anything else goes to the browser's default search engine via `chrome.search.query` / `browser.search.search`. Hidden if the API is missing. |
 
@@ -52,6 +52,44 @@ No search engine is hard-coded, and nothing typed into the box is sent to WebBra
 the page. The only request the page itself makes to WebBrain is the bulletin check below.
 
 ## Hand-off
+
+Act goes to the side panel as described below. Ask uses the same storage record but no panel:
+the page writes `wbNewtabHandoff:<tabId>` (awaited, since no user gesture is needed), then
+navigates its own tab to the full-page chat, which claims the record addressed to that tab
+exactly as a panel would (step 3). Records say who they are for (`target`: `tab-chat` for Ask,
+`panel` for Act; none, from an older new tab, means the panel), and each receiver claims only its
+own, so a side panel already open beside the new tab leaves Ask's record for the chat. The full-page chat is the standalone (Ask-only) layout bound to
+the tab it was loaded in (`tab=1`): it reads its own tab with `tabs.getCurrent()`, does not follow
+tab switches, and does not report itself to the background as the window's side panel, so Act from
+another tab still opens the real panel there. Like the standalone window it sends no page or browser
+context, but its runs carry `standaloneWebTools`, so the model may read the web with Ask's read-only
+network tools (`fetch_url`, `research_url`, `calculate`; the permission gate still asks per host) and
+its own tool calls stay in the conversation it sees. Page tools are never offered, an in-browser
+(WebGPU) model stays tool-free, and the standalone window itself is unchanged. The first-open pin
+coachmark is left for the first real side panel, since it points at the panel's header.
+
+The full-page chat is a centred column (up to 880 px; a narrower window is all chat) on the
+background the new tab was showing, so asking feels like the new tab opening up rather than a jump
+to another page. Right before navigating, the new tab writes a description of that background to
+its own tab's `sessionStorage` (`wbTabChatBackdrop`, see
+`newtab/src/features/background/api/chatBackdrop.js`). Both pages are on the extension's origin and
+`sessionStorage` is per tab, so the chat finds it on its first paint, keeps it across reloads, and
+no other tab sees it. `src/ui/tab-chat-backdrop.js` (identical in both extensions, a classic script
+in the page's `<head>` like the theme bootstrap) reads and checks it before first paint:
+
+- A bundled or remote picture goes by its address (only this extension's own files or http(s)).
+  An uploaded one goes by its id in the new tab's `MueCustomBackgrounds` database, which the chat
+  reads only if it already exists, so a multi-MB upload is never copied.
+- A colour or gradient goes as its CSS value. The browser must accept it and it may not contain
+  `url()`.
+- Blur, brightness and the effect filter carry over, with bounded numbers, for pictures and
+  colours alike. They're applied in the new tab's order: blur and the effect first, then the
+  darkening.
+- Videos are not carried over. Neither is anything when backgrounds are turned off, or when the
+  chat was opened some other way. The column then sits on a plain, slightly darker surround.
+
+The column itself stays solid, so answers are never drawn over the picture. Back still shows a new
+random photo on the new tab, as any new tab load does.
 
 1. In the submit handler (no `await` before it, to keep the user gesture) the page
    writes `{id, tabId, text, mode, createdAt}` to extension storage key

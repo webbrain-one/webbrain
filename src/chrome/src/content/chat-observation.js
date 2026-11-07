@@ -578,6 +578,19 @@
     }
   };
   const whatsappDrawers = () => query(document, '[data-testid="chat-info-drawer"]').filter(whatsappRendered);
+  // WhatsApp draws each emoji in a contact's name as an <img> inside the
+  // name (a traced contact's name held one). Requiring a name node with no
+  // child elements at all left such a contact's drawer uncaptured and its
+  // Close button blocked, the very step the guard names, so the contact could
+  // never be confirmed. A name is still plain text when its only elements are
+  // those emoji images: they hold no text, and the header and chat-list
+  // titles it is compared with leave the same images out of their text. Any
+  // other element, or an image whose text is not emoji, still fails.
+  const WHATSAPP_EMOJI_TEXT = /^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|[0-9#*]\ufe0f?\u20e3|[\u200d\ufe0e\ufe0f\u{e0020}-\u{e007f}])+$/u;
+  const whatsappEmojiImage = node => node?.localName === 'img' && node.childElementCount === 0
+    && !!node.matches?.('.emoji,[data-type="emoji"],[data-plain-text]')
+    && WHATSAPP_EMOJI_TEXT.test(attribute(node, 'data-plain-text') || attribute(node, 'alt'));
+  const whatsappPlainName = node => !!node && Array.from(node.children).every(whatsappEmojiImage);
   const whatsappPhoneFields = drawer => query(drawer, '[data-testid="selectable-text"]')
     .filter(node => !drawer.isConnected || whatsappRendered(node))
     .map(node => {
@@ -593,7 +606,7 @@
     const subtitles = scoped('[data-testid="contact-info-subtitle selectable-text"]');
     const fields = whatsappPhoneFields(drawer);
     return headers.length === 1 && headers[0] === record.drawerHeader
-      && subtitles.length === 1 && subtitles[0] === record.subtitle && record.subtitle.childElementCount === 0
+      && subtitles.length === 1 && subtitles[0] === record.subtitle && whatsappPlainName(record.subtitle)
       && compact(record.subtitle.innerText || record.subtitle.textContent, 240) === record.pins.name
       && fields.length === record.phoneFields.length
       && fields.every((field, index) => field.node === record.phoneFields[index].node
@@ -642,7 +655,7 @@
       const drawer = drawers[0];
       const header = uniqueWhatsappNode(drawer, '[data-testid="contact-info-header"]');
       const subtitle = uniqueWhatsappNode(drawer, '[data-testid="contact-info-subtitle selectable-text"]');
-      if (!header || !subtitle || subtitle.childElementCount !== 0
+      if (!header || !subtitle || !whatsappPlainName(subtitle)
           || compact(subtitle.innerText || subtitle.textContent, 240) !== record.pins.name) return;
       const phoneFields = whatsappPhoneFields(drawer);
       const phones = new Set(phoneFields.map(field => field.phone));
@@ -787,7 +800,7 @@
     if (drawers.length !== 1) return false;
     const subtitle = uniqueWhatsappNode(drawers[0], '[data-testid="contact-info-subtitle selectable-text"]');
     const close = whatsappDrawerClose(drawers[0]);
-    return subtitle?.childElementCount === 0 && compact(subtitle.textContent, 240) === pins.name
+    return whatsappPlainName(subtitle) && compact(subtitle.textContent, 240) === pins.name
       && !!close && contains(close, target);
   };
   window.__wb_native_whatsapp_repair_snapshot = target => window.__wb_native_whatsapp_repair_action(target)

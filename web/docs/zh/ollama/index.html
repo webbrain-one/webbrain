@@ -5,13 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>在 Ollama 中使用 WebBrain — WebBrain 用户指南</title>
   <meta name="description" content="将 WebBrain 连接到本地 Ollama 模型，或尝试预览版的启动交接功能，自动配置浏览器扩展。">
-  <link rel="canonical" href="https://webbrain.one/docs/zh/ollama/">
-  <link rel="alternate" hreflang="en" href="https://webbrain.one/docs/ollama/">
-  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/ollama/">
-  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/ollama/">
-  <link rel="icon" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/docs/zh/ollama/"><link rel="alternate" hreflang="en" href="https://webbrain.one/docs/ollama/"><link rel="alternate" hreflang="hi" href="https://webbrain.one/docs/hi/ollama/"><link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/ollama/"><link rel="alternate" hreflang="ar" href="https://webbrain.one/docs/ar/ollama/"><link rel="alternate" hreflang="nl" href="https://webbrain.one/docs/nl/ollama/"><link rel="alternate" hreflang="tl" href="https://webbrain.one/docs/tl/ollama/"><link rel="alternate" hreflang="fr" href="https://webbrain.one/docs/fr/ollama/"><link rel="alternate" hreflang="de" href="https://webbrain.one/docs/de/ollama/"><link rel="alternate" hreflang="id" href="https://webbrain.one/docs/id/ollama/"><link rel="alternate" hreflang="es" href="https://webbrain.one/docs/es/ollama/"><link rel="alternate" hreflang="tr" href="https://webbrain.one/docs/tr/ollama/"><link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/ollama/"><link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
-  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261028">
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
   <!-- Plausible analytics: start -->
   <!-- Privacy-friendly analytics by Plausible -->
   <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
@@ -69,7 +65,7 @@
 </head>
 <body class="doc-page">
   <a class="skip-link" href="#main">跳到正文</a>
-  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">用户指南</span></a><nav class="top-nav" aria-label="主导航"><a href="/">首页</a><a href="/docs/zh/" aria-current="page">文档</a><a href="/blog/">博客</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><a class="lang-switch" href="/docs/ollama/" aria-label="Read in English"><span>EN</span><span class="active">中文</span></a><button class="icon-button" type="button" data-theme-toggle aria-label="切换主题">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="打开文档菜单">☰</button></div></div></header>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">用户指南</span></a><nav class="top-nav" aria-label="主导航"><a href="/">首页</a><a href="/docs/zh/" aria-current="page">文档</a><a href="/blog/">博客</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><label class="lang-switch"><select data-docs-language aria-label="切换语言"><option value="/docs/ollama/">English</option><option value="/docs/hi/ollama/">हिन्दी</option><option value="/docs/zh/ollama/" selected>中文</option><option value="/docs/ar/ollama/">العربية</option><option value="/docs/nl/ollama/">Nederlands</option><option value="/docs/tl/ollama/">Filipino</option><option value="/docs/fr/ollama/">Français</option><option value="/docs/de/ollama/">Deutsch</option><option value="/docs/id/ollama/">Bahasa Indonesia</option><option value="/docs/es/ollama/">Español</option><option value="/docs/tr/ollama/">Türkçe</option></select></label><button class="icon-button" type="button" data-theme-toggle aria-label="切换主题">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="打开文档菜单">☰</button></div></div></header>
 
   <div class="docs-shell">
     <aside class="docs-sidebar" aria-label="文档目录"><div class="sidebar-group"><div class="sidebar-label">从这里开始</div><nav><a href="/docs/zh/">概览</a><a href="/docs/zh/faq/">常见问题</a></nav></div><div class="sidebar-group"><div class="sidebar-label">使用 WebBrain</div><nav><a href="/docs/zh/settings/">设置说明</a><a href="/docs/zh/providers/">提供商与模型</a><a href="/companion/">WebBrain Companion</a><a href="/docs/zh/safety/">模式、安全与隐私</a><a href="/docs/zh/formats/">导出与工作流</a><a href="/docs/zh/ollama/" aria-current="page">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Ollama 启动交接</div><nav><a href="/blog/ollama-launch-handoff/">发布公告 ↗</a><a href="https://github.com/esokullu/ollama/tree/codex/ollama-webbrain-launch-handoff">预览分支 ↗</a><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/providers-and-models.md#ollama-launch-handoff-preview">提供商内部实现 ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">社区</div><nav><a href="https://discord.gg/cgC325ssfw">Discord 支持</a></nav></div></aside>
@@ -133,6 +129,6 @@ OLLAMA_ORIGINS="chrome-extension://*,moz-extension://*" ./ollama serve</code></p
   </div>
 </footer>
 <!-- Site footer: end -->
-  <script src="/docs/assets/docs.js?v=20260809"></script>
+  <script src="/docs/assets/docs.js?v=20261107"></script>
 </body>
 </html>

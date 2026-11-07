@@ -223,7 +223,7 @@
   "mcp.docs_cta": "راهنمای کامل MCP را باز کنید",
   "mcp.step1_title": "از عاملتان بخواهید راه‌اندازی‌اش کند",
   "mcp.step1_body": "این را در Claude Code، Codex، Cursor یا هر کلاینت MCP محلی بچسبانید. راهنما را می‌خواند و WebBrain را برایتان اضافه می‌کند.",
-  "mcp.prompt": "https://webbrain.one/docs/mcp/ را بخوان و سرور MCP وب‌برین را برایم راه‌اندازی کن.",
+  "mcp.prompt": "https://webbrain.one/docs/mcp/ را بخوان و سرور MCP WebBrain را برایم راه‌اندازی کن.",
   "mcp.copy": "کپی",
   "mcp.copied": "کپی شد",
   "mcp.step2_title": "سپس کار مرورگر را بخواهید",

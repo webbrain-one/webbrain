@@ -6,6 +6,7 @@ import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { WEBSITES_LAUNCHED } from './site-footer.mjs';
 
 const runFile = promisify(execFile);
 const locale = { code: 'en', bcp47: 'en-US', dir: 'ltr', isDefault: true };
@@ -165,6 +166,5 @@ test('websites launch blocks keep one side of the switch', () => {
   const source = 'a<!-- if websites -->ON<!-- else websites -->OFF<!-- end websites -->b<!-- if websites -->X<!-- end websites -->c';
   assert.equal(builder.applyLaunchBlocks(source, true), 'aONbXc');
   assert.equal(builder.applyLaunchBlocks(source, false), 'aOFFbc');
-  // Until the dashboard launches, templates render the "off" side.
-  assert.equal(builder.applyTemplate(source, {}, locale).html, 'aOFFbc');
+  assert.equal(builder.applyTemplate(source, {}, locale).html, WEBSITES_LAUNCHED ? 'aONbXc' : 'aOFFbc');
 });

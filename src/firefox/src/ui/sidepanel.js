@@ -30,7 +30,7 @@ import {
 } from './ui-scale.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
-import { createNewtabHandoff } from './newtab-handoff.js';
+import { createNewtabHandoff, NEWTAB_HANDOFF_TARGET_PANEL, NEWTAB_HANDOFF_TARGET_TAB_CHAT } from './newtab-handoff.js';
 import {
   formatSelectionPromptForDisplay,
   normalizeSelectionAction,
@@ -109,6 +109,10 @@ const _btwParams = new URLSearchParams(window.location.search);
 const isBtwWindow = _btwParams.get('btw') === '1';
 const btwSourceTabId = isBtwWindow ? (Number(_btwParams.get('forkFromTabId')) || null) : null;
 const btwInitialPrompt = isBtwWindow ? (_btwParams.get('prompt') || '') : '';
+// The full-page chat that Ask in the WebBrain new tab opens in that same tab (`tab=1`). Like the
+// standalone window it stays in Ask, but it lives in an ordinary tab among others, so it is bound
+// to that one tab: it never follows tab switches.
+const isTabChat = isStandaloneWindow && _btwParams.get('tab') === '1';
 let _btwReadyResolve = null;
 let _btwReadySettled = false;
 const btwReady = new Promise((resolve) => { _btwReadyResolve = resolve; });
@@ -1524,6 +1528,8 @@ const newtabHandoff = createNewtabHandoff({
   storage: browser.storage.local,
   onChanged: browser.storage.onChanged,
   getCurrentTabId: () => currentTabId,
+  // Ask from the new tab is for the full-page chat; a panel open beside that tab must leave it.
+  receiver: isTabChat ? NEWTAB_HANDOFF_TARGET_TAB_CHAT : NEWTAB_HANDOFF_TARGET_PANEL,
   getIsProcessing: () => isProcessing,
   getIsBlocked: () => isConversationClearInProgress(),
   getIsDocumentVisible: () => document.visibilityState !== 'hidden',
@@ -5499,7 +5505,9 @@ function clearScratchpad(tabId = currentTabId) {
 async function init() {
   const initialWindow = await browser.windows.getCurrent().catch(() => null);
   const initialWindowId = initialWindow?.id ?? null;
-  const [tab] = await browser.tabs.query(initialWindowId != null
+  // A tab chat is its own tab; the active tab of the window is only the same while it is in front.
+  const ownTab = isTabChat ? await browser.tabs.getCurrent().catch(() => null) : null;
+  const [tab] = ownTab ? [ownTab] : await browser.tabs.query(initialWindowId != null
     ? { active: true, windowId: initialWindowId }
     : { active: true, currentWindow: true });
   let initialTabId = tab?.id;
@@ -5513,7 +5521,7 @@ async function init() {
     } catch {
       // Degrade to an empty standalone window rather than aborting init.
     }
-  } else {
+  } else if (!isTabChat) {
     try {
       const state = await sendToBackground('agent_run_state', { tabId: initialTabId });
       const sourceTabId = researchEscalationSourceTabIdFromState(state);
@@ -5526,8 +5534,8 @@ async function init() {
   // Tab-activation events are extension-wide — every browser window fires
   // them, and each window has its own side panel instance. Without
   // scoping, activity in window B would silently retarget window A's
-  // panel to B's tab.
-  const windowScope = isBtwWindow ? null : createSidePanelWindowScope({
+  // panel to B's tab. A tab chat follows no tab but its own.
+  const windowScope = isBtwWindow || isTabChat ? null : createSidePanelWindowScope({
     browserApi: browser,
     initialWindowId: initialWindowId ?? tab?.windowId ?? null,
     getCurrentTabId: () => currentTabId,
@@ -10434,6 +10442,7 @@ async function sendMessage(extraChatParams = {}) {
       apiMutationsAllowed: apiMutationsAllowedForSend,
       foreground: foregroundForSend,
       ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
       ...(runCaptureDirective ? {
         runCapture: {
           kind: runCaptureDirective.kind,
@@ -14267,6 +14276,8 @@ async function continueAgent(options = {}) {
       mode: modeForSend,
       foreground: foregroundForSend,
       ...(options.failureRecoveryId ? { recoveryId: options.failureRecoveryId, choice: 'retry' } : {}),
+      ...(isStandaloneWindow ? { standaloneChat: true } : {}),
+      ...(isTabChat ? { standaloneWebTools: true } : {}),
     }, {
       onStateObserved: state => {
         if (!runAccepted && (state?.runUi?.requestId === requestId || state?.startingRequestId === requestId)) {

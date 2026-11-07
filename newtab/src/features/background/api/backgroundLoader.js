@@ -110,6 +110,8 @@ async function getCustomBackground(isOffline) {
     photoInfo: {
       hidden: true,
       blur_hash: selected.blurHash || null,
+      // Lets the full-page chat show the same upload without copying it (api/chatBackdrop.js).
+      ...(Number.isInteger(selected.id) ? { customId: selected.id } : {}),
     },
   };
 
