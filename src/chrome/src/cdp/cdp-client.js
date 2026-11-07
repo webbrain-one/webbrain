@@ -1088,6 +1088,23 @@ export class CDPClient {
   }
 
   /**
+   * The node native input would reach now, marked for its document's page
+   * monitor exactly as each input command marks its receiver
+   * (_pageAgentInputTarget): the one under a viewport point, or with
+   * `focused` the one holding keyboard focus. Page feedback prepares a vision
+   * action in that document when it is an embedded frame's
+   * (page-feedback.js prepareReceiverFrame). Returns { nativeTarget,
+   * documentToken, documentRevision }, or {} with no monitored receiver.
+   */
+  async markPageAgentInputReceiver(tabId, target = {}) {
+    const focused = target.focused === true;
+    const x = Number(target.x), y = Number(target.y);
+    if (!focused && (!Number.isFinite(x) || !Number.isFinite(y))) return {};
+    await this.attach(tabId);
+    return this._pageAgentInputTarget(tabId, focused ? 'Input.insertText' : 'Input.dispatchMouseEvent', focused ? {} : { x, y });
+  }
+
+  /**
    * The document native input reaches: the one under a viewport point (a
    * coordinate click) or the one holding keyboard focus (type_text without a
    * selector, press_keys). Chrome delivers that input into embedded frames,
