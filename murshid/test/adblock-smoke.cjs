@@ -18,7 +18,7 @@ app.commandLine.appendSwitch('host-resolver-rules', `MAP ${AD_HOST} 127.0.0.1, M
 
 const seen = [];
 const server = http.createServer((req, res) => {
-  seen.push(`${req.headers.host.split(':')[0]}${req.url}`);
+  seen.push({ host: req.headers.host.split(':')[0], url: req.url });
   if (req.url.endsWith('.js')) { res.setHeader('Content-Type', 'text/javascript'); res.end('window.loaded = true;'); return; }
   if (req.url.startsWith('/collect')) { res.setHeader('Content-Type', 'image/gif'); res.end(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')); return; }
   res.setHeader('Content-Type', 'text/html');
@@ -86,7 +86,7 @@ server.listen(0, '127.0.0.1', () => {
       const tab = w.addTab({ url: `${base}/page` });
       let result = await load(tab);
       assert.deepEqual(result, { ad: 'error', tracker: 'error', local: 'load', banner: 'none', slot: 'none', content: 'block' });
-      assert.ok(!seen.some((s) => s.startsWith(AD_HOST) || s.startsWith(TRACKER_HOST)), `nothing reached the ad hosts: ${seen}`);
+      assert.ok(!seen.some((entry) => entry.host === AD_HOST || entry.host === TRACKER_HOST), `nothing reached the ad hosts: ${seen.map((entry) => `${entry.host}${entry.url}`).join(',')}`);
       await waitFor(async () => (await evaluate('adEvents')).some((e) => e.name === 'onErrorOccurred'), 'WebBrain to see the blocked request');
       const events = await evaluate('adEvents');
       const adEvents = events.filter((e) => {
