@@ -1,6 +1,6 @@
-// Writes the Turkish, Arabic and Persian homepages (web/tr/, web/ar/ and
-// web/fa/) from the English one (web/index.html) and the translations beside
-// this script.
+// Writes the translated homepages (web/tr/, web/ar/, web/fa/, web/hi/, web/az/,
+// web/he/, web/el/, web/ru/ and web/uk/) from the English one (web/index.html)
+// and the translations beside this script.
 //
 //   node scripts/i18n/build.mjs            write the pages (or: npm run web:i18n)
 //   node scripts/i18n/build.mjs --check    write nothing; fail if a page is out of date
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const web = resolve(here, '..', '..', 'web');
-const LANGS = ['tr', 'ar', 'fa'];
+const LANGS = ['tr', 'ar', 'fa', 'hi', 'az', 'he', 'el', 'ru', 'uk'];
 const SITE = 'https://murshid.one/';
 const mode = process.argv[2] || 'write';
 if (!['write', '--check', '--sync', '--accept'].includes(mode)) {
@@ -169,6 +169,8 @@ const SCRIPT_CHECKS = {
   fa: [[/[يك]/, 'Arabic ي or ك (Persian uses ی and ک)'], [/[٠-٩]/, 'Arabic-Indic digits (Persian uses ۰–۹)'], [/(^|[\s>«(])ن?می [؀-ۿ]/, '"می" followed by a space (use a zero-width non-joiner)']],
   ar: [[/[یک]/, 'Persian ی or ک (Arabic uses ي and ك)'], [/[۰-۹]/, 'Persian digits']],
   tr: [],
+  he: [[/[؀-ۿ]/, 'Arabic script (Hebrew uses Hebrew letters)']],
+  hi: [], az: [], el: [], ru: [], uk: [],
 };
 
 const html = readFileSync(resolve(web, 'index.html'), 'utf8');

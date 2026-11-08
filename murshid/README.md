@@ -123,14 +123,15 @@ web/               the Murshid homepage
 ## Languages
 
 Murshid's own interface (menus, dialogs, tab strip, toolbar and the
-`murshid://` pages) is in English, Turkish, Arabic and Persian. WebBrain and its
+`murshid://` pages) is in English, Turkish, Arabic, Persian, Hindi, Azerbaijani,
+Hebrew, Greek, Russian and Ukrainian. WebBrain and its
 new tab page have their own translations and their own language setting.
 
 - **Which language:** Settings → Language. "Automatic" uses the language
   Chromium picked from the system, or English if Murshid doesn't have it. A
   language picked there is also passed to Chromium as `--lang` at startup, so
   native menus and dialogs follow it. Changing it needs a restart.
-- **Right to left:** Arabic and Persian mirror the tab strip and toolbar, and put
+- **Right to left:** Arabic, Persian and Hebrew mirror the tab strip and toolbar, and put
   the WebBrain side panel on the left. Chromium mirrors the window frame itself
   when its own locale reads right to left (caption buttons move left, and child
   view positions flip). `app/window.js` and `app/ui` allow for that, because the
@@ -145,7 +146,8 @@ new tab page have their own translations and their own language setting.
 - **Adding a language:** copy `en.js`, translate it, add it to `DICTIONARIES`
   and `NATIVE_NAMES` in `app/i18n.js`, and to `RTL` if it reads right to left.
   `npm test` checks the keys, the placeholders and, for Persian, the Persian
-  ی/ک and half spaces.
+  ی/ک and half spaces. The website follows the same ten languages; see
+  `scripts/i18n/README.md`.
 
 ## Package it
 

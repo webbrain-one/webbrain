@@ -6303,6 +6303,32 @@
         title: el.getAttribute ? el.getAttribute('title') : null,
         labelText,
       };
+      // How many visible password fields share this one's form (outside a
+      // form, its document or shadow root), and what the form's submit
+      // control says. Two or more password fields are a new password and its
+      // confirmation, and a submit control such as "Create account" makes
+      // an account; the agent's sign-in password check (credential-fields.js
+      // isSignInPasswordField) leaves both to the run. The Chrome build's CDP
+      // selector probe (cdp-client.js) reports the same facts.
+      if (fieldType === 'password') {
+        try {
+          const fields = el.form ? [...el.form.elements]
+            : [...((el.getRootNode?.() || document).querySelectorAll?.('input') || [])];
+          meta.passwordFields = fields.filter(field => field.tagName === 'INPUT'
+            && String(field.type || '').toLowerCase() === 'password'
+            && field.getClientRects().length > 0).length;
+          // The text of the form's first visible submit control, which may
+          // say the form creates an account ("Create account").
+          const submit = el.form ? [...el.form.elements].find(control => control.getClientRects().length > 0
+            && ((control.tagName === 'BUTTON' && String(control.type || 'submit').toLowerCase() === 'submit')
+              || (control.tagName === 'INPUT' && ['submit', 'image'].includes(String(control.type || '').toLowerCase())))) : null;
+          const submitText = submit
+            ? String((submit.tagName === 'INPUT' ? submit.value || submit.alt : submit.textContent)
+              || submit.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+            : '';
+          if (submitText) meta.formSubmitText = submitText;
+        } catch {}
+      }
       const toolbarCandidate = _richTextToolbarCandidate(el, meta);
       if (toolbarCandidate) meta.toolbarCandidate = toolbarCandidate;
       return meta;

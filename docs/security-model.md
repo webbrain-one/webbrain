@@ -119,6 +119,58 @@ After every `set_field` / `type_ax` call, `credential-fields.js` checks whether 
 
 The regex: `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credential|recovery[-_\s]?code|backup[-_\s]?code|access[-_\s]?token|refresh[-_\s]?token|client[-_\s]?secret|private[-_\s]?key|seed[-_\s]?phrase|passphrase|pin[-_\s]?code`
 
+### Sign-in passwords the user never gave
+
+WebBrain types into an existing account's password field only a password the
+user gave (guard `credential-not-provided`). The field is one with
+`autocomplete="current-password"`, or a password input whose name, id and
+label do not name a new or repeated password, an API key or a token, that is
+its form's only visible password field, and whose form's submit control does
+not say it creates an account ("Create account", "Sign up", "Register",
+"Join"; `credential-fields.js` `isSignInPasswordField`). The name, label
+and submit rules are English. A sign-up form with one password field, no
+`autocomplete="new-password"`, and a label and submit control that do not
+say so (for example "Password" and "Next", a sign-up panel outside a
+`<form>`, or any non-English form) is treated as a sign-in, so a password the
+model makes up for the new account is refused and the model has to ask the
+user for one.
+
+A password counts as given when it appears whole in the user's own messages
+in this conversation (without the page context WebBrain adds), a text file
+they attached, a clarify answer they typed or chose, the WebBrain profile
+when it is enabled, a MemCode recall result, or a new-password field WebBrain
+filled earlier in the conversation (signing in to an account it created). The
+agent keeps the passwords it set this way in memory for the tab, whether typed
+alone or in a `browser_batch`, so compacting the context does not drop them; a
+conversation restored after the extension restarted reads them from its
+history, folded `browser_batch` answers included. A
+value that is a credential word or a stock login ("password", "pass",
+"username", "admin", "root", "test", "demo", ...) counts only where a message
+sets it as a value: quoted, after ":", "=" or "is", after a word such as
+"password", in a pair such as "admin/admin", or as a whole reply. "I don't
+know the password" or "log in to the admin panel" does not give it. Page text
+is not a source: a page could otherwise sign the run in to an account of its
+choosing.
+
+The check runs before anything is typed, on calls the model makes through the
+tool batch (a saved workflow's replay of the user's own steps is not
+checked), against the field the typing-target preflight resolved; when
+nothing tells it the target is a password field, the text is typed as before.
+The refusal tells the model to ask for the credentials or end the run as
+partial, naming them, and to ask for the password to set if the form in fact
+creates an account. New-password fields, one-time codes and API keys are not
+checked, since a run may create an account's password, read a code from the
+user's mailbox, or copy a key a page issued. A field a password manager
+filled is not affected: the check stops typing, not the click that submits
+the form.
+
+When the user answers a clarify question with consequence "credentials", a
+reply that withholds them or declines ("I don't have them", "No", "Do not
+sign in"; English) gets a result note that says not to guess and to end
+partial. Any other reply, including an approval such as "Sign in" for a saved
+password or a mailbox code, gets a note to continue with what it gives or
+approves, without guessing.
+
 ### Strict Secret Mode
 
 When enabled (Settings → "Strict secret handling"), the agent:

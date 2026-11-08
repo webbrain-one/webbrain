@@ -1,6 +1,6 @@
-# The site in Turkish, Arabic and Persian
+# The site in other languages
 
-`web/index.html` is the English page and the template for the others. `build.mjs` writes `web/tr/`, `web/ar/` and `web/fa/` from it and from `tr.json`, `ar.json` and `fa.json`. Don't edit the written pages; edit the English page or a translation and run:
+`web/index.html` is the English page and the template for the others. `build.mjs` writes `web/tr/`, `web/ar/`, `web/fa/`, `web/hi/`, `web/az/`, `web/he/`, `web/el/`, `web/ru/` and `web/uk/` from it and from the `<code>.json` beside it. Don't edit the written pages; edit the English page or a translation and run:
 
 ```bash
 npm run web:i18n
@@ -25,11 +25,12 @@ Translations are HTML. Keep the markup the English uses (`<em>`, `<strong>`, `<c
 - The nav, the buttons and the small labels are set in capitals, and Turkish capitals turn i into İ. Wrap a Latin name inside those strings in `<span lang="en">`, for example `<span lang="en">Murshid</span>'i indirin`. Otherwise the name comes out as MURSHİD.
 - The page script does this for the system names in the hero's download button.
 
-**Arabic and Persian.**
+**Arabic, Persian and Hebrew.**
 - The pages are right to left, but commands, file names and URLs stay left to right. `code` elements do this on their own.
 - Wrap a Latin name that holds digits or hyphens in `<bdi>`, for example `<bdi>SHA-256</bdi>`, `<bdi>Bonsai 2 27B</bdi>` or `<bdi>GPL-3.0</bdi>`. Without it, the bidi algorithm reorders it (256-SHA).
 - When a number follows a Latin word, as in the platform status lines (`x64 · 150 MB`), put a right-to-left mark (U+200F) before the number. Without it, the number joins the Latin run and the line reads backwards.
 - In Persian, also put one after each `،` that separates Latin names.
+- In Hebrew, `<bdi>` and the U+200F mark apply just as in Arabic; the build rejects Arabic letters in Hebrew strings.
 
 **Persian.**
 - Use Persian characters and digits: ی and ک, not the Arabic ي and ك, and ۰–۹ in prose.
@@ -43,4 +44,4 @@ Translations are HTML. Keep the markup the English uses (`<em>`, `<strong>`, `<c
 
 ## Review
 
-The Arabic and Persian copy was written without a native speaker's review and would benefit from one. The interface names in the install notes need it most: the Windows SmartScreen buttons in Arabic and the macOS settings path in Arabic. The Persian page gives these in English, because macOS has no Persian interface.
+The Arabic and Persian copy was written without a native speaker's review and would benefit from one, and so was the Hindi, Azerbaijani, Hebrew, Greek, Russian and Ukrainian copy added later. The interface names in the install notes need it most: the Windows SmartScreen buttons in Arabic and the macOS settings path in Arabic. The Persian page gives these in English, because macOS has no Persian interface.
