@@ -141,6 +141,11 @@ body.mac #brand { display: none; }
 .tab {
   position: relative;
   flex: 1 1 236px;
+  /* #tabs is as wide as its content, and Chromium sizes that content from
+     each tab's width, not its flex basis. Without a width, a tab that went
+     narrow (icon only, no padding) kept the strip narrow, and so itself,
+     after tabs were closed or the window grew. */
+  width: 236px;
   max-width: 236px;
   min-width: 36px;
   height: 33px;

@@ -162,9 +162,18 @@ function renderTabs() {
       tabEls.delete(id);
     }
   }
-  requestAnimationFrame(() => {
-    for (const el of tabEls.values()) el.classList.toggle('narrow', el.getBoundingClientRect().width < 72);
-  });
+  requestAnimationFrame(updateNarrowTabs);
+}
+
+// Tabs too narrow for a title show only their icon. Every tab has the same
+// flex basis, so they share one width and one decision. Measured tab by tab,
+// each toggle reflowed the strip before the next tab was read, and a narrow
+// tab (no padding) shrinks more than a titled one, so the strip settled with
+// some tabs icon-only and the rest titled.
+function updateNarrowTabs() {
+  const count = tabEls.size;
+  const narrow = count > 0 && els.tabs.getBoundingClientRect().width / count < 72;
+  for (const el of tabEls.values()) el.classList.toggle('narrow', narrow);
 }
 
 // Drag to reorder ------------------------------------------------------------

@@ -9,7 +9,7 @@
   "author": "Emre Sokullu",
   "homepage": "https://github.com/webbrain-one/webbrain/tree/main/murshid",
   "scripts": {
-    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs",
+    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs test/tab-strip.test.cjs",
     "test:integration": "node test/run-smoke.cjs",
     "test:session": "node test/run-session-smoke.cjs",
     "start": "electron .",
