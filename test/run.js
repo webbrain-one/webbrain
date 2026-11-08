@@ -116332,6 +116332,61 @@ test('a Gmail reply here that also names someone sends to the composer recipient
   }
 });
 
+// From a trace: "reply this message from ladson" planned a named recipient,
+// and every Gmail Reply click was blocked for want of a composer that only
+// Reply opens. Compose was the one control left, so the reply went out as a
+// new thread under a hand-typed "Re:" subject.
+test('a Gmail reply to a named sender opens its reply composer and still checks the send', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = label === 'chrome' ? 27331 : 27332;
+    const threadUrl = 'https://mail.google.com/mail/u/0/#inbox/thread-9';
+    agent._currentUrl = async () => threadUrl;
+    const planned = { target_kind: 'named', recipients: [{ identity: 'ladson', role: 'to' }] };
+    agent._planExecutionGuards.set(tabId, { messaging: planned, requiresSubmission: true, requiresStateChange: true });
+    let probe = { success: true, conclusive: false, composerAvailable: false, composerSetup: true, messageSend: null,
+      reasonCode: 'no_composer_surface', identityCandidates: [] };
+    agent._messageRecipientContentProbe = async () => probe;
+
+    assert.equal(await agent._messageRecipientGuardBlock(tabId, 'click', { x: 447, y: 694 }, threadUrl, {}), null,
+      `${label}: Reply to the named sender was blocked`);
+    assert.equal(await agent._messageRecipientGuardBlock(tabId, 'click_ax', { ref_id: 'ref_reply' }, threadUrl, {}), null,
+      `${label}: Reply by ref to the named sender was blocked`);
+
+    // Only a content-verified opener passes; any other composer-less click stays blocked.
+    probe = { ...probe };
+    delete probe.composerSetup;
+    const unverified = await agent._messageRecipientGuardBlock(tabId, 'click', { x: 969, y: 217 }, threadUrl, {});
+    assert.equal(unverified?.blocked, true, `${label}: an unverified control passed as a Reply opener`);
+    assert.equal(unverified?.reasonCode, 'no_composer_surface');
+
+    // A task that authorizes no message does not open replies this way.
+    agent._planExecutionGuards.set(tabId, { requiresSubmission: true, requiresStateChange: true });
+    probe = { ...probe, composerSetup: true };
+    const unauthorized = await agent._messageRecipientGuardBlock(tabId, 'click', { x: 447, y: 694 }, threadUrl, {});
+    assert.equal(unauthorized?.blocked, true, `${label}: Reply opened for a task with no message target`);
+
+    // The send in the opened reply is still checked against the named sender.
+    agent._planExecutionGuards.set(tabId, { messaging: planned, requiresSubmission: true, requiresStateChange: true });
+    probe = {
+      success: true,
+      conclusive: true,
+      composerAvailable: true,
+      messageSend: true,
+      messageBody: 'Hi Ladson',
+      messageBodyBaselineCount: 0,
+      gmailComposeFlow: true,
+      strongRecipientCandidates: [],
+      observedRecipientCandidates: [{ identity: 'eve@example.com', role: 'to', aliases: ['eve@example.com', 'Eve'] }],
+      messageRecipientDispatchBinding: { token: `named-reply-${label}` },
+    };
+    const mismatch = await agent._messageRecipientGuardBlock(tabId, 'click_ax', { ref_id: 'ref_send' }, threadUrl, {});
+    assert.equal(mismatch?.blocked, true, `${label}: a reply to someone else was sent`);
+    assert.equal(mismatch?.reasonCode, 'active_recipient_unverified');
+    assert.deepEqual(mismatch?.recipientConfirmation?.requested, ['ladson']);
+  }
+});
+
 // From review: when a WhatsApp contact's identity still needs its drawer
 // while planning, the open chat is pinned at its first send; the person
 // named besides it must still be kept for the card then.
