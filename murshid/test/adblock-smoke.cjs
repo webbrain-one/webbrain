@@ -129,7 +129,7 @@ server.listen(0, '127.0.0.1', () => {
       assert.equal(result.ad, 'load');
       assert.equal(result.tracker, 'load');
       assert.equal(result.banner, 'block');
-      assert.ok(seen.some((s) => s.startsWith(AD_HOST)), 'the ad request reached the network');
+      assert.ok(seen.some((s) => s.split('/')[0].toLowerCase() === AD_HOST), 'the ad request reached the network');
       ctx.settings.set('adblock', true);
       console.log('The Settings switch turns blocking off and on');
 
