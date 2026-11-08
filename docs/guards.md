@@ -172,7 +172,13 @@ missing relationship evidence count as verified publication.
 `credential-not-provided` pauses a model's `set_field`, `type_ax`,
 `type_text` or `iframe_type` before anything is typed and asks "Type this
 into a sign-in password field on {host}?", saying the text is not a password
-the user gave in this conversation, their profile or their saved notes. The
+the user gave in this conversation, their profile or their saved notes.
+{host} is the field's own site: the tab's for the top frame, a subframe's
+own for a field in a frame (`_credentialTargetHost`), so a sign-in iframe
+from another origin is named by its host, and an answer kept for the page
+does not cover it. A frame at `about:blank` or `about:srcdoc` has the site of
+the frame above it. A field whose site cannot be read (a `data:` frame, a
+frame that is gone) is refused without a card. The
 buttons are **Type it** (`once`) and **Don't type it** (`deny`), numbered like
 the other cards. Like the submit confirmation card, which shows a password
 field's value as `[password redacted]`, it never shows the text in full. A
@@ -185,8 +191,9 @@ text]`, still holds the masked preview of a card it relays.
   name, id, autocomplete and labels, and its frame). A changed target types
   nothing (`credential_field_changed`, retryable). The text then counts as
   given on that site for the rest of the run, so the same text there does not
-  ask again; other text, another site or a new run asks again. The result
-  carries a note that the user approved it on the card.
+  ask again; other text, another site (another frame's included) or a new
+  run asks again. The result carries a note that the user approved it on
+  the card.
 - **Don't type it.** Nothing is typed, and the result is the refusal the
   model already knew (`credential_not_provided`, `noDispatch`,
   `retryable: false`), saying the user declined: ask for the credentials or
@@ -221,7 +228,7 @@ and `test/credential-not-provided.mjs`.
 | `recipient` | `chat-send-recipient-guards`, `native-chat-receipt-not-durable`, `preparation-timeout-recipient-preflight`, `recipient-active-conversation-pin`, `recipient-dispatch-binding-revalidate`, `recipient-guard-refusal`, `recipient-mismatch-confirm-card`, `schedule-resume-chat-state-not-durable`, `social-preflight-context-mismatch` | A message to the wrong person cannot be taken back. A resumed run without a durable receipt would send a delivered message again. |
 | `deletion` | `deletion-confirm-card`, `deletion-guard-refusal`, `preparation-timeout-submit-preflight`, `truncated-preview-replacement`, `unsaved-changes-data-loss` | Deleted data, including a field value replaced by its own shortened preview, is gone. |
 | `money` | `captcha-paid-solve-protection` | A paid solve spends the user's balance. |
-| `credentials` | `chat-user-input-required`, `credential-not-provided`, `otp-mailbox-scope`, `strict-secret-credential-handling` | One-time codes, passwords and payment details are the user's to enter. A guessed sign-in can lock the account or count as an unauthorized attempt. `credential-not-provided` checks only a password field the page shows to be a sign-in's (a field naming the account, such as a username, email, phone or hidden username, in a lone password field's form, a "Sign in", "Next" or "Verify" button there, a sign-in label, or autocomplete `current-password`; a field in a web component counts with the form around the component), against what the user gave: their messages, attached files, clarify answers, the WebBrain profile, memory notes they wrote (not auto-captured ones), MemCode recall and passwords WebBrain set for an account it created (`docs/security-model.md`). Text from none of those is typed only after the user's "Type it" on WebBrain's card ("The sign-in password card" above). |
+| `credentials` | `chat-user-input-required`, `credential-not-provided`, `otp-mailbox-scope`, `strict-secret-credential-handling` | One-time codes, passwords and payment details are the user's to enter. A guessed sign-in can lock the account or count as an unauthorized attempt. `credential-not-provided` checks an existing account's password field: autocomplete `current-password`, a field naming the current password, and any lone password field (one not marked as a new or repeated password, a key or token, a second password field of its form, or a field of a form that creates an account), with or without sign-in evidence (a field naming the account, a "Sign in", "Next", "Verify" or "Confirm" button, a sign-in label), except one that names a network's key such as a Wi-Fi password; a field in a web component counts with the form around the component. It checks the text against what the user gave: their messages, attached files, clarify answers, the WebBrain profile, memory notes they wrote (not auto-captured ones), MemCode recall and passwords WebBrain set for an account it created (`docs/security-model.md`). Text from none of those is typed only after the user's "Type it" on WebBrain's card ("The sign-in password card" above). |
 | `unrequested_publication` | `bot-memory-reservation`, `click-duplicate-submit`, `clickax-task-click-lock`, `consequential-durability-checkpoint`, `github-conditional-commit-unbound`, `recipient-guard-unrequested-send`, `sched-reconciliation-required`, `social-api-publication-route`, `social-publication-audit`, `social-publication-authorization-guard`, `steer-post-correction-commit-guard`, `steer-prior-submission-unreconciled` | A post, commit, submit or send the user did not ask for, or a second copy of one that may already have gone out, is public or hard to undo. |
 
 After a correction, `steer-post-correction-commit-guard` and

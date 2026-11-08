@@ -10,9 +10,10 @@
 // "Type it" the guess is refused; the reply to a credentials question tells
 // the model to end partial instead of guessing. Credentials in the task (case
 // E2), a clarify answer, the WebBrain profile or a memory note the user saved,
-// other fields, new passwords, password fields that are no sign-in's (a Wi-Fi
-// key, a form's lone "Password" with a "Submit" button) and app-owned writes
-// are not affected.
+// other fields, new passwords, a network's key (a Wi-Fi password) and
+// app-owned writes are not affected; a form's lone "Password" with a "Submit"
+// button asks on the card, since a sign-in can look like that. The card names
+// the site of the field's own frame.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
@@ -40,6 +41,11 @@ const FIELDS = {
 // Messages the content scripts received, and the field the page has focused.
 const sent = [];
 let focused = FIELDS.ref_pass;
+// The tab's frames as webNavigation reports them (null: the top frame only;
+// an Error: the call fails), and the address of the document that answers
+// the field probe ('' : none reported).
+let navigationFrames = null;
+let digestDocumentUrl = '';
 const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
 const api = {
   storage: { local: area, session: area },
@@ -52,7 +58,8 @@ const api = {
       const params = message?.params || {};
       if (message?.action === 'field_value_digest') {
         const fieldMeta = params.focused ? focused : FIELDS[params.ref_id];
-        return fieldMeta ? { success: true, valueLength: 0, valueSha256: '0'.repeat(64), fieldMeta } : { success: false };
+        return fieldMeta ? { success: true, valueLength: 0, valueSha256: '0'.repeat(64), fieldMeta,
+          ...(digestDocumentUrl ? { refScopeUrl: digestDocumentUrl } : {}) } : { success: false };
       }
       if (message?.action === 'set_field' || message?.action === 'type') {
         return { success: true, verified: true, value: String(params.text || ''),
@@ -62,7 +69,12 @@ const api = {
     },
   },
   scripting: { executeScript: async () => [{ result: null }] },
-  webNavigation: { getAllFrames: async () => [{ frameId: 0, parentFrameId: -1, url: PAGE_URL }] },
+  webNavigation: {
+    getAllFrames: async () => {
+      if (navigationFrames instanceof Error) throw navigationFrames;
+      return navigationFrames || [{ frameId: 0, parentFrameId: -1, url: PAGE_URL }];
+    },
+  },
 };
 globalThis.chrome = api;
 globalThis.browser = api;
@@ -86,7 +98,7 @@ function b4Conversation() {
 
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
-  const { isSignInPasswordField, credentialValueProvided, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials } =
+  const { isSignInPasswordField, credentialValueProvided, newPasswordValue, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials } =
     await import(`../src/${build}/src/agent/credential-fields.js`);
   const { foldBrowserBatchMessages } = await import(`../src/${build}/src/agent/browser-batch.js`);
   const memory = await import(`../src/${build}/src/agent/user-memory.js`);
@@ -94,6 +106,8 @@ for (const build of ['chrome', 'firefox']) {
   const fresh = (tab, messages = b4Conversation()) => {
     sent.length = 0;
     focused = FIELDS.ref_pass;
+    navigationFrames = null;
+    digestDocumentUrl = '';
     const agent = new Agent({});
     agent._persist = () => {};
     agent._persistNow = async () => true;
@@ -138,28 +152,59 @@ for (const build of ['chrome', 'firefox']) {
   // #593 follow-up: "Fill out this form with random info" was refused on a
   // form's lone "Password" field with a "Submit" button, and "generate a
   // strong Wi-Fi password" on a "Wi-Fi password" field with "Apply": any lone
-  // password field counted as a sign-in. Now the page has to show one.
-  test(`${build}: a lone password field is a sign-in's only with sign-in evidence`, () => {
+  // password field counted as a sign-in. A field that names a network's key
+  // is left out. Review of the card then found sign-ins that a rule needing
+  // sign-in evidence typed a guess into unasked: a re-authentication's
+  // "Confirm", a "NetID" and "Password" form with "Submit", a PIN step with
+  // a generic hidden id and "OK". Since WebBrain now asks instead of refusing,
+  // a lone field nothing shows to be anything else counts as a sign-in's, and
+  // a wrong guess there costs the user one click on the card.
+  test(`${build}: a lone password field is a sign-in's unless it names a network's key`, () => {
     const guarded = meta => isSignInPasswordField(meta).guarded;
     const lone = { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Password',
       passwordFields: 1, usernameFields: 0 };
+    // Nothing shows what these are for: WebBrain asks.
     for (const meta of [
       { ...lone, formSubmitText: 'Submit' },
-      { ...lone, name: 'wifi_key', id: 'wifi_key', labelText: 'Wi-Fi password', formSubmitText: 'Apply' },
-      { ...lone, name: 'pin', id: 'pin', labelText: 'Choose a 4-digit PIN', formSubmitText: 'Save' },
+      { ...lone, formSubmitText: 'Submit', buttonTexts: ['Submit'] },
+      { ...lone, formSubmitText: 'OK', buttonTexts: ['OK'] },
+      { ...lone, name: 'pin', id: 'pin', labelText: 'PIN', formSubmitText: 'OK' },
       { ...lone, formSubmitText: 'Senden' },
       // Words that only contain a sign-in word.
       { ...lone, formSubmitText: 'Save to Nextcloud' },
       { ...lone, formSubmitText: 'Discontinued items' },
+      { ...lone, formSubmitText: 'Apply' },
+      { ...lone, formSubmitText: 'Connect' },
       // Outside a form there is no submit control.
       lone,
       { ...lone, passwordFields: 0 },
+    ]) assert.deepEqual(isSignInPasswordField(meta), { guarded: true, reason: 'input type=password' }, JSON.stringify(meta));
+    // A network's key, and a new PIN, are not a sign-in's.
+    for (const meta of [
+      { ...lone, name: 'wifi_key', id: 'wifi_key', labelText: 'Wi-Fi password', formSubmitText: 'Apply' },
+      { ...lone, name: 'key', id: 'key', labelText: 'WiFi password', formSubmitText: 'Save' },
+      { ...lone, name: 'wpa_psk', id: 'wpa_psk', labelText: 'WPA2 key', formSubmitText: 'Submit' },
+      { ...lone, name: 'wlan_key', id: 'wlan_key', labelText: 'WLAN-Schlüssel', formSubmitText: 'Übernehmen' },
+      { ...lone, name: 'key', id: 'key', labelText: 'Wireless password', formSubmitText: 'Save' },
+      { ...lone, name: 'hs_pass', id: 'hs_pass', labelText: 'Hotspot password' },
+      { ...lone, name: 'ssid_pass', id: 'ssid_pass', labelText: 'Key' },
+      { ...lone, name: 'netkey', id: 'netkey', labelText: 'Network key', formSubmitText: 'Connect' },
+      { ...lone, name: 'pin', id: 'pin', labelText: 'Choose a 4-digit PIN', formSubmitText: 'Save' },
     ]) assert.equal(guarded(meta), false, JSON.stringify(meta));
+    // Sign-in evidence beside a network's key still makes it a sign-in's (a
+    // captive portal's account, or its "Log in").
+    assert.deepEqual(isSignInPasswordField({ ...lone, labelText: 'Wi-Fi password', usernameFields: 1, formSubmitText: 'Submit' }),
+      { guarded: true, reason: 'input type=password beside a username field' });
+    assert.deepEqual(isSignInPasswordField({ ...lone, labelText: 'Wi-Fi password', formSubmitText: 'Log in' }),
+      { guarded: true, reason: 'input type=password, submit control signs in' });
     assert.deepEqual(isSignInPasswordField({ ...lone, usernameFields: 1, formSubmitText: 'Submit' }),
       { guarded: true, reason: 'input type=password beside a username field' });
     for (const formSubmitText of ['Sign in', 'Log in', 'Login', 'Log on', 'Sign up or log in', 'Next', 'Continue', 'Enter',
       'Anmelden', 'Weiter', 'Se connecter', 'Suivant', 'Iniciar sesión', 'Entrar', 'Siguiente', 'Accedi', 'Inloggen',
-      'Giriş yap', 'Oturum aç', 'Devam', 'İleri', 'Войти', 'Далее', 'ログイン', '次へ', '登录', '下一步', '로그인', '다음']) {
+      'Giriş yap', 'Oturum aç', 'Devam', 'İleri', 'Войти', 'Далее', 'ログイン', '次へ', '登录', '下一步', '로그인', '다음',
+      // A re-authentication: "Confirm access" and its translations.
+      'Confirm', 'Confirm password', 'Confirm access', 'Bestätigen', 'Confirmer', 'Confirmar', 'Conferma', 'Bevestigen',
+      'Onayla', 'Подтвердить', 'Potwierdź', '確認', '确认', '확인']) {
       assert.deepEqual(isSignInPasswordField({ ...lone, formSubmitText }),
         { guarded: true, reason: 'input type=password, submit control signs in' }, formSubmitText);
     }
@@ -190,13 +235,46 @@ for (const build of ['chrome', 'firefox']) {
       assert.deepEqual(isSignInPasswordField({ ...lone, buttonTexts }),
         { guarded: true, reason: 'input type=password beside a sign-in button' }, buttonTexts.join());
     }
+    // Buttons that show nothing either way leave the field to the card; a
+    // network's key with them is still left out.
     for (const buttonTexts of [['Show', 'Submit'], ['Apply', 'Cancel'], ['Connect'], [42, null, {}], 'Log in']) {
-      assert.equal(guarded({ ...lone, formSubmitText: 'Submit', buttonTexts }), false, JSON.stringify(buttonTexts));
+      assert.deepEqual(isSignInPasswordField({ ...lone, formSubmitText: 'Submit', buttonTexts }),
+        { guarded: true, reason: 'input type=password' }, JSON.stringify(buttonTexts));
+      assert.equal(guarded({ ...lone, labelText: 'Wi-Fi password', formSubmitText: 'Submit', buttonTexts }), false,
+        JSON.stringify(buttonTexts));
     }
     // Field facts that do not report username fields (a route that does not
     // read the form) keep the old rule: the lone password field is a sign-in's.
     assert.equal(guarded({ type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Submit' }), true);
     assert.equal(guarded({ type: 'password', name: 'password' }), true);
+    assert.equal(guarded({ type: 'password', name: 'wifi_key', labelText: 'Wi-Fi password' }), true);
+  });
+
+  // Outside a form the password fields counted are every form-less one of the
+  // page, so a form-less sign-in shown beside a form-less sign-up counted
+  // three and read as a new password, typed unasked.
+  test(`${build}: a form-less sign-in beside a form-less sign-up stays a sign-in's`, () => {
+    const loose = { tag: 'input', type: 'password', name: 'password', labelText: 'Password', formless: true };
+    const signIn = { ...loose, id: 'login-password', passwordFields: 3, usernameFields: 2, buttonTexts: ['Log in', 'Create account'] };
+    assert.deepEqual(isSignInPasswordField(signIn), { guarded: true, reason: 'input type=password beside a username field' });
+    assert.deepEqual(isSignInPasswordField({ ...signIn, usernameFields: 0, buttonTexts: ['Anmelden', 'Registrieren'] }),
+      { guarded: true, reason: 'input type=password beside a sign-in button' });
+    assert.equal(newPasswordValue('set_field', { text: 'Rx7-random-Q5' }, { success: true, fieldMeta: signIn }), null);
+    // The sign-up's repeat field, and one marked as new, stay new passwords.
+    for (const meta of [
+      { ...signIn, id: 'signup-confirm', labelText: 'Confirm password' },
+      { ...signIn, id: 'signup-password', autocomplete: 'new-password' },
+      // A form-less sign-up without a button that signs in.
+      { ...loose, passwordFields: 2, usernameFields: 1, buttonTexts: ['Create account'] },
+      { ...loose, passwordFields: 2, usernameFields: 1, buttonTexts: ['Next'] },
+      // Inside a form the count is that form's own: a sign-up whose form also
+      // holds a "Sign in with Google" button.
+      { ...loose, formless: undefined, passwordFields: 2, usernameFields: 1, buttonTexts: ['Sign in with Google', 'Sign up'] },
+    ]) {
+      assert.equal(isSignInPasswordField(meta).guarded, false, JSON.stringify(meta));
+      assert.equal(newPasswordValue('set_field', { text: 'Gen-Placeholder-6' }, { success: true, fieldMeta: meta }), 'Gen-Placeholder-6',
+        JSON.stringify(meta));
+    }
   });
 
   test(`${build}: a credential counts as given only where the user wrote it whole`, () => {
@@ -496,30 +574,29 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal((await agent.executeTool(66, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).success, true);
   });
 
-  test(`${build}: a random or generated value is typed into a password field that is no sign-in's`, async () => {
+  test(`${build}: a generated network key is typed unasked; a lone "Password" is a sign-in's`, async () => {
     const conversation = task => [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: task, webbrainUserAuthoredText: task }];
     const fill = (agent, tab, ref_id, text) => agent.executeTool(tab, 'set_field', { ref_id, text }, null, modelCall(FIELDS[ref_id]));
-    let agent = fresh(60, conversation('Fill out this form with random info and submit it.'));
-    assert.equal((await fill(agent, 60, 'ref_lone', 'Rx7-random-Q2')).success, true);
-    agent = fresh(61, conversation('Generate a strong Wi-Fi password and save it on this router page.'));
+    let agent = fresh(61, conversation('Generate a strong Wi-Fi password and save it on this router page.'));
     assert.equal((await fill(agent, 61, 'ref_wifi', 'Gen-Wifi-Placeholder-4')).success, true);
     assert.deepEqual(typed().map(message => message.params?.ref_id), ['ref_wifi']);
-    // A random value for a real sign-in is a guessed credential.
+    // A random value for a field that may be a sign-in's is a guessed
+    // credential: refused where nobody can be asked (the tool batch asks).
     agent = fresh(62, conversation('Fill out this form with random info and submit it.'));
-    for (const ref of ['ref_login', 'ref_step']) {
+    for (const ref of ['ref_login', 'ref_step', 'ref_lone']) {
       assert.equal((await fill(agent, 62, ref, 'Rx7-random-Q3')).errorCode, 'credential_not_provided', ref);
     }
     assert.deepEqual(typed(), []);
-    // A value typed into a lone password field is not a new account's
-    // password, so it does not become a source for a later sign-in, live or
-    // read back from the conversation.
-    agent = fresh(63, conversation('Fill out this form with random info and submit it.'));
-    const loneFill = { ref_id: 'ref_lone', text: 'Rx7-random-Q4' };
-    const loneResult = await fill(agent, 63, 'ref_lone', 'Rx7-random-Q4');
-    assert.equal(loneResult.success, true);
-    agent.conversations.get(63).push({ role: 'assistant', content: '', tool_calls: [{ id: 'lone_1', type: 'function',
-      function: { name: 'set_field', arguments: JSON.stringify(loneFill) } }] },
-    { role: 'tool', tool_call_id: 'lone_1', content: JSON.stringify({ ...loneResult, fieldMeta: FIELDS.ref_lone }) });
+    // A value typed into a network's key is not a new account's password, so
+    // it does not become a source for a later sign-in, live or read back from
+    // the conversation.
+    agent = fresh(63, conversation('Generate a strong Wi-Fi password and save it on this router page.'));
+    const wifiFill = { ref_id: 'ref_wifi', text: 'Rx7-random-Q4' };
+    const wifiResult = await fill(agent, 63, 'ref_wifi', 'Rx7-random-Q4');
+    assert.equal(wifiResult.success, true);
+    agent.conversations.get(63).push({ role: 'assistant', content: '', tool_calls: [{ id: 'wifi_1', type: 'function',
+      function: { name: 'set_field', arguments: JSON.stringify(wifiFill) } }] },
+    { role: 'tool', tool_call_id: 'wifi_1', content: JSON.stringify({ ...wifiResult, fieldMeta: FIELDS.ref_wifi }) });
     assert.equal((await fill(agent, 63, 'ref_login', 'Rx7-random-Q4')).errorCode, 'credential_not_provided');
     assert.deepEqual(newPasswordValuesFromHistory(agent.conversations.get(63)), []);
   });
@@ -554,7 +631,11 @@ for (const build of ['chrome', 'firefox']) {
     const agent = new Agent({ getActive: () => provider, getProvider: () => provider, getVisionProvider: async () => null });
     sent.length = 0;
     focused = FIELDS.ref_pass;
-    const page = { url: PAGE_URL, fields: { ...FIELDS } };
+    navigationFrames = null;
+    digestDocumentUrl = '';
+    // page.frameIds: the frame the preflight resolves a ref in (the top
+    // frame when not listed; null: the probe names no frame).
+    const page = { url: PAGE_URL, fields: { ...FIELDS }, frameIds: {} };
     Object.assign(agent, {
       _persist: () => {}, _persistNow: async () => ({ ok: true }), _skipPermissionGate: true,
       _ensureGateSetting: async () => true, _adoptLiveSocialPublishWorkflow: async () => false,
@@ -566,7 +647,8 @@ for (const build of ['chrome', 'firefox']) {
     const preflights = [];
     agent._preflightRichTextToolbarTarget = async (_tab, name, args) => {
       preflights.push(`${name}:${args.ref_id}`);
-      return { block: null, shot: null, probe: { resolved: true, refId: args.ref_id, fieldMeta: page.fields[args.ref_id] || null } };
+      const frameId = page.frameIds[args.ref_id] === null ? {} : { frameId: Number.isInteger(page.frameIds[args.ref_id]) ? page.frameIds[args.ref_id] : 0 };
+      return { block: null, shot: null, probe: { resolved: true, refId: args.ref_id, ...frameId, fieldMeta: page.fields[args.ref_id] || null } };
     };
     const dispatched = [];
     agent._executeToolImpl = async (_tab, name, args) => {
@@ -796,6 +878,110 @@ for (const build of ['chrome', 'firefox']) {
     await run([pass], respond('deny'));
     assert.equal(cards.length, 1);
     assert.equal(result(pass).errorCode, 'credential_not_provided');
+    assert.deepEqual(dispatched, []);
+  });
+
+  // "Fill out this form with random info" on a lone "Password" with "Submit"
+  // (nothing shows whether it is a sign-in's) costs one click, not the run;
+  // a generated Wi-Fi key is typed unasked.
+  test(`${build}: a random value for a lone "Password" asks once, and "Type it" types it`, async () => {
+    const task = 'Fill out this form with random info and submit it.';
+    const { cards, call, run, respond, result, dispatched } = batchFixture(57,
+      [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: task, webbrainUserAuthoredText: task }]);
+    const wifi = call('set_field', { ref_id: 'ref_wifi', text: 'Gen-Wifi-Placeholder-4' });
+    const lone = call('set_field', { ref_id: 'ref_lone', text: 'Rx7-random-Q2' });
+    await run([wifi, lone], respond('once'));
+    assert.equal(cards.length, 1, 'only the lone "Password" asks');
+    assert.deepEqual(cards[0].dispatchedBefore, ['set_field:ref_wifi=Gen-Wifi-Placeholder-4']);
+    assert.equal(cards[0].unverifiedStepConfirmation.host, 'localhost');
+    assert.deepEqual(dispatched, ['set_field:ref_wifi=Gen-Wifi-Placeholder-4', 'set_field:ref_lone=Rx7-random-Q2']);
+    assert.equal(result(lone).success, true);
+  });
+
+  // Review of the card: the card and the answers kept for it named the
+  // top-level page's site for a field in a frame from another origin, so a
+  // guess approved on the page was typed into a bank's sign-in iframe
+  // unasked. The site is now the field's frame's.
+  test(`${build}: the card names the site of the field's frame, and an answer covers only that site`, async () => {
+    const { cards, call, run, respond, result, dispatched, page } = batchFixture(58);
+    page.url = 'https://shop.example.test/checkout';
+    navigationFrames = [
+      { frameId: 0, parentFrameId: -1, url: page.url },
+      { frameId: 7, parentFrameId: 0, url: 'https://acs.bank.example.test/challenge' },
+      { frameId: 8, parentFrameId: 0, url: 'about:srcdoc' },
+      { frameId: 9, parentFrameId: 8, url: 'about:blank' },
+      { frameId: 10, parentFrameId: 0, url: 'data:text/html,<form></form>' },
+      { frameId: 12, parentFrameId: 7, url: 'about:blank' },
+    ];
+    page.fields.ref_frame_pass = FIELDS.ref_pass;
+    page.frameIds.ref_frame_pass = 7;
+    const inFrame = call('set_field', { ref_id: 'ref_frame_pass', text: 'Guess-1234' });
+    await run([inFrame], respond('deny'));
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].unverifiedStepConfirmation.host, 'acs.bank.example.test');
+    assert.equal(cards[0].question, 'Type this into a sign-in password field on acs.bank.example.test?');
+    assert.equal(result(inFrame).errorCode, 'credential_not_provided');
+    // "Type it" on the page's own sign-in field covers the page's site only.
+    const onPage = call('set_field', { ref_id: 'ref_pass', text: 'Guess-5678' });
+    await run([onPage], respond('once'));
+    assert.equal(cards.length, 2);
+    assert.equal(cards[1].unverifiedStepConfirmation.host, 'shop.example.test');
+    const sameTextInFrame = call('set_field', { ref_id: 'ref_frame_pass', text: 'Guess-5678' });
+    await run([sameTextInFrame], respond('once'));
+    assert.equal(cards.length, 3, 'the frame\'s site asks again');
+    assert.equal(cards[2].unverifiedStepConfirmation.host, 'acs.bank.example.test');
+    assert.deepEqual(cards[2].dispatchedBefore, ['set_field:ref_pass=Guess-5678']);
+    assert.equal(result(sameTextInFrame).success, true, '"Type it" types into the frame it named');
+    // A frame at about:blank or about:srcdoc has the site of the frame above it.
+    page.frameIds.ref_frame_pass = 9;
+    const srcdoc = call('set_field', { ref_id: 'ref_frame_pass', text: 'Guess-5678' });
+    await run([srcdoc], respond('deny'));
+    assert.equal(cards.length, 3, 'the page\'s answer covers its about:srcdoc frame');
+    page.frameIds.ref_frame_pass = 12;
+    const blankInBank = call('set_field', { ref_id: 'ref_frame_pass', text: 'Guess-9012' });
+    await run([blankInBank], respond('deny'));
+    assert.equal(cards.length, 4);
+    assert.equal(cards[3].unverifiedStepConfirmation.host, 'acs.bank.example.test');
+    assert.deepEqual(dispatched, ['set_field:ref_pass=Guess-5678', 'set_field:ref_frame_pass=Guess-5678',
+      'set_field:ref_frame_pass=Guess-5678']);
+    // A frame whose site cannot be read is refused without a card: a data:
+    // frame, a frame that is gone, or no frame list at all.
+    for (const [frameId, frames] of [[10, navigationFrames], [11, navigationFrames], [7, new Error('no frames')]]) {
+      navigationFrames = frames;
+      page.frameIds.ref_frame_pass = frameId;
+      const unknown = call('set_field', { ref_id: 'ref_frame_pass', text: 'Guess-5678' });
+      await run([unknown], respond('once'));
+      assert.equal(cards.length, 4, `frame ${frameId}: no card`);
+      assert.equal(result(unknown).errorCode, 'credential_not_provided', `frame ${frameId}`);
+      assert.equal(result(unknown).retryable, false);
+      assert.match(result(unknown).error, /could not tell which site this field's frame belongs to/);
+    }
+    assert.equal(dispatched.length, 3, 'nothing more is typed');
+  });
+
+  // Without a frame from the preflight, the guard's own probe of the field
+  // may be answered by a subframe's document: its address names the site.
+  test(`${build}: the field probe's document names the site when no frame is known`, async () => {
+    const { cards, call, run, respond, result, dispatched, page } = batchFixture(59);
+    delete page.fields.ref_pass;
+    page.frameIds.ref_pass = null;
+    digestDocumentUrl = 'https://login.example.test/embedded?step=password';
+    const embedded = call('set_field', { ref_id: 'ref_pass', text: 'Guess-3456' });
+    await run([embedded], respond('deny'));
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].unverifiedStepConfirmation.host, 'login.example.test');
+    assert.equal(sent.filter(message => message.action === 'field_value_digest').length, 1, 'the guard probed the field');
+    digestDocumentUrl = 'about:srcdoc';
+    const opaque = call('set_field', { ref_id: 'ref_pass', text: 'Guess-3456' });
+    await run([opaque], respond('once'));
+    assert.equal(cards.length, 1, 'a document whose site cannot be read is refused without a card');
+    assert.match(result(opaque).error, /could not tell which site/);
+    // No address reported: the top frame's site.
+    digestDocumentUrl = '';
+    const top = call('set_field', { ref_id: 'ref_pass', text: 'Guess-3456' });
+    await run([top], respond('deny'));
+    assert.equal(cards.length, 2);
+    assert.equal(cards[1].unverifiedStepConfirmation.host, 'localhost');
     assert.deepEqual(dispatched, []);
   });
 

@@ -55650,12 +55650,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // _resolveCredentialConfirmation asks the user before anything is typed.
   // The answer for this text on this site holds for the run
   // (_credentialDecision); the call the user approved (credentialApproval)
-  // goes ahead only into the field the card named. Only calls of the tool
-  // batch carry credentialProvenanceCheck, and a saved workflow's replay
-  // steps do not; the field is the one the batch's typing-target preflight
-  // resolved, or a read-only probe of it. A target that cannot be read is not
-  // known to be a password field and is typed as before. An autofilled field
-  // is untouched: the guard stops typing, not the click that submits it.
+  // goes ahead only into the field the card named. The site is the field's
+  // own (_credentialTargetHost): a sign-in iframe from another origin is
+  // named on the card, and answered for, by its host, not the page's. Only
+  // calls of the tool batch carry credentialProvenanceCheck, and a saved
+  // workflow's replay steps do not; the field is the one the batch's
+  // typing-target preflight resolved, or a read-only probe of it. A target
+  // that cannot be read is not known to be a password field and is typed as
+  // before. An autofilled field is untouched: the guard stops typing, not the
+  // click that submits it.
   async _unprovidedCredentialBlock(tabId, name, args = {}, executionContext = null) {
     if (executionContext?.credentialProvenanceCheck !== true
         || !['set_field', 'type_ax', 'type_text', 'iframe_type'].includes(name)) return null;
@@ -55670,15 +55673,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // without reading the conversation; without one, the page is asked
     // only about text the user did not give.
     let fieldMeta = executionContext.typingTargetFieldMeta || null;
+    let documentUrl = '';
     if (fieldMeta && !isSignInPasswordField(fieldMeta).guarded) return null;
     if (credentialValueProvided(value, this._userProvidedCredentialSources(tabId))) return null;
-    fieldMeta ||= await this._credentialTargetFieldMeta(tabId, name, args, frameId);
+    if (!fieldMeta) ({ fieldMeta, documentUrl } = await this._credentialTargetFieldMeta(tabId, name, args, frameId));
     const field = isSignInPasswordField(fieldMeta);
     const outcome = field.guarded ? this._guardOutcome('credential-not-provided', { decided: true, tabId }) : 'skip';
     if (outcome !== 'block' && outcome !== 'ask') return null;
-    const host = normalizeHost(await this._currentUrl(tabId));
+    const host = await this._credentialTargetHost(tabId, frameId, documentUrl);
     const valueKey = this._sha256TextSync(value);
-    const decision = this._credentialDecision(tabId, host, valueKey);
+    const decision = host === null ? null : this._credentialDecision(tabId, host, valueKey);
     if (decision?.choice === 'once') return null;
     // Nothing will be typed by this call now (after a "Type it" the batch
     // resolves the target again), so the target the preflight bound for it
@@ -55686,6 +55690,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (executionContext.dispatchBinding?.token) {
       await this._releaseRichTextToolbarProbeTarget(tabId, executionContext.dispatchBinding);
     }
+    // A field whose site cannot be read cannot be named on the card, nor an
+    // answer kept for it, and the page's own site would name the wrong one.
+    if (host === null) return this._credentialNotProvidedRefusal(field.reason, 'unknown_site');
     // Text already declined on this site in this run is not asked about again.
     if (decision) return this._credentialNotProvidedRefusal(field.reason, decision.source, true);
     const refusal = this._credentialNotProvidedRefusal(field.reason);
@@ -55701,10 +55708,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // this site stays, so a retry into that field does not ask again.
   async _approvedCredentialTargetBlock(tabId, name, args, executionContext, approval, value) {
     const frameId = executionContext.typingTargetFrameId;
-    const fieldMeta = executionContext.typingTargetFieldMeta
-      || await this._credentialTargetFieldMeta(tabId, name, args, frameId);
-    const host = normalizeHost(await this._currentUrl(tabId));
-    if (fieldMeta && isSignInPasswordField(fieldMeta).guarded && host === approval.host
+    const { fieldMeta, documentUrl } = executionContext.typingTargetFieldMeta
+      ? { fieldMeta: executionContext.typingTargetFieldMeta, documentUrl: '' }
+      : await this._credentialTargetFieldMeta(tabId, name, args, frameId);
+    const host = fieldMeta ? await this._credentialTargetHost(tabId, frameId, documentUrl) : null;
+    if (fieldMeta && isSignInPasswordField(fieldMeta).guarded && host !== null && host === approval.host
         && this._sha256TextSync(value) === approval.valueKey
         && credentialFieldIdentity(fieldMeta, frameId) === approval.fieldKey) return null;
     if (executionContext.dispatchBinding?.token) {
@@ -55726,14 +55734,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // The refusal the model reads when a sign-in password the user never gave
   // is not typed. `source` says who decided when WebBrain asked: the user
   // ('user'), nobody in time ('timeout'), an unattended run that cannot ask
-  // ('unattended'), or no card ('unavailable'); `repeated` when this text was
-  // already decided on this site in this run. Never the text itself.
+  // ('unattended'), or no card ('unavailable'), or why it did not ask: the
+  // field's site could not be read ('unknown_site'); `repeated` when this
+  // text was already decided on this site in this run. Never the text itself.
   _credentialNotProvidedRefusal(reason, source = null, repeated = false) {
     const answered = source === 'user'
       ? (repeated ? ', and the user already chose not to type it on WebBrain\'s card' : ', and the user chose not to type it on WebBrain\'s card')
       : source === 'unattended' ? '. This unattended run cannot ask the user on WebBrain\'s card'
         : source === 'timeout' || source === 'auto' ? ', and WebBrain\'s card about it was not answered'
-          : source === 'unavailable' ? '. WebBrain could not ask the user on its card' : '';
+          : source === 'unavailable' ? '. WebBrain could not ask the user on its card'
+            : source === 'unknown_site' ? '. WebBrain could not tell which site this field\'s frame belongs to, so it could not ask the user on its card' : '';
     return {
       success: false,
       dispatched: false,
@@ -55849,8 +55859,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   // The typing target's field metadata when the batch preflight did not
   // resolve it: the read-only field_value_digest probe of the ref, selector
-  // or focused element, in the target's frame when known. null when the page
-  // cannot answer.
+  // or focused element, in the target's frame when known, with the address of
+  // the document that answered (`documentUrl`, for the field's site when no
+  // frame is known). fieldMeta is null when the page cannot answer.
   async _credentialTargetFieldMeta(tabId, name, args = {}, frameId = null) {
     const params = (name === 'set_field' || name === 'type_ax') && typeof args.ref_id === 'string' && args.ref_id
       ? { ref_id: args.ref_id }
@@ -55858,14 +55869,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ? { selector: args.selector.trim() }
         : name === 'type_text' && args.index == null ? { focused: true } : null;
     // An iframe selector names an element in a frame this probe cannot pick.
-    if (!params || (name === 'iframe_type' && !Number.isInteger(frameId))) return null;
+    if (!params || (name === 'iframe_type' && !Number.isInteger(frameId))) return { fieldMeta: null, documentUrl: '' };
     try {
       const response = await chrome.tabs.sendMessage(tabId, { target: 'content', action: 'field_value_digest', params },
         Number.isInteger(frameId) ? { frameId } : undefined);
-      return response?.success === true && response.fieldMeta && typeof response.fieldMeta === 'object' ? response.fieldMeta : null;
+      return response?.success === true && response.fieldMeta && typeof response.fieldMeta === 'object'
+        ? { fieldMeta: response.fieldMeta, documentUrl: typeof response.refScopeUrl === 'string' ? response.refScopeUrl : '' }
+        : { fieldMeta: null, documentUrl: '' };
     } catch {
-      return null;
+      return { fieldMeta: null, documentUrl: '' };
     }
+  }
+
+  // The site a sign-in password field belongs to, for WebBrain's card and the
+  // answers kept for it (credential-not-provided): the tab's for the top
+  // frame; a subframe's own, so a sign-in iframe from another origin is named
+  // by its host rather than the page's. A frame at about:blank or
+  // about:srcdoc has the site of the frame above it, whose origin its
+  // document takes. Without a known frame, the write goes to the top frame,
+  // unless the guard's own probe was answered by another document
+  // (`documentUrl`): then that document's site. A local file has no site
+  // (''), as a top-level file page has none. null when the site cannot be
+  // read (the frame is gone, or its address has no site, such as data:).
+  async _credentialTargetHost(tabId, frameId = null, documentUrl = '') {
+    const site = url => {
+      try {
+        const parsed = new URL(String(url || ''));
+        if (parsed.protocol === 'file:') return '';
+        return parsed.origin && parsed.origin !== 'null' ? normalizeHost(parsed.origin) : null;
+      } catch {
+        return null;
+      }
+    };
+    const inherits = url => /^about:(?:blank|srcdoc)(?:[?#]|$)/i.test(String(url || ''));
+    if (!Number.isInteger(frameId) && documentUrl) return inherits(documentUrl) ? null : site(documentUrl);
+    if (!Number.isInteger(frameId) || frameId === 0) return normalizeHost(await this._currentUrl(tabId));
+    let frames = null;
+    try { frames = await chrome.webNavigation.getAllFrames({ tabId }); } catch { return null; }
+    const byId = new Map((Array.isArray(frames) ? frames : []).map(frame => [frame?.frameId, frame]));
+    for (let frame = byId.get(frameId), hops = 0; frame && hops < 32; frame = byId.get(frame.parentFrameId), hops += 1) {
+      if (frame.frameId === 0) return normalizeHost(await this._currentUrl(tabId));
+      if (!inherits(frame.url)) return site(frame.url);
+    }
+    return null;
   }
 
   // A submission whose edited field still holds the page's own placeholder

@@ -2,11 +2,11 @@
 // selector probe that type_text({selector}) resolves its target through,
 // report how many visible password fields share a field's form
 // (`passwordFields`), how many of its fields name an account
-// (`usernameFields`), what the form's submit control says (`formSubmitText`)
-// and what its buttons say (`buttonTexts`), so the agent tells a sign-in
-// form's password from a
-// sign-up form's new password and its confirmation, and from a lone password
-// field that is no account's (a Wi-Fi key). Both builds' real content
+// (`usernameFields`), what the form's submit control says (`formSubmitText`),
+// what its buttons say (`buttonTexts`) and whether the field is in no form
+// (`formless`), so the agent tells a sign-in form's password from a sign-up
+// form's new password and its confirmation, and from a lone password field
+// that names a network's key (a Wi-Fi password). Both builds' real content
 // scripts, and the Chrome build's CDP client over a real CDP session, in
 // Chromium (the only installed engine), on owned fixture pages; no external
 // page is contacted.
@@ -35,13 +35,15 @@ const PAGE = `<!doctype html>
       account </button></form>
   <div id="loose"><label for="loose-pass">Password</label><input id="loose-pass" name="loose_pass" type="password"></div>`;
 
-// Lone password fields, with and without what makes them a sign-in's: a
-// username, email or login field of the same form (`usernameFields`), a
+// Lone password fields, with and without what shows them to be a sign-in's:
+// a username, email or login field of the same form (`usernameFields`), a
 // submit control that signs in or goes on to the next step, or a label that
 // says so. A field of another form names no account. A hidden username
 // carries the account of a password step: the second step of a real
 // sign-in, so #hu-pass ("Submit") is guarded too (it was not before the
-// review of the follow-up).
+// review of the follow-up). Without any of that, only a field that names a
+// network's key is left out: #lone-pass ("Password" with "Submit") is
+// guarded, and WebBrain asks before typing text the user did not give there.
 const EVIDENCE_PAGE = `<!doctype html>
   <form id="login-submit"><label for="ls-user">Username</label><input id="ls-user" name="username">
     <label for="ls-pass">Password</label><input id="ls-pass" name="password" type="password"><button>Submit</button></form>
@@ -74,7 +76,7 @@ const LOGIN_PANEL_PAGE = `<!doctype html>
 const EVIDENCE = [
   ['#ls-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
   ['#es-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
-  ['#lone-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, false],
+  ['#lone-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
   ['#wifi-key', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Apply', buttonTexts: ['Apply'] }, false],
   ['#step-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Next', buttonTexts: ['Next'] }, true],
   ['#hu-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
@@ -122,7 +124,7 @@ const COMPONENT_EVIDENCE = [
   ['#c-login-pass-input', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Log in'] }, true],
   ['#c-new-input', { passwordFields: 2, usernameFields: 0, formSubmitText: 'Save', buttonTexts: ['Save'] }, false],
   ['#c-wifi-key-input', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Apply', buttonTexts: ['Apply'] }, false],
-  ['#c-loose-pass-input', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Sign in'] }, true],
+  ['#c-loose-pass-input', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Sign in'], formless: true }, true],
 ];
 // A username labelled by aria-labelledby; an icon-only submit control named
 // by its aria-label; a "Show" toggle (a submit control by default) before
@@ -144,7 +146,39 @@ const BUTTONS_EVIDENCE = [
   ['#is-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Sign in', buttonTexts: ['Sign in'] }, true],
   ['#tf-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Show', buttonTexts: ['Show', 'Log in'] }, true],
   ['#hi-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Confirm', buttonTexts: ['Confirm'] }, true],
-  ['#gh-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, false],
+  ['#gh-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
+];
+// Review of the card: sign-ins the rule needing sign-in evidence typed a
+// guess into unasked. A re-authentication with "Confirm"; a "NetID" the
+// account test does not recognize, with "Submit"; a PIN step whose account
+// is a generic hidden id, with "OK".
+const REAUTH_PAGE = `<!doctype html>
+  <h1>Confirm access</h1><p>Signed in as test-account-a</p>
+  <form id="reauth"><label for="sudo-password">Password</label><input type="password" name="sudo_password" id="sudo-password">
+    <a href="#reset">Forgot password?</a><button type="submit">Confirm</button></form>
+  <form id="netid"><label for="nid">NetID</label><input id="nid" name="nid">
+    <label for="npw">Password</label><input id="npw" name="password" type="password"><input type="submit" value="Submit"></form>
+  <form id="pin"><input type="hidden" name="userId" value="7"><label for="pin-in">PIN</label>
+    <input id="pin-in" name="pin" type="password" inputmode="numeric"><button>OK</button></form>`;
+const REAUTH_EVIDENCE = [
+  ['#sudo-password', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Confirm', buttonTexts: ['Confirm'] }, true],
+  ['#npw', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
+  ['#pin-in', { passwordFields: 1, usernameFields: 0, formSubmitText: 'OK', buttonTexts: ['OK'] }, true],
+];
+// A form-less sign-in panel beside a form-less sign-up panel: outside a form
+// every form-less password field counts, three here, which read as a new
+// password for the sign-in's. A button that signs in keeps it a sign-in's;
+// the sign-up's own "Password" asks too, and its confirmation is new.
+const SIDE_BY_SIDE_PAGE = `<!doctype html>
+  <div id="login-panel"><label for="sb-user">Email</label><input id="sb-user" type="email">
+    <label for="sb-pass">Password</label><input id="sb-pass" type="password"><button type="button">Log in</button></div>
+  <div id="signup-panel"><label for="sb-email">Email</label><input id="sb-email" type="email">
+    <label for="sb-second">Password</label><input id="sb-second" type="password">
+    <label for="sb-repeat">Confirm password</label><input id="sb-repeat" type="password"><button type="button">Create account</button></div>`;
+const SIDE_BY_SIDE_EVIDENCE = [
+  ['#sb-pass', { passwordFields: 3, usernameFields: 2, buttonTexts: ['Log in', 'Create account'], formless: true }, true],
+  ['#sb-second', { passwordFields: 3, usernameFields: 2, buttonTexts: ['Create account', 'Log in'], formless: true }, true],
+  ['#sb-repeat', { passwordFields: 3, usernameFields: 2, buttonTexts: ['Create account', 'Log in'], formless: true }, false],
 ];
 // Outside a form: a phone number and a role=button "Log in".
 const TEL_LOGIN_PAGE = `<!doctype html>
@@ -158,14 +192,16 @@ const DIALOG_PAGE = `<!doctype html>
 
 const PAGES = [
   [EVIDENCE_PAGE, EVIDENCE],
-  [LOOSE_PAGE, [['#router-key', { passwordFields: 1, usernameFields: 0, buttonTexts: ['Save'] }, false]]],
-  [LOGIN_PANEL_PAGE, [['#ll-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Log in'] }, true]]],
+  [LOOSE_PAGE, [['#router-key', { passwordFields: 1, usernameFields: 0, buttonTexts: ['Save'], formless: true }, false]]],
+  [LOGIN_PANEL_PAGE, [['#ll-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Log in'], formless: true }, true]]],
   [COMPONENT_PAGE, COMPONENT_EVIDENCE],
   [BUTTONS_PAGE, BUTTONS_EVIDENCE],
-  [TEL_LOGIN_PAGE, [['#tl-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Log in'] }, true]]],
+  [TEL_LOGIN_PAGE, [['#tl-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Log in'], formless: true }, true]]],
   [DIALOG_PAGE, [['#df-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Cancel', 'Sign in'] }, true]]],
+  [REAUTH_PAGE, REAUTH_EVIDENCE],
+  [SIDE_BY_SIDE_PAGE, SIDE_BY_SIDE_EVIDENCE],
 ];
-const facts = meta => Object.fromEntries(['passwordFields', 'usernameFields', 'formSubmitText', 'buttonTexts']
+const facts = meta => Object.fromEntries(['passwordFields', 'usernameFields', 'formSubmitText', 'buttonTexts', 'formless']
   .filter(key => key in meta).map(key => [key, meta[key]]));
 
 const fixturePage = async (browser, html = PAGE) => {
@@ -224,6 +260,8 @@ for (const build of ['chrome', 'firefox']) {
       const loose = await meta('#loose-pass');
       assert.equal(loose.passwordFields, 1);
       assert.equal('formSubmitText' in loose, false);
+      assert.equal(loose.formless, true);
+      assert.equal('formless' in signin, false, 'a field in a form is not form-less');
       // Only password inputs carry the facts.
       const user = await meta('#user');
       assert.equal('passwordFields' in user, false);
@@ -242,10 +280,10 @@ for (const build of ['chrome', 'firefox']) {
     }
   });
 
-  // #593 follow-up: a lone password field is a sign-in's only when the page
-  // shows one, so "fill this form with random info" and a generated Wi-Fi
-  // key are typed, and a real sign-in (a username field with a "Submit"
-  // button, a password step with "Next") stays guarded.
+  // #593 follow-up: a generated Wi-Fi key is typed, and a real sign-in (a
+  // username field with a "Submit" button, a password step with "Next", a
+  // re-authentication with "Confirm", a "NetID" with "Submit") stays
+  // guarded, as does a lone "Password" nothing shows to be anything else.
   test(`${build}: content.js reports what makes a lone password field a sign-in's`, async () => {
     const browser = await chromium.launch({ headless: true });
     try {

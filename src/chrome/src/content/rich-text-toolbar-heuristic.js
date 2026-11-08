@@ -472,7 +472,10 @@ var __wbRichTextToolbarHeuristic = (() => {
   //   - usernameFields: the fields of that form that name an account,
   //   - formSubmitText: the text of the form's first visible submit control,
   //   - buttonTexts: the texts of the visible buttons of that form, nearest
-  //     first.
+  //     first,
+  //   - formless: true for a field in no form, whose counts are those of the
+  //     form-less part of its document (a form-less sign-in shown beside a
+  //     form-less sign-up counts the password fields of both).
   //
   // A field's form is its form owner or, for a field in a web component's
   // shadow root (which has none), the nearest <form> around it across shadow
@@ -572,6 +575,7 @@ var __wbRichTextToolbarHeuristic = (() => {
       facts.passwordFields = fields.filter(field => String(field.type || '').toLowerCase() === 'password'
         && _passwordFactVisible(field)).length;
       facts.usernameFields = fields.filter(field => field !== el && _namesAccount(field)).length;
+      if (!form) facts.formless = true;
       if (form) {
         const submit = [...(form.elements || [])].find(control => _isSubmitControl(control) && _passwordFactVisible(control));
         const submitText = submit ? _passwordFactButtonText(submit) : '';
