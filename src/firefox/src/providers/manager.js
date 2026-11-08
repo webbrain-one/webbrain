@@ -259,6 +259,7 @@ const DUPLICATE_BLANK_CONFIG_KEYS = [
   'cacheWrite1hCostPerMillionUsd',
   'outputCostPerMillionUsd',
   'promptTier',
+  'promptTierChosen',
   'routingVariant',
   'toolsMode',
   'visionMode',

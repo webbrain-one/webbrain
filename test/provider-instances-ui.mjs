@@ -105,6 +105,21 @@ try {
           'http://127.0.0.1:8327/v1',
         );
         assert.equal(await companionCard.locator('.btn-load-models').count(), 1);
+        // The Companion relays cloud subscriptions, so it runs at Full, and a
+        // tier counts only once picked in its menu: saving the card with the
+        // menu untouched records no choice (the menu's Mid used to be saved).
+        const companionTier = companionCard.locator('select[data-key="promptTier"]');
+        assert.equal(await companionTier.inputValue(), 'full');
+        await companionCard.locator('.btn-save').click();
+        await page.waitForFunction(() => testStore.providers?.webbrain_companion);
+        assert.equal(await page.evaluate(() => testStore.providers.webbrain_companion.promptTierChosen), undefined);
+        assert.equal(await page.evaluate(() => testManager.providers.get('webbrain_companion').promptTier), 'full');
+        await companionCard.locator('details.provider-companion-details > summary').click();
+        await companionTier.selectOption('mid');
+        await companionCard.locator('.btn-save').click();
+        await page.waitForFunction(() => testStore.providers.webbrain_companion.promptTierChosen === true);
+        assert.equal(await page.evaluate(() => testStore.providers.webbrain_companion.promptTier), 'mid');
+        assert.equal(await page.evaluate(() => testManager.providers.get('webbrain_companion').promptTier), 'mid');
         const companionDownloads = await companionCard.locator('.provider-companion-guide a').evaluateAll(
           links => links.map(link => link.href),
         );

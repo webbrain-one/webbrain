@@ -28,15 +28,15 @@ Auto turns lean mode on only when all of these hold (`src/*/src/agent/lean-mode.
 
 1. **The run is in Act mode.**
 2. **The provider is a cloud or router provider, or a local relay to the cloud.** The category WebBrain gives the provider decides, so Ollama Cloud is a cloud provider. A local provider never gets lean mode under Auto, whatever model it serves (a local model can carry a strong model's name), and a provider of unknown category does not either. A provider config that names no category is local when it is llama.cpp, Ollama, LM Studio or WebGPU. The exception is the two local relays, WebBrain Companion (`webbrain_companion`) and the Local OpenAI-compatible Proxy (`local_openai_proxy`): their address is on this computer, but they forward to the cloud subscriptions the user signed in with (both are CLIProxyAPI), so Auto judges them by the model they serve, as it does a router, and the trace note says `strong_relay_model`. The one model the Companion runs itself, Bonsai, is not on the strong list.
-3. **The provider's prompt tier is Full.** Auto keeps WebBrain's checks for a provider the user set to Compact or Mid. A relay's tier is not read: like every local provider it defaults to Mid, and the settings page saves that default with the provider, so it says nothing about the model.
+3. **The provider's prompt tier is Full.** Auto keeps WebBrain's checks for a provider the user set to Compact or Mid. A relay defaults to Full, and its stored tier counts only once the user chose it in the provider's tier menu (`providers/prompt-tier.js`): the settings page used to save the menu's Mid with every local provider, so a relay's stored Mid was nearly always that default, not a choice.
 4. **The model id is on the strong-model list:**
    - Claude Opus and Sonnet, generation 4 and later, and Claude Fable and Mythos (`claude-sonnet-4-5`, `claude-opus-4-1-…`, `claude-fable-5-1`, `anthropic/claude-sonnet-4.5`, Bedrock ids);
    - GPT-5 and later, including gpt-6 variants, except nano models;
    - OpenAI o3, o4 and later o-series reasoning models;
-   - Gemini 2.5 Pro and newer Pro or Ultra models;
+   - Gemini 2.5 Pro and newer Pro or Ultra models, and Gemini Flash from generation 3 (`gemini-3-flash-preview`, `gemini-3.8-flash-high`), except Flash-Lite;
    - Grok 4 and later.
 
-   The id is the model the provider calls: with the model setting left blank, that is the provider's default (Anthropic's is `claude-sonnet-5`). Ids are matched in lower case anywhere in the string, so router prefixes, regional prefixes and dated snapshots match. Haiku, Flash, GPT-4o, Claude 3.x and the WebBrain Cloud default model are not on the list, so Auto leaves them off.
+   The id is the model the provider calls: with the model setting left blank, that is the provider's default (Anthropic's is `claude-sonnet-5`). Ids are matched in lower case anywhere in the string, so router prefixes, regional prefixes and dated snapshots match. Haiku, Gemini Flash before 3 and Flash-Lite, GPT-4o, Claude 3.x and the WebBrain Cloud default model are not on the list, so Auto leaves them off.
 
 The list is `LEAN_STRONG_MODEL_RULES` in `lean-mode.js`. That file is identical in both builds (a test checks it); add a family there when it has proven itself, and add a case to `test/lean-mode.mjs`.
 

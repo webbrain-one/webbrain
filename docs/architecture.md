@@ -1532,7 +1532,7 @@ promptTier                    → 'compact' | 'mid' | 'full'
 testConnection()              → { ok, error, model }
 ```
 
-`promptTier` drives both the action prompt and the normal tool subset. Local providers default to Mid, cloud providers are forced Full, and the legacy `useCompactPrompt` flag maps to Compact for existing configs. Dev mode is a separate conversation mode: Mid/Full Dev uses the selected Act tier plus `SYSTEM_PROMPT_DEV_APPENDIX`; Compact Dev is blocked before an LLM request is sent.
+`promptTier` drives both the action prompt and the normal tool subset. Local providers default to Mid (except the two local relays to the cloud, WebBrain Companion and the Local OpenAI-compatible Proxy, which default to Full), cloud providers are forced Full, and the legacy `useCompactPrompt` flag maps to Compact for existing configs. Dev mode is a separate conversation mode: Mid/Full Dev uses the selected Act tier plus `SYSTEM_PROMPT_DEV_APPENDIX`; Compact Dev is blocked before an LLM request is sent.
 
 Ollama, llama.cpp, LM Studio, and LocalAI resolve `supportsVision` from native
 server metadata before page enrichment. Explicit model/base-URL identities are
