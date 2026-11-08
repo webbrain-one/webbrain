@@ -9,9 +9,10 @@
   "author": "Emre Sokullu",
   "homepage": "https://github.com/webbrain-one/webbrain/tree/main/murshid",
   "scripts": {
-    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs test/tab-strip.test.cjs",
+    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs test/tab-strip.test.cjs test/adblock.test.cjs",
     "test:integration": "node test/run-smoke.cjs",
     "test:session": "node test/run-session-smoke.cjs",
+    "test:adblock": "node test/run-adblock-smoke.cjs",
     "start": "electron .",
     "dev": "electron . --murshid-devtools",
     "art": "npm run art:pictures && npm run art:icons",
@@ -20,10 +21,13 @@
     "fonts": "node scripts/copy-fonts.mjs",
     "web": "node scripts/serve.mjs",
     "web:i18n": "node scripts/i18n/build.mjs",
+    "adblock": "node scripts/build-adblock.mjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
   "dependencies": {
+    "@ghostery/adblocker": "2.20.3",
+    "@ghostery/adblocker-electron-preload": "2.20.3",
     "electron-chrome-extensions": "4.10.0"
   },
   "devDependencies": {
