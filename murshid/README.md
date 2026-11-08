@@ -15,6 +15,8 @@ Murshid is a Chromium browser, built on Electron, with WebBrain built in:
   `../webbrain-systray` in the background (`--background`, no panel) when it is
   installed or bundled and not already running. The tray app is the Go
   companion, not part of the Electron process.
+- **Ad and tracker blocking**, on by default, with EasyList, EasyPrivacy and
+  uBlock's Unbreak list (see below).
 
 The homepage is in `web/`.
 
@@ -43,6 +45,66 @@ cleared too.
 The list is its own small view (`app/omnibox-popup.js`, `app/ui/popup.*`)
 because the tab views are drawn above the browser chrome; matching and
 ranking are in `app/omnibox.js`, the history store in `app/history.js`.
+
+## Ad and tracker blocking
+
+Murshid blocks ads and trackers by default, with
+[Ghostery's adblocker library](https://github.com/ghostery/adblocker)
+(`@ghostery/adblocker`, MPL-2.0) and these filter lists:
+
+| List | Source | Licence |
+|---|---|---|
+| EasyList, by the EasyList authors | `https://easylist.to/easylist/easylist.txt` | GPL-3.0-or-later or CC BY-SA 3.0 ([licence](https://easylist.to/pages/licence.html)) |
+| EasyPrivacy, by the EasyList authors | `https://easylist.to/easylist/easyprivacy.txt` | GPL-3.0-or-later or CC BY-SA 3.0 |
+| uBlock filters – Unbreak, by the uBlock Origin contributors ([uAssets](https://github.com/uBlockOrigin/uAssets)) | `https://ublockorigin.github.io/uAssets/filters/unbreak.txt` | GPL-3.0 ([licence](https://github.com/uBlockOrigin/uAssets/blob/master/LICENSE)) |
+
+The lists are used as published; Murshid ships them, compiled into the
+library's engine format, under the GPL-3.0.
+
+- **How.** Electron keeps one listener per webRequest event and session, and
+  Murshid's are in `app/identity.js` (client hints, and WebBrain's
+  `chrome.webRequest`), so the library's `enableBlockingInSession()` is not
+  used. Those listeners ask `app/adblock/` instead: `onBeforeRequest` cancels
+  what a list blocks, and `onHeadersReceived` adds a list's `$csp` policy to a
+  page as a header of its own, so the site's own policy still applies. Element
+  hiding (`##` rules) comes from the library's Electron preload
+  (`@ghostery/adblocker-electron-preload`), in top frames, answered by
+  `app/adblock/`. Not applied: scriptlets (`+js`), procedural selectors, HTML
+  filtering and `$removeparam`. `$redirect` filters cancel the request, as
+  Chromium refuses the library's `data:` stand-ins.
+- **Never filtered:** pages themselves (a listed site still opens), Murshid's
+  own pages and requests (search suggestions, downloads, list updates), and
+  anything from an extension: WebBrain's worker, side panel, offscreen
+  documents and new tab page. Only the browsing session is filtered; other
+  sessions are not. WebBrain's `chrome.webRequest` still sees a blocked
+  request, ending in `onErrorOccurred` with `net::ERR_BLOCKED_BY_CLIENT`, as
+  in Chrome.
+- **Turning it off:** Settings → *Block ads and trackers*, or for one site,
+  untick *Block ads on <site>* in the ⋮ menu on it (the tab reloads; the
+  sites are kept in `adblockAllowedSites` in the settings file). The library
+  hides no elements on IP addresses and `localhost`.
+- **Lists offline, and updates.** `app/adblock/engine.bin.gz` is a prebuilt
+  engine, described by `app/adblock/lists.json` (list versions, library
+  engine version), so blocking works offline from the first run. Once the
+  lists in use are a day old, Murshid downloads them again in a session of its
+  own (no cookies), parses them in a utility process and keeps the result in
+  `<profile>/adblock/`. A failed update is retried an hour later, and a
+  download that is not a filter list is never used.
+- **Rebuilding the bundled engine:** `npm run adblock`. Do it after upgrading
+  `@ghostery/adblocker`, since a stored engine loads only with the library
+  version that wrote it (`npm test` checks), and before releases, so new
+  installs start with recent lists.
+- **Tests:** `test/adblock.test.cjs` (in `npm test`) runs the real
+  webRequest listeners against a small engine. `npm run test:adblock` starts
+  Murshid with a fresh profile and checks, against real ad and tracker host
+  names pointed at a local server: blocking, element hiding, what WebBrain's
+  `chrome.webRequest` sees, its side panel, the ⋮ menu item and the Settings
+  switch. With `MURSHID_TEST_ADBLOCK_REFRESH=1` it also downloads the lists.
+
+Ghostery's Electron wrapper, `@ghostery/adblocker-electron`, is not a
+dependency: Murshid would use nothing of it but its preload, which is a
+package of its own, and importing it switches off Electron's security
+warnings for the whole app (`ELECTRON_DISABLE_SECURITY_WARNINGS`).
 
 ## Run it
 
@@ -103,6 +165,8 @@ app/
   downloads.js     download tracking shared by the toolbar and chrome.downloads
   companion.js     find and start WebBrain Companion
   permissions.js   site permission prompts
+  identity.js      user agent and client hints; owns the session's webRequest listeners
+  adblock/         ad and tracker blocking: lists, engine, bundled engine (see above)
   i18n.js          interface language, strings, right-to-left layout
   locales/         en, tr, ar, fa: Murshid's own strings
 assets/
@@ -116,6 +180,7 @@ scripts/
   copy-art.mjs     copy the icon into web/
   copy-fonts.mjs   copy the self-hosted fonts into web/fonts
   serve.mjs        static server for web/ and assets/
+  build-adblock.mjs  rebuild app/adblock/engine.bin.gz from the filter lists
 vendor/companion/  WebBrain Companion builds to bundle (not committed)
 web/               the Murshid homepage
 ```
@@ -208,3 +273,11 @@ under the SIL Open Font License (`web/fonts/LICENSE.txt`).
 ## Licence
 
 GPL-3.0-or-later, like WebBrain. electron-chrome-extensions is MIT.
+
+Ghostery's adblocker packages (`@ghostery/adblocker`,
+`@ghostery/adblocker-electron-preload` and the `@ghostery/*` and `@remusao/*`
+packages they use) are MPL-2.0, copyright Ghostery GmbH, and their files stay
+under the MPL-2.0: Murshid uses them unmodified from `node_modules`, and the
+GPL is one of the MPL's Secondary Licenses, so the two combine. tldts, which
+they use, is MIT. The filter lists keep their own licences (see "Ad and
+tracker blocking").
