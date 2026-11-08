@@ -128,12 +128,19 @@ The field is one with
 `autocomplete="current-password"`, one whose name, id or label names the
 current password, or any other password input that is not left out.
 Left out are fields whose name, id or label names a new or repeated
-password, an API key or a token; fields that share their form with another
-visible password field (a new password and its confirmation); and fields
-whose form's submit control says it creates an account ("Create account",
-"Sign up", "Register", "Join"). Any other password input is a lone password
-field. It counts as a sign-in's, and the reason the model reads names the
-sign-in evidence when the page shows some:
+password, an API key or a token; fields whose form's submit control says it
+creates an account ("Create account", "Sign up", "Register", "Join"); and
+fields that share their form with another visible password field (a new
+password and its confirmation) when the form shows no sign-in: neither a
+field that names the account nor a button that signs in ("Log in", "Sign
+in" and their translations; not "Next"). A sign-in's second password field
+(a bank's "Password" and "PIN" with "Log in", or an off-screen autofill
+decoy beside an email field) does not make the form a sign-up's: such a
+field is read as a lone one, and a sign-up whose account field nothing else
+marks ("Email", two passwords and "Submit") asks for its "Password" while its
+"Confirm password" stays a new password. Any other password input is a lone
+password field. It counts as a sign-in's, and the reason the model reads
+names the sign-in evidence when the page shows some:
 
 - a field of its form that names the account: an email or phone (`tel`)
   input, one with autocomplete `username`, `email` or `tel`, a text or
@@ -158,8 +165,13 @@ sign-in evidence when the page shows some:
 
 Without such evidence, one kind of lone password field is left out: a field
 whose name, id or label names a network's key (Wi-Fi, WLAN, wireless, WPA,
-WEP, SSID, hotspot, network key), so "generate a strong Wi-Fi password" on a
-router page is typed. Every other lone password field counts as a sign-in's
+WEP, SSID, hotspot, network key, network security key), so "generate a
+strong Wi-Fi password" on a router page is typed. Only wireless words count:
+"Network password" is how many companies name the directory (AD or SSO)
+account's password, so a lock page's lone "Network password" with "OK" asks,
+and SSID, WEP and WPA must not continue a longer word ("sessid", "passid"),
+though a separator may join them (`ssid_pass`, `router_wpa_key`). Every
+other lone password field counts as a sign-in's
 even with no evidence, because a sign-in can show none that WebBrain reads:
 a re-authentication with only a password and "Confirm" or "OK", a "NetID"
 and "Password" form with "Submit" (WebBrain does not know every name for an
@@ -176,16 +188,18 @@ across open shadow roots (fields and buttons inside some other form do not
 count). A form without a visible button of its own (one a dialog footer
 submits) also reads the form-less buttons of its document. Outside a form,
 the visible password fields counted are every form-less one of the document,
-so a form-less sign-in shown beside a form-less sign-up counts three. There,
-a button that signs in ("Log in", "Sign in" and the like, not "Next")
-keeps the field from reading as a new password: the sign-in's field is
-guarded, and so is the sign-up's own "Password" unless its name, label or
-autocomplete marks it as new (its confirmation stays a new password).
+so a form-less sign-in shown beside a form-less sign-up counts three, and
+there is no submit control: a button that creates the account, with none
+that signs in, makes it a sign-up's. So beside a "Log in" button the
+sign-in's field is guarded, and so is the sign-up's own "Password" unless
+its name, label or autocomplete marks it as new (its confirmation stays a
+new password).
 
 A username and password form with a "Submit" button, or a password step with
 "Next", is guarded: a random value there is a guessed credential, and the
 user can give a literal one. Only a value typed into a field read as a new
-password counts later as a password WebBrain set (a network's key does not).
+password counts later as a password WebBrain set (a network's key and a
+sign-in's PIN do not), and only on the site of that field.
 `content.js` `_fieldMeta` and, in Chrome, the CDP selector probe
 (`cdp-client.js` `probeRichTextToolbarSelector`) report these facts
 (`passwordFields`, `usernameFields`, `formSubmitText`, `buttonTexts`, the
@@ -198,30 +212,46 @@ new-account, new-password, network-key and label rules are English. The rule
 errs towards guarding: a sign-up form with one password field, no
 `autocomplete="new-password"`, and a label and submit control that do not say
 it creates an account (for example "Email", "Password" and "Next" or
-"Submit"), a Wi-Fi key in a setup wizard labelled only "Password", or a
-settings form that sets a password ("Room password" with "Save") is treated
-as a sign-in's: a password the model makes up there asks on the card.
+"Submit"), the same with a "Confirm password" field (its "Password" asks), a
+Wi-Fi key in a setup wizard labelled only "Password", or a settings form
+that sets a password ("Room password" with "Save") is treated as a
+sign-in's: a password the model makes up there asks on the card.
 
 The site the card names, and the site an answer is kept for, is the field's
 own: the tab's for the top frame, a subframe's own site for a field in a
 frame, so a sign-in iframe from another origin (a bank's or an identity
 provider's inside a shop's page) is named by its host, and an answer given
 for the page does not cover it. A frame at `about:blank` or `about:srcdoc`
-has the site of the frame above it. When the guard reads the field itself
-without a known frame, the site of the document that answered is used. A
-field whose site cannot be read (a `data:` frame, a frame that is gone) is
-refused without a card, and the model is told to ask the user.
+has the site of the frame above it. The top frame's site comes from the
+tab's address by the same rule, so a top page at `about:blank` (a popup
+another page wrote into), `data:` or an address the tab does not report has
+none; a `blob:` page has its creator's site. When the preflight named no
+frame, the guard asks each frame for the field on its own (a write with no
+frame goes to every frame that has WebBrain's content script, and a probe
+sent to all of them took the first answer, often a frame's that does not
+hold the field), and the frame that holds it gives the site; the document
+that answered must be of that frame's site. A selector or focused field that
+is a sign-in password field in more than one frame has no one site. A field
+whose site cannot be read (one of those, a `data:` frame, a frame that is
+gone) is refused without a card, and the model is told to ask the user. The
+typing-target preflight's own probe of a ref, selector or index asks only
+the top frame, whose answer it is bound to.
 
 A password counts as given when it appears whole in the user's own messages
 in this conversation (without the page context WebBrain adds), a text file
 they attached, a clarify answer they typed or chose, the WebBrain profile
 when it is enabled, a note the user wrote in WebBrain's local memory when
-memory is enabled, a MemCode recall result, or a new-password field WebBrain
-filled earlier in the conversation (signing in to an account it created). The
-agent keeps the passwords it set this way in memory for the tab, whether typed
-alone or in a `browser_batch`, so compacting the context does not drop them; a
+memory is enabled, a MemCode recall result, or, on the same site, a
+new-password field WebBrain filled earlier in the conversation (signing in to
+an account it created). The agent keeps the passwords it set this way in
+memory for the tab, each with the site of its field, read before the write
+went out (a submit may navigate elsewhere), whether typed alone or in a
+`browser_batch`, so compacting the context does not drop them; a
 conversation restored after the extension restarted reads them from its
-history, folded `browser_batch` answers included.
+history, folded `browser_batch` answers included, where the fill's result
+names the site (`newPasswordSite`). A password set on one site is not a
+source for a sign-in on another, and one whose site could not be read (or
+saved before the site was recorded) counts nowhere.
 
 WebBrain's local memory refuses text that says "password", "token" and the
 like, but keeps a note such as "QA portal login: qa-tester / value". Only

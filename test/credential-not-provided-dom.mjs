@@ -180,6 +180,45 @@ const SIDE_BY_SIDE_EVIDENCE = [
   ['#sb-second', { passwordFields: 3, usernameFields: 2, buttonTexts: ['Create account', 'Log in'], formless: true }, true],
   ['#sb-repeat', { passwordFields: 3, usernameFields: 2, buttonTexts: ['Create account', 'Log in'], formless: true }, false],
 ];
+// Review of the card: a sign-in form with a second visible password field
+// read as a sign-up's new password. A bank's username, "Password" and "PIN"
+// with "Log in"; an email, a password and an off-screen autofill decoy with
+// "Submit". A sign-up with "Create account" keeps both of its fields new; one
+// with "Submit" asks for its "Password", and its confirmation stays new.
+const SECOND_PASSWORD_PAGE = `<!doctype html>
+  <form id="bank"><label for="bk-user">Username</label><input id="bk-user" name="username">
+    <label for="bk-pass">Password</label><input id="bk-pass" name="password" type="password">
+    <label for="bk-pin">PIN</label><input id="bk-pin" name="pin" type="password" inputmode="numeric"><button>Log in</button></form>
+  <form id="decoy"><label for="dc-email">Email</label><input id="dc-email" type="email">
+    <label for="dc-pass">Password</label><input id="dc-pass" name="password" type="password">
+    <input id="dc-trap" name="password_trap" type="password" tabindex="-1" aria-hidden="true"
+      style="position:absolute;left:-10000px;top:0;width:1px;height:1px"><button>Submit</button></form>
+  <form id="register"><label for="rg-email">Email</label><input id="rg-email" type="email">
+    <label for="rg-pass">Password</label><input id="rg-pass" name="password" type="password">
+    <label for="rg-again">Confirm password</label><input id="rg-again" name="password2" type="password"><button>Create account</button></form>
+  <form id="register-submit"><label for="rs-email">Email</label><input id="rs-email" type="email">
+    <label for="rs-pass">Password</label><input id="rs-pass" name="password" type="password">
+    <label for="rs-again">Confirm password</label><input id="rs-again" name="password2" type="password"><button>Submit</button></form>`;
+const SECOND_PASSWORD_EVIDENCE = [
+  ['#bk-pass', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Log in', buttonTexts: ['Log in'] }, true],
+  ['#bk-pin', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Log in', buttonTexts: ['Log in'] }, true],
+  ['#dc-pass', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
+  ['#rg-pass', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Create account', buttonTexts: ['Create account'] }, false],
+  ['#rg-again', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Create account', buttonTexts: ['Create account'] }, false],
+  ['#rs-pass', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, true],
+  ['#rs-again', { passwordFields: 2, usernameFields: 1, formSubmitText: 'Submit', buttonTexts: ['Submit'] }, false],
+];
+// A corporate lock page's "Network password" (the directory account's) with
+// "OK" is a sign-in's; a router's "Network security key" with "Save" is not.
+const NETWORK_PAGE = `<!doctype html>
+  <form id="lock"><label for="np-pass">Network password</label><input id="np-pass" name="pw" type="password">
+    <button>OK</button></form>
+  <form id="router-security"><label for="ns-key">Network security key</label><input id="ns-key" name="key" type="password">
+    <button>Save</button></form>`;
+const NETWORK_EVIDENCE = [
+  ['#np-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'OK', buttonTexts: ['OK'] }, true],
+  ['#ns-key', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Save', buttonTexts: ['Save'] }, false],
+];
 // Outside a form: a phone number and a role=button "Log in".
 const TEL_LOGIN_PAGE = `<!doctype html>
   <div id="tel-login"><input id="tl-phone" type="tel" placeholder="Mobile number">
@@ -200,6 +239,8 @@ const PAGES = [
   [DIALOG_PAGE, [['#df-pass', { passwordFields: 1, usernameFields: 1, buttonTexts: ['Cancel', 'Sign in'] }, true]]],
   [REAUTH_PAGE, REAUTH_EVIDENCE],
   [SIDE_BY_SIDE_PAGE, SIDE_BY_SIDE_EVIDENCE],
+  [SECOND_PASSWORD_PAGE, SECOND_PASSWORD_EVIDENCE],
+  [NETWORK_PAGE, NETWORK_EVIDENCE],
 ];
 const facts = meta => Object.fromEntries(['passwordFields', 'usernameFields', 'formSubmitText', 'buttonTexts', 'formless']
   .filter(key => key in meta).map(key => [key, meta[key]]));

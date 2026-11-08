@@ -376,10 +376,14 @@ const signsIn = text => typeof text === 'string'
 // password", "login_password", "signin-pass".
 const SIGN_IN_FIELD_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|account/i;
 // A password field whose own name or label names a network's key: a Wi-Fi,
-// WLAN, wireless, WPA or WEP password, a hotspot's, an SSID's or a network
-// key. It is the one lone password field without sign-in evidence that is
-// left out, since a run may generate one for a router or hotspot page.
-const NETWORK_KEY_FIELD_RE = /wi-?fi|wlan|wireless|\bwpa|\bwep\b|ssid|hotspot|network[-_\s]?(?:key|pass)/i;
+// WLAN, wireless, WPA or WEP password, a hotspot's, an SSID's, a network key
+// or a "network security key". It is the one lone password field without
+// sign-in evidence that is left out, since a run may generate one for a
+// router or hotspot page. Only wireless words count: "Network password" is
+// how many companies name the directory account's password, and "ssid",
+// "wep" and "wpa" must not continue a longer word ("sessid", "passid"); a
+// separator such as "_" may join them ("ssid_pass", "router_wpa_key").
+const NETWORK_KEY_FIELD_RE = /wi-?fi|wlan|wireless|(?<![\p{L}\p{N}])(?:wpa|wep(?!\p{L})|ssid(?!\p{L}))|hotspot|network[-_\s]?(?:security[-_\s]?)?key/iu;
 
 // What a field that may hold a password is for (isSignInPasswordField,
 // newPasswordValue): `sign-in` (an existing account's password, or a lone
@@ -398,16 +402,25 @@ function passwordFieldPurpose(meta) {
   if (CURRENT_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'sign-in', reason: 'input type=password' };
   if (NEW_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'new' };
   const buttons = Array.isArray(meta.buttonTexts) ? meta.buttonTexts.slice(0, 16) : [];
-  if (Number(meta.passwordFields) > 1) {
-    // Outside a form, the password fields counted are all the form-less ones
-    // of the document, so a form-less sign-in shown beside a form-less
-    // sign-up counts three. A button there that signs in leaves the field to
-    // the rules for a lone one below, so the sign-in's password is guarded
-    // (and a sign-up's that its own label does not mark as new asks).
-    if (meta.formless !== true || !buttons.some(text => typeof text === 'string'
-      && SIGN_IN_BUTTON_RE.test(text.slice(0, 200)))) return { purpose: 'new' };
-  }
   const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
+  if (Number(meta.passwordFields) > 1) {
+    // A second visible password field is a sign-up's or a password change's
+    // confirmation, but also a sign-in's PIN or memorable word, or an
+    // off-screen autofill decoy. So the field reads as a new password only
+    // when the form creates an account (its submit control, or outside a
+    // form or without one, a button that creates it while none signs in),
+    // or when it shows no sign-in either: neither a field naming the account
+    // nor a button that signs in ("Log in", "Sign in", not "Next"). Otherwise
+    // the rules for a lone field below decide, and a sign-up's "Password"
+    // that its own label does not mark as new asks. Outside a form the
+    // password fields counted are all the form-less ones of the document, so
+    // a form-less sign-in shown beside a form-less sign-up counts three.
+    const signInButton = [submit, ...buttons].some(text => typeof text === 'string' && SIGN_IN_BUTTON_RE.test(text.slice(0, 200)));
+    const createsAccount = text => typeof text === 'string' && NEW_ACCOUNT_SUBMIT_RE.test(text.slice(0, 200))
+      && !SIGN_IN_SUBMIT_RE.test(text.slice(0, 200));
+    const newAccount = submit ? createsAccount(submit) : !signInButton && buttons.some(createsAccount);
+    if (newAccount || (!signInButton && !(Number(meta.usernameFields) > 0))) return { purpose: 'new' };
+  }
   if (NEW_ACCOUNT_SUBMIT_RE.test(submit) && !SIGN_IN_SUBMIT_RE.test(submit)) return { purpose: 'new' };
   // A lone password field. Field facts that do not count the form's
   // username fields come from a route that did not read the form, and keep
@@ -448,12 +461,13 @@ function passwordFieldPurpose(meta) {
  * - autocomplete `new-password` or `one-time-code`: no.
  * - an `<input type="password">` whose name, id or label names a key or token
  *   rather than a password: no; one that names the current password: yes.
- * - one that names a new or repeated password, whose form holds more than one
- *   visible password field (a new password and its confirmation;
- *   `passwordFields`), or whose form's submit control creates an account
- *   (`formSubmitText`): no. Outside a form (`formless`), more than one
- *   password field beside a button that signs in is a sign-in shown next to
- *   a sign-up, and the field is read as a lone one.
+ * - one that names a new or repeated password, or whose form's submit control
+ *   creates an account (`formSubmitText`): no. One whose form holds more than
+ *   one visible password field (`passwordFields`): no when the form creates
+ *   an account or shows no sign-in (no field naming the account, no button
+ *   that signs in), as a new password and its confirmation do; otherwise it
+ *   is read as a lone one (a sign-in's password and PIN, an autofill decoy,
+ *   or outside a form, `formless`, a sign-in shown next to a sign-up).
  * - any other (a lone password field): yes, with the sign-in evidence as its
  *   reason when there is some: a field of its form that names an account (a
  *   username, email, login, phone or customer number, or the hidden username
@@ -462,8 +476,9 @@ function passwordFieldPurpose(meta) {
  *   ("Sign in", "Log in", "Next", "Continue", "Verify", "Confirm", and those
  *   words in many languages; `formSubmitText`, `buttonTexts`); or a name or
  *   label that says sign-in, login or account. Without such evidence, a field
- *   whose name or label names a network's key (Wi-Fi, WLAN, WPA, SSID,
- *   hotspot, network key): no. A field's form is its form owner, or the
+ *   whose name or label names a network's key (Wi-Fi, WLAN, wireless, WPA,
+ *   WEP, SSID, hotspot, network key, network security key; not "network
+ *   password"): no. A field's form is its form owner, or the
  *   <form> around the web component it sits in; outside a form, the
  *   form-less part of its document. Field facts without `usernameFields` (a
  *   route that did not read the form) count as a sign-in.
@@ -603,12 +618,13 @@ export function clarifyReplyWithholdsCredentials(answer) {
 /**
  * The password a fill tool call typed into a new-password field (autocomplete
  * `new-password`, or a password-type field that names a new or repeated
- * password, has a confirmation beside it, or is in a form that creates an
- * account), trimmed, or null: a password WebBrain chose for an account it
- * created, which a later sign-in to that account may need. A lone password
- * field nothing marks as new (a Wi-Fi key, a form's lone "Password") is not
- * one, so a value a run made up for it never becomes a sign-in source. A live
- * result and the copy saved in a conversation give the same answer.
+ * password, has a confirmation beside it in a form that shows no sign-in, or
+ * is in a form that creates an account), trimmed, or null: a password
+ * WebBrain chose for an account it created, which a later sign-in to that
+ * account may need. A lone password field nothing marks as new (a Wi-Fi key,
+ * a form's lone "Password"), or a sign-in's second password field (a PIN), is
+ * not one, so a value a run made up for it never becomes a sign-in source. A
+ * live result and the copy saved in a conversation give the same answer.
  *
  * @param {string} toolName
  * @param {object} args the tool call's arguments
@@ -622,6 +638,19 @@ export function newPasswordValue(toolName, args, result) {
   if (passwordFieldPurpose(field)?.purpose !== 'new') return null;
   const value = typeof args?.text === 'string' ? args.text.trim() : '';
   return value || null;
+}
+
+/**
+ * Whether a fill into a field with this metadata may set a new password
+ * (newPasswordValue), so the agent reads the field's site before the write
+ * goes out: no metadata (the target is not known yet), or a field read as a
+ * new password.
+ *
+ * @param {object|null} meta
+ * @returns {boolean}
+ */
+export function mayBeNewPasswordField(meta) {
+  return !meta || typeof meta !== 'object' || passwordFieldPurpose(meta)?.purpose === 'new';
 }
 
 /**
@@ -663,14 +692,20 @@ export function browserBatchFillCallsFromHistory(messages) {
  * conversation, alone or in a browser_batch (newPasswordValue of each fill
  * call). The agent also keeps them in memory for the tab, since compacting the
  * context replaces older calls with a summary; this rebuilds them for a
- * conversation restored after its worker stopped.
+ * conversation restored after its worker stopped. With `site`, only those set
+ * on that site: the agent records the site of the field, read before the
+ * write went out, in the result (`newPasswordSite`), and a result without one
+ * (saved before the site was recorded, or on a page whose site could not be
+ * read) counts on no site.
  *
  * @param {object[]} messages the conversation
  * @param {(content: string) => string} unwrap
+ * @param {string} [site]
  * @returns {string[]}
  */
-export function newPasswordValuesFromHistory(messages, unwrap = content => content) {
+export function newPasswordValuesFromHistory(messages, unwrap = content => content, site = undefined) {
   return [...fillCallsFromHistory(messages, unwrap), ...browserBatchFillCallsFromHistory(messages)]
+    .filter(({ result }) => site === undefined || (typeof result?.newPasswordSite === 'string' && result.newPasswordSite === site))
     .map(({ name, args, result }) => newPasswordValue(name, args, result))
     .filter(Boolean);
 }
