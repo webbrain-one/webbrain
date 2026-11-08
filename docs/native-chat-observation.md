@@ -234,9 +234,12 @@ the right chat. The probe reports that kind of request
 already pinned to a verified chat identity, never moves its anchor. Once a check
 is armed, a later selection change spends it.
 
-The drawer's close control is its header's one named plain button, whatever
-language names it ("Close", "Kapat"); a header with two controls offers none,
-and the control must keep the name it had when the guarded click armed it.
+The drawer's close control is the named plain button that leads its header,
+whatever language names it ("Close", "Kapat"): the header's one button, or,
+where the header also holds actions after its title (a saved contact's drawer
+reads Close, "Contact info", Edit), the one button before that title. A header
+without one title, or with more than one button before it, offers none, and the
+control must keep the name it had when the guarded click armed it.
 
 Contact-drawer media loaders and the Close icon can update unrelated visual
 content without changing identity. The original subtitle and phone nodes,

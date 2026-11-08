@@ -627,16 +627,29 @@
         || /^\+[\d ()-]{7,40}$/.test(compact(node.innerText || node.textContent, 80)));
     });
   };
-  // The contact drawer's close control, in any language: the one named plain
-  // button in the drawer's own header (WhatsApp names it in the page's
-  // language). A drawer that was removed is judged as it was when it closed.
+  // The contact drawer's close control, in any language (WhatsApp names it in
+  // the page's language): the named plain button that leads the drawer's own
+  // header. That is its one button, or, where the header also holds actions
+  // after its title, the one button before that title. A saved contact's
+  // drawer reads Close, "Contact info", Edit: taking only a header with one
+  // button left that Close blocked, the very step the guard names, so a
+  // saved contact could never be confirmed. A header without one title, or
+  // with more than one button before it, still offers none. A drawer that
+  // was removed is judged as it was when it closed.
   const whatsappDrawerClose = drawer => {
     if (!drawer) return null;
     const shown = node => !drawer.isConnected || whatsappRendered(node);
     const header = query(drawer, 'header').find(shown);
-    const buttons = header ? query(header, 'button').filter(button => shown(button)
-      && button.closest('[data-testid="chat-info-drawer"]') === drawer && button.closest('header') === header) : [];
-    const button = buttons.length === 1 ? buttons[0] : null;
+    const own = node => shown(node) && node.closest('[data-testid="chat-info-drawer"]') === drawer
+      && node.closest('header') === header;
+    const buttons = header ? query(header, 'button').filter(own) : [];
+    let button = buttons.length === 1 ? buttons[0] : null;
+    if (buttons.length > 1) {
+      const titles = query(header, 'h1,h2,h3,h4,h5,h6,[role="heading"]').filter(own);
+      const leading = titles.length === 1 ? buttons.filter(candidate => !candidate.contains(titles[0])
+        && (candidate.compareDocumentPosition(titles[0]) & Node.DOCUMENT_POSITION_FOLLOWING)) : [];
+      button = leading.length === 1 ? leading[0] : null;
+    }
     return button && attribute(button, 'aria-label') && button.type === 'button' && !button.disabled
       && !button.form && !button.hasAttribute('form') ? button : null;
   };
