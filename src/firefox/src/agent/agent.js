@@ -30446,13 +30446,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // content-verified Reply/Reply all/Forward control to open the editor;
     // every other unresolved click remains blocked. Recipient authorization
     // is still deferred: the eventual send must bind to the exact chip set.
+    // A named recipient ("reply to the message from Ladson") opens its reply
+    // the same way: the composer does not exist until Reply is clicked, so
+    // blocking the opener for want of a composer left only Compose, and the
+    // reply went out as a new thread. The send itself is still checked
+    // against the named recipient.
     const deferredConversationScope = String(guard?.messagingConversationScope || '');
     // The authorized thread is the one that was open when the run started. If
     // the tab moved to another one, its composer is not the user's target.
     const inAuthorizedConversation = !deferredConversationScope
       || this._workflowJobScopeIdentity(pageUrl) === deferredConversationScope;
     if (policy.deferActiveConversationUntilComposer === true
-        && target?.target_kind === 'active_conversation'
+        && (target?.target_kind === 'active_conversation' || target?.target_kind === 'named')
         && inAuthorizedConversation
         && probe?.composerAvailable === false
         && probe?.composerSetup === true
