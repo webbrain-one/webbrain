@@ -122,29 +122,71 @@ The regex: `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credentia
 ### Sign-in passwords the user never gave
 
 WebBrain types into an existing account's password field only a password the
-user gave (guard `credential-not-provided`). The field is one with
-`autocomplete="current-password"`, or a password input whose name, id and
-label do not name a new or repeated password, an API key or a token, that is
-its form's only visible password field, and whose form's submit control does
-not say it creates an account ("Create account", "Sign up", "Register",
-"Join"; `credential-fields.js` `isSignInPasswordField`). The name, label
-and submit rules are English. A sign-up form with one password field, no
-`autocomplete="new-password"`, and a label and submit control that do not
-say so (for example "Password" and "Next", a sign-up panel outside a
-`<form>`, or any non-English form) is treated as a sign-in, so a password the
-model makes up for the new account is refused and the model has to ask the
-user for one.
+user gave (guard `credential-not-provided`; `credential-fields.js`
+`isSignInPasswordField`). The field is one with
+`autocomplete="current-password"`, one whose name, id or label names the
+current password, or a password input on which the page shows a sign-in.
+Left out are fields whose name, id or label names a new or repeated
+password, an API key or a token; fields that share their form with another
+visible password field (a new password and its confirmation); and fields
+whose form's submit control says it creates an account ("Create account",
+"Sign up", "Register", "Join"). Any other password input is a lone password
+field, and it is a sign-in's only with one of these:
+
+- a username, email or login field in its form, or, outside a `<form>`,
+  among the form-less fields of its document or shadow root: an email input,
+  one with autocomplete `username` or `email`, or a text field whose name,
+  id, label or placeholder says user, login, email, account or identifier
+  (hidden inputs do not count);
+- a form submit control that signs in or goes on to the next step ("Sign
+  in", "Log in", "Login", "Next", "Continue", "Enter", and those words in
+  German, French, Spanish, Portuguese, Italian, Dutch, Turkish, Russian,
+  Polish, Japanese, Chinese and Korean);
+- a name or label that says sign-in, login or account ("Account password").
+
+So a form's lone "Password" field with a "Submit" button, or a "Wi-Fi
+password" field with "Apply", takes a random or generated value when the
+user asks for one. A username and password form with a "Submit" button, or a
+password step with "Next", stays guarded: a random value there is a guessed
+credential, and the user can give a literal one. A value typed into a lone
+password field does not count as a new account's password later.
+`content.js` `_fieldMeta` and, in Chrome, the CDP selector probe
+(`cdp-client.js` `probeRichTextToolbarSelector`) report these facts with the
+same code (`passwordFields`, `usernameFields`, `formSubmitText`); field
+metadata without `usernameFields` keeps the older rule that a lone password
+field is a sign-in's. The new-account, new-password and label rules are
+English. A sign-up form with one password field, no
+`autocomplete="new-password"`, an email field, and a label and submit control
+that do not say it creates an account (for example "Email", "Password" and
+"Next" or "Submit", or a sign-up panel with an email field outside a
+`<form>`) is treated as a sign-in, so a password the model makes up for the
+new account is refused and the model has to ask the user for one.
 
 A password counts as given when it appears whole in the user's own messages
 in this conversation (without the page context WebBrain adds), a text file
 they attached, a clarify answer they typed or chose, the WebBrain profile
-when it is enabled, a MemCode recall result, or a new-password field WebBrain
+when it is enabled, a note the user wrote in WebBrain's local memory when
+memory is enabled, a MemCode recall result, or a new-password field WebBrain
 filled earlier in the conversation (signing in to an account it created). The
 agent keeps the passwords it set this way in memory for the tab, whether typed
 alone or in a `browser_batch`, so compacting the context does not drop them; a
 conversation restored after the extension restarted reads them from its
-history, folded `browser_batch` answers included. A
-value that is a credential word or a stock login ("password", "pass",
+history, folded `browser_batch` answers included.
+
+WebBrain's local memory refuses text that says "password", "token" and the
+like, but keeps a note such as "QA portal login: qa-tester / value". Only
+active notes whose `source` is `manual` count (`user-memory.js`
+`userAuthoredMemoryRecords`): saved with `/memory --add`, edited in Settings,
+or brought in with that source by a memory or config import or Profile Sync.
+Notes auto-capture saved (`source` `auto`, from a chat turn, clarification
+answers or a completed form alike) do not: an extraction model wrote them
+from the turn, whose final assistant reply and clarify questions can quote
+the page, and the note does not say which part it came from. An auto-capture
+rewrite of a note the user wrote makes it `auto`; the user's edit in Settings
+that changes the text makes it `manual` again. Like the profile, local memory
+is not a source in a Cloud bot-memory session, whose prompt carries neither.
+
+A value that is a credential word or a stock login ("password", "pass",
 "username", "admin", "root", "test", "demo", ...) counts only where a message
 sets it as a value: quoted, after ":", "=" or "is", after a word such as
 "password", in a pair such as "admin/admin", or as a whole reply. "I don't
@@ -158,9 +200,11 @@ checked), against the field the typing-target preflight resolved; when
 nothing tells it the target is a password field, the text is typed as before.
 The refusal tells the model to ask for the credentials or end the run as
 partial, naming them, and to ask for the password to set if the form in fact
-creates an account. New-password fields, one-time codes and API keys are not
-checked, since a run may create an account's password, read a code from the
-user's mailbox, or copy a key a page issued. A field a password manager
+creates an account. New-password fields, one-time codes, API keys and lone
+password fields without sign-in evidence are not checked, since a run may
+create an account's password, read a code from the user's mailbox, copy a key
+a page issued, or fill a form with values the user asked it to make up. A
+field a password manager
 filled is not affected: the check stops typing, not the click that submits
 the form.
 

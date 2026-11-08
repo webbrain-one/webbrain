@@ -357,6 +357,44 @@ const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PA
 // also says sign in or log in ("Sign up or log in") does not count.
 const NEW_ACCOUNT_SUBMIT_RE = /sign[-_\s]?up|regist|create|join|get[-_\s]started|enrol/i;
 const SIGN_IN_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n/i;
+// A submit control that signs in, or goes on to a sign-in's next step (a
+// password step after the username one): "Sign in", "Log in", "Login",
+// "Next", "Continue", "Enter", and the same words in German, French, Spanish,
+// Portuguese, Italian, Dutch, Turkish, Russian, Polish, Japanese, Chinese and
+// Korean. "Submit", "Save" or "Apply" is not one.
+const SIGN_IN_STEP_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|\b(?:next|continue|enter)\b|anmelden|einloggen|weiter|connexion|se connecter|suivant|continuer|iniciar sesi[oó]n|iniciar sess[aã]o|ingresar|entrar|acceder|acessar|siguiente|pr[oó]ximo|continuar|accedi|avanti|inloggen|aanmelden|volgende|doorgaan|giriş|oturum aç|ileri|İleri|devam|войти|вход|далее|продолжить|zaloguj|dalej|ログイン|サインイン|次へ|登录|登入|下一步|로그인|다음/iu;
+// A password field whose own name or label says it is the account's: "Account
+// password", "login_password", "signin-pass".
+const SIGN_IN_FIELD_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|account/i;
+
+// What a field that may hold a password is for (isSignInPasswordField,
+// newPasswordValue): `sign-in` (an existing account's password, and why),
+// `new` (a password being set: an account's first one, a changed one, or the
+// repeat of either), or null (not a password field, a one-time code or a key,
+// or a lone password field nothing marks as a sign-in's or a new one, such
+// as a Wi-Fi key).
+function passwordFieldPurpose(meta) {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  const tokens = String(meta.autocomplete ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.includes('current-password')) return { purpose: 'sign-in', reason: 'autocomplete=current-password' };
+  if (tokens.includes('new-password')) return { purpose: 'new' };
+  if (tokens.includes('one-time-code') || String(meta.type ?? '').toLowerCase() !== 'password') return null;
+  const identity = fieldIdentity(meta);
+  if (namesKeyOrToken(identity)) return null;
+  if (CURRENT_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'sign-in', reason: 'input type=password' };
+  if (NEW_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'new' };
+  if (Number(meta.passwordFields) > 1) return { purpose: 'new' };
+  const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
+  if (NEW_ACCOUNT_SUBMIT_RE.test(submit) && !SIGN_IN_SUBMIT_RE.test(submit)) return { purpose: 'new' };
+  // A lone password field. Field facts that do not count the form's
+  // username fields come from a route that did not read the form, and keep
+  // the rule from before the page had to show a sign-in.
+  if (typeof meta.usernameFields !== 'number') return { purpose: 'sign-in', reason: 'input type=password' };
+  if (meta.usernameFields > 0) return { purpose: 'sign-in', reason: 'input type=password beside a username field' };
+  if (SIGN_IN_STEP_SUBMIT_RE.test(submit)) return { purpose: 'sign-in', reason: 'input type=password, submit control signs in' };
+  if (SIGN_IN_FIELD_RE.test(identity)) return { purpose: 'sign-in', reason: 'input type=password named for a sign-in' };
+  return null;
+}
 
 /**
  * Whether a field takes the password of an existing account: the one secret a
@@ -364,36 +402,33 @@ const SIGN_IN_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n/i;
  * value the user gave (credential-not-provided, see agent.js). Fields that
  * create or change a password, one-time codes and API keys are left out: a
  * run may generate a new account's password, read a code from the user's
- * mailbox, or copy a key the page just issued.
+ * mailbox, or copy a key the page just issued. So is a password field that
+ * nothing marks as a sign-in's, such as a Wi-Fi key or a form's lone
+ * "Password" with a "Submit" button: a run asked for random or generated
+ * values may fill it.
  *
  * - autocomplete `current-password`: yes.
  * - autocomplete `new-password` or `one-time-code`: no.
- * - any other `<input type="password">`: yes, unless its name, id or label
- *   names a key or token rather than a password, or, when the field does not
- *   name the current password: it names a new or repeated password, its form
- *   holds more than one visible password field (a new password and its
- *   confirmation; `passwordFields`), or its form's submit control creates an
- *   account (`formSubmitText`).
+ * - an `<input type="password">` whose name, id or label names a key or token
+ *   rather than a password: no; one that names the current password: yes.
+ * - one that names a new or repeated password, whose form holds more than one
+ *   visible password field (a new password and its confirmation;
+ *   `passwordFields`), or whose form's submit control creates an account
+ *   (`formSubmitText`): no.
+ * - any other (a lone password field): yes only with sign-in evidence: a
+ *   username, email or login field in its form, or outside a form among the
+ *   form-less fields of its root (`usernameFields`); a submit control that
+ *   signs in or goes to the next step ("Sign in", "Log in", "Next",
+ *   "Continue", "Enter", and those words in a dozen languages); or a name or
+ *   label that says sign-in, login or account. Field facts without
+ *   `usernameFields` (a route that did not read the form) count as a sign-in.
  *
  * @param {object} meta field metadata as content.js _fieldMeta reports it
  * @returns {{guarded: boolean, reason: string|null}}
  */
 export function isSignInPasswordField(meta) {
-  const no = { guarded: false, reason: null };
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return no;
-  const tokens = String(meta.autocomplete ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-  if (tokens.includes('current-password')) return { guarded: true, reason: 'autocomplete=current-password' };
-  if (tokens.includes('new-password') || tokens.includes('one-time-code')) return no;
-  if (String(meta.type ?? '').toLowerCase() !== 'password') return no;
-  const identity = fieldIdentity(meta);
-  if (namesKeyOrToken(identity)) return no;
-  if (!CURRENT_PASSWORD_FIELD_RE.test(identity)) {
-    if (NEW_PASSWORD_FIELD_RE.test(identity)) return no;
-    if (Number(meta.passwordFields) > 1) return no;
-    const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
-    if (NEW_ACCOUNT_SUBMIT_RE.test(submit) && !SIGN_IN_SUBMIT_RE.test(submit)) return no;
-  }
-  return { guarded: true, reason: 'input type=password' };
+  const field = passwordFieldPurpose(meta);
+  return field?.purpose === 'sign-in' ? { guarded: true, reason: field.reason } : { guarded: false, reason: null };
 }
 
 // Words people use to talk about credentials, and the stock logins a guess
@@ -495,11 +530,14 @@ export function clarifyReplyWithholdsCredentials(answer) {
 }
 
 /**
- * The password a fill tool call typed into a new-password field (a
- * password-type or `new-password` field isSignInPasswordField leaves out,
- * other than keys and tokens), trimmed, or null: a password WebBrain chose for
- * an account it created, which a later sign-in to that account may need. A
- * live result and the copy saved in a conversation give the same answer.
+ * The password a fill tool call typed into a new-password field (autocomplete
+ * `new-password`, or a password-type field that names a new or repeated
+ * password, has a confirmation beside it, or is in a form that creates an
+ * account), trimmed, or null: a password WebBrain chose for an account it
+ * created, which a later sign-in to that account may need. A lone password
+ * field nothing marks as new (a Wi-Fi key, a form's lone "Password") is not
+ * one, so a value a run made up for it never becomes a sign-in source. A live
+ * result and the copy saved in a conversation give the same answer.
  *
  * @param {string} toolName
  * @param {object} args the tool call's arguments
@@ -510,13 +548,9 @@ export function newPasswordValue(toolName, args, result) {
   if (!FILL_TOOLS.has(toolName) || !result || typeof result !== 'object' || Array.isArray(result)
       || result.dispatched === false || result.noDispatch === true) return null;
   const field = [result.fieldMeta, result.focusedField].find(meta => meta && typeof meta === 'object');
-  if (!field || isSignInPasswordField(field).guarded) return null;
-  const tokens = String(field.autocomplete ?? '').toLowerCase().split(/\s+/);
-  const passwordField = tokens.includes('new-password')
-    || (String(field.type ?? '').toLowerCase() === 'password' && !tokens.includes('one-time-code')
-      && !namesKeyOrToken(fieldIdentity(field)));
+  if (passwordFieldPurpose(field)?.purpose !== 'new') return null;
   const value = typeof args?.text === 'string' ? args.text.trim() : '';
-  return passwordField && value ? value : null;
+  return value || null;
 }
 
 /**

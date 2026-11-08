@@ -7,9 +7,10 @@
 // user has not provided, and the clarify result told the model to "continue
 // the task". Now the guessed password is refused before anything is typed,
 // and the reply to a credentials question tells the model to end partial
-// instead of guessing. Credentials in the task (case E2), a clarify answer or
-// the WebBrain profile, other fields, new passwords and app-owned writes are
-// not affected.
+// instead of guessing. Credentials in the task (case E2), a clarify answer,
+// the WebBrain profile or a memory note the user saved, other fields, new
+// passwords, password fields that are no sign-in's (a Wi-Fi key, a form's lone
+// "Password" with a "Submit" button) and app-owned writes are not affected.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
@@ -24,6 +25,15 @@ const FIELDS = {
   ref_user: { tag: 'input', type: 'text', name: 'user', id: 'user', autocomplete: 'username', labelText: 'Username' },
   ref_pass: { tag: 'input', type: 'password', name: 'pass', id: 'pass', autocomplete: 'current-password', labelText: 'Password', passwordFields: 1 },
   ref_new: { tag: 'input', type: 'password', name: 'password', id: 'password', autocomplete: 'new-password', labelText: 'Choose a password', passwordFields: 2 },
+  // Lone password fields, with and without sign-in evidence.
+  ref_lone: { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Password', passwordFields: 1,
+    usernameFields: 0, formSubmitText: 'Submit' },
+  ref_wifi: { tag: 'input', type: 'password', name: 'wifi_key', id: 'wifi_key', labelText: 'Wi-Fi password', passwordFields: 1,
+    usernameFields: 0, formSubmitText: 'Apply' },
+  ref_login: { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Password', passwordFields: 1,
+    usernameFields: 1, formSubmitText: 'Submit' },
+  ref_step: { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Enter password', passwordFields: 1,
+    usernameFields: 0, formSubmitText: 'Next' },
 };
 // Messages the content scripts received, and the field the page has focused.
 const sent = [];
@@ -77,6 +87,7 @@ for (const build of ['chrome', 'firefox']) {
   const { isSignInPasswordField, credentialValueProvided, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials } =
     await import(`../src/${build}/src/agent/credential-fields.js`);
   const { foldBrowserBatchMessages } = await import(`../src/${build}/src/agent/browser-batch.js`);
+  const memory = await import(`../src/${build}/src/agent/user-memory.js`);
 
   const fresh = (tab, messages = b4Conversation()) => {
     sent.length = 0;
@@ -120,6 +131,57 @@ for (const build of ['chrome', 'firefox']) {
     // The current password of a change-password form stays a sign-in password.
     assert.equal(guarded({ type: 'password', name: 'current_password', passwordFields: 1, formSubmitText: 'Create account' }), true);
     assert.equal(guarded({ type: 'password', autocomplete: 'current-password', formSubmitText: 'Register' }), true);
+  });
+
+  // #593 follow-up: "Fill out this form with random info" was refused on a
+  // form's lone "Password" field with a "Submit" button, and "generate a
+  // strong Wi-Fi password" on a "Wi-Fi password" field with "Apply": any lone
+  // password field counted as a sign-in. Now the page has to show one.
+  test(`${build}: a lone password field is a sign-in's only with sign-in evidence`, () => {
+    const guarded = meta => isSignInPasswordField(meta).guarded;
+    const lone = { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Password',
+      passwordFields: 1, usernameFields: 0 };
+    for (const meta of [
+      { ...lone, formSubmitText: 'Submit' },
+      { ...lone, name: 'wifi_key', id: 'wifi_key', labelText: 'Wi-Fi password', formSubmitText: 'Apply' },
+      { ...lone, name: 'pin', id: 'pin', labelText: 'Choose a 4-digit PIN', formSubmitText: 'Save' },
+      { ...lone, formSubmitText: 'Senden' },
+      // Words that only contain a sign-in word.
+      { ...lone, formSubmitText: 'Save to Nextcloud' },
+      { ...lone, formSubmitText: 'Discontinued items' },
+      // Outside a form there is no submit control.
+      lone,
+      { ...lone, passwordFields: 0 },
+    ]) assert.equal(guarded(meta), false, JSON.stringify(meta));
+    assert.deepEqual(isSignInPasswordField({ ...lone, usernameFields: 1, formSubmitText: 'Submit' }),
+      { guarded: true, reason: 'input type=password beside a username field' });
+    for (const formSubmitText of ['Sign in', 'Log in', 'Login', 'Log on', 'Sign up or log in', 'Next', 'Continue', 'Enter',
+      'Anmelden', 'Weiter', 'Se connecter', 'Suivant', 'Iniciar sesión', 'Entrar', 'Siguiente', 'Accedi', 'Inloggen',
+      'Giriş yap', 'Oturum aç', 'Devam', 'İleri', 'Войти', 'Далее', 'ログイン', '次へ', '登录', '下一步', '로그인', '다음']) {
+      assert.deepEqual(isSignInPasswordField({ ...lone, formSubmitText }),
+        { guarded: true, reason: 'input type=password, submit control signs in' }, formSubmitText);
+    }
+    for (const identity of [{ labelText: 'Account password' }, { name: 'login_password' }, { id: 'signin-pass' },
+      { placeholder: 'Your log-in password' }, { ariaLabel: 'Sign-in password' }]) {
+      assert.deepEqual(isSignInPasswordField({ ...lone, labelText: null, ...identity, formSubmitText: 'Submit' }),
+        { guarded: true, reason: 'input type=password named for a sign-in' }, JSON.stringify(identity));
+    }
+    // The exemptions still come first: a new account's submit, a new or
+    // repeated password, a second password field, a key.
+    for (const meta of [
+      { ...lone, usernameFields: 1, formSubmitText: 'Create account' },
+      { ...lone, usernameFields: 1, labelText: 'Confirm password', formSubmitText: 'Sign in' },
+      { ...lone, usernameFields: 1, passwordFields: 2, formSubmitText: 'Next' },
+      { ...lone, usernameFields: 1, name: 'api_key', id: 'api_key', labelText: 'API key' },
+      { ...lone, usernameFields: 1, autocomplete: 'new-password' },
+    ]) assert.equal(guarded(meta), false, JSON.stringify(meta));
+    // A field that names the current password is one without other evidence.
+    assert.equal(guarded({ ...lone, labelText: 'Current password', formSubmitText: 'Save' }), true);
+    assert.equal(guarded({ ...lone, autocomplete: 'current-password', formSubmitText: 'Apply' }), true);
+    // Field facts that do not report username fields (a route that does not
+    // read the form) keep the old rule: the lone password field is a sign-in's.
+    assert.equal(guarded({ type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Submit' }), true);
+    assert.equal(guarded({ type: 'password', name: 'password' }), true);
   });
 
   test(`${build}: a credential counts as given only where the user wrote it whole`, () => {
@@ -221,6 +283,7 @@ for (const build of ['chrome', 'firefox']) {
     assert.match(refused.error, /Never guess, invent or try common or default credentials/);
     assert.match(refused.error, /outcome "partial"/);
     assert.match(refused.error, /creates a new account instead, ask the user with clarify for the password to set/);
+    assert.match(refused.error, /their WebBrain profile or a WebBrain memory note they saved/, 'the refusal names the memory as a source');
     assert.equal(refused.error.includes('admin'), false, 'the refusal does not repeat the guessed value');
     assert.deepEqual(typed(), []);
     // The target the preflight bound for the refused call is released.
@@ -273,6 +336,124 @@ for (const build of ['chrome', 'firefox']) {
     const fromProfile = await agent.executeTool(44, 'set_field', { ref_id: 'ref_pass', text: PROFILE_PASSWORD }, null, modelCall(FIELDS.ref_pass));
     assert.equal(fromProfile.success, true);
     assert.deepEqual(typed().map(message => message.params?.text), [PROFILE_PASSWORD]);
+  });
+
+  // #593 follow-up: WebBrain's local memory was not a source, so a login the
+  // user saved there ("/memory --add QA portal login: user / value") was
+  // refused while the same value in the profile was typed.
+  const MEMORY_PASSWORD = 'Memory-Placeholder-6';
+  const memoryNote = { id: 'mem_qa_portal', text: `QA portal login: test-account-a / ${MEMORY_PASSWORD}`, kind: 'profile_hint',
+    source: 'manual', createdAt: 10, updatedAt: 10 };
+
+  test(`${build}: a sign-in password the user saved in WebBrain memory is typed`, async () => {
+    let agent = fresh(55);
+    agent.setUserMemory({ enabled: true, records: [memoryNote] });
+    assert.equal(agent.userMemoryRecords.length, 1, 'memory keeps a login pair that does not say "password"');
+    const fromMemory = await agent.executeTool(55, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass));
+    assert.equal(fromMemory.success, true);
+    assert.deepEqual(typed().map(message => message.params?.text), [MEMORY_PASSWORD]);
+    assert.equal((await agent.executeTool(55, 'set_field', { ref_id: 'ref_pass', text: 'admin' }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided', 'a guess is still refused');
+    // Memory the user turned off is not a source.
+    agent.setUserMemory({ enabled: false });
+    assert.equal((await agent.executeTool(55, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+    // Nor is a note the user archived.
+    agent = fresh(56);
+    agent.setUserMemory({ enabled: true, records: [{ ...memoryNote, archivedAt: 20 }] });
+    assert.equal((await agent.executeTool(56, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+    // A Cloud bot-memory session reads neither local memory nor the profile.
+    agent = fresh(57);
+    agent.setUserMemory({ enabled: true, records: [memoryNote] });
+    agent.profileEnabled = true;
+    agent.profileText = `Throwaway password: ${PROFILE_PASSWORD}`;
+    assert.equal(credentialValueProvided(MEMORY_PASSWORD, agent._userProvidedCredentialSources(57)), true);
+    agent._botMemorySessions.set(57, { systemNote: () => '', contextData: () => '' });
+    try {
+      assert.equal(credentialValueProvided(MEMORY_PASSWORD, agent._userProvidedCredentialSources(57)), false);
+      assert.equal(credentialValueProvided(PROFILE_PASSWORD, agent._userProvidedCredentialSources(57)), false);
+    } finally {
+      agent._botMemorySessions.delete(57);
+    }
+  });
+
+  // Auto-capture saves text an extraction model wrote from a finished turn:
+  // the user's message, but also the final assistant reply and the clarify
+  // questions, which can quote the page. Every capture path (chat,
+  // clarification answers, completed forms) saves source 'auto'.
+  test(`${build}: a memory note auto-capture wrote is not a source, even over a note the user wrote`, async () => {
+    const captured = memory.applyUserMemoryExtractionOperations({ records: [] }, [{ op: 'add', kind: 'profile_hint', confidence: 0.95,
+      text: memoryNote.text }], { now: 100 });
+    assert.equal(captured.store.records[0].source, 'auto');
+    let agent = fresh(58);
+    agent.setUserMemory({ enabled: true, records: captured.store.records });
+    assert.equal(agent.userMemoryRecords.length, 1);
+    assert.equal((await agent.executeTool(58, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+    assert.deepEqual(typed(), []);
+    // An auto-capture rewrite of the user's own note makes it auto-captured.
+    const rewritten = memory.applyUserMemoryExtractionOperations({ records: [memoryNote] }, [{ op: 'update', id: memoryNote.id,
+      kind: 'profile_hint', confidence: 0.95, text: 'QA portal login: test-account-a / Page-Placeholder-8' }], { now: 200 });
+    assert.equal(rewritten.store.records[0].source, 'auto');
+    assert.deepEqual(memory.userAuthoredMemoryRecords(rewritten.store), []);
+    agent = fresh(59);
+    agent.setUserMemory({ enabled: true, records: rewritten.store.records });
+    assert.equal((await agent.executeTool(59, 'set_field', { ref_id: 'ref_pass', text: 'Page-Placeholder-8' }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+    // A rewrite that leaves the text as the user wrote it keeps their note.
+    const sameText = memory.applyUserMemoryExtractionOperations({ records: [memoryNote] }, [{ op: 'update', id: memoryNote.id,
+      kind: 'preference', confidence: 0.95, text: memoryNote.text }], { now: 200 });
+    assert.equal(sameText.store.records[0].source, 'manual');
+    // The user's edit in Settings (update_user_memory) makes a note theirs;
+    // saving only a new kind leaves the captured text captured.
+    const kindOnly = memory.updateUserMemoryRecord(rewritten.store, memoryNote.id, { text: rewritten.store.records[0].text,
+      kind: 'preference', source: 'manual' }, { now: 300 });
+    assert.equal(kindOnly.record.source, 'auto');
+    const edited = memory.updateUserMemoryRecord(rewritten.store, memoryNote.id, { text: memoryNote.text, source: 'manual' }, { now: 300 });
+    assert.equal(edited.record.source, 'manual');
+    assert.deepEqual(memory.userAuthoredMemoryRecords(edited.store).map(record => record.text), [memoryNote.text]);
+    // "/memory --add" of a note auto-capture already saved (same words up to
+    // case and punctuation) keeps the text the user typed, as passwords are
+    // case-sensitive.
+    const capturedLower = memory.addUserMemoryRecord({ records: [] }, 'QA portal login: test-account-a / memory-placeholder-6',
+      { source: 'auto', now: 100 });
+    const readded = memory.addUserMemoryRecord(capturedLower.store, memoryNote.text, { source: 'manual', now: 200 });
+    assert.equal(readded.deduped, true);
+    assert.equal(readded.record.source, 'manual');
+    assert.equal(readded.record.text, memoryNote.text);
+    // Settings saves an edit as the user's.
+    const background = await readFile(`src/${build}/src/background.js`, 'utf8');
+    const updateRoute = background.match(/case 'update_user_memory': \{([\s\S]*?)case 'delete_user_memory':/)?.[1] || '';
+    assert.match(updateRoute, /source: 'manual'/);
+  });
+
+  test(`${build}: a random or generated value is typed into a password field that is no sign-in's`, async () => {
+    const conversation = task => [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: task, webbrainUserAuthoredText: task }];
+    const fill = (agent, tab, ref_id, text) => agent.executeTool(tab, 'set_field', { ref_id, text }, null, modelCall(FIELDS[ref_id]));
+    let agent = fresh(60, conversation('Fill out this form with random info and submit it.'));
+    assert.equal((await fill(agent, 60, 'ref_lone', 'Rx7-random-Q2')).success, true);
+    agent = fresh(61, conversation('Generate a strong Wi-Fi password and save it on this router page.'));
+    assert.equal((await fill(agent, 61, 'ref_wifi', 'Gen-Wifi-Placeholder-4')).success, true);
+    assert.deepEqual(typed().map(message => message.params?.ref_id), ['ref_wifi']);
+    // A random value for a real sign-in is a guessed credential.
+    agent = fresh(62, conversation('Fill out this form with random info and submit it.'));
+    for (const ref of ['ref_login', 'ref_step']) {
+      assert.equal((await fill(agent, 62, ref, 'Rx7-random-Q3')).errorCode, 'credential_not_provided', ref);
+    }
+    assert.deepEqual(typed(), []);
+    // A value typed into a lone password field is not a new account's
+    // password, so it does not become a source for a later sign-in, live or
+    // read back from the conversation.
+    agent = fresh(63, conversation('Fill out this form with random info and submit it.'));
+    const loneFill = { ref_id: 'ref_lone', text: 'Rx7-random-Q4' };
+    const loneResult = await fill(agent, 63, 'ref_lone', 'Rx7-random-Q4');
+    assert.equal(loneResult.success, true);
+    agent.conversations.get(63).push({ role: 'assistant', content: '', tool_calls: [{ id: 'lone_1', type: 'function',
+      function: { name: 'set_field', arguments: JSON.stringify(loneFill) } }] },
+    { role: 'tool', tool_call_id: 'lone_1', content: JSON.stringify({ ...loneResult, fieldMeta: FIELDS.ref_lone }) });
+    assert.equal((await fill(agent, 63, 'ref_login', 'Rx7-random-Q4')).errorCode, 'credential_not_provided');
+    assert.deepEqual(newPasswordValuesFromHistory(agent.conversations.get(63)), []);
   });
 
   test(`${build}: other fields, new passwords and app-owned writes are not checked`, async () => {

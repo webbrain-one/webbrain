@@ -1282,7 +1282,13 @@ hints in `wb_user_memory_v1` using this v1 shape:
 `{ version, updatedAt, records: [{ id, text, kind, scope, confidence, source, createdAt, updatedAt, lastUsedAt, archivedAt }] }`.
 Allowed `kind` values are `preference`, `profile_hint`, and
 `workflow_preference`. Normalization drops malformed records, obvious secrets,
-page facts, attachment bodies, and duplicate normalized text.
+page facts, attachment bodies, and duplicate normalized text. `source` names
+who wrote a record's text: `manual` for `/memory --add` and an edit in
+Settings that changes the text, `auto` for auto-capture, including an
+auto-capture rewrite of a manual record; saving the same words again keeps
+the text and source of whoever saved them last. The sign-in password check
+takes only active `manual` records as given by the user
+(`userAuthoredMemoryRecords`, `docs/security-model.md`).
 
 The agent hydrates memory from local storage before the first handled message
 and listens for storage changes so live conversations refresh their system

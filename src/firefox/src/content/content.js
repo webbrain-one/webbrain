@@ -6306,12 +6306,16 @@
         labelText,
       };
       // How many visible password fields share this one's form (outside a
-      // form, its document or shadow root), and what the form's submit
-      // control says. Two or more password fields are a new password and its
-      // confirmation, and a submit control such as "Create account" makes
-      // an account; the agent's sign-in password check (credential-fields.js
-      // isSignInPasswordField) leaves both to the run. The Chrome build's CDP
-      // selector probe (cdp-client.js) reports the same facts.
+      // form, its document or shadow root), how many of its fields name an
+      // account, and what the form's submit control says. Two or more
+      // password fields are a new password and its confirmation, and a
+      // submit control such as "Create account" makes an account; the
+      // agent's sign-in password check (credential-fields.js
+      // isSignInPasswordField) leaves both to the run. A lone password field
+      // is a sign-in's only with a username field beside it, a submit
+      // control such as "Sign in" or "Next", or a label that says so: a
+      // Wi-Fi key with "Apply" is not. The Chrome build's CDP selector probe
+      // (cdp-client.js) reports the same facts.
       if (fieldType === 'password') {
         try {
           const fields = el.form ? [...el.form.elements]
@@ -6319,6 +6323,22 @@
           meta.passwordFields = fields.filter(field => field.tagName === 'INPUT'
             && String(field.type || '').toLowerCase() === 'password'
             && field.getClientRects().length > 0).length;
+          // Fields of the same form (outside a form, the form-less fields
+          // of the root) that name the account: an email field, one
+          // autocomplete marks as a username or email, or a text field whose
+          // name, id, label or placeholder says user, login, email, account
+          // or identifier. Hidden inputs are left out: a page keeps ids
+          // there that the user never types.
+          meta.usernameFields = fields.filter(field => {
+            if (field === el || field.tagName !== 'INPUT' || field.form !== el.form) return false;
+            const type = String(field.type || 'text').toLowerCase();
+            if (!['text', 'email', 'tel', 'number'].includes(type)) return false;
+            const autocomplete = String(field.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/);
+            if (type === 'email' || autocomplete.includes('username') || autocomplete.includes('email')) return true;
+            const identity = [field.getAttribute('name'), field.id, field.getAttribute('aria-label'), field.getAttribute('placeholder'),
+              ...[...(field.labels || [])].map(label => label.textContent)].map(value => String(value || '').slice(0, 120)).join(' ');
+            return /user|log[-_ ]?[io]n|e-?mail|account|identifier/i.test(identity);
+          }).length;
           // The text of the form's first visible submit control, which may
           // say the form creates an account ("Create account").
           const submit = el.form ? [...el.form.elements].find(control => control.getClientRects().length > 0

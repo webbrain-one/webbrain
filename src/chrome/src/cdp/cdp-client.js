@@ -4879,16 +4879,29 @@ export class CDPClient {
           };
           // The same password-field facts content.js _fieldMeta reports (keep
           // the two in step): how many visible password fields share the
-          // form (outside a form, the root), and the text of the form's
-          // first visible submit control. The sign-in password check
-          // (credential-fields.js isSignInPasswordField) tells a sign-up's
-          // new password from a sign-in's by them.
+          // form (outside a form, the root), how many fields of the form
+          // (outside a form, the root's form-less fields) name an account,
+          // and the text of the form's first visible submit control. The
+          // sign-in password check (credential-fields.js
+          // isSignInPasswordField) tells a sign-up's new password, and a
+          // lone password field that is no account's, from a sign-in's by
+          // them.
           if (fieldType === 'password') {
             try {
               const fields = el.form ? [...el.form.elements] : [...(root.querySelectorAll?.('input') || [])];
               fieldMeta.passwordFields = fields.filter(field => field.tagName === 'INPUT'
                 && String(field.type || '').toLowerCase() === 'password'
                 && field.getClientRects().length > 0).length;
+              fieldMeta.usernameFields = fields.filter(field => {
+                if (field === el || field.tagName !== 'INPUT' || field.form !== el.form) return false;
+                const type = String(field.type || 'text').toLowerCase();
+                if (!['text', 'email', 'tel', 'number'].includes(type)) return false;
+                const autocomplete = String(field.getAttribute('autocomplete') || '').toLowerCase().split(/\\s+/);
+                if (type === 'email' || autocomplete.includes('username') || autocomplete.includes('email')) return true;
+                const identity = [field.getAttribute('name'), field.id, field.getAttribute('aria-label'), field.getAttribute('placeholder'),
+                  ...[...(field.labels || [])].map(label => label.textContent)].map(value => String(value || '').slice(0, 120)).join(' ');
+                return /user|log[-_ ]?[io]n|e-?mail|account|identifier/i.test(identity);
+              }).length;
               const submit = el.form ? [...el.form.elements].find(control => control.getClientRects().length > 0
                 && ((control.tagName === 'BUTTON' && String(control.type || 'submit').toLowerCase() === 'submit')
                   || (control.tagName === 'INPUT' && ['submit', 'image'].includes(String(control.type || '').toLowerCase())))) : null;

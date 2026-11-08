@@ -137,6 +137,18 @@ export function activeUserMemoryRecords(storeOrRecords) {
     });
 }
 
+// The active records whose text the user wrote: saved with /memory --add,
+// edited in Settings, or brought in by an import or Profile Sync with that
+// source (`manual`). Auto-capture (`auto`, from chat turns, clarification
+// answers and completed forms alike) saves text an extraction model wrote
+// from the user's message and also the final assistant reply and the clarify
+// questions, which can quote the page; the record does not say which. The
+// sign-in password check (agent.js _userProvidedCredentialSources) takes only
+// these as given by the user.
+export function userAuthoredMemoryRecords(storeOrRecords) {
+  return activeUserMemoryRecords(storeOrRecords).filter((record) => record.source === 'manual');
+}
+
 export function formatUserMemoryPrompt(storeOrRecords, maxChars = USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS) {
   const n = Number(maxChars);
   const limit = Number.isFinite(n)
@@ -175,6 +187,10 @@ export function addUserMemoryRecord(storeInput, text, opts = {}) {
   const comparable = normalizeUserMemoryComparable(record.text);
   const existing = store.records.find((item) => !item.archivedAt && normalizeUserMemoryComparable(item.text) === comparable);
   if (existing) {
+    // The same words up to case and punctuation: the record keeps the text of
+    // whoever saved it last, with that source, so `source` always names who
+    // wrote the text (a password in it is case-sensitive).
+    existing.text = record.text;
     existing.kind = record.kind;
     existing.scope = record.scope;
     existing.confidence = Math.max(existing.confidence || 0, record.confidence || 0);
@@ -197,6 +213,13 @@ export function updateUserMemoryRecord(storeInput, id, changes = {}, opts = {}) 
   if (changes.text != null) {
     const text = normalizeUserMemoryText(changes.text);
     if (!text || looksLikeSensitiveMemoryText(text)) return { store, record, changed: false, reason: 'invalid_or_sensitive' };
+    // `source` names who wrote the new text (`manual` for the user's edit in
+    // Settings, `auto` for an auto-capture rewrite), and is recorded only
+    // when the text changes: saving a new kind does not make captured text
+    // the user's.
+    if (changes.source != null && text !== record.text) {
+      record.source = normalizeUserMemoryText(changes.source, 40) || record.source;
+    }
     record.text = text;
   }
   if (changes.kind != null) record.kind = normalizeUserMemoryKind(changes.kind);
@@ -317,6 +340,7 @@ export function applyUserMemoryExtractionOperations(storeInput, operations, opts
         text: op.text,
         kind: op.kind,
         confidence: op.confidence,
+        source: 'auto',
         archivedAt: null,
       }, { now: ts });
     } else if (op.op === 'archive' && op.id) {

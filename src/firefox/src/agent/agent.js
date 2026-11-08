@@ -184,7 +184,7 @@ import { stepLimitUserMessage, terminalGuardUserMessage } from './terminal-messa
 import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefinitions, buildSkillToolRegistry, getEligibleCustomSkills, getEligibleSkillCatalog, normalizeCustomSkills } from './skills.js';
 import { OTP_EMAIL_PROVIDER_IDS, OTP_EMAIL_SKILL_ID, OTP_EMAIL_TOOL_NAME, otpEmailCandidates, otpEmailProviderForUrl, otpEmailUrlLooksLikeMessage, otpOpenMessageRootRef, otpRedactRefs, otpServiceDisplay, otpServiceKey, otpVerificationMessageExcerpt, selectOtpMailboxTab, selectUniqueOtpCandidateByPreview } from './otp-email-tool.js';
 import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
-import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
+import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore, userAuthoredMemoryRecords } from './user-memory.js';
 import { createMemcodeRecall } from './memcode-recall.js';
 import { BotMemorySession, BOT_MEMORY_TOOLS, BOT_MEMORY_SCOPE_HEADER } from './bot-memory.js';
 import {
@@ -48551,8 +48551,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       credentialNotProvided: true,
       errorCode: 'credential_not_provided',
       error: `Nothing was typed: this looks like the password field of a sign-in (${field.reason}), and this text is not a password the user gave. `
-        + 'It is not in their messages, clarify answers or attached files in this conversation, their WebBrain profile, or a password '
-        + 'WebBrain set for an account it created here. Never guess, invent or try common or default credentials. If you have not asked '
+        + 'It is not in their messages, clarify answers or attached files in this conversation, their WebBrain profile or a WebBrain '
+        + 'memory note they saved, or a password WebBrain set for an account it created here. Never guess, invent or try common or '
+        + 'default credentials. If you have not asked '
         + 'the user yet, ask for the credentials with clarify (consequence "credentials"). If they cannot give them, do not submit the '
         + 'form empty or look for another way in: call done with outcome "partial" and say which credentials are missing. If this form '
         + 'creates a new account instead, ask the user with clarify for the password to set rather than ending the run.',
@@ -48562,10 +48563,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // Where a sign-in password may come from: what the user wrote in this
   // conversation (their own messages without the page context WebBrain adds,
   // the text files they attached, and their clarify answers), the WebBrain
-  // profile they enabled for forms, MemCode recall results (their saved
-  // memory), and a password WebBrain typed into a new-password field here,
-  // for signing in to an account it just created. Page text is not a source:
-  // a page could otherwise sign the run in to an account of its choosing.
+  // profile they enabled for forms, the notes they wrote in WebBrain's local
+  // memory when it is on, MemCode recall results (their saved memory), and a
+  // password WebBrain typed into a new-password field here, for signing in to
+  // an account it just created. Page text is not a source: a page could
+  // otherwise sign the run in to an account of its choosing.
   _userProvidedCredentialSources(tabId) {
     const messages = this.conversations.get(tabId) || [];
     const unwrap = content => this._unwrapUntrusted(content);
@@ -48590,6 +48592,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (this.profileEnabled && typeof this.profileText === 'string' && !this._botMemorySessions.has(tabId)) {
       sources.push(this.profileText);
+    }
+    // Only notes the user wrote (userAuthoredMemoryRecords): an auto-captured
+    // one holds text a model chose from a turn that may quote the page. Like
+    // the profile, local memory is not read in a Cloud bot-memory session.
+    if (this.userMemoryEnabled && !this._botMemorySessions.has(tabId)) {
+      sources.push(...userAuthoredMemoryRecords(this.userMemoryRecords).map(record => record.text));
     }
     sources.push(...(this._newPasswordValues?.get(tabId) || []), ...newPasswordValuesFromHistory(messages, unwrap));
     return sources.filter(source => typeof source === 'string' && source);

@@ -3256,11 +3256,15 @@ async function handleMessage(msg, sender) {
     }
 
     case 'update_user_memory': {
+      // Settings sends the user's edit: new text in it is theirs (a note
+      // they wrote counts as given for a sign-in, user-memory.js
+      // userAuthoredMemoryRecords).
       const result = await withUserMemoryStoreLock(() => userMemoryStore.update(String(msg.id || ''), {
         text: msg.text,
         kind: msg.kind,
         scope: msg.scope,
         confidence: msg.confidence,
+        source: 'manual',
       }));
       if (result.changed) await syncAgentUserMemoryFromStorage();
       return { ok: result.changed, ...result };
