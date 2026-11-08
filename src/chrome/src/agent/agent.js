@@ -2243,6 +2243,19 @@ export class Agent extends LoopDetector {
       || (guard?.requiresSubmission == null && guard?.requiresStateChange === true) || !!guard?.siteWorkflow?.job;
   }
 
+  // No form on the page can hold text this run entered or be one it sent:
+  // the run typed into no field (fieldTextEntered, completion-invariant.js)
+  // and every receipt it recorded is a native confirmation, which sends no
+  // form (a semantic commit, such as Mastodon's delete dialog). The done probe
+  // then stops counting a form of empty text fields, like the composer
+  // Mastodon always shows, as a task form left unsent (classifyCompletionForm).
+  _completionFormsUntouchedByRun(tabId) {
+    const run = this.completionInvariants.get(tabId);
+    if (!run || run.fieldTextEntered === true) return false;
+    const submit = this._completionSubmitStates.get(tabId);
+    return !submit || ((submit.dispatched !== true || !!submit.semanticCommit) && submit.formSentEarlier !== true);
+  }
+
   // A visible form made only of search fields, or of one empty text field
   // that says nothing about itself in markup, sent with GET and holding no
   // task evidence, is a search form unless its submit controls commit
@@ -2706,6 +2719,7 @@ export class Agent extends LoopDetector {
       && this.completionInvariants.get(tabId)?.runToken === publication.runToken
       && this._sha256TextSync(this._progressTaskAnchorText(tabId)) === publication.sourceSha256
       && !this._checkAbort(tabId) && !this._hasUnvalidatedSteering(tabId) ? publication : null;
+    const priorReceipt = this._completionSubmitStates.get(tabId);
     const state = {
       originatingUrl: beforeUrl || '',
       taskKey: this._progressTaskKeyHash(tabId),
@@ -2750,6 +2764,10 @@ export class Agent extends LoopDetector {
         sourceSha256: this._sha256TextSync(this._progressTaskAnchorText(tabId)),
         documentToken: beforeDocument,
       } : null,
+      // An ordinary form this run sent before, whose receipt this one
+      // replaces (_completionFormsUntouchedByRun).
+      ...(priorReceipt?.dispatched === true && (!priorReceipt.semanticCommit || priorReceipt.formSentEarlier === true)
+        ? { formSentEarlier: true } : {}),
       dispatched: !explicitlyNotDispatched && dispatchMayHaveOccurred,
       documentChanged: !!(
         result?.pageUrlChanged
@@ -2837,6 +2855,31 @@ export class Agent extends LoopDetector {
 
   _completionSemanticCommitCurrent(tabId, submit, pageUrl) {
     return semanticCommitIsCurrent(submit, this._completionSemanticContext(tabId, pageUrl));
+  }
+
+  // A native confirmation commit counts only on the document it was sent in,
+  // while that document is still the live one (semantic-commit-navigation.js).
+  // An accessibility-tree read is what tells the agent which document is
+  // live. A vision run reads none, so its commit carried no document and the
+  // completion verdict could never certify it. Ask the page itself, as the
+  // text-write guards do (_liveTextMutationScope), before such a commit is
+  // sent and again when done relies on it. A page that does not answer in
+  // time keeps the last known document, and the result says so: true only
+  // when the cached document is the one the page reported just now. Done
+  // certifies nothing on a false result, since a page reloaded at the same
+  // URL may not answer yet while the cache still names the old document.
+  async _refreshLiveDocumentScope(tabId) {
+    let live = null;
+    try {
+      live = await withCompletionTimeout(() => this._liveTextMutationScope(tabId, '', {}),
+        this._runAbortSignal(tabId), 1500);
+    } catch { return false; }
+    if (!live?.documentToken) return false;
+    const cached = this._lastAxScopes.get(tabId);
+    if (live.documentToken === cached?.documentToken
+        && this._normalizeUrl(live.pageUrl || '') === this._normalizeUrl(cached?.pageUrl || '')) return true;
+    this._rememberAxScope(tabId, live.documentToken, live.pageUrl || cached?.pageUrl || '');
+    return true;
   }
 
   _completionIframeBinding(tabId) {
@@ -6826,10 +6869,12 @@ export class Agent extends LoopDetector {
       // How this run read pages and whether it changed its tab are facts of
       // the run, not evidence for the old objective: done reports them under
       // the revised one too, and never claims an unchanged tab it changed.
+      // Text the run typed before the revision may still sit in a form.
       this.completionInvariants.set(tabId, { ...createCompletionInvariantState(state.runToken),
         sequence: state.sequence, historyToolCallIdsBeforeRun,
         ...(state.backgroundReads ? { backgroundReads: state.backgroundReads } : {}),
-        ...(state.runTabChanged ? { runTabChanged: true } : {}) });
+        ...(state.runTabChanged ? { runTabChanged: true } : {}),
+        ...(state.fieldTextEntered ? { fieldTextEntered: true } : {}) });
     }
     this._completionVerdicts?.delete(tabId);
     this._doneBlockCount.delete(tabId);
@@ -17889,6 +17934,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         && this._isNavigationProneToolCall(fnName, fnArgs);
       let beforeUrl = '';
       let afterUrl = '';
+      // A native confirmation commit is bound to the document it is sent in.
+      if (!protectedPageFailure && detectedSubmitAction?.semanticCommit === true) {
+        await this._refreshLiveDocumentScope(tabId);
+      }
       const beforeDocument = String(this._lastAxScopes.get(tabId)?.documentToken || '');
       if (navigationProneCall) {
         beforeUrl = await this._currentUrl(tabId);
@@ -49878,6 +49927,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // it created/added/saved/submitted something, that's a red flag —
           // the submit almost certainly didn't happen.
           let pageState = null;
+          const formsUntouchedByRun = this._completionFormsUntouchedByRun(tabId);
           try {
             const stateProbe = await cdpClient.evaluate(tabId, `
               (() => {
@@ -49895,6 +49945,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 const publicationDetail = ${publicationDetailResource.toString()};
                 const publicationParent = ${publicationReplyParent.toString()};
                 const publicationParentCache = new Map();
+                // This run typed into no field and sent no ordinary form.
+                const untouchedByRun = ${formsUntouchedByRun ? 'true' : 'false'};
                 const dialogs = Array.from(document.querySelectorAll('[role=dialog],[role=alertdialog],[aria-modal="true"],dialog[open]')).filter(visible);
                 const forms = Array.from(document.querySelectorAll('form')).filter(visible);
                 const primaryContent = document.querySelector('main,[role=main]');
@@ -49931,6 +49983,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                       // A type=button or type=reset control cannot send its form natively.
                       type: /^(?:button|input)$/i.test(el.tagName || '') ? String(el.type || '').toLowerCase() : '',
                     })),
+                    untouchedByRun,
                   });
                 });
                 // Live messages are returned as they are; the agent reads what
@@ -50277,11 +50330,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           const genericGuard = this._planExecutionGuards.get(tabId);
           const dispatchedSubmit = this._currentCompletionSubmitState(tabId);
+          // The verdict certifies a native confirmation only on the document
+          // it was sent in: read which document is live now. A page that
+          // does not say leaves the commit unverified.
+          const liveDocumentRead = completionDecision?.outcome === 'succeeded' && !!dispatchedSubmit?.semanticCommit
+            && await this._refreshLiveDocumentScope(tabId);
           if (completionDecision?.outcome === 'succeeded'
               && genericGuard?.enabled && !genericGuard.siteWorkflow?.job
               && dispatchedSubmit?.dispatched && dispatchedSubmit.observedAfterSubmit
               && this._normalizeUrl(dispatchedSubmit.currentUrl) === this._normalizeUrl(probe?.url || '')
-              && (!dispatchedSubmit.semanticCommit || this._completionSemanticCommitCurrent(tabId, dispatchedSubmit, probe?.url || ''))
+              && (!dispatchedSubmit.semanticCommit || (liveDocumentRead && this._completionSemanticCommitCurrent(tabId, dispatchedSubmit, probe?.url || '')))
               && !dispatchedSubmit.formValidationFailed) {
             genericGuard.verifiedSubmissionEvidence = true;
             genericGuard.semanticSubmissionVerified = true;
