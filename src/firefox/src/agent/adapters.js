@@ -16396,10 +16396,13 @@ const ADAPTERS = [
     fullPageCapture: { infiniteScroll: isRedditInfiniteScrollUrl },
     notes: `
 - Prefer old.reddit.com — its DOM is simpler and easier to automate. If you land on www.reddit.com or new.reddit.com, navigate to the old.reddit.com equivalent first (swap the subdomain, keep the path).
-- old.reddit.com and new.reddit.com have completely different DOMs. Check the URL before assuming selectors.
-- Comments are nested deeply; "load more comments" links require clicking to expand.
-- Voting requires being logged in; the up/down arrows are siblings of each post/comment.
-- Post composer: title, body (markdown editor), flair selector. "Submit" button is at the bottom.`,
+- On old.reddit.com /r/<subreddit>/submit, choose the "text" tab for a text/self post before filling the separate title and Markdown body textareas. Modern Reddit has a different composer; check the URL first.
+- Before opening old Reddit's flair picker, scroll the "choose a flair" row into the upper half of the viewport so the popup and its bottom button fit. After scrolling, observe the new positions before clicking.
+- Old Reddit post flair is a two-step popup, not a native select: click "select", choose the appropriate flair, then explicitly click the popup's "apply" button. Clicking an option only previews it; clicking outside dismisses the popup without applying it.
+- Choosing a flair inserts a preview and "(remove flair)" row ABOVE "apply", moving that button DOWN. Re-read the picker for a fresh AX reference in element mode, or call take_screenshot in vision mode, then single-click the actual current "apply" button. Do not reuse its pre-selection coordinates, press Enter on the option, or double-click the option to apply it.
+- A flair chip can appear on the main form even before it is applied. After explicitly clicking "apply", verify that the popup closes and the intended flair remains. If submit reports "Your post must contain post flair.", preserve the title/body, reopen the picker and explicitly apply the intended flair before retrying submit.
+- Submit only after applying any required flair. Verify the resulting /r/<subreddit>/comments/<id>/ permalink and posted title/body in the intended community before marking that item published or moving to the next subreddit; observe the result before retrying a submit.
+- Comments are nested deeply; "load more comments" links require clicking to expand.`,
   },
   {
     name: 'youtube',
