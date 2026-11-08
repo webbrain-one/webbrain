@@ -133,16 +133,33 @@ whose form's submit control says it creates an account ("Create account",
 "Sign up", "Register", "Join"). Any other password input is a lone password
 field, and it is a sign-in's only with one of these:
 
-- a username, email or login field in its form, or, outside a `<form>`,
-  among the form-less fields of its document or shadow root: an email input,
-  one with autocomplete `username` or `email`, or a text field whose name,
-  id, label or placeholder says user, login, email, account or identifier
-  (hidden inputs do not count);
-- a form submit control that signs in or goes on to the next step ("Sign
-  in", "Log in", "Login", "Next", "Continue", "Enter", and those words in
-  German, French, Spanish, Portuguese, Italian, Dutch, Turkish, Russian,
-  Polish, Japanese, Chinese and Korean);
+- a field of its form that names the account: an email or phone (`tel`)
+  input, one with autocomplete `username`, `email` or `tel`, a text or
+  number field whose name, id, label (`<label>`, `aria-label`,
+  `aria-labelledby`), placeholder or title, or the label of the web
+  component it sits in, says user, login, email, account, identifier, phone,
+  mobile, customer, member, client, number or "ID" (and those words in a
+  dozen other languages), or a hidden input named for the account of a
+  password step (`username`, `login`, `login_hint`, `email`, `identifier`,
+  `account_name`; not a generic id such as `user_id` or `flow`);
+- a button of its form that signs in, re-authenticates or goes on to the
+  next step ("Sign in", "Log in", "Login", "Next", "Continue", "Enter",
+  "Verify", "Unlock", "Authenticate", and those words in German, French,
+  Spanish, Portuguese, Italian, Dutch, the Nordic languages, Finnish, Czech,
+  Slovak, Hungarian, Romanian, Greek, Hebrew, Arabic, Persian, Turkish,
+  Russian, Polish, Vietnamese, Indonesian, Thai, Hindi, Japanese, Chinese and
+  Korean): the first submit control or any other visible button, a
+  `type=button` or `role=button` control, or a button component whose label
+  is slotted in, named by its text, `aria-label`, `aria-labelledby` or
+  title;
 - a name or label that says sign-in, login or account ("Account password").
+
+A field's form is its form owner; for a field in a web component's shadow
+root, which has no form owner, the `<form>` around the component across
+shadow boundaries; outside a `<form>`, the form-less part of its document,
+across open shadow roots (fields and buttons inside some other form do not
+count). A form without a visible button of its own (one a dialog footer
+submits) also reads the form-less buttons of its document.
 
 So a form's lone "Password" field with a "Submit" button, or a "Wi-Fi
 password" field with "Apply", takes a random or generated value when the
@@ -151,16 +168,23 @@ password step with "Next", stays guarded: a random value there is a guessed
 credential, and the user can give a literal one. A value typed into a lone
 password field does not count as a new account's password later.
 `content.js` `_fieldMeta` and, in Chrome, the CDP selector probe
-(`cdp-client.js` `probeRichTextToolbarSelector`) report these facts with the
-same code (`passwordFields`, `usernameFields`, `formSubmitText`); field
-metadata without `usernameFields` keeps the older rule that a lone password
-field is a sign-in's. The new-account, new-password and label rules are
-English. A sign-up form with one password field, no
-`autocomplete="new-password"`, an email field, and a label and submit control
-that do not say it creates an account (for example "Email", "Password" and
-"Next" or "Submit", or a sign-up panel with an email field outside a
-`<form>`) is treated as a sign-in, so a password the model makes up for the
-new account is refused and the model has to ask the user for one.
+(`cdp-client.js` `probeRichTextToolbarSelector`) report these facts
+(`passwordFields`, `usernameFields`, `formSubmitText`, `buttonTexts`, the
+nearest eight button texts) by calling the same function,
+`rich-text-toolbar-heuristic.js` `passwordFieldFacts`, which both routes
+already load; field metadata without `usernameFields` keeps the older rule
+that a lone password field is a sign-in's. The new-account, new-password and
+label rules are English. The evidence errs towards guarding: an email or
+phone field beside a lone password field, or a "Next", "Continue" or
+"Verify" button anywhere in its form (outside a form, anywhere in the
+form-less part of the page), makes it a sign-in's. So a sign-up form with
+one password field, no `autocomplete="new-password"`, an email field, and a
+label and submit control that do not say it creates an account (for example
+"Email", "Password" and "Next" or "Submit", or a sign-up panel with an email
+field outside a `<form>`) is treated as a sign-in, and so is a Wi-Fi key in a
+setup wizard with "Next": a password the model makes up there, for the new
+account or from "fill with random info", is refused, and the model has to
+ask the user for one.
 
 A password counts as given when it appears whole in the user's own messages
 in this conversation (without the page context WebBrain adds), a text file
@@ -175,16 +199,25 @@ history, folded `browser_batch` answers included.
 
 WebBrain's local memory refuses text that says "password", "token" and the
 like, but keeps a note such as "QA portal login: qa-tester / value". Only
-active notes whose `source` is `manual` count (`user-memory.js`
-`userAuthoredMemoryRecords`): saved with `/memory --add`, edited in Settings,
-or brought in with that source by a memory or config import or Profile Sync.
-Notes auto-capture saved (`source` `auto`, from a chat turn, clarification
-answers or a completed form alike) do not: an extraction model wrote them
-from the turn, whose final assistant reply and clarify questions can quote
-the page, and the note does not say which part it came from. An auto-capture
-rewrite of a note the user wrote makes it `auto`; the user's edit in Settings
-that changes the text makes it `manual` again. Like the profile, local memory
-is not a source in a Cloud bot-memory session, whose prompt carries neither.
+active notes the user wrote count (`user-memory.js`
+`userAuthoredMemoryRecords`): `source` `manual` with confidence 1, saved with
+`/memory --add`, edited in Settings, or brought in with that source by a
+memory or config import or Profile Sync. Notes auto-capture saved (`source`
+`auto`, from a chat turn, clarification answers or a completed form alike)
+do not: an extraction model wrote them from the turn, whose final assistant
+reply and clarify questions can quote the page, and the note does not say
+which part it came from. An auto-capture rewrite of a note the user wrote
+makes it `auto`; the user's edit in Settings that changes the text makes it
+`manual` with confidence 1 again. Auto-capture saving the same words as a
+note the user wrote (up to case and punctuation) leaves that note, its text,
+source and confidence as they were, and the user's own save of the same
+words takes the note over with their text. Before this rule, an auto-capture
+rewrite of a user's note kept `source` `manual` with the extraction model's
+text and confidence; such notes in an existing store are not counted, since
+that confidence is below 1, unless the model reported exactly 1.0 (which
+nothing in the record tells apart), until the user edits them in Settings.
+Like the profile, local memory is not a source in a Cloud bot-memory session,
+whose prompt carries neither.
 
 A value that is a credential word or a stock login ("password", "pass",
 "username", "admin", "root", "test", "demo", ...) counts only where a message

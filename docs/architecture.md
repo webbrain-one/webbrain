@@ -1285,10 +1285,15 @@ Allowed `kind` values are `preference`, `profile_hint`, and
 page facts, attachment bodies, and duplicate normalized text. `source` names
 who wrote a record's text: `manual` for `/memory --add` and an edit in
 Settings that changes the text, `auto` for auto-capture, including an
-auto-capture rewrite of a manual record; saving the same words again keeps
-the text and source of whoever saved them last. The sign-in password check
-takes only active `manual` records as given by the user
-(`userAuthoredMemoryRecords`, `docs/security-model.md`).
+auto-capture rewrite of a manual record. Saving the same words again (up to
+case and punctuation) takes the newer text and source, except that
+auto-capture repeating a `manual` record leaves its text, source and
+confidence alone. A `manual` record has confidence 1 (`/memory --add` saves
+it so, and a Settings edit that changes the text sets it). The sign-in
+password check takes only active `manual` records with confidence 1 as given
+by the user (`userAuthoredMemoryRecords`, `docs/security-model.md`); that
+leaves out records an older auto-capture rewrote without changing their
+source.
 
 The agent hydrates memory from local storage before the first handled message
 and listens for storage changes so live conversations refresh their system

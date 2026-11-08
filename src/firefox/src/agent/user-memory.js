@@ -145,8 +145,19 @@ export function activeUserMemoryRecords(storeOrRecords) {
 // questions, which can quote the page; the record does not say which. The
 // sign-in password check (agent.js _userProvidedCredentialSources) takes only
 // these as given by the user.
+//
+// A note the user wrote has confidence 1 (/memory --add saves it so, and an
+// edit in Settings that changes the text sets it). Before auto-capture
+// rewrites set `auto`, a rewrite of the user's note left it `manual` with the
+// extraction model's text and its confidence, which is below 1 unless the
+// model said 1.0; such a note is not counted.
+function userAuthoredMemoryRecord(record) {
+  const confidence = Number(record?.confidence);
+  return record?.source === 'manual' && (Number.isFinite(confidence) ? confidence : 1) === 1;
+}
+
 export function userAuthoredMemoryRecords(storeOrRecords) {
-  return activeUserMemoryRecords(storeOrRecords).filter((record) => record.source === 'manual');
+  return activeUserMemoryRecords(storeOrRecords).filter(userAuthoredMemoryRecord);
 }
 
 export function formatUserMemoryPrompt(storeOrRecords, maxChars = USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS) {
@@ -187,14 +198,20 @@ export function addUserMemoryRecord(storeInput, text, opts = {}) {
   const comparable = normalizeUserMemoryComparable(record.text);
   const existing = store.records.find((item) => !item.archivedAt && normalizeUserMemoryComparable(item.text) === comparable);
   if (existing) {
-    // The same words up to case and punctuation: the record keeps the text of
-    // whoever saved it last, with that source, so `source` always names who
-    // wrote the text (a password in it is case-sensitive).
-    existing.text = record.text;
+    // The same words up to case and punctuation. `source` names who wrote
+    // the record's text (a password in it is case-sensitive), and a note the
+    // user wrote stays theirs: auto-capture saving the same words again
+    // changes neither its text, its source nor its confidence
+    // (userAuthoredMemoryRecords). The user's own save, or an auto-capture
+    // over an auto-captured note, takes the new text and source.
+    const keepsUserText = existing.source === 'manual' && record.source !== 'manual';
+    if (!keepsUserText) {
+      existing.text = record.text;
+      existing.source = record.source;
+      existing.confidence = Math.max(existing.confidence || 0, record.confidence || 0);
+    }
     existing.kind = record.kind;
     existing.scope = record.scope;
-    existing.confidence = Math.max(existing.confidence || 0, record.confidence || 0);
-    existing.source = record.source;
     existing.updatedAt = ts;
     existing.archivedAt = null;
     return { store: updateStoreTimestamp(store, ts), record: existing, changed: true, deduped: true };
@@ -210,24 +227,30 @@ export function updateUserMemoryRecord(storeInput, id, changes = {}, opts = {}) 
   const store = normalizeUserMemoryStore(storeInput, { now: ts });
   const record = store.records.find((item) => item.id === id);
   if (!record) return { store, record: null, changed: false, reason: 'not_found' };
+  // `source` names who wrote the new text (`manual` for the user's edit in
+  // Settings, `auto` for an auto-capture rewrite), and is recorded only when
+  // the text changes: saving a new kind does not make captured text the
+  // user's, nor does an auto-capture that keeps the user's words make their
+  // note captured.
+  const author = changes.source != null ? normalizeUserMemoryText(changes.source, 40) : '';
+  let rewritten = false;
   if (changes.text != null) {
     const text = normalizeUserMemoryText(changes.text);
     if (!text || looksLikeSensitiveMemoryText(text)) return { store, record, changed: false, reason: 'invalid_or_sensitive' };
-    // `source` names who wrote the new text (`manual` for the user's edit in
-    // Settings, `auto` for an auto-capture rewrite), and is recorded only
-    // when the text changes: saving a new kind does not make captured text
-    // the user's.
-    if (changes.source != null && text !== record.text) {
-      record.source = normalizeUserMemoryText(changes.source, 40) || record.source;
-    }
+    rewritten = text !== record.text;
+    if (author && rewritten) record.source = author;
     record.text = text;
   }
   if (changes.kind != null) record.kind = normalizeUserMemoryKind(changes.kind);
   if (changes.scope != null) record.scope = normalizeUserMemoryText(changes.scope, MAX_SCOPE_TEXT) || 'global';
-  if (changes.confidence != null) {
+  // A note the user wrote has confidence 1 (userAuthoredMemoryRecords), which
+  // another author's change that leaves its text alone does not lower.
+  const keepsUserNote = !rewritten && author && author !== 'manual' && record.source === 'manual';
+  if (changes.confidence != null && !keepsUserNote) {
     const confidence = Number(changes.confidence);
     if (Number.isFinite(confidence)) record.confidence = Math.max(0, Math.min(1, confidence));
   }
+  if (author === 'manual' && rewritten) record.confidence = 1;
   record.updatedAt = ts;
   if (changes.archivedAt !== undefined) record.archivedAt = changes.archivedAt ? normalizeTimestamp(changes.archivedAt, ts) : null;
   return { store: updateStoreTimestamp(store, ts), record, changed: true };

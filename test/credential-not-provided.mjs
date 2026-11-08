@@ -178,6 +178,19 @@ for (const build of ['chrome', 'firefox']) {
     // A field that names the current password is one without other evidence.
     assert.equal(guarded({ ...lone, labelText: 'Current password', formSubmitText: 'Save' }), true);
     assert.equal(guarded({ ...lone, autocomplete: 'current-password', formSubmitText: 'Apply' }), true);
+    // Any button of the form counts, not only its first submit control: a
+    // "Show" toggle first, a type=button "Log in", a re-authentication.
+    for (const buttonTexts of [['Show', 'Log in'], ['Sign in with email'], ['Verify'], ['Unlock'], ['Logga in'], ['Kirjaudu sisään'],
+      ['Đăng nhập'], ['تسجيل الدخول']]) {
+      assert.deepEqual(isSignInPasswordField({ ...lone, formSubmitText: buttonTexts[0], buttonTexts }),
+        { guarded: true, reason: buttonTexts[0] === 'Show' ? 'input type=password beside a sign-in button'
+          : 'input type=password, submit control signs in' }, buttonTexts.join());
+      assert.deepEqual(isSignInPasswordField({ ...lone, buttonTexts }),
+        { guarded: true, reason: 'input type=password beside a sign-in button' }, buttonTexts.join());
+    }
+    for (const buttonTexts of [['Show', 'Submit'], ['Apply', 'Cancel'], ['Connect'], [42, null, {}], 'Log in']) {
+      assert.equal(guarded({ ...lone, formSubmitText: 'Submit', buttonTexts }), false, JSON.stringify(buttonTexts));
+    }
     // Field facts that do not report username fields (a route that does not
     // read the form) keep the old rule: the lone password field is a sign-in's.
     assert.equal(guarded({ type: 'password', name: 'password', passwordFields: 1, formSubmitText: 'Submit' }), true);
@@ -426,6 +439,59 @@ for (const build of ['chrome', 'firefox']) {
     const background = await readFile(`src/${build}/src/background.js`, 'utf8');
     const updateRoute = background.match(/case 'update_user_memory': \{([\s\S]*?)case 'delete_user_memory':/)?.[1] || '';
     assert.match(updateRoute, /source: 'manual'/);
+  });
+
+  // Review of the follow-up: auto-capture is on by default and re-saves what
+  // the user said; the dedupe that absorbs the repeat must not take the
+  // user's note away from them, nor replace their case-sensitive text.
+  test(`${build}: auto-capture saving the user's note again leaves it theirs`, async () => {
+    const userStore = { records: [{ ...memoryNote, confidence: 1 }] };
+    for (const text of [memoryNote.text, memoryNote.text.toLowerCase(), `${memoryNote.text.toUpperCase()}.`]) {
+      const captured = memory.applyUserMemoryExtractionOperations(userStore, [{ op: 'add', kind: 'preference', confidence: 0.9, text }], { now: 200 });
+      assert.equal(captured.changed, true);
+      assert.equal(captured.store.records.length, 1, text);
+      assert.deepEqual(memory.userAuthoredMemoryRecords(captured.store).map(record => [record.text, record.source, record.confidence]),
+        [[memoryNote.text, 'manual', 1]], text);
+      const agent = fresh(64);
+      agent.setUserMemory({ enabled: true, records: captured.store.records });
+      assert.equal((await agent.executeTool(64, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).success,
+        true, text);
+      assert.deepEqual(typed().map(message => message.params?.text), [MEMORY_PASSWORD]);
+    }
+    // An auto-capture update that keeps the user's words keeps their note.
+    const sameWords = memory.applyUserMemoryExtractionOperations(userStore, [{ op: 'update', id: memoryNote.id, kind: 'preference',
+      confidence: 0.9, text: memoryNote.text }], { now: 200 });
+    assert.deepEqual(memory.userAuthoredMemoryRecords(sameWords.store).map(record => record.confidence), [1]);
+    // Over an auto-captured note, a newer capture takes its text and the
+    // user's own save takes it over.
+    const auto = memory.addUserMemoryRecord({ records: [] }, 'QA portal login: test-account-a / memory-placeholder-6', { source: 'auto', confidence: 0.9, now: 100 });
+    const autoAgain = memory.addUserMemoryRecord(auto.store, memoryNote.text, { source: 'auto', confidence: 0.95, now: 200 });
+    assert.deepEqual([autoAgain.record.text, autoAgain.record.source], [memoryNote.text, 'auto']);
+    const userAgain = memory.addUserMemoryRecord(auto.store, memoryNote.text, { source: 'manual', now: 300 });
+    assert.deepEqual([userAgain.record.text, userAgain.record.source, userAgain.record.confidence], [memoryNote.text, 'manual', 1]);
+  });
+
+  // Before the follow-up, an auto-capture rewrite of the user's note left it
+  // 'manual' with the extraction model's text and confidence. Such a note in
+  // an existing store does not count; the user's edit in Settings makes it
+  // theirs again.
+  test(`${build}: a note an earlier auto-capture rewrote does not count until the user edits it`, async () => {
+    const legacy = { ...memoryNote, text: 'QA portal login: test-account-a / Page-Placeholder-8', confidence: 0.9 };
+    assert.deepEqual(memory.userAuthoredMemoryRecords([legacy]), []);
+    assert.deepEqual(memory.userAuthoredMemoryRecords([{ ...memoryNote, confidence: null }]), []);
+    assert.equal(memory.userAuthoredMemoryRecords([{ ...memoryNote }]).length, 1, 'a record without a confidence has the default 1');
+    let agent = fresh(65);
+    agent.setUserMemory({ enabled: true, records: [legacy] });
+    assert.equal((await agent.executeTool(65, 'set_field', { ref_id: 'ref_pass', text: 'Page-Placeholder-8' }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+    // A save in Settings that changes nothing but the kind leaves it uncounted.
+    const kindOnly = memory.updateUserMemoryRecord({ records: [legacy] }, legacy.id, { text: legacy.text, kind: 'preference', source: 'manual' }, { now: 300 });
+    assert.deepEqual(memory.userAuthoredMemoryRecords(kindOnly.store), []);
+    const edited = memory.updateUserMemoryRecord({ records: [legacy] }, legacy.id, { text: memoryNote.text, kind: 'profile_hint', source: 'manual' }, { now: 300 });
+    assert.deepEqual([edited.record.source, edited.record.confidence], ['manual', 1]);
+    agent = fresh(66);
+    agent.setUserMemory({ enabled: true, records: edited.store.records });
+    assert.equal((await agent.executeTool(66, 'set_field', { ref_id: 'ref_pass', text: MEMORY_PASSWORD }, null, modelCall(FIELDS.ref_pass))).success, true);
   });
 
   test(`${build}: a random or generated value is typed into a password field that is no sign-in's`, async () => {
@@ -721,6 +787,10 @@ for (const build of ['chrome', 'firefox']) {
 }
 
 test('the credential field rules stay mirrored', async () => {
-  assert.equal(await readFile('src/chrome/src/agent/credential-fields.js', 'utf8'),
-    await readFile('src/firefox/src/agent/credential-fields.js', 'utf8'));
+  // The field rules, the memory notes that count as given, and the page-side
+  // password-field facts (rich-text-toolbar-heuristic.js passwordFieldFacts,
+  // which content.js and the Chrome CDP probe both call).
+  for (const file of ['agent/credential-fields.js', 'agent/user-memory.js', 'content/rich-text-toolbar-heuristic.js']) {
+    assert.equal(await readFile(`src/chrome/src/${file}`, 'utf8'), await readFile(`src/firefox/src/${file}`, 'utf8'), file);
+  }
 });

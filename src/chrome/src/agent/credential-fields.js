@@ -357,12 +357,16 @@ const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PA
 // also says sign in or log in ("Sign up or log in") does not count.
 const NEW_ACCOUNT_SUBMIT_RE = /sign[-_\s]?up|regist|create|join|get[-_\s]started|enrol/i;
 const SIGN_IN_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n/i;
-// A submit control that signs in, or goes on to a sign-in's next step (a
-// password step after the username one): "Sign in", "Log in", "Login",
-// "Next", "Continue", "Enter", and the same words in German, French, Spanish,
-// Portuguese, Italian, Dutch, Turkish, Russian, Polish, Japanese, Chinese and
-// Korean. "Submit", "Save" or "Apply" is not one.
-const SIGN_IN_STEP_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|\b(?:next|continue|enter)\b|anmelden|einloggen|weiter|connexion|se connecter|suivant|continuer|iniciar sesi[oó]n|iniciar sess[aã]o|ingresar|entrar|acceder|acessar|siguiente|pr[oó]ximo|continuar|accedi|avanti|inloggen|aanmelden|volgende|doorgaan|giriş|oturum aç|ileri|İleri|devam|войти|вход|далее|продолжить|zaloguj|dalej|ログイン|サインイン|次へ|登录|登入|下一步|로그인|다음/iu;
+// A button that signs in, re-authenticates, or goes on to a sign-in's next
+// step (a password step after the username one): "Sign in", "Log in",
+// "Login", "Next", "Continue", "Enter", "Verify", "Unlock", "Authenticate",
+// and the same words in German, French, Spanish, Portuguese, Italian, Dutch,
+// Swedish, Norwegian, Danish, Finnish, Czech, Slovak, Hungarian, Romanian,
+// Greek, Hebrew, Arabic, Persian, Vietnamese, Indonesian, Thai, Hindi,
+// Turkish, Russian, Polish, Japanese, Chinese and Korean. "Submit", "Save",
+// "Apply" or "Connect" is not one. "Sign in" and "log in" match inside a
+// word too ("OneLogin"), at the cost of an odd "Blog index".
+const SIGN_IN_STEP_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|\b(?:next|continue|enter|verify|unlock|authenticate|authori[sz]e)\b|anmelden|einloggen|weiter|connexion|se connecter|suivant|continuer|iniciar sesi[oó]n|iniciar sess[aã]o|ingresar|entrar|acceder|acessar|siguiente|pr[oó]ximo|continuar|accedi|avanti|inloggen|aanmelden|volgende|doorgaan|logga in|logg inn|log ind|kirjaudu|přihlásit|prihlásiť|bejelentkez|autentificare|conectare|σύνδεση|είσοδος|התחבר|כניסה|تسجيل الدخول|ورود|đăng nhập|masuk|เข้าสู่ระบบ|लॉग इन|साइन इन|giriş|oturum aç|ileri|İleri|devam|войти|вход|далее|продолжить|zaloguj|dalej|ログイン|サインイン|次へ|登录|登入|下一步|로그인|다음/iu;
 // A password field whose own name or label says it is the account's: "Account
 // password", "login_password", "signin-pass".
 const SIGN_IN_FIELD_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|account/i;
@@ -392,6 +396,14 @@ function passwordFieldPurpose(meta) {
   if (typeof meta.usernameFields !== 'number') return { purpose: 'sign-in', reason: 'input type=password' };
   if (meta.usernameFields > 0) return { purpose: 'sign-in', reason: 'input type=password beside a username field' };
   if (SIGN_IN_STEP_SUBMIT_RE.test(submit)) return { purpose: 'sign-in', reason: 'input type=password, submit control signs in' };
+  // Any visible button of the form (outside a form, of the document's
+  // form-less part), not only its first submit control: a "Show" toggle may
+  // come first, and many sign-ins submit from a type=button or role=button
+  // control.
+  const buttons = Array.isArray(meta.buttonTexts) ? meta.buttonTexts.slice(0, 16) : [];
+  if (buttons.some(text => typeof text === 'string' && SIGN_IN_STEP_SUBMIT_RE.test(text.slice(0, 200)))) {
+    return { purpose: 'sign-in', reason: 'input type=password beside a sign-in button' };
+  }
   if (SIGN_IN_FIELD_RE.test(identity)) return { purpose: 'sign-in', reason: 'input type=password named for a sign-in' };
   return null;
 }
@@ -416,12 +428,16 @@ function passwordFieldPurpose(meta) {
  *   `passwordFields`), or whose form's submit control creates an account
  *   (`formSubmitText`): no.
  * - any other (a lone password field): yes only with sign-in evidence: a
- *   username, email or login field in its form, or outside a form among the
- *   form-less fields of its root (`usernameFields`); a submit control that
+ *   field of its form that names an account (a username, email, login,
+ *   phone or customer number, or the hidden username of a password step;
+ *   `usernameFields`); a submit control or other button of the form that
  *   signs in or goes to the next step ("Sign in", "Log in", "Next",
- *   "Continue", "Enter", and those words in a dozen languages); or a name or
- *   label that says sign-in, login or account. Field facts without
- *   `usernameFields` (a route that did not read the form) count as a sign-in.
+ *   "Continue", "Verify", and those words in many languages;
+ *   `formSubmitText`, `buttonTexts`); or a name or label that says sign-in,
+ *   login or account. A field's form is its form owner, or the <form> around
+ *   the web component it sits in; outside a form, the form-less part of its
+ *   document. Field facts without `usernameFields` (a route that did not
+ *   read the form) count as a sign-in.
  *
  * @param {object} meta field metadata as content.js _fieldMeta reports it
  * @returns {{guarded: boolean, reason: string|null}}
