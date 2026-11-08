@@ -2,6 +2,7 @@ import { getRequestTimeoutMs } from './fetch-with-fallback.js';
 import { inferContextWindow, resolveMaxOutputTokens } from './context-windows.js';
 import { createResponseReader, readResponseText, responseAbortError } from '../network/response-body.js';
 import { isRateLimitClass, rateLimitStatusOf, retryAfterMs } from './model-retry.js';
+import { resolvePromptTier } from './prompt-tier.js';
 import {
   addConfiguredMaxTokens,
   mapProviderMessages,
@@ -252,11 +253,9 @@ export class BaseLLMProvider {
    * to 'mid' and everything else (e.g. OpenRouter) to 'full'.
    */
   get promptTier() {
-    if (this.config.category === 'cloud') return 'full';
-    const t = this.config.promptTier;
-    if (t === 'compact' || t === 'mid' || t === 'full') return t;
-    if (this.config.useCompactPrompt) return 'compact';
-    return this.config.category === 'local' ? 'mid' : 'full';
+    // A local relay to the cloud (WebBrain Companion, the Local
+    // OpenAI-compatible Proxy) defaults to Full: see prompt-tier.js.
+    return resolvePromptTier(this.config);
   }
 
   /**

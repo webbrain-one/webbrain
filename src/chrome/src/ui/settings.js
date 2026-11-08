@@ -70,6 +70,7 @@ import {
 import { ADDITIONAL_PROVIDER_UI } from '../providers/provider-catalog.js';
 import { AUTO_VISION_PROVIDER_IDS, visionDetectionMatches } from '../providers/vision-capabilities.js';
 import { canonicalizeOllamaBaseUrl } from '../providers/context-windows.js';
+import { resolvePromptTier } from '../providers/prompt-tier.js';
 import {
   WEBGPU_DEFAULT_MODEL_ID,
   WEBGPU_MODEL_PRESETS,
@@ -3328,15 +3329,11 @@ function renderProviderCompatibilitySettings(id, config) {
   `;
 }
 
-// Effective tier for the dropdown's initial value — same precedence as the
-// provider getter: cloud is forced full; an explicit promptTier wins; the
-// legacy useCompactPrompt boolean maps to compact; otherwise local → mid.
-function effectivePromptTier(config) {
-  if ((config.category || 'cloud') === 'cloud') return 'full';
-  const tier = config.promptTier;
-  if (tier === 'compact' || tier === 'mid' || tier === 'full') return tier;
-  if (config.useCompactPrompt) return 'compact';
-  return config.category === 'local' ? 'mid' : 'full';
+// Effective tier for the dropdown's initial value: the provider getter's own
+// rule (providers/prompt-tier.js), with a config that names no category taken
+// as cloud. A local relay's stored tier counts only once the user chose it.
+function effectivePromptTier(config, providerId = '') {
+  return resolvePromptTier({ ...config, category: config.category || 'cloud' }, providerId);
 }
 
 function providerDisplayLabel(id, config = {}) {
@@ -4189,7 +4186,7 @@ function renderProviders() {
       const placeholder = field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '');
       if (field.type === 'select') {
         const current = field.key === 'promptTier'
-          ? effectivePromptTier(config)
+          ? effectivePromptTier(config, id)
           : (config[field.key] ?? field.options[0]?.value);
         const optionsHTML = field.options
           .map(o => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.labelKey ? t(o.labelKey) : o.label)}</option>`)
@@ -4489,6 +4486,9 @@ function renderProviders() {
   });
   document.querySelectorAll('select[data-key="visionMode"]').forEach((select) => {
     select.addEventListener('change', () => refreshVisionStatus(select.dataset.provider));
+  });
+  document.querySelectorAll('select[data-key="promptTier"]').forEach((select) => {
+    select.addEventListener('change', () => { select.dataset.tierChosen = 'true'; });
   });
   document.querySelector('select[data-provider="ollama"][data-key="visionMode"]')?.addEventListener('change', refreshOllamaVisionStatus);
   document.querySelectorAll('.provider-compatibility select[data-provider], .provider-compatibility textarea[data-provider]').forEach((input) => {
@@ -4961,6 +4961,9 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
       if (input.dataset.key === 'contextWindow') {
         config.manualContextWindow = input.dataset.manuallyEdited === 'true';
       }
+      // A tier picked in the menu is the user's choice, which a local relay
+      // needs before its stored tier counts (providers/prompt-tier.js).
+      if (input.dataset.key === 'promptTier' && input.dataset.tierChosen === 'true') config.promptTierChosen = true;
     });
     if (typeof config.label === 'string') config.label = config.label.trim();
     apiKeyWarning = providerApiKeyWarning(id, config);

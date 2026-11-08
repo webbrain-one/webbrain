@@ -4,7 +4,8 @@
 // The hard classes, permission gates, host checks, budgets and user control
 // keep their behavior. Auto turns lean mode on only for a strong model on a
 // cloud provider at the Full tier, or relayed by a local relay to the cloud
-// (WebBrain Companion, the Local OpenAI-compatible Proxy) at any tier. Real Agent run loops with a scripted
+// (WebBrain Companion, the Local OpenAI-compatible Proxy), which defaults to
+// the Full tier (providers/prompt-tier.js). Real Agent run loops with a scripted
 // provider, both builds; the recipient case runs the real content script in
 // Chromium.
 import assert from 'node:assert/strict';
@@ -45,6 +46,7 @@ const names = tools => tools.map(tool => tool.function.name);
 
 test('lean-mode.js is shared verbatim by both builds', () => {
   assert.equal(read('src/chrome/src/agent/lean-mode.js'), read('src/firefox/src/agent/lean-mode.js'));
+  assert.equal(read('src/chrome/src/providers/prompt-tier.js'), read('src/firefox/src/providers/prompt-tier.js'));
 });
 
 test('docs/lean-mode.md says a lean run keeps its tools and names every quality guard lean mode keeps', async () => {
@@ -142,6 +144,9 @@ for (const build of ['chrome', 'firefox']) {
       [{ category: 'cloud', model: 'o4-mini', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'cloud', model: 'gemini-2.5-pro', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'cloud', model: 'gemini-3.1-pro', promptTier: 'full' }, true, 'strong_cloud_model'],
+      [{ category: 'cloud', model: 'gemini-3-flash-preview', promptTier: 'full' }, true, 'strong_cloud_model'],
+      [{ category: 'cloud', model: 'gemini-3.8-flash-high', promptTier: 'full' }, true, 'strong_cloud_model'],
+      [{ category: 'router', model: 'google/gemini-3-flash', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'cloud', model: 'grok-4', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'router', model: 'anthropic/claude-sonnet-4.5', promptTier: 'full' }, true, 'strong_cloud_model'],
       // The provider's tier vetoes Auto.
@@ -153,6 +158,7 @@ for (const build of ['chrome', 'firefox']) {
       [{ category: 'cloud', model: 'gpt-4o', promptTier: 'full' }, false, 'model_not_listed'],
       [{ category: 'cloud', model: 'gpt-5-nano', promptTier: 'full' }, false, 'model_not_listed'],
       [{ category: 'cloud', model: 'gemini-2.5-flash', promptTier: 'full' }, false, 'model_not_listed'],
+      [{ category: 'cloud', model: 'gemini-3.1-flash-lite', promptTier: 'full' }, false, 'model_not_listed'],
       [{ category: 'cloud', model: 'webbrain-cloud 1.0', promptTier: 'full' }, false, 'model_not_listed'],
       // Local providers never, whatever they serve.
       [{ category: 'local', type: 'openai', providerId: 'ollama', model: 'gpt-oss:120b', promptTier: 'mid' }, false, 'local_provider'],
@@ -164,14 +170,16 @@ for (const build of ['chrome', 'firefox']) {
       // Cloud is a cloud provider although its id starts with "ollama-".
       [{ category: 'cloud', type: 'openai', providerId: 'ollama-cloud', model: 'gemini-3-pro-preview', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'local', providerId: 'custom-cloud', model: 'gpt-5', promptTier: 'full' }, false, 'local_provider'],
-      // A local relay to the cloud is judged by the model it relays, at any
-      // tier: its Mid is the local default the settings page saves with it.
+      // A local relay to the cloud is judged by the model it relays. It
+      // defaults to Full: a stored Mid is the old local default the settings
+      // page saved with it, and counts only once the user chose it.
       [{ category: 'local', providerName: 'webbrain-companion', model: 'claude-sonnet-4-5', promptTier: 'mid' }, true, 'strong_relay_model'],
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'claude-sonnet-4-5', promptTier: 'mid', promptTierChosen: true }, false, 'prompt_tier'],
       [{ category: 'local', providerId: 'webbrain_companion', model: 'gpt-5.4', promptTier: 'mid' }, true, 'strong_relay_model'],
       [{ category: 'local', providerId: 'webbrain_companion-2', model: 'claude-opus-5-5' }, true, 'strong_relay_model'],
       [{ category: 'local', providerName: 'local-openai-proxy', model: 'gemini-3-pro-preview', promptTier: 'compact' }, true, 'strong_relay_model'],
       [{ category: 'local', providerName: 'webbrain-companion', model: 'bonsai-2-27b', promptTier: 'mid' }, false, 'model_not_listed'],
-      [{ category: 'local', providerName: 'webbrain-companion', model: 'gemini-3.8-flash-high', promptTier: 'mid' }, false, 'model_not_listed'],
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'gemini-3.8-flash-high', promptTier: 'mid' }, true, 'strong_relay_model'],
       [{ category: 'local', providerName: 'webbrain-companion', model: 'claude-haiku-5-5', promptTier: 'mid' }, false, 'model_not_listed'],
       // Only those two are relays; another local server stays local.
       [{ category: 'local', providerName: 'vllm', providerId: 'vllm', model: 'claude-sonnet-4-5', promptTier: 'full' }, false, 'local_provider'],
@@ -196,6 +204,33 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(lean.normalizeLeanModeSetting('ON'), 'on');
     assert.equal(lean.normalizeLeanModeSetting('maybe'), 'auto');
     assert.equal(lean.normalizeLeanModeSetting(undefined), 'auto');
+  });
+
+  test(`${build}: a local relay to the cloud runs at the Full tier unless the user chose another`, async () => {
+    const { resolvePromptTier, isLocalRelay } = await import(`../src/${build}/src/providers/prompt-tier.js`);
+    const companion = { category: 'local', providerName: 'webbrain-companion' };
+    assert.equal(resolvePromptTier(companion), 'full');
+    assert.equal(resolvePromptTier({ ...companion, promptTier: 'mid' }), 'full', 'the Mid the settings page used to save with it');
+    assert.equal(resolvePromptTier({ ...companion, promptTier: 'mid', promptTierChosen: true }), 'mid');
+    assert.equal(resolvePromptTier({ ...companion, promptTier: 'compact', promptTierChosen: true }), 'compact');
+    assert.equal(resolvePromptTier({ category: 'local', providerName: 'local-openai-proxy', promptTier: 'mid' }), 'full');
+    assert.equal(resolvePromptTier({ category: 'local', promptTier: 'mid' }, 'webbrain_companion_2'), 'full', 'an instance id names a relay too');
+    assert.equal(isLocalRelay({}, 'webbrain_companion-copy'), true);
+    assert.equal(isLocalRelay({ providerName: 'ollama' }, 'ollama'), false);
+    // Everything else as before.
+    assert.equal(resolvePromptTier({ category: 'local', providerName: 'ollama' }), 'mid');
+    assert.equal(resolvePromptTier({ category: 'local', promptTier: 'full' }), 'full');
+    assert.equal(resolvePromptTier({ category: 'local', useCompactPrompt: true }), 'compact');
+    assert.equal(resolvePromptTier({ category: 'router' }), 'full');
+    assert.equal(resolvePromptTier({ category: 'router', promptTier: 'mid' }), 'mid');
+    assert.equal(resolvePromptTier({ category: 'cloud', promptTier: 'compact' }), 'full');
+    // The settings page reads the same rule, and records a tier picked in its
+    // menu as the user's choice.
+    const settings = read(`src/${build}/src/ui/settings.js`);
+    assert.match(settings, /function effectivePromptTier\(config, providerId = ''\) \{\n  return resolvePromptTier\(\{ \.\.\.config, category: config\.category \|\| 'cloud' \}, providerId\);/);
+    assert.match(settings, /effectivePromptTier\(config, id\)/);
+    assert.match(settings, /select\[data-key="promptTier"\]'\)\.forEach\(\(select\) => \{\n    select\.addEventListener\('change', \(\) => \{ select\.dataset\.tierChosen = 'true'; \}\);/);
+    assert.match(settings, /if \(input\.dataset\.key === 'promptTier' && input\.dataset\.tierChosen === 'true'\) config\.promptTierChosen = true;/);
   });
 
   test(`${build}: Auto reads real provider instances: category, tier and model`, () => {
@@ -239,9 +274,17 @@ for (const build of ['chrome', 'firefox']) {
     // but was taken for a local provider whatever it served, and its Mid tier,
     // the local default saved with it, vetoed Auto again.
     const companion = built('webbrain_companion', { model: 'claude-sonnet-4-5', promptTier: 'mid' });
-    assert.equal(companion.promptTier, 'mid');
+    assert.equal(companion.promptTier, 'full', 'a relay runs at Full unless the user chose another tier');
     assert.deepEqual(lean.resolveLeanMode('auto', { provider: companion }),
       { active: true, setting: 'auto', reason: 'strong_relay_model', family: 'claude' });
+    const companionMid = built('webbrain_companion', { model: 'claude-sonnet-4-5', promptTier: 'mid', promptTierChosen: true });
+    assert.equal(companionMid.promptTier, 'mid', 'a tier the user chose stands');
+    assert.equal(lean.resolveLeanMode('auto', { provider: companionMid }).reason, 'prompt_tier');
+    assert.deepEqual(lean.resolveLeanMode('auto', { provider: built('webbrain_companion', { model: 'gemini-3.8-flash-high' }) }),
+      { active: true, setting: 'auto', reason: 'strong_relay_model', family: 'gemini' });
+    // Real local runtimes keep their Mid default.
+    assert.equal(built('ollama', { model: 'qwen3:8b' }).promptTier, 'mid');
+    assert.equal(built('vllm', { model: 'qwen3:8b' }).promptTier, 'mid');
     assert.deepEqual(lean.resolveLeanMode('auto', { provider: built('local_openai_proxy', { model: 'gpt-5', apiKey: 'test' }) }),
       { active: true, setting: 'auto', reason: 'strong_relay_model', family: 'gpt' });
     // The model the Companion runs itself is not a strong one.

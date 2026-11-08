@@ -12,6 +12,7 @@
 // the Chrome and Firefox builds (test/lean-mode.mjs checks that).
 
 import { guardEntry } from './guard-policy.js';
+import { isLocalRelay, resolvePromptTier } from '../providers/prompt-tier.js';
 
 export const LEAN_MODE_SETTINGS = Object.freeze(['auto', 'on', 'off']);
 export const DEFAULT_LEAN_MODE = 'auto';
@@ -37,6 +38,9 @@ export const LEAN_STRONG_MODEL_RULES = Object.freeze([
   Object.freeze({ family: 'openai-reasoning', pattern: /(?:^|[/.:])o(\d+)(?:-|$)/, min: 3 }),
   // Gemini 2.5 Pro and newer Pro or Ultra models.
   Object.freeze({ family: 'gemini', pattern: /gemini-(\d+(?:\.\d+)?)-(?:pro|ultra)/, min: 2.5 }),
+  // Gemini Flash from generation 3 (gemini-3-flash, gemini-3.8-flash-high).
+  // Flash-Lite is a smaller model, and Flash before 3 stays off the list.
+  Object.freeze({ family: 'gemini', pattern: /gemini-(\d+(?:\.\d+)?)-flash/, min: 3, exclude: /flash-lite/ }),
   // Grok 4 and later.
   Object.freeze({ family: 'grok', pattern: /grok-(\d+)/, min: 4 }),
 ]);
@@ -61,14 +65,11 @@ export function strongModelFamily(modelId) {
 const LOCAL_PROVIDER_TYPES = Object.freeze(['llamacpp', 'webgpu']);
 const LOCAL_PROVIDER_ID = /^(?:llamacpp|ollama|lmstudio|webgpu)(?:$|[_-])/;
 
-// Local relays: apps on this computer that forward to the cloud subscriptions
-// the user signed in with. WebBrain Companion embeds CLIProxyAPI, and the
-// Local OpenAI-compatible Proxy is CLIProxyAPI on its own. Their category is
-// local (their address is), but the model that answers is the cloud model
-// they serve, so Auto judges them by that model, as it does a router. The one
-// model the Companion runs itself (Bonsai) is not on the strong list.
-const LOCAL_RELAY_PROVIDER_NAMES = Object.freeze(['webbrain-companion', 'local-openai-proxy']);
-const LOCAL_RELAY_PROVIDER_ID = /^(?:webbrain_companion|local_openai_proxy)(?:$|[_-])/;
+// Local relays to the cloud (WebBrain Companion, the Local OpenAI-compatible
+// Proxy; see providers/prompt-tier.js): their category is local, but the model
+// that answers is the cloud model they serve, so Auto judges them by that
+// model, as it does a router. The one model the Companion runs itself
+// (Bonsai) is not on the strong list.
 
 // The first value that is a non-blank string, read lazily: a provider's
 // getters can throw, and a blank configured value (model: '') means "not
@@ -98,8 +99,11 @@ export function leanProviderInfo(provider) {
   // A blank configured model is unset: the provider's model getter returns
   // the model it actually calls (AnthropicProvider defaults to its own).
   const model = firstText(() => config.model, () => provider?.model).trim();
-  const promptTier = firstText(() => provider?.promptTier, () => config.promptTier).trim().toLowerCase();
-  const relay = LOCAL_RELAY_PROVIDER_NAMES.includes(providerName) || LOCAL_RELAY_PROVIDER_ID.test(providerId);
+  const relay = isLocalRelay({ providerName }, providerId);
+  // A relay's stored tier counts only when the user chose it; its getter
+  // already reads it that way, and a plain config is read the same way.
+  const promptTier = (relay ? resolvePromptTier(config, providerId)
+    : firstText(() => provider?.promptTier, () => config.promptTier)).trim().toLowerCase();
   // An explicit category decides, as ProviderManager.categoryFor does: the
   // built-in Ollama Cloud is 'cloud' although its id starts with "ollama-".
   // The type and id lists only classify a config written without one.
@@ -117,9 +121,8 @@ export function leanProviderInfo(provider) {
  * Companion, the Local OpenAI-compatible Proxy), serving a listed strong
  * model; never llama.cpp, Ollama, LM Studio, WebGPU or any other local
  * provider. The provider's prompt tier vetoes it: a provider the user set to
- * the Compact or Mid tier is never lean under Auto. A relay's tier is not
- * read: like every local provider it defaults to Mid, and the settings page
- * saves that default with the provider, so it says nothing about the model.
+ * the Compact or Mid tier is never lean under Auto. A relay defaults to Full,
+ * and its stored tier counts only once the user chose it (prompt-tier.js).
  * Returns { active, setting, reason, family? }.
  */
 export function resolveLeanMode(setting, { mode = 'act', provider = null } = {}) {
@@ -130,7 +133,7 @@ export function resolveLeanMode(setting, { mode = 'act', provider = null } = {})
   const info = leanProviderInfo(provider);
   if (info.local) return { active: false, setting: value, reason: 'local_provider' };
   if (!info.cloud) return { active: false, setting: value, reason: 'unknown_provider' };
-  if (!info.relay && (info.promptTier === 'compact' || info.promptTier === 'mid')) {
+  if (info.promptTier === 'compact' || info.promptTier === 'mid') {
     return { active: false, setting: value, reason: 'prompt_tier' };
   }
   const family = strongModelFamily(info.model);
