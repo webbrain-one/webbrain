@@ -6,7 +6,20 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [47.0.0] - 2026-11-08
+
+### Added
+- Murshid, the Chromium browser with WebBrain built in, now has desktop packaging for Windows, macOS and Linux with Companion bundled. Its address bar completes addresses and searches, suggests history and open tabs, and lets you switch to an existing tab.
+- Murshid and its website are available in Turkish, Arabic, Persian, Hindi, Azerbaijani, Hebrew, Greek, Russian and Ukrainian alongside English, including right-to-left layouts where needed.
+- Murshid offers temporary browser sessions in Settings. The change takes effect after restarting; WebBrain is unavailable in temporary sessions because Electron requires a persistent session to load extensions.
+- Added CloudGPU to the extended provider catalog in Chrome and Firefox.
+- Added French, Spanish, German, Arabic, Turkish, Dutch, Indonesian and Filipino user guide sets.
+
+### Changed
+- WebBrain Companion can run Compass VLD v6 2B natively as its local decision model, with the older d1 model retained as an alternative and fallback.
+
 ### Fixed
+- Murshid handles authenticated downloads, offers a save dialog for image downloads and resume for interrupted downloads, keeps the address bar in sync with navigation, and honors a page's request to confirm before closing. WebBrain's security checks receive response addresses inside Murshid as well.
 - In vision mode, a click that lands on the backdrop around an open dialog, or on an empty area of it, now says so instead of reporting a plain success. A model aiming at a composer's Post button clicked the dialog's backdrop ten times without noticing. Chrome and Firefox.
 - In vision mode, repeated clicks that keep missing the same spot are caught even while a video or animation elsewhere on the page keeps changing the screen, and points a few pixels apart count as the same spot. Chrome and Firefox.
 - The check that pins the exact text of a social post gets the same output budget as a normal step. With a model that thinks before answering, it used to run out of tokens and fail before checking anything. Chrome and Firefox.
