@@ -34,6 +34,37 @@
 @font-face { font-family: "Amiri"; src: url(fonts/amiri-arabic-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
 @font-face { font-family: "Ruqaa"; src: url(fonts/aref-ruqaa-arabic-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Ruqaa"; src: url(fonts/aref-ruqaa-arabic-700-normal.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-300-italic.woff2) format("woff2"); font-weight: 300; font-style: italic; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-500-italic.woff2) format("woff2"); font-weight: 500; font-style: italic; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-600-italic.woff2) format("woff2"); font-weight: 600; font-style: italic; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-300-normal.woff2) format("woff2"); font-weight: 300; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-300-italic.woff2) format("woff2"); font-weight: 300; font-style: italic; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-500-italic.woff2) format("woff2"); font-weight: 500; font-style: italic; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Cormorant"; src: url(fonts/cormorant-garamond-cyrillic-ext-600-italic.woff2) format("woff2"); font-weight: 600; font-style: italic; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-ext-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-ext-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-cyrillic-ext-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-greek-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0370-0374, U+0376, U+0377, U+037A-037D, U+037F, U+0384, U+0386, U+0388-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-greek-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0370-0374, U+0376, U+0377, U+037A-037D, U+037F, U+0384, U+0386, U+0388-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+@font-face { font-family: "Plex Sans"; src: url(fonts/ibm-plex-sans-greek-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0370-0374, U+0376, U+0377, U+037A-037D, U+037F, U+0384, U+0386, U+0388-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+@font-face { font-family: "Plex Sans Hebrew"; src: url(fonts/ibm-plex-sans-hebrew-hebrew-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0590-05FF, U+200C-2010, U+2019, U+202A-202E, U+FB1D-FB4F; }
+@font-face { font-family: "Plex Sans Hebrew"; src: url(fonts/ibm-plex-sans-hebrew-hebrew-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0590-05FF, U+200C-2010, U+2019, U+202A-202E, U+FB1D-FB4F; }
+@font-face { font-family: "Plex Sans Hebrew"; src: url(fonts/ibm-plex-sans-hebrew-hebrew-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0590-05FF, U+200C-2010, U+2019, U+202A-202E, U+FB1D-FB4F; }
+@font-face { font-family: "Plex Sans Devanagari"; src: url(fonts/ibm-plex-sans-devanagari-devanagari-400-normal.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F1, U+25CC, U+A830-A83F, U+A8E0-A8FF, U+11B60-11B6C; }
+@font-face { font-family: "Plex Sans Devanagari"; src: url(fonts/ibm-plex-sans-devanagari-devanagari-500-normal.woff2) format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F1, U+25CC, U+A830-A83F, U+A8E0-A8FF, U+11B60-11B6C; }
+@font-face { font-family: "Plex Sans Devanagari"; src: url(fonts/ibm-plex-sans-devanagari-devanagari-600-normal.woff2) format("woff2"); font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F1, U+25CC, U+A830-A83F, U+A8E0-A8FF, U+11B60-11B6C; }
 
 :root {
   --crimson: #9e1b2b;
@@ -72,10 +103,29 @@
 /* Arabic and Persian: IBM Plex Sans Arabic for text and Amiri, a Naskh in
    the Bulaq press tradition, for the headings; Latin words keep the Latin
    faces. */
-[dir="rtl"] {
+html:lang("ar"), html:lang("fa") {
   --display: "Amiri", "Cormorant", "Noto Naskh Arabic", serif;
   --sans: "Plex Sans Arabic", "Plex Sans", "Noto Sans Arabic", system-ui, sans-serif;
   --mono: "Plex Mono", "Plex Sans Arabic", ui-monospace, monospace;
+}
+
+/* Hebrew: IBM Plex Sans Hebrew for text and headings; Plex Sans Hebrew
+   carries the Latin too, so the Latin faces stay behind it in the stack. */
+html:lang("he") {
+  --display: "Plex Sans Hebrew", "Cormorant", "Noto Sans Hebrew", system-ui, sans-serif;
+  --sans: "Plex Sans Hebrew", "Plex Sans", "Noto Sans Hebrew", system-ui, sans-serif;
+  --mono: "Plex Mono", "Plex Sans Hebrew", ui-monospace, monospace;
+}
+
+/* Hindi: IBM Plex Sans Devanagari for text and headings; Latin words keep
+   the Latin faces. */
+html:lang("hi") {
+  --display: "Plex Sans Devanagari", "Cormorant", "Noto Sans Devanagari", system-ui, sans-serif;
+  --sans: "Plex Sans Devanagari", "Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+}
+
+/* mirrored layout for every right-to-left page */
+[dir="rtl"] {
   --hero-x: 22%;
   --toward-end: 270deg;
   --carries-x: 10%;

@@ -14,11 +14,20 @@ const DICTIONARIES = {
   tr: require('./locales/tr'),
   ar: require('./locales/ar'),
   fa: require('./locales/fa'),
+  hi: require('./locales/hi'),
+  az: require('./locales/az'),
+  he: require('./locales/he'),
+  el: require('./locales/el'),
+  ru: require('./locales/ru'),
+  uk: require('./locales/uk'),
 };
 const SUPPORTED = Object.keys(DICTIONARIES);
-const RTL = new Set(['ar', 'fa']);
+const RTL = new Set(['ar', 'fa', 'he']);
 /** Each language in its own name, for the language menu in Settings. */
-const NATIVE_NAMES = { en: 'English', tr: 'Türkçe', ar: 'العربية', fa: 'فارسی' };
+const NATIVE_NAMES = {
+  en: 'English', tr: 'Türkçe', ar: 'العربية', fa: 'فارسی', hi: 'हिन्दी',
+  az: 'Azərbaycanca', he: 'עברית', el: 'Ελληνικά', ru: 'Русский', uk: 'Українська',
+};
 const SETTINGS_FILE = 'murshid-settings.json';
 
 // Languages Chromium lays out right to left. When its own locale is one of these,

@@ -1,0 +1,399 @@
+{
+  "lang": "el",
+  "dir": "ltr",
+  "locale": "el_GR",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "el": "Murshid (Αναπτυξιακή Προεπισκόπηση) — ο φυλλομετρητής που γνωρίζει τον δρόμο"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "el": "Αναπτυξιακή προεπισκόπηση. Το Murshid είναι ένας φυλλομετρητής Chromium με ενσωματωμένο τον πράκτορα WebBrain: ρωτήστε για οποιαδήποτε σελίδα, αναθέστε του μια εργασία και αφήστε τα δικά σας πακέτα τεχνητής νοημοσύνης να τον εκτελούν από το εικονογείο του συστήματος. Ανοιχτός κώδικας."
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "el": "Murshid — ο φυλλομετρητής που γνωρίζει τον δρόμο"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "el": "Φυλλομετρητής Chromium με ενσωματωμένο το WebBrain. Ρωτήστε, σχεδιάστε, δράστε — στις δικές σας καρτέλες."
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "el": "Μετάβαση στο περιεχόμενο"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "el": "Αρχική σελίδα του Murshid"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "el": "Το Murshid είναι αναπτυξιακή προεπισκόπηση"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "el": "Προεπισκόπηση"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "el": "Ενότητες"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "el": "Φυλλομετρητής"
+    },
+    "nav.way": {
+      "en": "The way",
+      "el": "Ο δρόμος"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "el": "Companion"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "el": "Αποκτήστε το"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "el": "Murshid στο GitHub"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "el": "Αποκτήστε το Murshid"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "el": "Γλώσσα: Ελληνικά"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "el": "Εμφάνιση του πάνω μέρους με κόκκινο"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "el": "Κόκκινο το πάνω μέρος"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "el": "Κίτρινο το πάνω μέρος"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "el": "Ο φυλλομετρητής<br>που γνωρίζει<br><em>τον δρόμο.</em>"
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "el": "Το Murshid είναι ένας φυλλομετρητής Chromium με μέσα το <strong>WebBrain</strong>. Ρωτήστε για τη σελίδα που έχετε μπροστά σας ή αναθέστε του μια εργασία. Διαβάζει, κάνει κλικ και πληκτρολογεί στις δικές σας καρτέλες ενώ εσείς παρακολουθείτε, και λειτουργεί με τα πακέτα τεχνητής νοημοσύνης για τα οποία ήδη πληρώνετε."
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "el": "Λήψη για Windows"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "el": "Λήψη για macOS"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "el": "Λήψη για Linux"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "el": "Αποκτήστε το Murshid"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "el": "Γνωρίστε το WebBrain"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "el": "Το σύστημά σας"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "el": "Εκτέλεση από την πηγή"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "el": "Εξαίρεση των δυαδικών αρχείων"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "el": "Αντιγραφή εντολών"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "el": "Αντιγράφηκε"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "el": "Μόνο το τελευταίο commit, και μόνο ο φάκελος <code>murshid/</code> με την επέκταση WebBrain που φορτώνει: χωρίς ιστορικό, αρχεία zip εκδόσεων, βίντεο ή αρχεία δοκιμών."
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "el": "Ένας Οθωμανός λόγιος με λευκό τουρμάνι, το κεφάλι ακουμπισμένο στο χέρι του, που διαβάζει το Κοράνι: ημιτονική εκτύπωση βάσει πίνακα του Osman Hamdi Bey του 1902."
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "el": "Murshid · ο οδηγός"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "el": "Το Murshid στη δράση"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "el": "Ο φυλλομετρητής Murshid στα Windows. Σε μια καρτέλα είναι ανοιχτό το λήμμα της Wikipedia για το τάγμα των Μεβλεβήδων και ο πλευρικός πίνακας WebBrain δίπλα του έχει διαβάσει ολόκληρη τη σελίδα και απαντά στο &quot;Summarize this page&quot; (σύνοψη της σελίδας) με μια περίληψη σε κουκκίδες."
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "el": "Πραγματικό στιγμιότυπο οθόνης του Murshid στα Windows, με εντολή να συνοψίσει τη σελίδα στην οποία βρίσκεται. Έκδοση αναπτυξιακής προεπισκόπησης, σε νέο προφίλ χωρίς λογαριασμούς."
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "el": "Όσα κουβαλά ο οδηγός"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "el": "Ένας πλήρης φυλλομετρητής,<br><em>με μυαλό μέσα του.</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "el": "Όλα όσα περιμένετε από το Chrome, με τον πράκτορα WebBrain πλεγμένο μέσα του και όχι προσαρτημένη προσθήκη."
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "el": "#1 Περιήγηση"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "el": "Chromium, με καρτέλες"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "el": "Καρτέλες που μπορείτε να σύρετε και να ξαναανοίξετε, γραμμή διεύθυνσης που κάνει και αναζητήσεις, λήψεις, εύρεση στη σελίδα, ζουμ, εργαλεία προγραμματιστή και οι συντομεύσεις που τα χέρια σας ήδη γνωρίζουν."
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "el": "#2 Ρωτήστε &amp; δράστε"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "el": "WebBrain στον πλευρικό πίνακα"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "el": "Ρωτήστε για οποιαδήποτε σελίδα, PDF ή επιλογή κειμένου. Ή πείτε του τι θέλετε να γίνει, και αυτό συμπληρώνει τις φόρμες, κάνει κλικ σε κάθε βήμα και συγκρίνει τις καρτέλες για εσάς."
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "el": "#3 Εικονογείο"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "el": "Τα πακέτα τεχνητής νοημοσύνης σας, από το εικονογείο"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "el": "Το WebBrain Companion κάθεται στο εικονογείο του συστήματος και προσφέρει τις συνδρομές σας σε Claude, ChatGPT, Gemini, Grok, Kimi, Muse και Devin στο WebBrain μέσω της διεύθυνσης 127.0.0.1. Χωρίς κλειδιά API."
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "el": "#4 Νέα καρτέλα"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "el": "Μια νέα καρτέλα που ακούει"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "el": "Κάθε νέα καρτέλα ανοίγει στη σελίδα του WebBrain: πληκτρολογήστε μια ερώτηση, μια εργασία ή μια αναζήτηση, και πάει κατευθείαν στον πίνακα. Προεγκατεστημένη και ενεργή."
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "el": "#5 Τοπικά"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "el": "Μοντέλα στον ίδιο σας τον υπολογιστή"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "el": "Το Companion μπορεί να εκτελεί τοπικά το Bonsai 2 27B της PrismML και το μοντέλο απόφασης d1 του WebBrain, προσαρμοσμένο στην κάρτα γραφικών σας, με επαλήθευση SHA-256."
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "el": "#6 Ανοιχτό"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "el": "Ανοιχτό, σε κάθε επίπεδο"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "el": "GPL-3.0, χτισμένο στο φως της δημοσιότητας μαζί με το WebBrain. Χωρίς τηλεμετρία στον φυλλομετρητή. Διαβάστε κάθε γραμμή που ακουμπά τις σελίδες σας."
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "el": "Ο δρόμος"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "el": "Ο αναζητητής ρωτά.<br>Ο οδηγός δείχνει.<br><em>Και μετά βαδίζετε μαζί.</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "el": "I"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "el": "Ρωτήστε"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "el": "Ρωτήστε για τη σελίδα που έχετε μπροστά σας. Το WebBrain τη διαβάζει — κείμενα, πίνακες, φόρμες, PDF, ακόμα όσα υπάρχουν μόνο στην οθόνη — και απαντά δίπλα της."
+    },
+    "way.step2.num": {
+      "en": "II",
+      "el": "II"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "el": "Δείτε το σχέδιο"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "el": "Για οποιαδήποτε εργασία που περιλαμβάνει κλικ ή πληκτρολόγηση, η προσέγγιση «Plan before Act» παραθέτει πρώτα τα βήματα. Εγκρίνετέ τα, αλλάξτε τα ή σταματήστε."
+    },
+    "way.step3.num": {
+      "en": "III",
+      "el": "III"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "el": "Βαδίστε"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "el": "Έπειτα εργάζεται στις πραγματικές σας καρτέλες, με τις πραγματικές σας συνδέσεις λογαριασμών. Κάθε κίνηση είναι ορατή, και μπορείτε να πάρετε το τιμόνι ανά πάσα στιγμή."
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "el": "Στο εικονογείο του συστήματος"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "el": "Τα πακέτα για τα οποία ήδη πληρώνετε,<br><em>στη διάθεση του WebBrain.</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "el": "Όταν ανοίγει το Murshid, εκκινεί και το WebBrain Companion. Συνδεθείτε μία φορά στη μικρή εφαρμογή του εικονογείου και οι συνδρομές σας γίνονται ένα τοπικό σημείο πρόσβασης που μόνο αυτός ο υπολογιστής μπορεί να δει, με μια ματιά στο πόσο απομένει από κάθε πακέτο."
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "el": "Οι συνδρομές που εξυπηρετεί το Companion"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "el": "Bonsai 2 27B · τοπικά"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "el": "d1 · τοπικά"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "el": "Σημείο πρόσβασης του Companion"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "el": "Αποκτήστε το Murshid"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "el": "Πάρτε τον οδηγό <em>μαζί σας.</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "el": "Το Murshid είναι αναπτυξιακή προεπισκόπηση. Για Windows, macOS και Linux υπάρχουν εγκαταστάτες με συμπεριλαμβανόμενο το WebBrain Companion. Το WebBrain και η σελίδα νέας καρτέλας του έρχονται προεγκατεστημένα."
+    },
+    "get.yours": {
+      "en": "Your system",
+      "el": "Το σύστημά σας"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "el": "10 και 11, x64. Το Arm64 εκτελείται από την πηγή."
+    },
+    "get.download": {
+      "en": "Download installer",
+      "el": "Λήψη εγκαταστάτη"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "el": "0.1.0 · x64 · 150 MB"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "el": "Δεν έχει ακόμη υπογραφεί ψηφιακά, γι’ αυτό το Windows SmartScreen μπορεί να το σταματήσει: επιλέξτε <b>Περισσότερες πληροφορίες</b> και έπειτα <b>Εκτέλεση παρόλα αυτά</b>."
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "el": "12 Monterey και νεότερες, Apple Silicon και Intel."
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "el": "0.1.0 · Apple Silicon και Intel · 294 MB"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "el": "Δεν έχει πιστοποιηθεί από την Apple: κάντε δεξί κλικ στην εφαρμογή και επιλέξτε <b>Άνοιγμα</b>, ή χρησιμοποιήστε το <b>Ρυθμίσεις συστήματος &gt; Απόρρητο και ασφάλεια &gt; Άνοιγμα παρόλα αυτά</b>."
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "el": "x64. Το Arm64 εκτελείται από την πηγή."
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "el": "0.1.0 · x64 · 171 MB · 135 MB"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "el": "AppImage: κάντε το εκτελέσιμο και εκτελέστε το. Σε Debian ή Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "el": "Ο πηγαίος κώδικας στο GitHub"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "el": "Αθροίσματα ελέγχου SHA-256"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "el": "Απόρρητο, με μελέτη"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "el": "Ιδιωτικό<br><em>εκεί που μετράει.</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "el": "Το Murshid δεν κρατά λίστα ιστορικού περιήγησης. Τα cookies, οι συνδεδεμένοι λογαριασμοί και η αποθήκευση των ιστότοπων διατηρούνται από προεπιλογή, ώστε οι συνεδρίες σας να είναι έτοιμες όταν επιστρέφετε."
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "el": "Υποσέλιδο"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "el": "Απόρρητο"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "el": "GPL-3.0-or-later · Γραμματοσειρές βάσει της άδειας SIL Open Font License · <span>Εικόνες βασισμένες σε έργα που ανήκουν στο δημόσιο πεδίο: οι πίνακες του Osman Hamdi Bey <i>Ισλαμικός Θεολόγος</i> (1902), <i>Ο Εκπαιδευτής Χελωνών</i> (1906) και <i>Δημόσιος Γραφέας</i> (1910)· ένας δερβίσης Μεβλεβήδων από τη σειρά του Vanmour (1700–37)· και φωτογραφίες δερβίσηδων Μεβλεβήδων στην Κωνσταντινούπολη, γύρω στο 1870–1910, μία από το στούντιο Sébah &amp; Joaillier. Ο δερβίσης και οι φωτογραφίες βρίσκονται στο Rijksmuseum. Εικονογράφηση απορρήτου: σε στιλ τεχνητής νοημοσύνης, βασισμένη στον πίνακα <i>Dame Turque</i>, μέσω του Open Culture.</span>"
+    }
+  }
+}

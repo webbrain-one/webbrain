@@ -1,0 +1,351 @@
+<!doctype html>
+<!-- Written by scripts/i18n/build.mjs from web/index.html and scripts/i18n/el.json: edit those, then run npm run web:i18n. -->
+<html lang="el" data-hero="yellow">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murshid (Αναπτυξιακή Προεπισκόπηση) — ο φυλλομετρητής που γνωρίζει τον δρόμο</title>
+<meta name="description" content="Αναπτυξιακή προεπισκόπηση. Το Murshid είναι ένας φυλλομετρητής Chromium με ενσωματωμένο τον πράκτορα WebBrain: ρωτήστε για οποιαδήποτε σελίδα, αναθέστε του μια εργασία και αφήστε τα δικά σας πακέτα τεχνητής νοημοσύνης να τον εκτελούν από το εικονογείο του συστήματος. Ανοιχτός κώδικας.">
+<meta name="theme-color" content="#e2aa3a">
+<script>
+  // The top of the page is yellow unless this visitor chose red with the
+  // circle in the nav (site.js); set it before the first paint.
+  try {
+    if (localStorage.getItem('murshid-hero') === 'red') {
+      document.documentElement.dataset.hero = 'red';
+      document.querySelector('meta[name="theme-color"]').content = '#9e1b2b';
+    }
+  } catch {}
+</script>
+<meta property="og:title" content="Murshid — ο φυλλομετρητής που γνωρίζει τον δρόμο">
+<meta property="og:description" content="Φυλλομετρητής Chromium με ενσωματωμένο το WebBrain. Ρωτήστε, σχεδιάστε, δράστε — στις δικές σας καρτέλες.">
+<meta property="og:image" content="../art/murshid-icon.svg">
+<meta property="og:locale" content="el_GR">
+<link rel="canonical" href="https://murshid.one/el/">
+<!-- the same page in each language (scripts/i18n/build.mjs writes the tr/, ar/, fa/, hi/, az/, he/, el/, ru/ and uk/ pages) -->
+<link rel="alternate" hreflang="en" href="https://murshid.one/">
+<link rel="alternate" hreflang="tr" href="https://murshid.one/tr/">
+<link rel="alternate" hreflang="ar" href="https://murshid.one/ar/">
+<link rel="alternate" hreflang="fa" href="https://murshid.one/fa/">
+<link rel="alternate" hreflang="hi" href="https://murshid.one/hi/">
+<link rel="alternate" hreflang="az" href="https://murshid.one/az/">
+<link rel="alternate" hreflang="he" href="https://murshid.one/he/">
+<link rel="alternate" hreflang="el" href="https://murshid.one/el/">
+<link rel="alternate" hreflang="ru" href="https://murshid.one/ru/">
+<link rel="alternate" hreflang="uk" href="https://murshid.one/uk/">
+<link rel="alternate" hreflang="x-default" href="https://murshid.one/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preload" href="../fonts/cormorant-garamond-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- the Ottoman ogee arch, in the units of whatever it frames -->
+    <clipPath id="arch-clip" clipPathUnits="objectBoundingBox">
+      <path d="M0 1 L0 .40 C0 .23 .16 .13 .34 .07 C.43 .04 .47 .03 .5 0 C.53 .03 .57 .04 .66 .07 C.84 .13 1 .23 1 .40 L1 1 Z"/>
+    </clipPath>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 .55 0"/>
+    </filter>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Μετάβαση στο περιεχόμενο</a>
+
+<header class="nav" id="top">
+  <a class="brand" href="#top" aria-label="Αρχική σελίδα του Murshid">
+    <img src="../art/murshid-icon.svg" alt="" width="34" height="34">
+    <span lang="en">Murshid</span>
+    <span class="badge" title="Το Murshid είναι αναπτυξιακή προεπισκόπηση">Προεπισκόπηση</span>
+  </a>
+  <nav class="links" aria-label="Ενότητες">
+    <a href="#carries">Φυλλομετρητής</a>
+    <a href="#way">Ο δρόμος</a>
+    <a href="#tray">Companion</a>
+    <a href="#get">Αποκτήστε το</a>
+  </nav>
+  <div class="nav-end">
+    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid στο GitHub"><svg><use href="#i-github"/></svg></a>
+    <a class="button small" href="#get">Αποκτήστε το Murshid</a>
+    <details class="lang" data-lang>
+      <summary aria-label="Γλώσσα: Ελληνικά"><svg><use href="#i-globe"/></svg><span lang="en" data-lang-code>EL</span></summary>
+      <ul>
+        <li><a href="../" hreflang="en" lang="en" data-lang-link="en">English</a></li>
+        <li><a href="../tr/" hreflang="tr" lang="tr" data-lang-link="tr">Türkçe</a></li>
+        <li><a href="../ar/" hreflang="ar" lang="ar" dir="rtl" data-lang-link="ar">العربية</a></li>
+        <li><a href="../fa/" hreflang="fa" lang="fa" dir="rtl" data-lang-link="fa">فارسی</a></li>
+        <li><a href="../hi/" hreflang="hi" lang="hi" data-lang-link="hi">हिन्दी</a></li>
+        <li><a href="../az/" hreflang="az" lang="az" data-lang-link="az">Azərbaycanca</a></li>
+        <li><a href="../he/" hreflang="he" lang="he" dir="rtl" data-lang-link="he">עברית</a></li>
+        <li><a href="../el/" hreflang="el" lang="el" data-lang-link="el" aria-current="page">Ελληνικά</a></li>
+        <li><a href="../ru/" hreflang="ru" lang="ru" data-lang-link="ru">Русский</a></li>
+        <li><a href="../uk/" hreflang="uk" lang="uk" data-lang-link="uk">Українська</a></li>
+      </ul>
+    </details>
+    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="Εμφάνιση του πάνω μέρους με κόκκινο" title="Κόκκινο το πάνω μέρος" data-to-red="Κόκκινο το πάνω μέρος" data-to-yellow="Κίτρινο το πάνω μέρος"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================================================ HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-grain" aria-hidden="true"><svg width="100%" height="100%"><rect width="100%" height="100%" filter="url(#grain)"/></svg></div>
+  <div class="hero-rays" aria-hidden="true"></div>
+
+  <div class="hero-copy">
+    <h1 id="hero-title">Ο φυλλομετρητής<br>που γνωρίζει<br><em>τον δρόμο.</em></h1>
+    <p class="lede">Το Murshid είναι ένας φυλλομετρητής Chromium με μέσα το <strong>WebBrain</strong>. Ρωτήστε για τη σελίδα που έχετε μπροστά σας ή αναθέστε του μια εργασία. Διαβάζει, κάνει κλικ και πληκτρολογεί στις δικές σας καρτέλες ενώ εσείς παρακολουθείτε, και λειτουργεί με τα πακέτα τεχνητής νοημοσύνης για τα οποία ήδη πληρώνετε.</p>
+    <div class="cta">
+      <a class="button" href="#get" data-get data-win="Λήψη για Windows" data-mac="Λήψη για macOS" data-linux="Λήψη για Linux"><span>Αποκτήστε το Murshid</span> <svg class="arrow"><use href="#i-arrow"/></svg></a>
+      <a class="button ghost" href="https://webbrain.one">Γνωρίστε το WebBrain</a>
+    </div>
+
+    <div class="terminal" data-terminal>
+      <div class="terminal-tabs" role="tablist" aria-label="Το σύστημά σας">
+        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-head">
+          <span class="terminal-label">Εκτέλεση από την πηγή</span>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>Εξαίρεση των δυαδικών αρχείων</span></label>
+        </div>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
+        <button class="copy" type="button" aria-label="Αντιγραφή εντολών" data-copied="Αντιγράφηκε"><svg><use href="#i-copy"/></svg></button>
+        <p class="terminal-note" data-fast-note hidden>Μόνο το τελευταίο commit, και μόνο ο φάκελος <code>murshid/</code> με την επέκταση WebBrain που φορτώνει: χωρίς ιστορικό, αρχεία zip εκδόσεων, βίντεο ή αρχεία δοκιμών.</p>
+      </div>
+    </div>
+  </div>
+
+  <figure class="hero-art">
+    <div class="arch">
+      <img class="photo" src="../art/halftone/hero-yellow.webp" data-yellow="../art/halftone/hero-yellow.webp" data-red="../art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="Ένας Οθωμανός λόγιος με λευκό τουρμάνι, το κεφάλι ακουμπισμένο στο χέρι του, που διαβάζει το Κοράνι: ημιτονική εκτύπωση βάσει πίνακα του Osman Hamdi Bey του 1902.">
+      <script>if (document.documentElement.dataset.hero === 'red') { const p = document.currentScript.previousElementSibling; p.src = p.dataset.red; }</script>
+    </div>
+    <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 128 L0 51.2 C0 29.4 16 16.6 34 9 C43 5.1 47 3.8 50 0 C53 3.8 57 5.1 66 9 C84 16.6 100 29.4 100 51.2 L100 128"/>
+      <path class="inner" d="M3 128 L3 52 C3 31.6 18 19.5 35 12.4 C43.4 8.9 47 7.6 50 4.6 C53 7.6 56.6 8.9 65 12.4 C82 19.5 97 31.6 97 52 L97 128"/>
+    </svg>
+    <span class="finial" aria-hidden="true"></span>
+    <figcaption><span class="arabic" lang="ar">مرشد</span><span>Murshid · ο οδηγός</span></figcaption>
+  </figure>
+</section>
+
+<div class="border-band" aria-hidden="true"></div>
+
+<!-- ========================================================== SCREENSHOT -->
+<section class="shot" aria-labelledby="shot-title">
+  <h2 class="visually-hidden" id="shot-title">Το Murshid στη δράση</h2>
+  <figure>
+    <picture>
+      <source type="image/avif" srcset="../art/screenshot/murshid-webbrain-1x.avif 1280w, ../art/screenshot/murshid-webbrain-2x.avif 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <source type="image/webp" srcset="../art/screenshot/murshid-webbrain-1x.webp 1280w, ../art/screenshot/murshid-webbrain-2x.webp 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <img src="../art/screenshot/murshid-webbrain.jpg" width="2560" height="1599" loading="lazy" decoding="async" alt="Ο φυλλομετρητής Murshid στα Windows. Σε μια καρτέλα είναι ανοιχτό το λήμμα της Wikipedia για το τάγμα των Μεβλεβήδων και ο πλευρικός πίνακας WebBrain δίπλα του έχει διαβάσει ολόκληρη τη σελίδα και απαντά στο &quot;Summarize this page&quot; (σύνοψη της σελίδας) με μια περίληψη σε κουκκίδες.">
+    </picture>
+    <figcaption>Πραγματικό στιγμιότυπο οθόνης του Murshid στα Windows, με εντολή να συνοψίσει τη σελίδα στην οποία βρίσκεται. Έκδοση αναπτυξιακής προεπισκόπησης, σε νέο προφίλ χωρίς λογαριασμούς.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================= CARRIES -->
+<section class="carries" id="carries" aria-labelledby="carries-title">
+  <header class="section-head">
+    <p class="eyebrow">Όσα κουβαλά ο οδηγός</p>
+    <h2 id="carries-title">Ένας πλήρης φυλλομετρητής,<br><em>με μυαλό μέσα του.</em></h2>
+    <p>Όλα όσα περιμένετε από το Chrome, με τον πράκτορα WebBrain πλεγμένο μέσα του και όχι προσαρτημένη προσθήκη.</p>
+  </header>
+
+  <div class="cards">
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-browse.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#1 Περιήγηση</p>
+      <h3>Chromium, με καρτέλες</h3>
+      <p>Καρτέλες που μπορείτε να σύρετε και να ξαναανοίξετε, γραμμή διεύθυνσης που κάνει και αναζητήσεις, λήψεις, εύρεση στη σελίδα, ζουμ, εργαλεία προγραμματιστή και οι συντομεύσεις που τα χέρια σας ήδη γνωρίζουν.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-ask.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#2 Ρωτήστε &amp; δράστε</p>
+      <h3>WebBrain στον πλευρικό πίνακα</h3>
+      <p>Ρωτήστε για οποιαδήποτε σελίδα, PDF ή επιλογή κειμένου. Ή πείτε του τι θέλετε να γίνει, και αυτό συμπληρώνει τις φόρμες, κάνει κλικ σε κάθε βήμα και συγκρίνει τις καρτέλες για εσάς.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-tray.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#3 Εικονογείο</p>
+      <h3>Τα πακέτα τεχνητής νοημοσύνης σας, από το εικονογείο</h3>
+      <p>Το WebBrain Companion κάθεται στο εικονογείο του συστήματος και προσφέρει τις συνδρομές σας σε Claude, ChatGPT, Gemini, Grok, Kimi, Muse και Devin στο WebBrain μέσω της διεύθυνσης 127.0.0.1. Χωρίς κλειδιά API.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-newtab.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#4 Νέα καρτέλα</p>
+      <h3>Μια νέα καρτέλα που ακούει</h3>
+      <p>Κάθε νέα καρτέλα ανοίγει στη σελίδα του WebBrain: πληκτρολογήστε μια ερώτηση, μια εργασία ή μια αναζήτηση, και πάει κατευθείαν στον πίνακα. Προεγκατεστημένη και ενεργή.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-local.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#5 Τοπικά</p>
+      <h3>Μοντέλα στον ίδιο σας τον υπολογιστή</h3>
+      <p>Το Companion μπορεί να εκτελεί τοπικά το Bonsai 2 27B της PrismML και το μοντέλο απόφασης d1 του WebBrain, προσαρμοσμένο στην κάρτα γραφικών σας, με επαλήθευση SHA-256.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-open.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#6 Ανοιχτό</p>
+      <h3>Ανοιχτό, σε κάθε επίπεδο</h3>
+      <p>GPL-3.0, χτισμένο στο φως της δημοσιότητας μαζί με το WebBrain. Χωρίς τηλεμετρία στον φυλλομετρητή. Διαβάστε κάθε γραμμή που ακουμπά τις σελίδες σας.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ================================================================ WAY -->
+<section class="way" id="way" aria-labelledby="way-title">
+  <div class="way-art" aria-hidden="true">
+    <img class="photo" src="../art/halftone/way.webp" width="1000" height="1432" loading="lazy" alt="">
+  </div>
+  <div class="way-copy">
+    <p class="eyebrow gold">Ο δρόμος</p>
+    <h2 id="way-title">Ο αναζητητής ρωτά.<br>Ο οδηγός δείχνει.<br><em>Και μετά βαδίζετε μαζί.</em></h2>
+    <ol class="steps">
+      <li>
+        <span class="step-num">I</span>
+        <div>
+          <h3>Ρωτήστε</h3>
+          <p>Ρωτήστε για τη σελίδα που έχετε μπροστά σας. Το WebBrain τη διαβάζει — κείμενα, πίνακες, φόρμες, PDF, ακόμα όσα υπάρχουν μόνο στην οθόνη — και απαντά δίπλα της.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">II</span>
+        <div>
+          <h3>Δείτε το σχέδιο</h3>
+          <p>Για οποιαδήποτε εργασία που περιλαμβάνει κλικ ή πληκτρολόγηση, η προσέγγιση «Plan before Act» παραθέτει πρώτα τα βήματα. Εγκρίνετέ τα, αλλάξτε τα ή σταματήστε.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">III</span>
+        <div>
+          <h3>Βαδίστε</h3>
+          <p>Έπειτα εργάζεται στις πραγματικές σας καρτέλες, με τις πραγματικές σας συνδέσεις λογαριασμών. Κάθε κίνηση είναι ορατή, και μπορείτε να πάρετε το τιμόνι ανά πάσα στιγμή.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- =============================================================== TRAY -->
+<section class="tray" id="tray" aria-labelledby="tray-title">
+  <div class="tray-inner">
+    <div>
+      <p class="eyebrow">Στο εικονογείο του συστήματος</p>
+      <h2 id="tray-title">Τα πακέτα για τα οποία ήδη πληρώνετε,<br><em>στη διάθεση του WebBrain.</em></h2>
+      <p>Όταν ανοίγει το Murshid, εκκινεί και το WebBrain Companion. Συνδεθείτε μία φορά στη μικρή εφαρμογή του εικονογείου και οι συνδρομές σας γίνονται ένα τοπικό σημείο πρόσβασης που μόνο αυτός ο υπολογιστής μπορεί να δει, με μια ματιά στο πόσο απομένει από κάθε πακέτο.</p>
+    </div>
+    <ul class="providers" aria-label="Οι συνδρομές που εξυπηρετεί το Companion">
+      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local">Bonsai 2 27B · τοπικά</li><li class="local">d1 · τοπικά</li>
+    </ul>
+    <pre class="endpoint" aria-label="Σημείο πρόσβασης του Companion"><code dir="ltr">http://127.0.0.1:8327/v1</code></pre>
+  </div>
+</section>
+
+<!-- ================================================================ GET -->
+<section class="get" id="get" aria-labelledby="get-title">
+  <header class="section-head center">
+    <p class="eyebrow">Αποκτήστε το Murshid</p>
+    <h2 id="get-title">Πάρτε τον οδηγό <em>μαζί σας.</em></h2>
+    <p>Το Murshid είναι αναπτυξιακή προεπισκόπηση. Για Windows, macOS και Linux υπάρχουν εγκαταστάτες με συμπεριλαμβανόμενο το WebBrain Companion. Το WebBrain και η σελίδα νέας καρτέλας του έρχονται προεγκατεστημένα.</p>
+  </header>
+  <div class="platforms">
+    <article class="platform" data-platform="win" data-you="Το σύστημά σας">
+      <h3>Windows</h3>
+      <p>10 και 11, x64. Το Arm64 εκτελείται από την πηγή.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-windows-x64-setup.exe" download>Λήψη εγκαταστάτη</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 150 MB</span>
+      <p class="fine">Δεν έχει ακόμη υπογραφεί ψηφιακά, γι’ αυτό το Windows SmartScreen μπορεί να το σταματήσει: επιλέξτε <b>Περισσότερες πληροφορίες</b> και έπειτα <b>Εκτέλεση παρόλα αυτά</b>.</p>
+    </article>
+    <article class="platform" data-platform="mac" data-you="Το σύστημά σας">
+      <h3>macOS</h3>
+      <p>12 Monterey και νεότερες, Apple Silicon και Intel.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-macos-universal.dmg" download>Λήψη εγκαταστάτη</a>
+      </div>
+      <span class="status">0.1.0 · Apple Silicon και Intel · 294 MB</span>
+      <p class="fine">Δεν έχει πιστοποιηθεί από την Apple: κάντε δεξί κλικ στην εφαρμογή και επιλέξτε <b>Άνοιγμα</b>, ή χρησιμοποιήστε το <b>Ρυθμίσεις συστήματος &gt; Απόρρητο και ασφάλεια &gt; Άνοιγμα παρόλα αυτά</b>.</p>
+    </article>
+    <article class="platform" data-platform="linux" data-you="Το σύστημά σας">
+      <h3>Linux</h3>
+      <p>x64. Το Arm64 εκτελείται από την πηγή.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-linux-x86_64.AppImage" download lang="en">AppImage</a>
+        <a class="button crimson" href="../download/Murshid-0.1.0-linux-amd64.deb" download>.deb</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 171 MB · 135 MB</span>
+      <p class="fine">AppImage: κάντε το εκτελέσιμο και εκτελέστε το. Σε Debian ή Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
+    </article>
+  </div>
+  <div class="get-cta">
+    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span>Ο πηγαίος κώδικας στο GitHub</span></a>
+  </div>
+  <p class="checksums"><a href="../download/SHA256SUMS.txt">Αθροίσματα ελέγχου SHA-256</a></p>
+</section>
+
+<!-- ============================================================ PRIVACY -->
+<section class="privacy" id="privacy" aria-labelledby="privacy-title">
+  <div class="privacy-inner">
+    <div class="section-head privacy-copy">
+      <p class="eyebrow gold">Απόρρητο, με μελέτη</p>
+      <h2 id="privacy-title">Ιδιωτικό<br><em>εκεί που μετράει.</em></h2>
+      <p>Το Murshid δεν κρατά λίστα ιστορικού περιήγησης. Τα cookies, οι συνδεδεμένοι λογαριασμοί και η αποθήκευση των ιστότοπων διατηρούνται από προεπιλογή, ώστε οι συνεδρίες σας να είναι έτοιμες όταν επιστρέφετε.</p>
+    </div>
+    <div class="privacy-art" aria-hidden="true">
+      <img src="../art/halftone/privacy-dame-turque.webp" width="1402" height="1122" loading="lazy" alt="">
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-mark" aria-hidden="true"><span class="arabic" lang="ar">مرشد</span></div>
+  <div class="footer-row">
+    <a class="brand" href="#top"><img src="../art/murshid-icon.svg" alt="" width="28" height="28"><span lang="en">Murshid</span></a>
+    <nav aria-label="Υποσέλιδο">
+      <a href="https://webbrain.one" lang="en">WebBrain</a>
+      <a href="https://webbrain.one/companion/" lang="en">Companion</a>
+      <a href="https://github.com/webbrain-one/webbrain" lang="en">GitHub</a>
+      <a href="https://webbrain.one/privacy">Απόρρητο</a>
+    </nav>
+    <p>GPL-3.0-or-later · Γραμματοσειρές βάσει της άδειας SIL Open Font License · <span>Εικόνες βασισμένες σε έργα που ανήκουν στο δημόσιο πεδίο: οι πίνακες του Osman Hamdi Bey <i>Ισλαμικός Θεολόγος</i> (1902), <i>Ο Εκπαιδευτής Χελωνών</i> (1906) και <i>Δημόσιος Γραφέας</i> (1910)· ένας δερβίσης Μεβλεβήδων από τη σειρά του Vanmour (1700–37)· και φωτογραφίες δερβίσηδων Μεβλεβήδων στην Κωνσταντινούπολη, γύρω στο 1870–1910, μία από το στούντιο Sébah &amp; Joaillier. Ο δερβίσης και οι φωτογραφίες βρίσκονται στο Rijksmuseum. Εικονογράφηση απορρήτου: σε στιλ τεχνητής νοημοσύνης, βασισμένη στον πίνακα <i>Dame Turque</i>, μέσω του Open Culture.</span></p>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>

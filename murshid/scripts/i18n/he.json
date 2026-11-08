@@ -1,0 +1,399 @@
+{
+  "lang": "he",
+  "dir": "rtl",
+  "locale": "he_IL",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "he": "הדפדפן שיודע את הדרך — Murshid (תצוגה מקדימה לפיתוח)"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "he": "תצוגה מקדימה לפיתוח. Murshid הוא דפדפן מבוסס Chromium עם סוכן WebBrain מובנה בו: שאל על כל דף, הטל עליו משימה, ותן לתוכניות הבינה המלאכותית שלך להריץ אותה ממגש המערכת. בקוד פתוח."
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "he": "הדפדפן שיודע את הדרך — Murshid"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "he": "דפדפן Chromium עם WebBrain מובנה בו. שאל, תכנן, פעל — בלשוניות שלך."
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "he": "דלג לתוכן"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "he": "הדף הראשי של Murshid"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "he": "Murshid הוא תצוגה מקדימה לפיתוח"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "he": "תצוגה מקדימה"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "he": "חלקים"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "he": "הדפדפן"
+    },
+    "nav.way": {
+      "en": "The way",
+      "he": "הדרך"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "he": "Companion"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "he": "הורדה"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "he": "Murshid ב־GitHub"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "he": "הורד את Murshid"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "he": "שפה: עברית"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "he": "הצג את החלק העליון באדום"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "he": "צבע את החלק העליון באדום"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "he": "צבע את החלק העליון בצהוב"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "he": "הדפדפן<br>שיודע<br><em>את הדרך.</em>"
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "he": "Murshid הוא דפדפן מבוסס Chromium ובתוכו <strong>WebBrain</strong>. שאל על הדף שלפניך, או הטל עליו משימה. הוא קורא, לוחץ ומקליד בלשוניות שלך בזמן שאתה צופה, ופועל על תוכניות הבינה המלאכותית שכבר שילמת עליהן."
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "he": "הורד עבור Windows"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "he": "הורד עבור macOS"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "he": "הורד עבור Linux"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "he": "הורד את Murshid"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "he": "הכר את WebBrain"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "he": "המערכת שלך"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "he": "הרץ מהמקור"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "he": "החרג קבצים בינריים"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "he": "העתק פקודות"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "he": "הועתק"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "he": "ההעלאה העדכנית בלבד, ורק <code>murshid/</code> והרחבת WebBrain שהיא טוענת: בלי היסטוריית גיטה, בלי קבצי zip של גרסאות, בלי סרטונים ובלי קובצי עזר לבדיקות."
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "he": "חוקר עות'מאני במגבעת לבנה, ראשו נשען על ידו, קורא בקוראן: הדפס גווני (האלפטון) לפי ציורו של Osman Hamdi Bey משנת 1902."
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "he": "מורשיד · המדריך"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "he": "Murshid בעבודה"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "he": "דפדפן Murshid על Windows. בלשונית פתוח ערך ויקיפדיה על מסדר המולוויה, ולצידה הפאנל הצדדי של WebBrain, שקרא את כל הדף ועונה על &quot;Summarize this page&quot; (סכם דף זה) בתקציר נקודות."
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "he": "צילום אמיתי של Murshid על Windows, אחרי שביקשו שיסכם את הדף הפתוח בו. גרסת תצוגה מקדימה לפיתוח, על פרופיל חדש ללא חשבונות."
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "he": "מה המדריך נושא עמו"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "he": "דפדפן שלם,<br><em>ובתוכו מחשבה.</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "he": "כל מה שאתה מצפה מ־Chrome, עם סוכן WebBrain ארוג בתוכו ולא מוברג עליו."
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "he": "#1 גלישה"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "he": "Chromium, עם לשוניות"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "he": "לשוניות שאפשר לגרור ולפתוח מחדש, שורת כתובות שיודעת גם לחפש, הורדות, חיפוש בדף, תקריב, כלי מפתחים וקיצורי המקשים שידיך כבר מכירות."
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "he": "#2 שאל ופעל"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "he": "WebBrain בפאנל הצדדי"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "he": "שאל על כל דף, PDF או קטע מסומן. או אמור לו מה אתה רוצה שייעשה, והוא ימלא טפסים, ילחץ צעד אחר צעד וישווה בין הלשוניות במקומך."
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "he": "#3 מגש"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "he": "תוכניות הבינה המלאכותית שלך, מהמגש"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "he": "WebBrain Companion יושב במגש המערכת ומגיש ל־WebBrain, הכתובת 127.0.0.1, את מנויי Claude, ChatGPT, Gemini, Grok, Kimi, Muse ו־Devin שלך. בלי מפתחות API."
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "he": "#4 לשונית חדשה"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "he": "לשונית חדשה שמקשיבה"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "he": "כל לשונית חדשה נפתחת בדף של WebBrain: הקלד שאלה, משימה או חיפוש, והוא עובר היישר לפאנל. מותקן מראש ופועל."
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "he": "#5 מקומי"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "he": "מודלים על המחשב שלך"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "he": "Companion יכול להריץ מקומית את <bdi>Bonsai 2 27B</bdi> של PrismML ואת מודל ההכרעות d1 של WebBrain, בהתאמה לגודל מעבד הגרפי שלך, מאומתים באמצעות <bdi>SHA-256</bdi>."
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "he": "#6 פתוח"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "he": "פתוח, עד השורה האחרונה"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "he": "ברישיון <bdi>GPL-3.0</bdi>, ונבנה לעיני כל יחד עם WebBrain. בלי טלמטריה בדפדפן. קרא כל שורה שנוגעת בדפים שלך."
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "he": "הדרך"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "he": "המבקש שואל.<br>המדריך מראה.<br><em>ואז הולכים יחד.</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "he": "א"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "he": "שאל"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "he": "שאל על הדף שלפניך. WebBrain קורא אותו — טקסט, טבלאות, טפסים ו־PDF, ואפילו מה שמופיע רק על המסך — ועונה לצידו."
+    },
+    "way.step2.num": {
+      "en": "II",
+      "he": "ב"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "he": "ראה את התוכנית"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "he": "בכל מה שכרוך בלחיצה או בהקלדה, <bdi>Plan before Act</bdi> (תוכנית לפני ביצוע) פורסת את השלבים תחילה. אשר אותם, שנה אותם, או עצור."
+    },
+    "way.step3.num": {
+      "en": "III",
+      "he": "ג"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "he": "לך"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "he": "ואז הוא עובד בלשוניות האמיתיות שלך, עם חשבונות המשתמש האמיתיים שלך. כל תנועה גלויה, ואתה יכול לתפוס את ההגה בכל רגע."
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "he": "במגש המערכת"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "he": "התוכניות שכבר שילמת עליהן,<br><em>נמזגות ל־WebBrain.</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "he": "Murshid מפעיל את WebBrain Companion כשהוא נפתח. היכנס פעם אחת לאפליקציית המגש הקטנה, והמנויים שלך יהפכו לנקודת קצה מקומית שמחשב זה בלבד יכול לגשת אליה, עם מבט על מה שנשאר מכל תוכנית."
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "he": "המנויים ש־Companion מגיש"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "he": "<bdi>Bonsai 2 27B</bdi> · מקומי"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "he": "d1 · מקומי"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "he": "נקודת הקצה של Companion"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "he": "השג את Murshid"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "he": "קח את המדריך <em>איתך.</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "he": "Murshid הוא תצוגה מקדימה לפיתוח. ל־Windows, macOS ו־Linux יש מתקינים שכוללים את WebBrain Companion. WebBrain והדף שלו ללשונית חדשה מגיעים מותקנים מראש."
+    },
+    "get.yours": {
+      "en": "Your system",
+      "he": "המערכת שלך"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "he": "10 ו־11, x64. Arm64 פועל מהמקור."
+    },
+    "get.download": {
+      "en": "Download installer",
+      "he": "הורד את המתקין"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "he": "0.1.0 · x64 · ‏150 MB"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "he": "עדיין לא חתום דיגיטלית, לכן Windows SmartScreen עלול לעצור אותו: בחר ב־<b>פרטים נוספים</b>, ואז ב־<b>הפעל בכל זאת</b>."
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "he": "12 Monterey ומעלה, Apple Silicon ו־Intel."
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "he": "0.1.0 · Apple Silicon ו־Intel · ‏294 MB"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "he": "לא עבר אישור (notarization) של Apple: לחץ לחיצה ימנית על האפליקציה ובחר <b>פתח</b>, או השתמש ב־<b>הגדרות מערכת &gt; פרטיות ואבטחה &gt; פתח בכל זאת</b>."
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "he": "x64. Arm64 פועל מהמקור."
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "he": "0.1.0 · x64 · ‏171 MB · 135 MB"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "he": "AppImage: הפוך אותו לקובץ הרצה והרץ אותו. ב־Debian או Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "he": "הקוד המקורי ב־GitHub"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "he": "סיכומי בדיקה <bdi>SHA-256</bdi>"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "he": "פרטיות, מחשבה תחילה"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "he": "פרטיות<br><em>בדברים שחשובים.</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "he": "Murshid לא שומר רשימת היסטוריית גלישה. עוגיות, כניסות ונתוני אתרים נשמרים כברירת מחדל, כך שישיבת הגלישה שלך מוכנה כשאתה חוזר."
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "he": "כותרת תחתונה"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "he": "פרטיות"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "he": "<bdi>GPL-3.0-or-later</bdi> · הגופנים ברישיון SIL Open Font License · <span>התמונות לקוחות מיצירות בנחלת הכלל: ציוריו של Osman Hamdi Bey — <i>תאולוג מוסלמי</i> (1902), <i>מאלף הצבים</i> (1906) ו־<i>הסופר הציבורי</i> (1910); דרוויש מולווי מסדרת ואנמור (1700–1737); ותצלומים של דרווישים מולווים בקונסטנטינופול, בערך בין 1870 ל־1910, אחד מהם של Sébah &amp; Joaillier. הדרוויש והתצלומים שמורים במוזיאון רייקס. איור הפרטיות: עובד בסגנון AI לפי <i>Dame Turque</i>, דרך Open Culture.</span>"
+    }
+  }
+}

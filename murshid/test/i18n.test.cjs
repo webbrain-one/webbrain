@@ -15,7 +15,7 @@ const emphasis = (text) => (text.match(/\*/g) || []).length;
 afterEach(() => i18n.setLocale('en'));
 
 test('every language has exactly the English keys, with the same placeholders', () => {
-  assert.deepEqual(i18n.SUPPORTED, ['en', 'tr', 'ar', 'fa']);
+  assert.deepEqual(i18n.SUPPORTED, ['en', 'tr', 'ar', 'fa', 'hi', 'az', 'he', 'el', 'ru', 'uk']);
   const english = LOCALES.en;
   for (const [code, dict] of Object.entries(LOCALES)) {
     assert.deepEqual(Object.keys(dict).sort(), Object.keys(english).sort(), `${code} keys`);
@@ -28,12 +28,12 @@ test('every language has exactly the English keys, with the same placeholders', 
   }
 });
 
-test('Persian uses Persian letters, and Turkish and English use no Arabic script', () => {
+test('Persian uses Persian letters, and the other languages use no Arabic script', () => {
   for (const [key, text] of Object.entries(LOCALES.fa)) {
     assert.doesNotMatch(text, /[يكى]/, `fa ${key} has an Arabic yeh or kaf`);
     assert.doesNotMatch(text, /(^|[\s«(])می (?=[؀-ۿ])/, `fa ${key} needs a half space after می`);
   }
-  for (const code of ['en', 'tr']) {
+  for (const code of ['en', 'tr', 'hi', 'az', 'he', 'el', 'ru', 'uk']) {
     for (const [key, text] of Object.entries(LOCALES[code])) {
       if (key === 'page.about.word') continue;
       assert.doesNotMatch(text, /[؀-ۿ]/, `${code} ${key}`);
@@ -43,6 +43,8 @@ test('Persian uses Persian letters, and Turkish and English use no Arabic script
   for (const code of ['ar', 'fa']) {
     assert.match(LOCALES[code]['menu.newTab'], /^[؀-ۿ\s‌]+$/);
   }
+  // Hebrew strings are written in Hebrew.
+  assert.match(LOCALES.he['menu.newTab'], /^[\u0590-\u05FF\s\u200f\u200e]+$/);
 });
 
 test('the interface language follows Settings, then the system, then English', () => {
@@ -50,11 +52,16 @@ test('the interface language follows Settings, then the system, then English', (
   assert.equal(i18n.resolve('auto', 'ar-EG'), 'ar');
   assert.equal(i18n.resolve('auto', 'fa_IR'), 'fa');
   assert.equal(i18n.resolve('auto', 'de-DE', ['fa-IR', 'en-US']), 'fa');
+  assert.equal(i18n.resolve('auto', 'he-IL'), 'he');
+  assert.equal(i18n.resolve('auto', 'ru-RU', ['uk-UA']), 'ru');
+  assert.equal(i18n.resolve('az', 'en-US'), 'az');
   assert.equal(i18n.resolve('auto', 'de-DE', ['de-DE', 'tr-TR']), 'en');
   assert.equal(i18n.resolve('klingon', 'xx'), 'en');
   assert.equal(i18n.match('constructor'), null);
   assert.equal(i18n.dir('ar'), 'rtl');
   assert.equal(i18n.dir('fa'), 'rtl');
+  assert.equal(i18n.dir('he'), 'rtl');
+  assert.equal(i18n.dir('ru'), 'ltr');
   assert.equal(i18n.dir('tr'), 'ltr');
 });
 
