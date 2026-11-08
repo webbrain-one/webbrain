@@ -311,7 +311,8 @@ before anything is typed: a two-step sign-in that focuses its password field
 after the username step's Next took the guess there with no card.
 Without a target from the preflight, a `type_text` with no selector is
 checked against the field it types into, which in Firefox is the field the
-last click focused when focus has since gone to the page (a virtual keypad
+last click focused when focus has since gone to the page or to that field's
+own component (a virtual keypad
 that blurs its clicked password field took a guess with no card).
 It holds in lean mode and with or without Strict checks.
 

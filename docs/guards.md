@@ -185,7 +185,8 @@ the dispatch sends to another field than the one the preflight resolved
 focused now, and a `type_text` selector the preflight did not pin types into
 its current match) is checked again against that field before it types, and
 a `type_text` with no selector against the field it types into (in Firefox
-the field the last click focused, when focus has since gone to the page). A field
+the field the last click focused, when focus has since gone to the page or to
+that field's own component). A field
 whose site cannot be read (a `data:` frame, a frame that is gone, a top page
 at `about:blank` or `data:`, a selector that names a sign-in field in two
 frames) is refused without a card. The
