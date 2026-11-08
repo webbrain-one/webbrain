@@ -53,6 +53,9 @@ let navigationFrames = null;
 // with its address and the fields its refs or selectors name. null: one
 // document answers every message for any ref.
 let digestFrames = null;
+// A test's own answer to a content message, before the stubs below
+// (undefined: no answer of its own).
+let contentAnswer = null;
 const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
 const api = {
   storage: { local: area, session: area },
@@ -67,6 +70,8 @@ const api = {
       sent.push(message);
       sentFrame.set(message, options?.frameId);
       const params = message?.params || {};
+      const answer = contentAnswer?.(message, options);
+      if (answer !== undefined) return answer;
       if (message?.action === 'field_value_digest' && digestFrames) {
         const frame = Number.isInteger(options?.frameId)
           ? digestFrames.find(item => item.frameId === options.frameId) : digestFrames[0];
@@ -116,7 +121,8 @@ function b4Conversation() {
 
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
-  const { isSignInPasswordField, credentialValueProvided, newPasswordValue, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials } =
+  const { isSignInPasswordField, credentialValueProvided, newPasswordValue, newPasswordValuesFromHistory, clarifyReplyWithholdsCredentials,
+    credentialFieldIdentity } =
     await import(`../src/${build}/src/agent/credential-fields.js`);
   const { foldBrowserBatchMessages } = await import(`../src/${build}/src/agent/browser-batch.js`);
   const { RichTextToolbarProbe } = await import(`../src/${build}/src/agent/rich-text-toolbar-probe.js`);
@@ -128,6 +134,7 @@ for (const build of ['chrome', 'firefox']) {
     tabUrl = PAGE_URL;
     navigationFrames = null;
     digestFrames = null;
+    contentAnswer = null;
     const agent = new Agent({});
     agent._persist = () => {};
     agent._persistNow = async () => true;
@@ -775,6 +782,7 @@ for (const build of ['chrome', 'firefox']) {
     tabUrl = PAGE_URL;
     navigationFrames = null;
     digestFrames = null;
+    contentAnswer = null;
     // page.frameIds: the frame the preflight resolves a ref in (the top
     // frame when not listed; null: the probe names no frame). page.unseen:
     // fields of a subframe, which the preflight (it probes only the top
@@ -1529,6 +1537,211 @@ for (const build of ['chrome', 'firefox']) {
     assert.deepEqual(newPasswordValuesFromHistory([messages[0], { ...messages[1], content: `note\n${messages[1].content}` }]), []);
     assert.deepEqual(newPasswordValuesFromHistory([messages[0], { role: 'user', content: 'next' }, messages[1]]), []);
   });
+
+  // Review of the card: the guard checked the field the typing-target
+  // preflight resolved, and the dispatch could then type into another one.
+  // By default (typing-target-identity advises) Chrome's focused type_text
+  // whose bound field lost focus types into the field focused now, and a
+  // type_text selector the preflight did not pin types into the selector's
+  // current match. A two-step sign-in that focuses its password field after
+  // the username step's Next took the guess there with no card (also on
+  // main). The field the text goes to is now checked before it is typed.
+  if (build === 'chrome') {
+    const { cdpClient } = await import('../src/chrome/src/cdp/cdp-client.js');
+    // Chrome's trusted typing with the debugger stubbed: the focus check
+    // reads `focused`, the selector pin `page.pinned`, and every command and
+    // selector write is recorded.
+    const trustedTyping = async (agent, run) => {
+      Object.assign(agent, { _isPdfTab: async () => false, _chromeProtectedPageFailure: async () => null,
+        _richTextToolbarToolBlock: async () => null, _injectCoreContentScripts: async () => {} });
+      const commands = [];
+      const selectorWrites = [];
+      const page = { pinned: null };
+      const overrides = {
+        attach: async () => ({ attached: true }),
+        evaluate: async () => ({ result: { value: { focused: true, editable: true, contentEditable: false, tag: 'INPUT',
+          type: focused.type, name: focused.name, value: '', rect: { x: 1, y: 2, w: 3, h: 4 } } } }),
+        textEntrySignature: async () => 'signature',
+        verifyTextEntry: async () => true,
+        sendCommand: async (_tab, method, params) => { commands.push({ method, params }); return {}; },
+        probeRichTextToolbarSelector: async () => page.pinned,
+        typeText: async (_tab, selector, text, _clear, expectedNode) => {
+          selectorWrites.push({ selector, text, expectedNode });
+          return { success: true, verified: true, method: 'cdp-insert-text', tag: 'INPUT', rect: { x: 1, y: 2, w: 3, h: 4 } };
+        },
+      };
+      const originals = Object.fromEntries(Object.keys(overrides).map(key => [key, cdpClient[key]]));
+      Object.assign(cdpClient, overrides);
+      try {
+        const inserted = () => commands.filter(command => command.method === 'Input.insertText').map(command => command.params.text);
+        return await run({ page, inserted, selectorWrites });
+      } finally { Object.assign(cdpClient, originals); }
+    };
+    const lostFocus = () => {
+      contentAnswer = message => (message.action === 'prepare_focused_type_dispatch'
+        ? { success: false, dispatched: false, noDispatch: true, retryable: true, reasonCode: 'focused_target_changed',
+          error: 'The focused target changed after the rich-text toolbar safety preflight. Focus the intended field again and retry.' }
+        : undefined);
+    };
+    // The preflight bound the username field, which had focus then.
+    const boundToUser = token => ({ ...modelCall(FIELDS.ref_user), credentialCardAvailable: true, typingTargetFrameId: 0,
+      dispatchBinding: { token, frameId: 0 } });
+    const probesOf = () => sent.filter(message => message.action === 'field_value_digest');
+
+    test('chrome: focused typing whose field lost focus to a sign-in password field asks before typing', async () => {
+      const agent = fresh(80);
+      await trustedTyping(agent, async ({ inserted }) => {
+        lostFocus();
+        focused = FIELDS.ref_pass;
+        const asked = await agent.executeTool(80, 'type_text', { text: 'admin' }, null, boundToUser('wbdb_focus_1'));
+        assert.equal(asked.success, false);
+        assert.equal(asked.noDispatch, true);
+        assert.equal(asked.errorCode, 'credential_not_provided');
+        assert.equal(asked.credentialConfirmation?.host, 'localhost', 'the card is offered for the field focused now');
+        assert.equal(asked.credentialConfirmation?.fieldKey, credentialFieldIdentity(FIELDS.ref_pass, 0));
+        assert.deepEqual(inserted(), [], 'nothing is typed into the password field');
+        assert.deepEqual(probesOf().map(message => [message.params?.focused, sentFrame.get(message)]), [[true, 0]],
+          'the field focused now is read in the top frame, which the fallback types into');
+        assert.equal(asked.guardAdvisories, undefined, 'no note about a fallback that typed nothing');
+        // An approval for the sign-in password field does not follow focus to
+        // the username field.
+        focused = FIELDS.ref_user;
+        const approval = { host: 'localhost', fieldKey: credentialFieldIdentity(FIELDS.ref_pass, 0), valueKey: agent._sha256TextSync('admin') };
+        const moved = await agent.executeTool(80, 'type_text', { text: 'admin' }, null,
+          { ...modelCall(FIELDS.ref_pass), credentialCardAvailable: true, typingTargetFrameId: 0, credentialApproval: approval,
+            dispatchBinding: { token: 'wbdb_focus_2', frameId: 0 } });
+        assert.equal(moved.errorCode, 'credential_field_changed');
+        assert.deepEqual(inserted(), []);
+      });
+      // Text the user gave, and other text into a field that is not a
+      // sign-in's password, are typed into the field focused now as before.
+      const task = `Sign in to the QA portal on this page with username test-account-a and password ${GIVEN_PASSWORD}.`;
+      const given = fresh(81, [{ role: 'user', content: task, webbrainUserAuthoredText: task }]);
+      await trustedTyping(given, async ({ inserted }) => {
+        lostFocus();
+        focused = FIELDS.ref_pass;
+        const typedGiven = await given.executeTool(81, 'type_text', { text: GIVEN_PASSWORD }, null, boundToUser('wbdb_focus_3'));
+        assert.equal(typedGiven.success, true);
+        assert.ok(typedGiven.guardAdvisories?.some(item => item.guard === 'typing-target-identity'));
+        focused = { tag: 'input', type: 'text', name: 'q', id: 'q', labelText: 'Search' };
+        const other = await given.executeTool(81, 'type_text', { text: 'admin' }, null, boundToUser('wbdb_focus_4'));
+        assert.equal(other.success, true);
+        assert.deepEqual(inserted(), [GIVEN_PASSWORD, 'admin']);
+      });
+    });
+
+    test('chrome: "Type it" after focus moved types into the sign-in password field focused now', async () => {
+      for (const answer of ['deny', 'once']) {
+        const tab = answer === 'once' ? 82 : 83;
+        const { agent, cards, call, run, respond, result } = batchFixture(tab);
+        delete agent._executeToolImpl; // the real dispatch
+        // The preflight binds the field focused when it runs.
+        let bindings = 0;
+        agent._preflightRichTextToolbarTarget = async () => ({ block: null, shot: null, probe: { resolved: true, frameId: 0,
+          fieldMeta: focused, dispatchBinding: { token: `wbdb_batch_${++bindings}`, frameId: 0 } } });
+        await trustedTyping(agent, async ({ inserted }) => {
+          focused = FIELDS.ref_user;
+          contentAnswer = message => {
+            if (message.action === 'prepare_focused_type_dispatch') {
+              // The username step's Next moved focus to the password field.
+              if (message.params?.dispatchBinding?.token === 'wbdb_batch_1') {
+                focused = FIELDS.ref_pass;
+                return { success: false, dispatched: false, noDispatch: true, retryable: true, reasonCode: 'focused_target_changed',
+                  error: 'The focused target changed.' };
+              }
+              return { success: true, tag: 'INPUT', type: focused.type, name: focused.name, rect: { x: 1, y: 2, w: 3, h: 4 },
+                beforeSignature: 'signature' };
+            }
+            if (message.action === 'verify_focused_type_dispatch') return { success: true, verified: true, fieldMeta: focused };
+            return undefined;
+          };
+          const guess = call('type_text', { text: 'admin' });
+          await run([guess], respond(answer));
+          assert.equal(cards.length, 1, `${answer}: the card is shown`);
+          assert.equal(cards[0].unverifiedStepConfirmation.host, 'localhost');
+          if (answer === 'deny') {
+            assert.equal(result(guess).errorCode, 'credential_not_provided');
+            assert.equal(result(guess).credentialDeclined, true);
+            assert.deepEqual(inserted(), [], 'nothing is typed');
+          } else {
+            assert.equal(result(guess).success, true);
+            assert.deepEqual(inserted(), ['admin'], 'typed once, into the field the card named');
+            assert.equal(bindings, 2, 'the target is resolved again after the answer');
+          }
+        });
+      }
+    });
+
+    test('chrome: a type_text selector the preflight did not pin is checked where it types', async () => {
+      const agent = fresh(84);
+      await trustedTyping(agent, async ({ page, selectorWrites }) => {
+        // The preflight read the username field by this selector, without a
+        // node pinned (its debugger resolver failed); the page then showed
+        // the password step, which the selector matches now.
+        digestFrames = [{ frameId: 0, url: PAGE_URL, fields: { '#login-field': FIELDS.ref_pass } }];
+        const unpinned = { ...modelCall(FIELDS.ref_user), credentialCardAvailable: true, typingTargetFrameId: 0,
+          dispatchBinding: { token: 'wbdb_selector_1', frameId: 0 } };
+        const args = { selector: '#login-field', text: 'admin' };
+        // No node can be pinned: the fallback would type into the current match.
+        const asked = await agent.executeTool(84, 'type_text', args, null, unpinned);
+        assert.equal(asked.errorCode, 'credential_not_provided');
+        assert.equal(asked.credentialConfirmation?.host, 'localhost');
+        assert.deepEqual(probesOf().map(message => [message.params?.selector, sentFrame.get(message)]), [['#login-field', 0]]);
+        assert.equal(asked.guardAdvisories, undefined);
+        // The node pinned now is the password field: its own reading decides.
+        sent.length = 0;
+        page.pinned = { selectorBackendNodeId: 42, fieldMeta: FIELDS.ref_pass };
+        const pinned = await agent.executeTool(84, 'type_text', args, null, { ...unpinned, dispatchBinding: { token: 'wbdb_selector_2', frameId: 0 } });
+        assert.equal(pinned.errorCode, 'credential_not_provided');
+        assert.deepEqual(probesOf(), [], 'the pinned node\'s reading needs no probe');
+        assert.deepEqual(selectorWrites, [], 'nothing is typed');
+        // A pinned username field takes the text, as does a node the
+        // preflight pinned itself.
+        page.pinned = { selectorBackendNodeId: 43, fieldMeta: FIELDS.ref_user };
+        assert.equal((await agent.executeTool(84, 'type_text', args, null, unpinned)).success, true);
+        page.pinned = null;
+        const preflightPinned = { ...unpinned, dispatchBinding: { backendNodeId: 7, frameId: 0 } };
+        assert.equal((await agent.executeTool(84, 'type_text', args, null, preflightPinned)).success, true);
+        assert.deepEqual(selectorWrites.map(write => write.expectedNode), [43, 7]);
+        assert.deepEqual(probesOf(), []);
+      });
+    });
+  }
+
+  if (build === 'firefox') {
+    test('firefox: a type_text selector the preflight did not bind is checked where it types', async () => {
+      const agent = fresh(85);
+      // The preflight read the username field by this selector and bound
+      // none; a frame from another site now holds a sign-in field it matches.
+      navigationFrames = [{ frameId: 0, parentFrameId: -1, url: PAGE_URL },
+        { frameId: 6, parentFrameId: 0, url: 'https://login.example.test/frame' }];
+      digestFrames = [{ frameId: 0, url: PAGE_URL, fields: {} },
+        { frameId: 6, url: 'https://login.example.test/frame', fields: { '#login-field': FIELDS.ref_pass } }];
+      const unbound = { ...modelCall(FIELDS.ref_user), credentialCardAvailable: true, typingTargetFrameId: 0 };
+      const args = { selector: '#login-field', text: 'admin' };
+      let retry = null;
+      agent._probeRichTextToolbarRetryTarget = async () => retry;
+      const writes = () => sent.filter(message => message.action === 'type');
+      // Without a binding the write goes to every frame: each is asked.
+      const asked = await agent.executeTool(85, 'type_text', args, null, unbound);
+      assert.equal(asked.errorCode, 'credential_not_provided');
+      assert.equal(asked.credentialConfirmation?.host, 'login.example.test', 'named by the frame that holds the field');
+      assert.equal(asked.guardAdvisories, undefined);
+      assert.deepEqual(writes(), []);
+      // The element the dispatch binds now reads as a sign-in password field.
+      retry = { resolved: true, frameId: 0, fieldMeta: FIELDS.ref_pass, dispatchBinding: { token: 'wbdb_retry_1', frameId: 0 } };
+      const bound = await agent.executeTool(85, 'type_text', args, null, unbound);
+      assert.equal(bound.errorCode, 'credential_not_provided');
+      assert.equal(bound.credentialConfirmation?.host, 'localhost');
+      assert.ok(sent.some(message => message.action === 'release_dispatch_binding'
+        && message.params?.dispatchBinding?.token === 'wbdb_retry_1'), 'its binding is released');
+      assert.deepEqual(writes(), []);
+      // A bound username field takes the text.
+      retry = { resolved: true, frameId: 0, fieldMeta: FIELDS.ref_user, dispatchBinding: { token: 'wbdb_retry_2', frameId: 0 } };
+      assert.equal((await agent.executeTool(85, 'type_text', args, null, unbound)).success, true);
+      assert.deepEqual(writes().map(message => [message.params?.dispatchBinding?.token, sentFrame.get(message)]), [['wbdb_retry_2', 0]]);
+    });
+  }
 }
 
 test('the credential field rules stay mirrored', async () => {

@@ -179,7 +179,11 @@ from another origin is named by its host, and an answer kept for the page
 does not cover it. A frame at `about:blank` or `about:srcdoc` has the site of
 the frame above it, and the top frame's comes from the tab's address by the
 same rule. Without a frame from the preflight, the guard asks each frame for
-the field on its own, and the frame that holds it names the site. A field
+the field on its own, and the frame that holds it names the site. A write
+the dispatch sends to another field than the one the preflight resolved
+(Chrome's focused `type_text` whose field lost focus types into the field
+focused now, and a `type_text` selector the preflight did not pin types into
+its current match) is checked again against that field before it types. A field
 whose site cannot be read (a `data:` frame, a frame that is gone, a top page
 at `about:blank` or `data:`, a selector that names a sign-in field in two
 frames) is refused without a card. The
@@ -220,8 +224,9 @@ Code: `_promptUnverifiedStepConfirmation` and `_resolveUnverifiedStepConfirmatio
 in `agent.js`, `agent/unverified-step.js` (shared by the agent, scheduler
 persistence and restored cards), and the `unverifiedStepConfirmation` branch
 of `renderClarifyCard` in `ui/sidepanel.js`. The sign-in password card:
-`_unprovidedCredentialBlock`, `_approvedCredentialTargetBlock` and
-`_resolveCredentialConfirmation` in `agent.js`, called from the tool batch
+`_unprovidedCredentialBlock`, `_approvedCredentialTargetBlock`,
+`_retargetedCredentialBlock` and `_resolveCredentialConfirmation` in
+`agent.js`, called from the tool batch
 after the call's action pipeline returns. Tests: `test/guard-ask-cards.mjs`
 and `test/credential-not-provided.mjs`.
 

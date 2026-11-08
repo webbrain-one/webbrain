@@ -48193,6 +48193,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const credentialBlock = await this._unprovidedCredentialBlock(tabId, name, args || {}, executionContext);
       if (credentialBlock) return credentialBlock;
+      // The dispatch checks again a field it types into in place of the one
+      // checked here (_retargetedCredentialBlock). Its refusal typed nothing
+      // either, and is returned unfinalized like the one above: after a
+      // "Type it" the batch runs the call again with this dispatch state,
+      // whose finalized result would stay the refusal.
+      const credentialRefusal = result => result?.noDispatch === true
+        && (result.credentialNotProvided === true || result.credentialFieldChanged === true);
       // The site a write that may set a new password goes to, read before it
       // is sent, since a submit may navigate to another site: such a password
       // counts as given only there (_rememberNewPassword).
@@ -48224,6 +48231,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             this._contentActionDeadlineMs(name, args),
             context._contentActionAbortSignal,
           );
+          if (credentialRefusal(result)) return result;
           return await this._finalizeToolResultOnce(tabId, name, args, result, dispatchState);
         } catch (error) {
           if (error?.code === 'content_action_timeout') {
@@ -48241,6 +48249,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
       const result = await this._executeToolImpl(tabId, name, args, onUpdate, context);
+      if (credentialRefusal(result)) return result;
       return await this._finalizeToolResultOnce(tabId, name, args, result, dispatchState);
     } catch (error) {
       const cancelled = error?.name === 'AbortError'
@@ -54461,6 +54470,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               // delete on whichever field has focus now could erase a value
               // that check never saw (a deletion-class concern).
               const identityLost = !prepared || prepared.reasonCode === 'focused_target_changed';
+              // credential-not-provided checked the bound field: the field
+              // focused now (in the top frame, where the unbound path types)
+              // is checked before any text goes to it.
+              if (identityLost && !args.clear && this._guardAdvises('typing-target-identity', { tabId, decided: !!prepared })) {
+                const credentialBlock = await this._retargetedCredentialBlock(tabId, name, args, dispatchContext, { frameId: 0 });
+                throwIfEarlyCdpAborted();
+                if (credentialBlock) return credentialBlock;
+              }
               if (identityLost && !args.clear && this._guardAdvisesFor(dispatchContext.guardAdvisories, 'typing-target-identity',
                 'The field focused when this call was checked lost focus before typing, so the text went to the field focused now. Check that the intended field changed.',
                 { tabId, decided: !!prepared })) {
@@ -54621,6 +54638,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (args.selector) {
           let result;
           let expectedBackendNodeId = Number(dispatchBinding?.backendNodeId) || null;
+          // The element pinned below when the preflight pinned none, as the
+          // pin's probe read it.
+          let pinnedFieldMeta = null;
           const unpinnedRefusal = {
             success: false,
             dispatched: false,
@@ -54637,9 +54657,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               });
               throwIfEarlyCdpAborted();
               expectedBackendNodeId = Number(probe?.selectorBackendNodeId) || null;
+              pinnedFieldMeta = expectedBackendNodeId ? probe?.fieldMeta || null : null;
             } catch {
               // A stopped or expired action sends nothing in any mode.
               if (earlyCdpAbortSignal?.aborted) return unpinnedRefusal;
+            }
+            // credential-not-provided checked the element the preflight read
+            // and did not pin: the element pinned now, or else the selector's
+            // current match (in the top frame, as typeText resolves it), is
+            // checked before any text goes to it.
+            if (expectedBackendNodeId || this._guardAdvises('typing-target-identity', { tabId, decided: false })) {
+              const credentialBlock = await this._retargetedCredentialBlock(tabId, name, args, dispatchContext,
+                { fieldMeta: pinnedFieldMeta, frameId: 0 });
+              throwIfEarlyCdpAborted();
+              if (credentialBlock) return credentialBlock;
             }
           }
           // The node checked before typing could not be pinned. By default
@@ -55717,6 +55748,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (outcome !== 'ask' || executionContext.credentialCardAvailable !== true) return refusal;
     return { ...refusal, credentialConfirmation: { host, reason: field.reason, valueKey,
       fieldKey: credentialFieldIdentity(fieldMeta, frameId) } };
+  }
+
+  // The guard above checked the field the typing-target preflight resolved.
+  // Where typing-target-identity advises, a write can go to another field:
+  // Chrome's focused type_text whose bound field lost focus types into the
+  // field focused now, and a type_text selector the preflight did not pin
+  // types into the selector's current match. A two-step sign-in that focuses
+  // its password field after the username step's Next took a guess there
+  // with no card. The dispatch checks that field again before it types:
+  // `fieldMeta` when the dispatch has read it (the element it bound), or
+  // else the guard's own probe, in `frameId` (each frame when null, for a
+  // write that goes to every frame).
+  _retargetedCredentialBlock(tabId, name, args, executionContext, { fieldMeta = null, frameId = null } = {}) {
+    return this._unprovidedCredentialBlock(tabId, name, args || {}, { ...executionContext,
+      typingTargetFieldMeta: fieldMeta || null, typingTargetFrameId: Number.isInteger(frameId) ? frameId : null });
   }
 
   // A call the user approved on the sign-in password card goes ahead only

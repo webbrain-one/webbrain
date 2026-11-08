@@ -303,6 +303,12 @@ The check runs before anything is typed, on calls the model makes through the
 tool batch (a saved workflow's replay of the user's own steps is not
 checked), against the field the typing-target preflight resolved; when
 nothing tells it the target is a password field, the text is typed as before.
+Where the dispatch would type into another field than that one (by default,
+Chrome's focused `type_text` whose bound field lost focus types into the
+field focused now, and a `type_text` selector the preflight did not pin
+types into the selector's current match), that field is checked the same way
+before anything is typed: a two-step sign-in that focuses its password field
+after the username step's Next took the guess there with no card.
 It holds in lean mode and with or without Strict checks.
 
 Text from none of those sources is not refused outright: the places WebBrain
