@@ -55,10 +55,20 @@ export function strongModelFamily(modelId) {
 }
 
 // Providers that run on the user's machine or in the browser. Auto never
-// turns lean mode on for them, whatever model they serve. The type and id
-// lists only classify a provider whose config names no category.
+// turns lean mode on for them, whatever model they serve: a local model may
+// carry a strong model's name ("...-claude-sonnet-4-distill"). The type and
+// id lists only classify a provider whose config names no category.
 const LOCAL_PROVIDER_TYPES = Object.freeze(['llamacpp', 'webgpu']);
 const LOCAL_PROVIDER_ID = /^(?:llamacpp|ollama|lmstudio|webgpu)(?:$|[_-])/;
+
+// Local relays: apps on this computer that forward to the cloud subscriptions
+// the user signed in with. WebBrain Companion embeds CLIProxyAPI, and the
+// Local OpenAI-compatible Proxy is CLIProxyAPI on its own. Their category is
+// local (their address is), but the model that answers is the cloud model
+// they serve, so Auto judges them by that model, as it does a router. The one
+// model the Companion runs itself (Bonsai) is not on the strong list.
+const LOCAL_RELAY_PROVIDER_NAMES = Object.freeze(['webbrain-companion', 'local-openai-proxy']);
+const LOCAL_RELAY_PROVIDER_ID = /^(?:webbrain_companion|local_openai_proxy)(?:$|[_-])/;
 
 // The first value that is a non-blank string, read lazily: a provider's
 // getters can throw, and a blank configured value (model: '') means "not
@@ -84,27 +94,32 @@ export function leanProviderInfo(provider) {
   const category = firstText(() => config.category, () => provider?.category).trim().toLowerCase();
   const type = firstText(() => config.type, () => provider?.type).trim().toLowerCase();
   const providerId = firstText(() => config._providerId, () => provider?.providerId).trim().toLowerCase();
+  const providerName = firstText(() => config.providerName, () => provider?.providerName).trim().toLowerCase();
   // A blank configured model is unset: the provider's model getter returns
   // the model it actually calls (AnthropicProvider defaults to its own).
   const model = firstText(() => config.model, () => provider?.model).trim();
   const promptTier = firstText(() => provider?.promptTier, () => config.promptTier).trim().toLowerCase();
+  const relay = LOCAL_RELAY_PROVIDER_NAMES.includes(providerName) || LOCAL_RELAY_PROVIDER_ID.test(providerId);
   // An explicit category decides, as ProviderManager.categoryFor does: the
   // built-in Ollama Cloud is 'cloud' although its id starts with "ollama-".
   // The type and id lists only classify a config written without one.
   const remote = category === 'cloud' || category === 'router';
-  const local = category === 'local'
-    || (!remote && (LOCAL_PROVIDER_TYPES.includes(type) || LOCAL_PROVIDER_ID.test(providerId)));
-  const cloud = !local && remote;
-  return { category, type, providerId, model, promptTier, local, cloud };
+  const local = !relay && (category === 'local'
+    || (!remote && (LOCAL_PROVIDER_TYPES.includes(type) || LOCAL_PROVIDER_ID.test(providerId))));
+  const cloud = !local && (remote || relay);
+  return { category, type, providerId, providerName, model, promptTier, relay, local, cloud };
 }
 
 /**
  * Whether lean mode applies to a run. Lean mode is an Act-mode setting; Ask
  * and Dev keep their own behavior. 'on' and 'off' are the user's choice.
- * 'auto' needs a cloud provider (not llama.cpp, Ollama, LM Studio, WebGPU or
- * any other local provider) serving a listed strong model, and the
- * provider's prompt tier vetoes it: a provider the user set to the Compact or
- * Mid tier is never lean under Auto.
+ * 'auto' needs a cloud provider, or a local relay to the cloud (WebBrain
+ * Companion, the Local OpenAI-compatible Proxy), serving a listed strong
+ * model; never llama.cpp, Ollama, LM Studio, WebGPU or any other local
+ * provider. The provider's prompt tier vetoes it: a provider the user set to
+ * the Compact or Mid tier is never lean under Auto. A relay's tier is not
+ * read: like every local provider it defaults to Mid, and the settings page
+ * saves that default with the provider, so it says nothing about the model.
  * Returns { active, setting, reason, family? }.
  */
 export function resolveLeanMode(setting, { mode = 'act', provider = null } = {}) {
@@ -115,12 +130,12 @@ export function resolveLeanMode(setting, { mode = 'act', provider = null } = {})
   const info = leanProviderInfo(provider);
   if (info.local) return { active: false, setting: value, reason: 'local_provider' };
   if (!info.cloud) return { active: false, setting: value, reason: 'unknown_provider' };
-  if (info.promptTier === 'compact' || info.promptTier === 'mid') {
+  if (!info.relay && (info.promptTier === 'compact' || info.promptTier === 'mid')) {
     return { active: false, setting: value, reason: 'prompt_tier' };
   }
   const family = strongModelFamily(info.model);
   if (!family) return { active: false, setting: value, reason: 'model_not_listed' };
-  return { active: true, setting: value, reason: 'strong_cloud_model', family };
+  return { active: true, setting: value, reason: info.relay ? 'strong_relay_model' : 'strong_cloud_model', family };
 }
 
 // Quality guards that keep running in lean mode, with the reason. Each one

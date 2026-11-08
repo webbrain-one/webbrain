@@ -3,7 +3,8 @@
 // class `quality` is skipped: no refusal, note, caveat, judge or forced turn.
 // The hard classes, permission gates, host checks, budgets and user control
 // keep their behavior. Auto turns lean mode on only for a strong model on a
-// cloud provider at the Full tier. Real Agent run loops with a scripted
+// cloud provider at the Full tier, or relayed by a local relay to the cloud
+// (WebBrain Companion, the Local OpenAI-compatible Proxy) at any tier. Real Agent run loops with a scripted
 // provider, both builds; the recipient case runs the real content script in
 // Chromium.
 import assert from 'node:assert/strict';
@@ -163,6 +164,17 @@ for (const build of ['chrome', 'firefox']) {
       // Cloud is a cloud provider although its id starts with "ollama-".
       [{ category: 'cloud', type: 'openai', providerId: 'ollama-cloud', model: 'gemini-3-pro-preview', promptTier: 'full' }, true, 'strong_cloud_model'],
       [{ category: 'local', providerId: 'custom-cloud', model: 'gpt-5', promptTier: 'full' }, false, 'local_provider'],
+      // A local relay to the cloud is judged by the model it relays, at any
+      // tier: its Mid is the local default the settings page saves with it.
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'claude-sonnet-4-5', promptTier: 'mid' }, true, 'strong_relay_model'],
+      [{ category: 'local', providerId: 'webbrain_companion', model: 'gpt-5.4', promptTier: 'mid' }, true, 'strong_relay_model'],
+      [{ category: 'local', providerId: 'webbrain_companion-2', model: 'claude-opus-5-5' }, true, 'strong_relay_model'],
+      [{ category: 'local', providerName: 'local-openai-proxy', model: 'gemini-3-pro-preview', promptTier: 'compact' }, true, 'strong_relay_model'],
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'bonsai-2-27b', promptTier: 'mid' }, false, 'model_not_listed'],
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'gemini-3.8-flash-high', promptTier: 'mid' }, false, 'model_not_listed'],
+      [{ category: 'local', providerName: 'webbrain-companion', model: 'claude-haiku-5-5', promptTier: 'mid' }, false, 'model_not_listed'],
+      // Only those two are relays; another local server stays local.
+      [{ category: 'local', providerName: 'vllm', providerId: 'vllm', model: 'claude-sonnet-4-5', promptTier: 'full' }, false, 'local_provider'],
       // A blank configured model is unset: the provider's own model decides.
       [{ config: { category: 'cloud', model: '' }, model: 'claude-sonnet-5' }, true, 'strong_cloud_model'],
       [{ config: { category: 'cloud', model: '   ' }, model: 'gpt-5' }, true, 'strong_cloud_model'],
@@ -223,20 +235,36 @@ for (const build of ['chrome', 'firefox']) {
     assert.deepEqual(lean.resolveLeanMode('auto', { provider: built('ollama-cloud', { model: 'gemini-3-pro-preview', apiKey: 'test' }) }),
       { active: true, setting: 'auto', reason: 'strong_cloud_model', family: 'gemini' });
     assert.equal(lean.resolveLeanMode('auto', { provider: built('ollama', { model: 'gpt-5' }) }).reason, 'local_provider');
+    // From a trace: WebBrain Companion relays the user's cloud subscriptions
+    // but was taken for a local provider whatever it served, and its Mid tier,
+    // the local default saved with it, vetoed Auto again.
+    const companion = built('webbrain_companion', { model: 'claude-sonnet-4-5', promptTier: 'mid' });
+    assert.equal(companion.promptTier, 'mid');
+    assert.deepEqual(lean.resolveLeanMode('auto', { provider: companion }),
+      { active: true, setting: 'auto', reason: 'strong_relay_model', family: 'claude' });
+    assert.deepEqual(lean.resolveLeanMode('auto', { provider: built('local_openai_proxy', { model: 'gpt-5', apiKey: 'test' }) }),
+      { active: true, setting: 'auto', reason: 'strong_relay_model', family: 'gpt' });
+    // The model the Companion runs itself is not a strong one.
+    assert.equal(lean.resolveLeanMode('auto', { provider: built('webbrain_companion', { model: 'bonsai-2-27b' }) }).reason, 'model_not_listed');
     // A cleared model setting means the provider's default, which for
     // Anthropic is claude-sonnet-5.
     const anthropic = built('anthropic', { model: '', apiKey: 'test' });
     assert.equal(anthropic.model, 'claude-sonnet-5');
     assert.deepEqual(lean.resolveLeanMode('auto', { provider: anthropic }),
       { active: true, setting: 'auto', reason: 'strong_cloud_model', family: 'claude' });
-    // Auto agrees with ProviderManager.categoryFor on every built-in, and a
-    // built-in whose default URL is on this machine is local.
+    // Auto agrees with ProviderManager.categoryFor on every built-in except
+    // the two local relays to the cloud, and every other built-in whose
+    // default URL is on this machine is local.
+    const relays = ['webbrain_companion', 'local_openai_proxy'];
     for (const [id, config] of Object.entries(defaults)) {
       const category = ProviderManager.categoryFor(id, config);
       const info = lean.leanProviderInfo({ config: { ...config, category, _providerId: id } });
-      assert.equal(info.local, category === 'local', `${id} is ${category}`);
-      assert.equal(info.cloud, category !== 'local', `${id} is ${category}`);
-      if (/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])[:/]/.test(String(config.baseUrl || ''))) assert.ok(info.local, `${id} runs locally`);
+      const relay = relays.includes(id);
+      assert.equal(info.relay, relay, `${id} relay`);
+      if (relay) assert.equal(category, 'local', `${id} is a local address`);
+      assert.equal(info.local, category === 'local' && !relay, `${id} is ${category}`);
+      assert.equal(info.cloud, category !== 'local' || relay, `${id} is ${category}`);
+      if (!relay && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])[:/]/.test(String(config.baseUrl || ''))) assert.ok(info.local, `${id} runs locally`);
     }
   });
 

@@ -1253,7 +1253,7 @@ word list: Discord's channel composer is found by its channelTextArea
 container and a channel or contact is named by the longest text of its
 selected rail link that the composer's label also contains, LinkedIn's
 conversation list by its class, a formatting toolbar by its role, WhatsApp's
-contact drawer closes through its header's one named button, and a phone
+contact drawer closes through the named button that leads its header (the one before its title when the header also holds Edit), and a phone
 number in a composer's label is taken by its digits.
 
 Chrome's one trusted retry click on a generic element whose synthetic click
