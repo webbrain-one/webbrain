@@ -10,7 +10,7 @@ For verification, lean mode follows the Claude in Chrome model ([claude-chrome-c
 
 Settings → Advanced → **Lean mode** (storage key `leanMode`):
 
-- **Auto** (default): on for strong cloud models, off for local and small models (rules below).
+- **Auto** (default): on for strong cloud models, including those WebBrain Companion or a local CLIProxyAPI relays; off for local and small models (rules below).
 - **On**: always, for every provider and tier.
 - **Off**: never.
 
@@ -19,7 +19,7 @@ It applies to Act mode only. Ask, Dev and the standalone chat keep their behavio
 The resolved mode is recorded:
 
 - in the trace's runtime config, as `lean_mode_setting` (`auto`, `on` or `off`) and `lean_mode` (`true` or `false`);
-- in a `lean_mode` trace note at the start of the run, with the reason (for example `strong_cloud_model`, `local_provider`, `prompt_tier`, `model_not_listed`) and the model family;
+- in a `lean_mode` trace note at the start of the run, with the reason (for example `strong_cloud_model`, `strong_relay_model`, `local_provider`, `prompt_tier`, `model_not_listed`) and the model family;
 - in the run's end details (`onRunFinished`'s `leanMode`), which the scheduler also keeps for scheduled runs.
 
 ## Auto rules
@@ -27,8 +27,8 @@ The resolved mode is recorded:
 Auto turns lean mode on only when all of these hold (`src/*/src/agent/lean-mode.js`):
 
 1. **The run is in Act mode.**
-2. **The provider is a cloud or router provider.** The category WebBrain gives the provider decides, so Ollama Cloud is a cloud provider. A local provider never gets lean mode under Auto, whatever model it serves, and a provider of unknown category does not either. A provider config that names no category is local when it is llama.cpp, Ollama, LM Studio or WebGPU.
-3. **The provider's prompt tier is Full.** Auto keeps WebBrain's checks for a provider the user set to Compact or Mid.
+2. **The provider is a cloud or router provider, or a local relay to the cloud.** The category WebBrain gives the provider decides, so Ollama Cloud is a cloud provider. A local provider never gets lean mode under Auto, whatever model it serves (a local model can carry a strong model's name), and a provider of unknown category does not either. A provider config that names no category is local when it is llama.cpp, Ollama, LM Studio or WebGPU. The exception is the two local relays, WebBrain Companion (`webbrain_companion`) and the Local OpenAI-compatible Proxy (`local_openai_proxy`): their address is on this computer, but they forward to the cloud subscriptions the user signed in with (both are CLIProxyAPI), so Auto judges them by the model they serve, as it does a router, and the trace note says `strong_relay_model`. The one model the Companion runs itself, Bonsai, is not on the strong list.
+3. **The provider's prompt tier is Full.** Auto keeps WebBrain's checks for a provider the user set to Compact or Mid. A relay's tier is not read: like every local provider it defaults to Mid, and the settings page saves that default with the provider, so it says nothing about the model.
 4. **The model id is on the strong-model list:**
    - Claude Opus and Sonnet, generation 4 and later, and Claude Fable and Mythos (`claude-sonnet-4-5`, `claude-opus-4-1-…`, `claude-fable-5-1`, `anthropic/claude-sonnet-4.5`, Bedrock ids);
    - GPT-5 and later, including gpt-6 variants, except nano models;
