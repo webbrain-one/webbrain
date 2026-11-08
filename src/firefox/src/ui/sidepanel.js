@@ -11803,24 +11803,29 @@ function renderClarifyCard(data) {
   // (textContent, never markup). Fixed choices return stable values
   // ('once'/'deny') with no free-text input, so nothing is parsed. A quality
   // check's card counts down to the answer the user's timeout setting
-  // picks; a hard check's card has no countdown.
+  // picks; a hard check's card has no countdown. The sign-in password card
+  // ('type', credential-not-provided) shows the text it would type masked
+  // ('masked'), or none of it with strict secret handling ('hidden'), and
+  // answers "Type it" / "Don't type it".
   if (data.unverifiedStepConfirmation) {
     card.dataset.unverifiedStepConfirmation = '1';
     const step = data.unverifiedStepConfirmation || {};
     const stepHost = String(step.host || '').slice(0, 300) || 'this site';
-    const stepAction = ['commit', 'submit', 'publish', 'click'].includes(step.action) ? step.action : 'submit';
+    const stepAction = ['commit', 'submit', 'publish', 'click', 'type'].includes(step.action) ? step.action : 'submit';
     qEl.textContent = t(`sp.unverified.question.${stepAction}`, { host: stepHost });
     const stepReason = ['editor_unverified', 'draft_unverified', 'draft_unobserved',
-      'submit_unclear', 'target_unresolved', 'repeat_unverified'].includes(step.reason) ? step.reason : 'step_unverified';
+      'submit_unclear', 'target_unresolved', 'repeat_unverified', 'credential_not_provided'].includes(step.reason)
+      ? step.reason : 'step_unverified';
     const reasonEl = document.createElement('div');
     reasonEl.className = 'clarify-reason';
     reasonEl.textContent = t(`sp.unverified.reason.${stepReason}`);
     card.appendChild(reasonEl);
-    const stepText = String(step.content || '').slice(0, 1501);
-    const stepLabel = ['editor', 'composer'].includes(step.contentLabel) ? step.contentLabel : 'page';
+    const stepLabel = ['editor', 'composer', 'masked', 'hidden'].includes(step.contentLabel) ? step.contentLabel : 'page';
+    const stepText = stepLabel === 'hidden' ? '' : String(step.content || '').slice(0, 1501);
     const labelEl = document.createElement('div');
     labelEl.className = 'clarify-reason';
-    labelEl.textContent = stepText ? t(`sp.unverified.content.${stepLabel}`) : t('sp.unverified.check_page');
+    labelEl.textContent = stepLabel === 'hidden' ? t('sp.unverified.content.hidden')
+      : stepText ? t(`sp.unverified.content.${stepLabel}`) : t('sp.unverified.check_page');
     card.appendChild(labelEl);
     if (stepText) {
       const textEl = document.createElement('div');
@@ -11830,7 +11835,10 @@ function renderClarifyCard(data) {
     }
     const optionsEl = document.createElement('div');
     optionsEl.className = 'clarify-options';
-    for (const [value, label] of [['once', t('sp.unverified.go_ahead')], ['deny', t('sp.unverified.dont')]]) {
+    const stepButtons = stepAction === 'type'
+      ? [['once', t('sp.unverified.type_it')], ['deny', t('sp.unverified.dont_type')]]
+      : [['once', t('sp.unverified.go_ahead')], ['deny', t('sp.unverified.dont')]];
+    for (const [value, label] of stepButtons) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'clarify-option';

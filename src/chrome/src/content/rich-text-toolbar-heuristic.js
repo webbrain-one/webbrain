@@ -23,6 +23,10 @@
  * read from a global. When it is absent the candidate still scores; it simply
  * carries no refs, and blocking falls back to regionKey.
  *
+ * The password-field facts the sign-in password check reads (passwordFieldFacts)
+ * live here for the same reason: content.js and the CDP probe once counted a
+ * form's fields with two copies of the same code, which had to be aligned.
+ *
  * Keep this file free of content.js internals — it must stay evaluable on its
  * own in a bare page context.
  */
@@ -459,6 +463,145 @@ var __wbRichTextToolbarHeuristic = (() => {
     } catch { return null; }
   }
 
+  // Password-field facts. content.js _fieldMeta and the Chrome CDP selector
+  // probe both report these for an <input type=password> by calling this one
+  // function, so the two routes cannot disagree (the agent's sign-in password
+  // check, credential-fields.js passwordFieldPurpose, reads them):
+  //
+  //   - passwordFields: the visible password fields of the field's form,
+  //   - usernameFields: the fields of that form that name an account,
+  //   - formSubmitText: the text of the form's first visible submit control,
+  //   - buttonTexts: the texts of the visible buttons of that form, nearest
+  //     first,
+  //   - formless: true for a field in no form, whose counts are those of the
+  //     form-less part of its document (a form-less sign-in shown beside a
+  //     form-less sign-up counts the password fields of both).
+  //
+  // A field's form is its form owner or, for a field in a web component's
+  // shadow root (which has none), the nearest <form> around it across shadow
+  // boundaries. A field in no form has the form-less part of its document,
+  // across open shadow roots, so a component sign-in reads the same as a
+  // plain one. A form without a visible button of its own (one submitted from
+  // a dialog footer) reads the form-less buttons of its document too.
+  const _PASSWORD_FACT_QUERY_LIMIT = 1000;
+  const _PASSWORD_FACT_BUTTON_TEXTS = 8;
+  const _BUTTON_LIKE_SELECTOR = 'button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [type="submit"]';
+  // What a visible field that names the account says: user, login, email,
+  // account, identifier, a phone or mobile number, a customer, member or
+  // client number, the same words in other languages, or "ID".
+  const _ACCOUNT_FIELD_RE = /user|log[-_\s]?[io]n|e-?mail|account|identifier|phone|mobile|customer|member|client|number|nummer|num[eé]ro|n[uú]mero|benutzer|kennung|utilisateur|identifiant|courriel|usuario|correo|celular|m[oó]vil|utente|cellulare|gebruiker|kullan[ıi]c[ıi]|e-?posta|t[eé]l[eé]fon|kimlik|müşteri|логин|почт|телефон|пользовател|użytkownik|ユーザー|メール|電話|用户|账号|帳號|邮箱|手机|아이디|이메일|사용자|휴대폰/iu;
+  const _ACCOUNT_ID_RE = /\bID\b/;
+  // A hidden input that carries the account of a sign-in's password step
+  // (username, login, login_hint, email, identifier, account_name), not a
+  // generic id such as user_id or flow.
+  const _HIDDEN_ACCOUNT_FIELD_RE = /(?:^|[^a-z])(?:user[-_]?name|login(?:[-_]?(?:name|hint|id))?|loginfmt|e-?mail(?:[-_]?address)?|identifier|account[-_]?name)(?:[^a-z]|$)/i;
+
+  function _shadowHost(node) {
+    const root = node?.getRootNode?.();
+    return typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot ? root.host : null;
+  }
+
+  // The form a control belongs to: its form owner, or the nearest <form>
+  // around it across shadow boundaries; null for none.
+  function _passwordFactForm(node) {
+    try {
+      if (node.form && node.form.nodeType === 1) return node.form;
+    } catch {}
+    return _composedClosestElement(_composedParent(node), 'form');
+  }
+
+  function _passwordFactVisible(node) {
+    try { return node.getClientRects().length > 0; } catch { return false; }
+  }
+
+  function _passwordFactText(value, max = 120) {
+    return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+  }
+
+  function _namesAccount(field) {
+    if (field.tagName !== 'INPUT') return false;
+    const type = String(field.type || 'text').toLowerCase();
+    const attr = name => _passwordFactText(field.getAttribute?.(name));
+    if (type === 'hidden') {
+      return [attr('name'), field.id].some(value => _HIDDEN_ACCOUNT_FIELD_RE.test(String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1_$2')));
+    }
+    if (!['text', 'email', 'tel', 'number'].includes(type)) return false;
+    if (type === 'email' || type === 'tel') return true;
+    const autocomplete = attr('autocomplete').toLowerCase().split(' ');
+    if (['username', 'email', 'tel', 'tel-national', 'tel-local'].some(token => autocomplete.includes(token))) return true;
+    const host = _shadowHost(field);
+    const identity = [attr('name'), field.id, attr('aria-label'), _ariaLabelledByText(field), attr('placeholder'), attr('title'),
+      ...[...(field.labels || [])].map(label => label.textContent),
+      ...(host ? ['label', 'name', 'aria-label', 'placeholder'].map(name => host.getAttribute?.(name)) : [])]
+      .map(value => _passwordFactText(value)).filter(Boolean).join(' ');
+    return _ACCOUNT_FIELD_RE.test(identity) || _ACCOUNT_ID_RE.test(identity);
+  }
+
+  // What a button says: its text (an input's value), else its aria-label,
+  // aria-labelledby text or title, else, for a button inside a component
+  // whose label is slotted in, the component's own text or label.
+  function _passwordFactButtonText(control) {
+    const attr = name => _passwordFactText(control.getAttribute?.(name), 80);
+    const own = _passwordFactText(control.tagName === 'INPUT' ? (control.value || control.alt) : control.textContent, 80);
+    if (own) return own;
+    const labelled = attr('aria-label') || _passwordFactText(_ariaLabelledByText(control), 80) || attr('title');
+    if (labelled) return labelled;
+    const host = _shadowHost(control);
+    return host ? (_passwordFactText(host.textContent, 80) || _passwordFactText(host.getAttribute?.('aria-label'), 80)) : '';
+  }
+
+  function _isSubmitControl(control) {
+    const type = String(control.type || '').toLowerCase();
+    return (control.tagName === 'BUTTON' && (type || 'submit') === 'submit')
+      || (control.tagName === 'INPUT' && ['submit', 'image'].includes(type));
+  }
+
+  function _passwordFieldFacts(el) {
+    const facts = {};
+    try {
+      const form = _passwordFactForm(el);
+      const doc = el.ownerDocument || document;
+      const inScope = scopeForm => node => _passwordFactForm(node) === scopeForm;
+      const collect = (scope, selector, scopeForm) => {
+        const found = new Set(_richTextToolbarQueryAcrossOpenShadowRoots(scope, selector, _PASSWORD_FACT_QUERY_LIMIT));
+        if (scopeForm) {
+          for (const control of scopeForm.elements || []) {
+            try { if (control.matches(selector)) found.add(control); } catch {}
+          }
+        }
+        return [...found].filter(inScope(scopeForm));
+      };
+      const fields = collect(form || doc, 'input', form);
+      facts.passwordFields = fields.filter(field => String(field.type || '').toLowerCase() === 'password'
+        && _passwordFactVisible(field)).length;
+      facts.usernameFields = fields.filter(field => field !== el && _namesAccount(field)).length;
+      if (!form) facts.formless = true;
+      if (form) {
+        const submit = [...(form.elements || [])].find(control => _isSubmitControl(control) && _passwordFactVisible(control));
+        const submitText = submit ? _passwordFactButtonText(submit) : '';
+        if (submitText) facts.formSubmitText = submitText;
+      }
+      let buttons = collect(form || doc, _BUTTON_LIKE_SELECTOR, form).filter(_passwordFactVisible);
+      if (form && !buttons.length) buttons = collect(doc, _BUTTON_LIKE_SELECTOR, null).filter(_passwordFactVisible);
+      // Nearest first: by how far up from the field the button's branch
+      // meets the field's.
+      const depth = new Map();
+      for (let node = _composedParent(el), level = 0; node; node = _composedParent(node), level += 1) depth.set(node, level);
+      const distance = node => {
+        for (let cur = node; cur; cur = _composedParent(cur)) if (depth.has(cur)) return depth.get(cur);
+        return Infinity;
+      };
+      const texts = [];
+      for (const { text } of buttons.map((control, index) => ({ text: _passwordFactButtonText(control), at: distance(control), index }))
+        .sort((a, b) => (a.at - b.at) || (a.index - b.index))) {
+        if (text && !texts.includes(text)) texts.push(text);
+        if (texts.length >= _PASSWORD_FACT_BUTTON_TEXTS) break;
+      }
+      if (texts.length) facts.buttonTexts = texts;
+    } catch {}
+    return facts;
+  }
+
   return {
     candidate(el, baseMeta, options = {}) {
       _axRef = typeof options.axRef === 'function' ? options.axRef : null;
@@ -474,6 +617,7 @@ var __wbRichTextToolbarHeuristic = (() => {
     queryAcrossOpenShadowRoots: _richTextToolbarQueryAcrossOpenShadowRoots,
     editorsAcrossOpenShadowRoots: _richTextEditorsAcrossOpenShadowRoots,
     availablePresetValues: _richTextToolbarAvailablePresetValues,
+    passwordFieldFacts: _passwordFieldFacts,
   };
 })();
 

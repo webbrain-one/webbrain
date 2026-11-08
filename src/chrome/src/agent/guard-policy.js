@@ -12,7 +12,11 @@
 // wrong recipient, deleting data, money, credentials, and publishing
 // something the user did not ask for. When a hard guard cannot decide it
 // asks the user on WebBrain's own card where one exists ('ask'), and
-// otherwise refuses ('block').
+// otherwise refuses ('block'). A hard guard asks even when it knows only
+// where the owner chose a card over a refusal (test/guard-policy.mjs lists
+// them): credential-not-provided asks before typing a sign-in password the
+// user never gave, so a wrong refusal costs one click instead of a stuck
+// run, while a guessed password is still never typed unasked.
 //
 // Every other guard is 'quality' (verification, exact readback, evidence,
 // completion checks): it tells the model about the problem instead of
@@ -185,8 +189,8 @@ export const GUARDS = Object.freeze({
     summary: "Before a consequential call, the run-UI/scheduler recovery checkpoint, or the task-attempt record for an action that may post on X, Bluesky or an unknown site, cannot be saved: the run stops (persistence_degraded) before sending." },
   "coordinate-click-provenance": { class: "infra", family: "predispatch", decides: "mixed", onDecided: "block", onCannotDecide: "block",
     summary: "A coordinate click without coordinate_space, with from_screenshot conflicting with css, with normalized 0-1 values, or with a missing/stale capture_id or a point outside the capture is refused before any probe (checked again inside executeTool)." },
-  "credential-not-provided": { class: "credentials", family: "predispatch", decides: "knows", onDecided: "block", onCannotDecide: "block",
-    summary: "Model-chosen text for an existing account's password field (autocomplete current-password, or a password input that names no new password, key or token, is its form's only one, and whose form's submit control does not create an account) that the user never gave (messages, clarify answers, attached files, profile, MemCode recall, a new-password field WebBrain filled): nothing is typed and the model is told to ask or end partial. A target it cannot read is typed as before.",
+  "credential-not-provided": { class: "credentials", family: "predispatch", decides: "knows", onDecided: "ask", onCannotDecide: "ask",
+    summary: "Model-chosen text for an existing account's password field (autocomplete current-password, autocomplete new-password on the only password field of a form whose submit control or a button says \"Log in\" or \"Sign in\" while none creates an account, or a password input that names no new password, key or token, is its form's only one or sits in a form that shows a sign-in (a field naming the account, a \"Log in\" button), whose form's submit control does not create an account, and that does not name a network's key such as a Wi-Fi password, with or without sign-in evidence) that the user never gave (messages, clarify answers, attached files, profile, memory notes they wrote, MemCode recall, a new-password field WebBrain filled on that site): nothing is typed until the user answers WebBrain's hard card, which names the field's own site, a subframe's for a field in a frame (each frame is asked when the preflight named none), and refuses where that site cannot be read (\"Type it\" types it, and that text then counts as given on that site for the run; \"Don't type it\", a timeout, an unattended run or no card refuses, and the model is told to ask or end partial). A target it cannot read is typed as before.",
     mustNotBlock: "test/credential-not-provided.mjs#a password the user gave in the task is typed into the sign-in form" },
   "deletion-confirm-card": { class: "deletion", family: "predispatch", decides: "mixed", onDecided: "block", onCannotDecide: "ask",
     summary: "A deletion whose item the latest request does not clearly name (not_requested, other_item, unclear) or whose semantic decision is unavailable goes to WebBrain's deletion card (\"once\" re-runs every workflow check, then dispatches; deny, timeout or auto answer refuses; a change during the card…" },
