@@ -444,7 +444,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'type_text',
-      description: 'Type text into an input field. TWO WAYS to use it: (1) provide a CSS selector to find the field by selector, or (2) provide ONLY the text (no selector) to type into the currently focused element — use this RIGHT AFTER clicking a field. The second form is the most reliable for forms with weird selectors (e.g. GitHub release[name], Stripe nested inputs). DO NOT pass an index. With clear:true, WebBrain proves the field empty before inserting; if that proof fails, it inserts nothing and blocks blind retries.',
+      description: 'Type text into an input field. TWO WAYS to use it: (1) provide a CSS selector to find the field by selector, or (2) provide ONLY the text (no selector) to type into the currently focused element — use this RIGHT AFTER clicking a field. The second form is the most reliable for forms with weird selectors (e.g. GitHub release[name], Stripe nested inputs). DO NOT pass an index. With clear:true, WebBrain proves the field empty before inserting; if that proof fails, it inserts nothing and blocks blind retries. A native date or time field (a calendar or clock picker) takes one ISO value instead: YYYY-MM-DD, HH:MM (24-hour), YYYY-MM-DDTHH:MM, YYYY-MM or YYYY-Www.',
       parameters: {
         type: 'object',
         properties: {
@@ -1218,6 +1218,7 @@ export const AGENT_TOOLS = [
                 action: { type: 'string', enum: [...PROGRESS_ACTIONS], description: 'Canonical action taken or planned, e.g. follow, star, collect_email, process_item. Use one of the listed names; any other word is rejected.' },
                 status: { type: 'string', enum: ['pending', 'acted', 'processed', 'skipped', 'failed'], description: 'Current row status.' },
                 fields: { type: 'object', description: 'Collected facts for this item, e.g. {email:"a@b.com"} or {email:null}.' },
+                emptyFields: { type: 'array', items: { type: 'string' }, description: 'Fields you checked that this item has no value for, e.g. ["bio"] for a profile with no bio; they count as recorded (set them to null in fields). Never list a value you could not find, read or reach. A list replaces the row\'s earlier one.' },
                 reason: { type: 'string', description: 'Short reason for skipped/failed, or a useful note.' },
               },
               required: ['id', 'status'],

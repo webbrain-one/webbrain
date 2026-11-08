@@ -1030,7 +1030,21 @@ keeping a post up, and whether the candidate summary gives the result, only
 says that an answer was given, or only describes what will be done next. A sure
 "expects later" answer adds the note that publication was verified while later
 votes and moderation remain unverified; a summary read as a claim or a plan is
-sent back once for the actual result. Where no judge runs, a model reads the
+sent back once for the actual result. After a run read a page in the background
+(a successful GET `fetch_url` or a `research_url`; the run keeps the site and
+the `retrieval` flags each reported), the judge also answers whether the
+request says how a page is to be opened or read (in the background, without
+opening a tab, keeping the current tab). A sure "asked" adds one line built
+from those reads, such as "Read in the background from example.org:
+fetched directly, without opening a tab or changing your active tab." The
+words "or changing your active tab" appear only when every other tool of the
+run only read its tab or used no page (`changedRunTab`): after a navigation,
+click, scroll or any tool not known to leave the tab alone, the line stops at
+"without opening a tab". The reads and whether the run changed its tab are
+kept across a steering revision. A `research_url` read says the browser was
+asked to close its background tab, since that close is requested, not
+confirmed. Without such a read the question is not sent. Where no judge runs,
+a model reads the
 summary with the `done_summary` question: a short Ask answer with no structure
 of its own (a colon, line breaks or a list mean it carries content), and an Act
 run's failed or partial summary, which may also blame the agent's own Ask or
@@ -1066,7 +1080,15 @@ follow) are batched: the decision model gets one question per item in chunks of
 of an expected item that only says it is missing ("unknown", "bilinmiyor", "—")
 is found this way once, at a successful done, among values of 40 characters or
 fewer; no sure answer leaves the value counted as given. Missing values are
-otherwise JSON null. Action names in progress rows and requested field names
+otherwise JSON null. A field the item itself has no value for (a profile with
+no bio) is recorded by name: the row lists it in `emptyFields` (names match
+ignoring case), it counts as answered and is not read. A later update that
+writes a different value for a listed field takes it off the list. A field
+that is null or absent and not listed was never filled and still blocks
+success, and the refusal tells the model how to list one. Rows that list the
+first required field and hold no value for it are left out of its duplicate
+check; a listed row that holds a value is still compared. Action names in
+progress rows and requested field names
 are the canonical names the models are given; another word for one is rejected
 (progress_update) or names no field (the requirement stays incomplete).
 

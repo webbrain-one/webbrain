@@ -6,6 +6,13 @@ import { CDPClient, cdpClient } from '../src/chrome/src/cdp/cdp-client.js';
 import { Agent } from '../src/chrome/src/agent/agent.js';
 import { installPageFeedback, pageFeedbackMethods } from '../src/chrome/src/agent/page-feedback.js';
 import { BidiSession, createNativeActionMarker } from '../firefox-companion/session.mjs';
+import { scaled } from './lib/time-budget.mjs';
+
+// How long a test waits for page feedback that must arrive: a MutationObserver
+// callback, the monitor's 150 ms debounce and a message round trip, which an
+// idle machine delivers well within a second. A loaded one did not, in 1000 ms.
+// A wait whose bound is part of the behaviour under test keeps its own value.
+const FEEDBACK_WAIT_MS = scaled(5000);
 
 const read = (build, file) => fs.readFileSync(new URL(`../src/${build}/src/${file}`, import.meta.url), 'utf8');
 const html = `<!doctype html><style>
@@ -134,7 +141,7 @@ test('Chrome AX preparation attributes actual scrolling without claiming field i
       if (action === 'ax_resolve_two_rects') assert.ok(await page.evaluate(() => [1, 2].every(i => document.getElementById(`scroll-box-${i}`).scrollTop > 0)));
       if (action === 'ax_prepare_field_for_trusted_type') {
         await page.keyboard.press('x');
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       }
     }
   } finally { await browser.close(); }
@@ -400,7 +407,7 @@ test('Chrome: unrelated layout shifts during an agent operation stay observable'
       deliver('page_monitor_dispatch', { operationId: 'active-layout-op', kind: 'click', selector: '#agent' });
       document.styleSheets[0].insertRule('#unrelated-layout-shift { height: 120px !important; }', document.styleSheets[0].cssRules.length);
     });
-    await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+    await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
     assert.ok(await page.evaluate(() => feedback.some(event => event.kind === 'dom' && event.source !== 'agent')),
       'A shift in a sibling region must not be discarded as an expected agent effect');
   } finally { await browser.close(); }
@@ -475,14 +482,14 @@ test('Firefox late registration covers blank/srcdoc frames and preserves an exis
       await frame.evaluate(() => {
         feedback = []; document.getElementById('late-frame-host').attachShadow({ mode: 'open' }).innerHTML = '<button id="late-frame-target">New target</button>';
       });
-      await frame.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'div#late-frame-host'), null, { timeout: 1000 });
+      await frame.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'div#late-frame-host'), null, { timeout: FEEDBACK_WAIT_MS });
       await frame.evaluate(() => { feedback = []; document.getElementById('late-frame-host').shadowRoot.querySelector('button').textContent = 'Updated target'; });
-      await frame.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'button#late-frame-target'), null, { timeout: 1000 });
+      await frame.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'button#late-frame-target'), null, { timeout: FEEDBACK_WAIT_MS });
     }
   } finally { await browser.close(); }
 });
 
-test('Chrome selector scrolling claims input only at the actual page mutation', { timeout: 30000 }, async () => {
+test('Chrome selector scrolling claims input only at the actual page mutation', { timeout: scaled(30000) }, async () => {
   const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser, tab = 912;
   const host = Object.assign({ isRunning: () => true, _checkAbort: () => false }, pageFeedbackMethods);
   let browser, page, session, pauseMethod = '', entered, resume;
@@ -540,7 +547,7 @@ test('Chrome selector scrolling claims input only at the actual page mutation', 
         .then(value => ({ value }), error => ({ code: error.code }));
       await paused;
       await page.evaluate(() => window.scrollTo(0, 600));
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'scroll'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'scroll'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.ok(registrations.every(mark => mark.fenceOnly === true), 'A resolver cannot claim scroll while a DOM search is pending');
       resume(); resume = null;
       const result = await resolving;
@@ -573,7 +580,7 @@ test('Chrome selector scrolling claims input only at the actual page mutation', 
 });
 
 for (const siteIsolation of [false, true]) {
-  test(`Chrome CDP input reaches the receiving iframe monitor (site isolation: ${siteIsolation})`, { timeout: 30000 }, async () => {
+  test(`Chrome CDP input reaches the receiving iframe monitor (site isolation: ${siteIsolation})`, { timeout: scaled(30000) }, async () => {
     const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser;
     const frames = new Map(), sessions = new Map(), registrations = [];
     const tab = siteIsolation ? 910 : 909;
@@ -944,7 +951,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         active: window.__wbPageMonitor?.active,
       })), { same: true, active: true });
       await page.evaluate(() => { feedback = []; document.getElementById('status').textContent = 'Monitor survived recovery'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
     } finally { await browser.close(); }
   });
 
@@ -962,13 +969,13 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         sheet.insertRule('#agent { margin-top: 100px; }', sheet.cssRules.length);
       });
       await page.waitForTimeout(200);
-      if (build === 'chrome') await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      if (build === 'chrome') await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const response = await page.evaluate(() => new Promise(resolve => {
         deliver('page_monitor_dispatch', { operationId: 'layout-click', kind: 'click', ...layoutClickPoint });
         setTimeout(() => resolve(lastMonitorResponse), 0);
       }));
       assert.equal(response.pageFeedbackPending, true, 'A CSSOM-only layout shift must invalidate the old click point');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       const localResult = await page.evaluate(() => {
         feedback = [];
         const rect = document.getElementById('human').getBoundingClientRect();
@@ -982,7 +989,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       });
       assert.deepEqual(localResult, { code: 'page_feedback_pending', dispatched: false },
         'The local content-action path must reject a moved coordinate before dispatch');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
     } finally { await browser.close(); }
   });
 
@@ -995,7 +1002,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'cssom-hidden-target', kind: 'click', selector: '#agent', fenceOnly: true });
         document.styleSheets[0].insertRule('#agent { opacity: 0 !important; }', document.styleSheets[0].cssRules.length);
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1500 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => {
         try {
           __wbPageMonitor.activatePreparedDispatch({ operationId: 'cssom-hidden-target', kind: 'click',
@@ -1017,7 +1024,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           + '<div id="option-second" role="option">Second</div>';
         document.body.append(listbox);
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       await page.waitForTimeout(180);
       await page.evaluate(() => {
         feedback = [];
@@ -1026,7 +1033,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('option-first').removeAttribute('data-selected');
         document.getElementById('option-second').setAttribute('data-selected', 'true');
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       const observation = await page.evaluate(() => feedback.find(event => event.kind === 'dom'));
       assert.equal(observation.target, 'div#custom-listbox [listbox]', 'Feedback should identify the model-visible listbox value');
       const blocked = await page.evaluate(() => {
@@ -1054,7 +1061,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return lastMonitorResponse.guard;
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'
-        && event.target === 'select#native-option-label-select'), null, { timeout: 1000 });
+        && event.target === 'select#native-option-label-select'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(await page.locator('#native-option-label-select').evaluate(select => select.value), 'stable-choice',
         'The native value remains stable while the model-visible selected label changes');
       assert.equal(JSON.stringify(await page.evaluate(() => feedback)).includes('Updated choice'), false,
@@ -1075,7 +1082,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'iframe-click-stale', kind: 'click', selector: '#human', fenceOnly: true });
       });
       await page.locator('#human').click();
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => {
         try {
           __wbPageMonitor.activatePreparedDispatch({ operationId: 'iframe-click-stale', kind: 'click',
@@ -1124,7 +1131,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       });
       // Observe setup feedback instead of racing the monitor's 150ms debounce.
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'),
-        null, { timeout: 3000 });
+        null, { timeout: FEEDBACK_WAIT_MS });
       const preparation = await page.evaluate(async () => {
         feedback = [];
         const request = (action, params) => new Promise(resolve => messageListeners.forEach(fn => fn({
@@ -1178,7 +1185,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         feedback = [];
         document.body.classList.add('large-page-state-change');
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(await page.evaluate(() => wholeSubtreeQueryCount()), 0,
         'A common-ancestor mutation must not materialize its complete descendant list before applying the cap');
     } finally { await browser.close(); }
@@ -1200,7 +1207,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('shadow-text-host').shadowRoot.firstChild.data = 'Updated result without an element wrapper';
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'
-        && event.source === 'page' && event.target === 'div#shadow-text-host'), null, { timeout: 1000 });
+        && event.source === 'page' && event.target === 'div#shadow-text-host'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => new Promise(resolve => {
         deliver('page_monitor_dispatch', { operationId: 'shadow-text', kind: 'dom' });
         setTimeout(() => resolve(lastMonitorResponse), 0);
@@ -1227,7 +1234,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('second-option').setAttribute('selected', '');
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'
-        && event.source === 'page' && event.target === 'select#state-select'), null, { timeout: 1000 });
+        && event.source === 'page' && event.target === 'select#state-select'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => new Promise(resolve => {
         deliver('page_monitor_dispatch', { operationId: 'select-state', kind: 'click', selector: '#agent' });
         setTimeout(() => resolve(lastMonitorResponse), 0);
@@ -1245,7 +1252,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'opacity-click', kind: 'click', selector: '#agent', fenceOnly: true });
         document.body.style.opacity = '0';
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       const response = await page.evaluate(() => new Promise(resolve => {
         deliver('page_monitor_dispatch', { operationId: 'opacity-click', kind: 'click', selector: '#agent' });
         setTimeout(() => resolve(lastMonitorResponse), 0);
@@ -1271,7 +1278,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return lastMonitorResponse.guard;
       });
       await page.locator('#page-base').evaluate(el => el.setAttribute('href', '/after/'));
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'html'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'html'), null, { timeout: FEEDBACK_WAIT_MS });
       const accepted = await page.evaluate(value => window.dispatchEvent(new CustomEvent('webbrain-agent-dom-dispatch', {
         detail: JSON.stringify({ ...value, dispatchPhase: 'click' }), cancelable: true,
       })), guard);
@@ -1313,7 +1320,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         }, id);
         await page.locator(`#${id}`).evaluate(el => el.classList.add('hide'));
         await page.waitForFunction(targetId => feedback.some(event => event.kind === 'dom' && event.target === `button#${targetId}`), id,
-          { timeout: 1500 });
+          { timeout: FEEDBACK_WAIT_MS });
         const accepted = await page.evaluate(value => window.dispatchEvent(new CustomEvent('webbrain-agent-dom-dispatch', {
           detail: JSON.stringify({ ...value, dispatchPhase: 'click' }), cancelable: true,
         })), guard);
@@ -1324,7 +1331,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('shadow-host').shadowRoot.getElementById('shadow-target').classList.add('hide');
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'button#shadow-target'), null,
-        { timeout: 1500 });
+        { timeout: FEEDBACK_WAIT_MS });
 
       const mixedGuard = await page.evaluate(() => {
         feedback = [];
@@ -1340,7 +1347,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       })), mixedGuard);
       assert.equal(mixedAccepted, false, 'A transition on one descendant must not defer checks for hidden siblings');
       await page.waitForFunction(revision => Number(document.documentElement.getAttribute('data-webbrain-page-revision').split(':').at(-1)) > revision + 1,
-        mixedGuard.revision, { timeout: 1500 });
+        mixedGuard.revision, { timeout: FEEDBACK_WAIT_MS });
     } finally { await browser.close(); }
   });
 
@@ -1359,7 +1366,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('secret').focus();
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'activity'
-        && event.source === 'page' && event.target === 'input#secret'), null, { timeout: 1000 });
+        && event.source === 'page' && event.target === 'input#secret'), null, { timeout: FEEDBACK_WAIT_MS });
       const observed = await page.evaluate(() => feedback);
       assert.equal(JSON.stringify(observed).includes('password-never-recorded'), false);
       const blocked = await page.evaluate(() => new Promise(resolve => {
@@ -1404,7 +1411,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return { code, events: feedback };
       });
       assert.equal(result.code, 'page_feedback_pending');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'unknown'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'unknown'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(JSON.stringify(result.events).includes('Visible tail mutation'), false);
       assert.equal(JSON.stringify(await page.evaluate(() => feedback)).includes('Visible tail mutation'), false);
 
@@ -1454,7 +1461,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await page.waitForFunction(() => feedback.some(event => event.interacting === true));
       assert.ok(host._pageFeedbackRuns.get(tab).gestures.has(0));
       await page.mouse.move(100, 480); await page.mouse.up();
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'activity' && event.interacting === false), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'activity' && event.interacting === false), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(host._pageFeedbackRuns.get(tab).gestures.size, 0);
       assert.ok(!JSON.stringify(await page.evaluate(() => feedback)).includes('owned-capture'), 'Owned UI must remain absent from event targets');
       await host._waitForPageFeedbackIdle(tab);
@@ -1487,7 +1494,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           try { __wbPageMonitor.beforeLocalDispatch(); return null; } catch (error) { return error.code; } finally { finish(); }
         }, index);
         assert.equal(initialClose, 'page_feedback_pending', 'Closing an initially open unseeded popover must invalidate actions');
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
         for (const open of [true, false]) {
           const code = await page.evaluate(async ({ index, open }) => {
             feedback = []; const finish = __wbPageMonitor.beginContentAction('click', { selector: '#agent', _bidiPrepare: true });
@@ -1495,7 +1502,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
             try { __wbPageMonitor.beforeLocalDispatch(); return null; } catch (error) { return error.code; } finally { finish(); }
           }, { index, open });
           assert.equal(code, 'page_feedback_pending');
-          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
         }
         await page.evaluate(index => {
           feedback = []; const finish = __wbPageMonitor.beginContentAction('execute_js');
@@ -1505,7 +1512,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         assert.deepEqual(await page.evaluate(() => feedback), [], 'An agent-opened popover must not feed back during the later toggle task');
         await page.evaluate(index => { popups[index].querySelector('button').focus(); feedback = []; }, index);
         await page.keyboard.press('Escape');
-        await page.waitForFunction(index => !popups[index].matches(':popover-open') && feedback.some(event => event.kind === 'dom'), index, { timeout: 1000 });
+        await page.waitForFunction(index => !popups[index].matches(':popover-open') && feedback.some(event => event.kind === 'dom'), index, { timeout: FEEDBACK_WAIT_MS });
         assert.ok((await page.evaluate(() => feedback)).some(event => event.source === 'user' && event.kind === 'activity'));
         await page.waitForTimeout(200);
         const cancelled = await page.evaluate(async index => {
@@ -1684,9 +1691,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         dense.innerHTML = `${'<span></span>'.repeat(650)}<input id="late-control">`;
         document.body.append(dense);
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       await page.evaluate(() => { feedback = []; document.getElementById('late-control').value = 'late-private-value'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1500 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(JSON.stringify(await page.evaluate(() => feedback)).includes('late-private-value'), false,
         'Controls beyond the layout-sampling budget still receive bounded state monitoring');
 
@@ -1697,7 +1704,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const check = document.createElement('input'); check.type = 'checkbox'; check.id = 'property-check';
         document.body.append(check); check.checked = true;
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1500 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const observed = await page.evaluate(() => feedback);
       assert.equal(JSON.stringify(observed).includes('private-property-only-value'), false);
       assert.ok(observed.some(event => event.kind === 'dom' && event.source === 'page'));
@@ -1748,7 +1755,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const slider = document.getElementById('custom-slider');
         slider.setAttribute('aria-valuenow', '20'); slider.setAttribute('aria-valuetext', 'Twenty');
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(JSON.stringify(await page.evaluate(() => feedback)).includes('Twenty'), false,
         'ARIA value text is observed internally but is not copied into feedback');
     } finally { await browser.close(); }
@@ -1759,7 +1766,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     try {
       await page.evaluate(() => { feedback = []; });
       await page.locator('#select').selectOption('B');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'input'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'input'), null, { timeout: FEEDBACK_WAIT_MS });
       await page.waitForTimeout(350);
       const observed = await page.evaluate(() => feedback);
       assert.equal(observed.some(event => event.kind === 'dom' && event.target === 'option'), false,
@@ -1865,7 +1872,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     const { browser, page } = await fixture(engine, build);
     try {
       const childNavigation = page.waitForEvent('framenavigated', {
-        predicate: frame => frame.url() === 'https://monitor.test/frame', timeout: 10000,
+        predicate: frame => frame.url() === 'https://monitor.test/frame', timeout: scaled(10000),
       });
       await page.evaluate(() => {
         const host = document.createElement('div'); host.id = 'shadow-host';
@@ -1983,7 +1990,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.deepEqual(await page.evaluate(() => feedback), []);
       await page.evaluate(() => document.getElementById('prepared-field').focus({ preventScroll: true }));
       await page.keyboard.press('x');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       await page.evaluate(() => {
         monitorEnabled = false; deliver('page_monitor_state'); document.activeElement?.blur();
       });
@@ -2041,7 +2048,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       const before = await page.locator('#agent').boundingBox();
       await page.evaluate(() => { feedback = []; deliver('page_monitor_prepare', { operationId: 'resize-click', tool: 'click', selector: '#agent' }); });
       await page.setViewportSize({ width: 900, height: 600 });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: FEEDBACK_WAIT_MS });
       const after = await page.locator('#agent').boundingBox();
       assert.notEqual(before.x, after.x);
       const response = await page.evaluate(async () => {
@@ -2060,7 +2067,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await child.waitForFunction(() => window.__wbPageMonitor && document.documentElement.hasAttribute('data-webbrain-page-revision'));
       await child.evaluate(() => { feedback = []; });
       await page.evaluate(() => { document.querySelector('iframe').style.width = '450px'; });
-      await child.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: 1000 });
+      await child.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(await child.evaluate(() => feedback.find(event => event.kind === 'resize').source), 'page', 'Embedded frame dimensions are page layout changes');
       await page.evaluate(() => { monitorEnabled = false; deliver('page_monitor_state'); feedback = []; });
       await page.setViewportSize({ width: 1000, height: 700 });
@@ -2085,7 +2092,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await page.evaluate(marker => deliver('page_monitor_resize_finish', {
         ...marker, expectedViewport: { width: 1000, height: 700 },
       }), agentResize);
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'resize'), null, { timeout: FEEDBACK_WAIT_MS });
       const attributed = await page.evaluate(() => feedback.find(event => event.kind === 'resize'));
       assert.equal(attributed.source, 'agent');
       assert.equal(attributed.viewport.width, 1000);
@@ -2104,7 +2111,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         ...marker, expectedViewport: { width: 1100, height: 750 },
       }), overlap);
       await page.waitForFunction(() => feedback.some(event => event.kind === 'resize')
-        && feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: 1000 });
+        && feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       const overlappingResize = await page.evaluate(() => feedback.find(event => event.kind === 'resize'));
       assert.equal(overlappingResize.source, 'unknown', 'Concurrent trusted input prevents agent attribution');
     } finally { await browser.close(); }
@@ -2151,7 +2158,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await page.evaluate(() => { feedback = []; });
       assert.equal((await page.evaluate(() => typeRichText({ text: ' agent' }))).success, true);
       await page.keyboard.press('x');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'input' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(await page.locator('#rich-editor').textContent(), 'Ready agentx', 'A later same-target human edit remains observable');
     } finally { await browser.close(); }
   });
@@ -2180,7 +2187,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         };
         window.editResult = typeRichText({ text: 'Never inserted', clear: true });
       });
-      await page.waitForFunction(() => window.editPaused, null, { timeout: 1000 });
+      await page.waitForFunction(() => window.editPaused, null, { timeout: FEEDBACK_WAIT_MS });
       await page.locator('#field').fill('Human intervention');
       await page.waitForFunction(() => feedback.some(event => event.source === 'user'));
       const result = await page.evaluate(async () => { resumeEdit(); return await editResult; });
@@ -2225,7 +2232,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         assert.ok((await page.evaluate(() => feedback)).some(event => event.kind === 'click' && event.source === 'user'),
           `${name} is page data, not proof of extension ownership`);
         await page.evaluate(() => { feedback = []; document.getElementById('status').textContent += ' changed'; });
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
         await page.evaluate(name => document.body.removeAttribute(name), name);
       }
     } finally { await browser.close(); }
@@ -2365,7 +2372,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         feedback = []; return lastMonitorResponse.guard;
       });
       await page.evaluate(() => { document.getElementById('status').textContent = 'Page changed after native preparation'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const ready = await page.evaluate(guard => {
         // The page can rewrite its visible marker, but cannot rewind the monitor's
         // private revision used by the extension-side native dispatch check.
@@ -2383,10 +2390,10 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await page.evaluate(() => { const link = document.createElement('a'); link.id = 'destination'; link.href = '/before'; link.textContent = 'Destination'; document.body.append(link); });
       await page.waitForTimeout(120);
       await page.evaluate(() => { feedback = []; document.getElementById('destination').href = '/after'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.ok((await page.evaluate(() => feedback)).some(event => event.kind === 'dom' && event.target === 'a#destination'));
       await page.evaluate(() => { feedback = []; document.getElementById('destination').setAttribute('target', '_blank'); });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.ok((await page.evaluate(() => feedback)).some(event => event.kind === 'dom' && event.target === 'a#destination'));
     } finally { await browser.close(); }
   });
@@ -2404,7 +2411,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         feedback = [];
         document.getElementById('programmatic-editor').firstChild.data = 'Page updated this editor';
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const observations = await page.evaluate(() => feedback);
       assert.ok(observations.some(event => event.source === 'page' && event.target.startsWith('div#programmatic-editor')));
       assert.equal(JSON.stringify(observations).includes('Page updated this editor'), false,
@@ -2417,7 +2424,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return lastMonitorResponse.guard;
       });
       await page.evaluate(() => { document.getElementById('programmatic-editor').textContent = 'Page replaced the editor value'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const replacementObservations = await page.evaluate(() => feedback);
       assert.ok(replacementObservations.some(event => event.source === 'page'
         && event.target.startsWith('div#programmatic-editor')),
@@ -2451,7 +2458,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return lastMonitorResponse.guard;
       });
       await page.evaluate(() => { document.getElementById('hidden-accessible-label').textContent = 'Updated label'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const observations = await page.evaluate(() => feedback);
       assert.ok(observations.some(event => event.source === 'page'));
       assert.equal(JSON.stringify(observations).includes('Updated label'), false, 'Hidden accessible-name text must not be sent');
@@ -2481,7 +2488,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'hidden-label-id', kind: 'click', selector: '#id-labelled-button', fenceOnly: true });
         document.getElementById('hidden-id-label').id = 'renamed-hidden-id-label';
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => {
         try { __wbPageMonitor.activatePreparedDispatch({ operationId: 'hidden-label-id', kind: 'click' }); return null; }
         catch (error) { return error.code; }
@@ -2508,7 +2515,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         return lastMonitorResponse.guard;
       });
       await page.locator('#boxless-name-button span').evaluate(label => { label.textContent = 'Updated action'; });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal(JSON.stringify(await page.evaluate(() => feedback)).includes('Updated action'), false,
         'The changed accessible name must not be copied into feedback');
       const accepted = await page.evaluate(value => window.dispatchEvent(new CustomEvent('webbrain-agent-dom-dispatch', {
@@ -2537,7 +2544,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       });
       assert.equal(linkDispatch.ready, true, JSON.stringify(linkDispatch));
       await page.locator('#keyboard-link').press('Enter');
-      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'click'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'click'), null, { timeout: FEEDBACK_WAIT_MS });
       const linkEvents = await page.evaluate(() => feedback);
       assert.equal(linkEvents.some(event => event.source === 'agent' && event.operation === 'click'
         && event.navigationUrl === 'https://monitor.test/keyboard-destination'), true, JSON.stringify(linkEvents));
@@ -2549,14 +2556,14 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'keyboard-button', kind: 'input', selector: '#keyboard-button' });
       });
       await page.locator('#keyboard-button').press('Space');
-      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'click'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'click'), null, { timeout: FEEDBACK_WAIT_MS });
       const buttonEvents = await page.evaluate(() => feedback);
       assert.equal(buttonEvents.some(event => event.source === 'agent' && event.operation === 'click'), true, JSON.stringify(buttonEvents));
       assert.equal(buttonEvents.some(event => event.kind === 'click' && event.source === 'user'), false, JSON.stringify(buttonEvents));
 
       await page.evaluate(() => { feedback = []; });
       await page.locator('#keyboard-button').click();
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'click' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       assert.equal((await page.evaluate(() => feedback)).some(event => event.kind === 'click' && event.source === 'user'), true,
         'A later pointer click must remain user activity after keyboard attribution');
     } finally { await browser.close(); }
@@ -2582,7 +2589,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       await page.locator('#shortcut-surface').press('Shift');
       assert.deepEqual(await page.evaluate(() => feedback), [], 'Modifier-only presses do not produce shortcut activity');
       await page.locator('#shortcut-surface').press('j');
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'activity' && event.source === 'user'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'activity' && event.source === 'user'), null, { timeout: FEEDBACK_WAIT_MS });
       const events = await page.evaluate(() => feedback);
       assert.equal(events.some(event => event.kind === 'activity' && event.source === 'user'), true, JSON.stringify(events));
       assert.equal(events.some(event => Object.hasOwn(event, 'key') || Object.hasOwn(event, 'value')), false,
@@ -2610,7 +2617,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('modal-container').setAttribute('aria-modal', 'true');
       });
       await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'
-        && event.target === 'div#modal-container [dialog]'), null, { timeout: 1000 });
+        && event.target === 'div#modal-container [dialog]'), null, { timeout: FEEDBACK_WAIT_MS });
       const blocked = await page.evaluate(() => {
         try { __wbPageMonitor.activatePreparedDispatch({ operationId: 'aria-modal', kind: 'click' }); return null; }
         catch (error) { return error.code; }
@@ -2657,7 +2664,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.getElementById('status').textContent = 'Page changed before upload dispatch';
         return value;
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       const staleAccepted = await page.locator('#synthetic-upload').evaluate((input, value) => {
         let inputEvents = 0;
         input.addEventListener('input', () => inputEvents++, { once: true });
@@ -2694,7 +2701,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           return lastMonitorResponse.guard;
         }, attribute);
         await page.locator('#metadata-field').evaluate((element, [name, next]) => element.setAttribute(name, next), [attribute, value]);
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'input#metadata-field'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'input#metadata-field'), null, { timeout: FEEDBACK_WAIT_MS });
         const ready = await page.evaluate(value => {
           deliver('page_monitor_validate', { ...value, kind: 'input' });
           return lastMonitorResponse.ready;
@@ -2785,7 +2792,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           deliver('page_monitor_dispatch', { operationId: id, kind: 'click', selector: '#validation-submit', fenceOnly: true });
         }, operationId);
         await page.locator(target).evaluate((element, name) => element.setAttribute(name, ''), attribute);
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.source === 'page'), null, { timeout: FEEDBACK_WAIT_MS });
         const blocked = await page.evaluate(id => {
           try { __wbPageMonitor.activatePreparedDispatch({ operationId: id, kind: 'click' }); return null; }
           catch (error) { return error.code; }
@@ -2842,7 +2849,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         deliver('page_monitor_dispatch', { operationId: 'enter-submit', kind: 'input', selector: '#enter-submit-input' });
       });
       await page.locator('#enter-submit-input').press('Enter');
-      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'submit'), null, { timeout: 1000 });
+      await page.waitForFunction(() => feedback.some(event => event.source === 'agent' && event.operation === 'submit'), null, { timeout: FEEDBACK_WAIT_MS });
       const marker = await page.evaluate(() => feedback.find(event => event.source === 'agent' && event.operation === 'submit'));
       assert.equal(marker.navigationUrl, 'https://monitor.test/enter-search');
       assert.equal(marker.navigationFormGet, true);
@@ -2966,7 +2973,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         feedback = [];
         document.getElementById('late-form-control').value = 'sensitive-after';
       });
-      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'input#late-form-control'), null, { timeout: 5000 });
+      await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'input#late-form-control'), null, { timeout: FEEDBACK_WAIT_MS });
       const serialized = JSON.stringify(await page.evaluate(() => feedback));
       assert.equal(serialized.includes('sensitive-after'), false, 'Detected property values must stay private');
     } finally { await browser.close(); }
@@ -3045,7 +3052,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
             return before.width === after.width && before.height === after.height;
           }, { attribute, show });
           assert.equal(unchangedGeometry, true);
-          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
           assert.equal(await page.locator('#plain-result').isVisible(), show);
           assert.ok((await page.evaluate(() => feedback)).some(event => event.kind === 'dom'));
         }
@@ -3069,7 +3076,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           feedback = [];
           document.getElementById('shadow-inherited-style-host').classList.toggle('open', shown);
         }, shown);
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
         assert.equal(await page.locator('#shadow-inherited-style-host').evaluate(host =>
           getComputedStyle(host.shadowRoot.getElementById('shadow-inherited-result')).display !== 'none'), shown);
         assert.ok(await page.evaluate(() => feedback.some(event => event.kind === 'dom'
@@ -3109,7 +3116,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
             return { code, sameGeometry: before.width === after.width && before.height === after.height };
           }, { attribute, shown });
           assert.deepEqual(result, { code: 'page_feedback_pending', sameGeometry: true });
-          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+          await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
           assert.equal(await page.locator('#late-result').isVisible(), shown);
           await page.evaluate(attribute => {
             feedback = []; const region = document.getElementById('large-region');
@@ -3188,7 +3195,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
             samePrefix: prefix === output.textContent.slice(0, 200) };
         }, edit);
         assert.deepEqual(result, { code: 'page_feedback_pending', sameGeometry: true, samePrefix: true });
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom'), null, { timeout: FEEDBACK_WAIT_MS });
       }
       await page.evaluate(() => { feedback = []; const output = document.getElementById('long-output'); output.textContent = output.textContent; });
       await page.waitForTimeout(200);
@@ -3224,7 +3231,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           finally { finish(); }
         }, state);
         assert.equal(code, 'page_feedback_pending');
-        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'button#human'), null, { timeout: 1000 });
+        await page.waitForFunction(() => feedback.some(event => event.kind === 'dom' && event.target === 'button#human'), null, { timeout: FEEDBACK_WAIT_MS });
       }
       await page.evaluate(() => {
         feedback = []; const finish = __wbPageMonitor.beginContentAction('execute_js');

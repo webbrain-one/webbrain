@@ -1,9 +1,11 @@
 // The done verification probe's form facts, as each build's agent.js sends
 // them from a real page: a complementary sidebar counts as outside the
 // primary content even on a page without a main landmark, a control's type
-// tells a caption-less type=button apart from one that sends the form, and a
-// field's own label or placeholder is reported for a model to read. Both
-// builds' probe source runs in Chromium; the snippet is plain page script.
+// tells a caption-less type=button apart from one that sends the form, a
+// field's own label or placeholder is reported for a model to read, and a form
+// of empty text fields stops counting on a run that typed nothing and sent no
+// form. Both builds' probe source runs in Chromium; the snippet is plain page
+// script.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
@@ -30,8 +32,21 @@ const mainPage = `<!doctype html><html><body>
 </main>
 <aside><form id="aside-submit"><input type="text" placeholder="Suchen"><button>${icon}</button></form></aside>
 </body></html>`;
+// Mastodon's always-present composer (a textarea, icon buttons, a visibility
+// button and Publish, in Turkish), an empty contenteditable reply editor that
+// holds only a zero-width space, and a composer that also has a select.
+const composerPage = (draft = '') => `<!doctype html><html><body>
+<div class="columns-area__panels">
+  <div class="compose-panel"><form id="composer" class="compose-form"><textarea class="autosuggest-textarea__textarea"
+    placeholder="Neler oluyor?">${draft}</textarea><button type="button">${icon}</button><button type="button">${icon}</button>
+    <button type="button">Herkese açık</button><button type="submit">Gönder</button></form></div>
+  <div class="columns-area__panels__main"><article><p>Henüz gönderi yok.</p></article></div>
+</div>
+<form id="editor"><div contenteditable="true" aria-label="Reply">&#8203;</div><button>Reply</button></form>
+<form id="with-select"><textarea></textarea><select><option>Public</option></select><button>Post</button></form>
+</body></html>`;
 
-async function probeFor(build) {
+async function probeFor(build, { untouchedByRun = false } = {}) {
   const source = await readFile(new URL(`../src/${build}/src/agent/agent.js`, import.meta.url), 'utf8');
   const { classifyCompletionForm } = await import(`../src/${build}/src/agent/completion-invariant.js`);
   const anchor = source.indexOf('const classifyForm = ${classifyCompletionForm.toString()};');
@@ -44,7 +59,14 @@ async function probeFor(build) {
   // The template literal's raw text is the page script only while it holds
   // no escapes or interpolations.
   assert.doesNotMatch(visibleSource + formsSource, /\\|\$\{/, `${build}: probe snippet needs template evaluation`);
-  return `(() => { ${visibleSource} const classifyForm = ${classifyCompletionForm.toString()}; ${formsSource} return formDescriptors; })()`;
+  // The agent's fact about the run is set between the two snippets and given
+  // to every form's classification.
+  assert.ok(source.slice(anchor, formsStart).includes(
+    "const untouchedByRun = ${formsUntouchedByRun ? 'true' : 'false'};"), `${build}: run fact moved`);
+  assert.ok(source.includes('const formsUntouchedByRun = this._completionFormsUntouchedByRun(tabId);'), `${build}: run fact not read`);
+  assert.match(formsSource, /^\s*untouchedByRun,$/m, `${build}: the classifier is not given the run fact`);
+  return `(() => { ${visibleSource} const classifyForm = ${classifyCompletionForm.toString()};
+    const untouchedByRun = ${untouchedByRun}; ${formsSource} return formDescriptors; })()`;
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -52,11 +74,12 @@ test.after(() => browser.close());
 
 for (const build of ['chrome', 'firefox']) {
   const probe = await probeFor(build);
-  const describe = async html => {
+  const untouchedProbe = await probeFor(build, { untouchedByRun: true });
+  const describe = async (html, source = probe) => {
     const page = await browser.newPage();
     try {
       await page.setContent(html);
-      return Object.fromEntries((await page.evaluate(probe)).map(form => [form.label, form]));
+      return Object.fromEntries((await page.evaluate(source)).map(form => [form.label, form]));
     } finally {
       await page.close();
     }
@@ -87,5 +110,20 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(forms['aside-submit'].relevant, true);
     assert.equal(forms['aside-submit'].searchCandidate, true);
     assert.equal(forms['aside-submit'].fieldLabel, 'Suchen');
+  });
+
+  test(`${build}: an empty composer stops counting only on a run that typed nothing and sent no form`, async () => {
+    const idle = await describe(composerPage(), untouchedProbe);
+    assert.deepEqual(idle.composer, { label: 'composer', relevant: false, utility: true,
+      utilityReason: 'untouched_empty', editableCount: 1, submitCount: 4 });
+    // An editor that holds only a zero-width space is empty too.
+    assert.equal(idle.editor.utilityReason, 'untouched_empty');
+    // A select's state is not an empty value: that form keeps counting.
+    assert.equal(idle['with-select'].relevant, true);
+    // The same page on a run that typed or sent a form: every form counts.
+    const typed = await describe(composerPage());
+    for (const id of ['composer', 'editor', 'with-select']) assert.equal(typed[id].relevant, true, id);
+    // A draft in the composer keeps it counted whatever the run did.
+    assert.equal((await describe(composerPage('Merhaba'), untouchedProbe)).composer.relevant, true);
   });
 }

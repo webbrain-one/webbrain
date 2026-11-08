@@ -41,7 +41,11 @@ const confirmation = shell => {
       : `<div class="modal-root__modal safety-action-modal">${body}<div class="safety-action-modal__bottom"><div class="safety-action-modal__actions"><button class="link-button" id="cancel">İptal</button><button type="button" class="button" id="confirm">Sil</button></div></div></div>`)
     + '</div></div>';
 };
-const page = ({ layout = 'narrow', shell = 'classic', deleteModal = true, signedIn = 'ownedqa', entries = 'buttons' } = {}) => `<!doctype html><meta charset="utf-8">
+// timerLatency runs every page timer that many milliseconds late, as a content
+// process does while the machine is busy; the test's own clock keeps going.
+const page = ({ layout = 'narrow', shell = 'classic', deleteModal = true, signedIn = 'ownedqa', entries = 'buttons', timerLatency = 0 } = {}) => `<!doctype html><meta charset="utf-8">
+${timerLatency ? `<script>{ const later = window.setTimeout;
+  window.setTimeout = (callback, delay = 0, ...rest) => later(callback, Number(delay) + ${Number(timerLatency)}, ...rest); }</script>` : ''}
 <style>body{margin:0;font:15px sans-serif}button{padding:8px}.columns-area__panels{display:flex}.columns-area__panels__main{width:600px}.navigation-panel{width:300px}
 .modal-root__overlay{position:fixed;inset:0;background:rgba(0,0,0,.4)}.modal-root__container{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
 .safety-action-modal{position:relative;background:#fff;padding:20px}svg{width:12px;height:12px;display:inline-block}</style>
@@ -83,6 +87,18 @@ for (const id of ['200', '201', '300']) {
 }
 </script>`;
 
+// Lets the page run the timers that a click (or the page itself) started, in
+// the page's own time. The confirmation opens on a 60 ms page timer, and
+// WebBrain's launcher binding takes the popup that opened on its next 50 ms
+// poll. A page runs a timer only after every timer that started before it
+// with an equal or shorter delay, so the first wait ends after the page's
+// timer has opened the popup, and the second after the poll that follows it.
+// A fixed sleep on the Node side could end before a busy content process had
+// run either of them.
+async function settle(tab) {
+  for (const ms of [150, 100]) await tab.evaluate(ms => new Promise(resolve => setTimeout(resolve, ms)), ms);
+}
+
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   test(`${build}: a Mastodon delete confirmation opened by WebBrain's own click keeps its post`, async t => {
@@ -111,7 +127,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const click = async (selector, synthetic = false) => {
           if (synthetic) await tab.evaluate(selector => document.querySelector(selector).click(), selector);
           else await tab.click(selector);
-          await tab.waitForTimeout(250);
+          await settle(tab);
         };
         const deletes = () => tab.evaluate(() => window.qaDeletes);
         return { tab, probe, adopt, click, deletes, get scope() { return scope; } };
@@ -157,6 +173,21 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           assert.equal(confirm.mutationKind, 'delete'); assert.equal(confirm.semanticCommit, true);
           assert.equal(confirm.actionResource?.url, own('200'));
           assert.equal(confirm.actionResource?.account, `${origin}/@ownedqa`);
+        } finally { await f.tab.close(); }
+      });
+
+      // On a busy machine the page opens the confirmation, and WebBrain's
+      // binding takes it, later than a fixed sleep allows for.
+      await t.test('a busy page whose timers all run late: the confirmation still keeps its post', async () => {
+        const f = await fixture({ timerLatency: 300 });
+        try {
+          const more = await f.probe('#more-200'); f.adopt(more); await f.click('#more-200');
+          const item = await f.probe('#menu-delete'); f.adopt(item); await f.click('#menu-delete');
+          const confirm = await f.probe('#confirm');
+          assert.equal(confirm?.mutationKind, 'delete', JSON.stringify(confirm)); assert.equal(confirm.semanticCommit, true);
+          assert.equal(confirm.actionResource?.url, own('200'));
+          await f.click('#confirm');
+          assert.deepEqual(await f.deletes(), ['200']);
         } finally { await f.tab.close(); }
       });
 
@@ -274,7 +305,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           const item = await f.probe('#menu-delete', unread); f.adopt(item);
           // Not clicked: the page opens the same confirmation by itself.
           await f.tab.evaluate(() => { document.querySelector('[id^="menu-"]').remove(); qaOpenModal(() => qaDeletes.push('script')); });
-          await f.tab.waitForTimeout(250);
+          await settle(f.tab);
           assert.equal((await f.probe('#confirm'))?.actionResource ?? null, null);
         } finally { await f.tab.close(); }
       });
@@ -287,7 +318,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           assert.notEqual(edit?.mutationKind, 'delete'); assert.ok(!edit?.popupLauncherToken);
           f.adopt(edit); await f.click('#menu-edit');
           await f.tab.evaluate(() => qaOpenModal(() => qaDeletes.push('script')));
-          await f.tab.waitForTimeout(250);
+          await settle(f.tab);
           assert.equal((await f.probe('#confirm'))?.actionResource ?? null, null);
         } finally { await f.tab.close(); }
       });

@@ -105833,6 +105833,7 @@ test('the injected completion probe survives its own template literal', async ()
       publicationResourceRecordRoot: invariant.publicationResourceRecordRoot,
       publicationDetailResource: invariant.publicationDetailResource,
       publicationReplyParent: invariant.publicationReplyParent,
+      formsUntouchedByRun: false,
     });
     assert.doesNotThrow(
       () => new vm.Script(`(${injected})`),

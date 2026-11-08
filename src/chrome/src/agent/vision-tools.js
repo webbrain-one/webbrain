@@ -174,7 +174,7 @@ export function visionToolDefinitions({ coordinates = 'pixel' } = {}) {
   ];
 }
 
-const VISION_TYPE_TEXT_DESCRIPTION = 'Type text into the focused field. Click the field with click_at first; the focused field receives the text. clear:true replaces the field\'s current content (WebBrain proves the field empty first; if it cannot, nothing is typed). For a native dropdown, click it and type the option label.';
+const VISION_TYPE_TEXT_DESCRIPTION = 'Type text into the focused field. Click the field with click_at first; the focused field receives the text. clear:true replaces the field\'s current content (WebBrain proves the field empty first; if it cannot, nothing is typed). For a native dropdown, click it and type the option label. For a native date or time field (a calendar or clock picker), click it and type one ISO value, whatever order the screen shows: YYYY-MM-DD, HH:MM (24-hour), YYYY-MM-DDTHH:MM, YYYY-MM or YYYY-Www.';
 
 /** type_text without selector targeting: in vision mode the focus decides. */
 export function visionTypeTextTool(baseTool) {

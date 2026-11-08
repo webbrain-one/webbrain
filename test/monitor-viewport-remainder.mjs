@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const RUN = 'viewport-remainder-run';
 const body = `<!doctype html><style>
@@ -84,8 +88,8 @@ const pageScrolls = (tab, steps) => tab.evaluate(async steps => {
 }, steps);
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: a page's fractional scroll is reported as a scroll, never as a viewport change`, { timeout: 60000 }, async () => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: a page's fractional scroll is reported as a scroll, never as a viewport change`, { timeout: scaled(60000) }, async () => {
+    const browser = await browsers.lease(engine);
     try {
       const { page } = await fixture(browser, build);
       assert.equal(await pageScrolls(page, ['far', 'near', 'top']), 0);
@@ -99,8 +103,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
-  test(`${build}: a certified decision survives a page scroll that returns to the same position`, { timeout: 60000 }, async () => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: a certified decision survives a page scroll that returns to the same position`, { timeout: scaled(60000) }, async () => {
+    const browser = await browsers.lease(engine);
     try {
       const { page } = await fixture(browser, build);
       const base = await certify(page);
@@ -113,8 +117,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
-  test(`${build}: persisting scroll, zoom, resize and user scroll still refuse the decision`, { timeout: 120000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: persisting scroll, zoom, resize and user scroll still refuse the decision`, { timeout: scaled(120000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const [name, change, predicate] of [
         ['page scroll that persists', async page => assert.ok(await pageScrolls(page, ['near']) > 0), /geometry_changed/],

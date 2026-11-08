@@ -31,6 +31,10 @@ const PAGE_AGENT_DOM_ACTION_SOURCE = `
   };
 `;
 
+// <input> types whose value is one ISO date or time string; text inserted
+// into them is ignored (see content.js _parseNativeDateInputValue).
+export const NATIVE_DATE_INPUT_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week']);
+
 function throwIfPageFeedbackPending(result) {
   if (!result?.pageFeedbackPending) return;
   const error = new Error(pageFeedbackPendingResult().error);
@@ -6385,6 +6389,19 @@ export class CDPClient {
         noDispatch: true,
         noop: true,
         method: 'cdp-insert-text',
+      };
+    }
+
+    // A native date or time field ignores inserted text and takes keys in
+    // the order of the browser's locale. Nothing is sent here: the agent sets
+    // its value through the content script (content.js _fillNativeDateInput).
+    if (info.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(info.type)) {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        nativeDateInput: info.type,
+        error: `The <input type="${info.type}"> field takes one value, not typed text.`,
       };
     }
 

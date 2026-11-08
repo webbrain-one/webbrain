@@ -3,7 +3,7 @@ import { DECISION_SETTINGS_KEYS, decisionFeatureEnabled } from './decision-confi
 import { resolveCurrentDecisionConfig } from './decision-availability.js';
 import { createSystemOneJudge } from './systemone-judge.js';
 import { redactSystemOneText, wrapSystemOneData, boundedSystemOneText as boundedText } from './systemone-evidence.js';
-import { COMPLETION_INSTRUCTIONS, LATER_OUTCOME_FIELD, SUMMARY_KIND_FIELD, completionQuestions, decisionCompletionVerdict, llmCompletionVerdict, verifyCompletion, withCompletionTimeout, completionStopError } from './completion-verifier.js';
+import { COMPLETION_INSTRUCTIONS, LATER_OUTCOME_FIELD, SUMMARY_KIND_FIELD, READ_METHOD_FIELD, completionQuestions, decisionCompletionVerdict, llmCompletionVerdict, verifyCompletion, withCompletionTimeout, completionStopError } from './completion-verifier.js';
 import { calculationResultInText } from './calculator.js';
 import { isPageIndependentCalculationCompletion, literalCalculationSummaryFormatMatches } from './page-feedback-policy.js';
 
@@ -311,6 +311,12 @@ async function evidenceKey(state) {
   return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
 }
 
+// A run that read a page in the background (agent.js keeps what those reads
+// reported) also asks the judge whether the request says how pages are to be
+// opened or read; done then reports what the reads did. A verdict judged
+// without that question is not reused once such a read exists.
+const asksReadMethod = run => Array.isArray(run?.backgroundReads) && run.backgroundReads.length > 0;
+
 function invalidateCompletionProof(agent, tabId) {
   const guard = agent._planExecutionGuards.get(tabId);
   if (guard?.semanticSubmissionVerified) {
@@ -339,11 +345,12 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
   const guard = agent._planExecutionGuards.get(tabId);
   const task = agent._progressTaskAnchorText?.(tabId) || guard?.taskText || agent._latestTaskText(tabId) || agent._originalTaskText(tabId);
   const run = agent.completionInvariants.get(tabId);
-  const scope = JSON.stringify([run?.runToken, run?.lastAction?.sequence, agent._progressTaskKeyHash(tabId), config.provider, config.model, config.url, provider.model, provider.supportsVision, JSON.stringify(config)]);
+  const readMethod = asksReadMethod(run);
+  const scope = JSON.stringify([run?.runToken, run?.lastAction?.sequence, agent._progressTaskKeyHash(tabId), config.provider, config.model, config.url, provider.model, provider.supportsVision, JSON.stringify(config), readMethod]);
   agent._completionVerdicts ??= new Map();
   const currentRun = () => context.isCurrent() && !signal?.aborted && agent._activeProvider(tabId) === provider
     && (!calculationEvidence || captureCalculationEvidence(agent, tabId, calculationEvidence))
-    && scope === JSON.stringify([agent.completionInvariants.get(tabId)?.runToken, agent.completionInvariants.get(tabId)?.lastAction?.sequence, agent._progressTaskKeyHash(tabId), config.provider, config.model, config.url, provider.model, provider.supportsVision, JSON.stringify(config)]);
+    && scope === JSON.stringify([agent.completionInvariants.get(tabId)?.runToken, agent.completionInvariants.get(tabId)?.lastAction?.sequence, agent._progressTaskKeyHash(tabId), config.provider, config.model, config.url, provider.model, provider.supportsVision, JSON.stringify(config), asksReadMethod(agent.completionInvariants.get(tabId))]);
   const currentIdentity = async evidence => !!evidence.identity && currentRun()
     && JSON.stringify(await resolveCurrentDecisionConfig(await chrome.storage.local.get(DECISION_SETTINGS_KEYS), compass, { feature: 'done', inBrowserModels })) === JSON.stringify(config)
     && evidence.identity === await agent._completionDocumentStamp(tabId, true) && currentRun();
@@ -566,7 +573,7 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
     evaluate: async evidence => {
       const headers = compass ? { 'X-WebBrain-Device-Id': compass.deviceGuid || '', 'X-WebBrain-Client': 'extension', 'X-WebBrain-Help-Improve': compass.helpImproveWebBrain === false ? '0' : '1' } : {};
       const result = await agent.evaluateSystemOne(tabId, createSystemOneJudge({ maxRetries: 0 }), {
-        config, state: evidence.state, questions: completionQuestions(), signal, headers,
+        config, state: evidence.state, questions: completionQuestions({ readMethod }), signal, headers,
         metadata: compass ? { session_id: agent.conversationIds.get(tabId), trace: { generation_name: 'completion_verification' } } : {},
       }, context);
       const verdict = decisionCompletionVerdict(result, config.threshold);
@@ -587,14 +594,14 @@ async function evaluateBrowserCompletion(agent, tabId, options = {}) {
       // Leave bounded room for it and the verdict without overriding the
       // provider's reasoning configuration or adding another model request.
       const result = await withCompletionTimeout(requestSignal => agent._chatWithCostAllowance(provider, [
-        { role: 'system', content: `${COMPLETION_INSTRUCTIONS} Return only JSON {"outcome":"succeeded|pending|failed|uncertain","reason":"brief evidence-based reason","later":"asked|not_asked","summary":"result|meta_only|plan_only"}. ${LATER_OUTCOME_FIELD} ${SUMMARY_KIND_FIELD} Do not call tools or perform actions.` },
+        { role: 'system', content: `${COMPLETION_INSTRUCTIONS} Return only JSON {"outcome":"succeeded|pending|failed|uncertain","reason":"brief evidence-based reason","later":"asked|not_asked","summary":"result|meta_only|plan_only"${readMethod ? ',"read":"asked|not_asked"' : ''}}. ${LATER_OUTCOME_FIELD} ${SUMMARY_KIND_FIELD}${readMethod ? ` ${READ_METHOD_FIELD}` : ''} Do not call tools or perform actions.` },
         { role: 'user', content: modality === 'vision' ? [{ type: 'text', text: JSON.stringify(info) }, observation] : JSON.stringify(judged) },
       ], { temperature: 0, maxTokens: 4096, signal: requestSignal }, context.costState || agent._newCostRunState(), { tabId, generationName: 'completion_verification' }), signal,
       Math.max(1, Math.min(10000, Number(timeoutMs) || 10000)));
       if (result.costAllowanceMessage) throw agent._costAllowanceError(result.costAllowanceMessage);
       // Its token counts go to the trace with the verdict, as the decision
       // model's do: a slow judge that spent its output on reasoning shows.
-      return { ...llmCompletionVerdict(result.content), model: provider.model, ...(result.usage ? { usage: result.usage } : {}) };
+      return { ...llmCompletionVerdict(result.content, { readMethod }), model: provider.model, ...(result.usage ? { usage: result.usage } : {}) };
     },
   } : null;
   // When the sidecar's copy of the request or plan lost every line naming a

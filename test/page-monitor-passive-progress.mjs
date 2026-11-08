@@ -4,6 +4,10 @@ import { test } from 'node:test';
 import { chromium, firefox } from 'playwright';
 import { createNativeActionMarker } from '../firefox-companion/session.mjs';
 import { fixturePageTextReading } from './semantic-decision-stub.mjs';
+import { sharedBrowsers } from './lib/shared-browsers.mjs';
+import { scaled, suiteTimeout } from './lib/time-budget.mjs';
+
+const browsers = sharedBrowsers([chromium, firefox]);
 
 const html = `<!doctype html><style>
 body { margin:0; width:900px; height:600px; }
@@ -324,7 +328,7 @@ async function performNativeKey(page, guard, key, sequence, { rebindFocus = fals
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: newest explicit preparation supersedes an older selectorless focus proof on the same field`, async () => {
-    const browser = await engine.launch();
+    const browser = await browsers.lease(engine);
     const { context, page } = await focusedModelFixture(browser, build);
     try {
       const previous = await captureTreeModel(page);
@@ -355,8 +359,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: ordinary forms bind their outside page heading across the real field handler`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 8 subtests.
+  test(`${build}: ordinary forms bind their outside page heading across the real field handler`, { timeout: suiteTimeout(8) }, async t => {
+    const browser = await browsers.lease(engine);
     const body = `<!doctype html><style>body{font:18px sans-serif;margin:32px}label{display:block;margin:18px 0}aside{position:absolute;right:35px;top:20px}</style>
       <h1 id="page-heading">QA contact form</h1><aside id="counter">100</aside>
       <form id="form" action="/send"><label>Name <input id="field" name="name"></label>
@@ -459,8 +464,9 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
-  test(`${build}: focused snapshots reach actual content handlers and preserve native dispatch phases`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  // 17 subtests.
+  test(`${build}: focused snapshots reach actual content handlers and preserve native dispatch phases`, { timeout: suiteTimeout(17) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const [name, target, action, params, expectedValue] of [
         ['selectorless text', { tool: 'type_text', text: ' appended' }, 'type', { text: ' appended' }, 'Prepared text appended'],
@@ -659,8 +665,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: uncertified raw selectors preserve node identity and the strict global fence`, { timeout: 30000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: uncertified raw selectors preserve node identity and the strict global fence`, { timeout: scaled(30000) }, async t => {
+    const browser = await browsers.lease(engine);
     const rawBody = modelHtml.replace('</aside>', '</aside><div id="raw" onclick="window.rawClicks++" style="position:absolute;left:600px;top:500px;width:120px;height:30px">Raw action</div>');
     try {
       await t.test('original raw onclick node reports only an opaque uncertified result and can use strict preparation', async () => {
@@ -743,8 +749,8 @@ async function conversationRecipientBinding(page) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: heading-free native conversation panes share exact recipient evidence with model snapshots`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch();
+  test(`${build}: heading-free native conversation panes share exact recipient evidence with model snapshots`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const [name, body, fixtureUrl, mutate] of [
         ['history counter', conversationPaneHtml, 'https://web.whatsapp.com/', () => { document.getElementById('history-counter').textContent = '101'; }],
@@ -886,8 +892,8 @@ const ownerIdentityHtml = modelHtml.replace('<form id="form"', `<div id="recipie
 <label for="sidebar-field">Sidebar filter</label><input id="sidebar-field" value="unrelated"></aside><form id="form"`);
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: owner-local recipient carriers outside a form remain bound without freezing sidebar state`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: owner-local recipient carriers outside a form remain bound without freezing sidebar state`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const [name, mutate] of [
         ['recipient identity carrier', () => { document.getElementById('recipient-chip').setAttribute('data-recipient-id', 'Bob'); }],
@@ -1048,8 +1054,8 @@ async function shadowModelFixture(browser, build, mode = 'open') {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: exact open-shadow selectors and actual AX references retain private model certificates`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch();
+  test(`${build}: exact open-shadow selectors and actual AX references retain private model certificates`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const addressing of ['selector', 'ref']) await t.test(`${addressing} certifies the same shadow node for its supported AX dispatch after an unrelated counter update`, async () => {
         const { context, page } = await shadowModelFixture(browser, build);
@@ -1154,8 +1160,8 @@ async function captureDeepPriority(page, actionTarget) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: bounded priority recovery observes an uncovered target before certifying a fresh decision`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch();
+  test(`${build}: bounded priority recovery observes an uncovered target before certifying a fresh decision`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const selector of ['#send', `#send:not([data-never="${'x'.repeat(620)}"])`]) await t.test(`fresh scoped observation binds the exact ${selector.length > 500 ? 'long' : 'short'} selector after the original target was uncovered`, async () => {
         const { context, page } = await treeModelFixture(browser, build, deepPriorityHtml);
@@ -1230,8 +1236,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: atomic model capture returns a fresh real AX page with matching private target bindings`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: atomic model capture returns a fresh real AX page with matching private target bindings`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       await t.test('real generated references survive tree regeneration and unrelated heading updates', async () => {
         const { context, page } = await treeModelFixture(browser, build);
@@ -1370,8 +1376,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: model snapshots bind intended controls before inference while harmless DOM updates progress`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: model snapshots bind intended controls before inference while harmless DOM updates progress`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const [name, target, mutate, boundary, owner] of [
         ['counter inside the same form', { tool: 'click_ax', ref_id: 'ref_send' }, () => { document.getElementById('in-form-counter').textContent = '201'; }],
@@ -1533,8 +1539,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: only explicitly validated stable targets survive unrelated passive page updates`, { timeout: 60000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: only explicitly validated stable targets survive unrelated passive page updates`, { timeout: scaled(60000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       for (const boundary of ['message', 'activate', 'native', 'local']) {
         await t.test(`${boundary}: unchanged target progresses while counter feedback remains observable`, async () => {
@@ -1699,8 +1705,8 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
-  test(`${build}: monitor registration acknowledgment proves current document ownership`, { timeout: 30000 }, async t => {
-    const browser = await engine.launch({ headless: true });
+  test(`${build}: monitor registration acknowledgment proves current document ownership`, { timeout: scaled(30000) }, async t => {
+    const browser = await browsers.lease(engine);
     try {
       await t.test('successful registration returns the active document and run tokens', async () => {
         const { context, page } = await registrationFixture(browser, build);

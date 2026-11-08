@@ -3835,6 +3835,237 @@
     };
   }
 
+  // ── Native date and time fields ─────────────────────────────────────
+  // <input type=date|time|datetime-local|month|week> draws its value in the
+  // browser's locale (20.11.2026, 11/20/2026, ...) as segments that take
+  // keystrokes in that locale's order, and it ignores inserted text. Its
+  // value is one locale-independent string (2026-11-20). type_text reads the
+  // requested text as exactly one such value and sets it the way the
+  // browser's own picker does (the value, then input and change events), or
+  // refuses text it cannot read as one value before touching the field.
+  // Shared verbatim by both builds (test/native-date-input.mjs).
+  const _NATIVE_DATE_INPUT_FORMATS = Object.freeze({
+    date: Object.freeze({ noun: 'date', format: 'YYYY-MM-DD', example: '2026-11-20' }),
+    time: Object.freeze({ noun: 'time', format: 'HH:MM (24-hour)', example: '14:30' }),
+    'datetime-local': Object.freeze({ noun: 'date and time', format: 'YYYY-MM-DDTHH:MM', example: '2026-11-20T14:30' }),
+    month: Object.freeze({ noun: 'month', format: 'YYYY-MM', example: '2026-11' }),
+    week: Object.freeze({ noun: 'week', format: 'YYYY-Www', example: '2026-W47' }),
+  });
+
+  // The canonical value for `text` in a field of this type ({value}), or why
+  // it is not one ({error}). Accepts the ISO value itself and common written
+  // forms (English month names, a 12-hour clock, a day-first or month-first
+  // date whose order the numbers prove); never guesses an ambiguous order.
+  function _parseNativeDateInputValue(type, text) {
+    const spec = _NATIVE_DATE_INPUT_FORMATS[type];
+    if (!spec) return { error: 'This is not a native date or time field.' };
+    const raw = String(text ?? '').trim();
+    const fail = detail => ({
+      error: `${detail} This is a native ${spec.noun} field (<input type="${type}">): it takes one value, not typed keystrokes. `
+        + `Pass it as ${spec.format}, for example type_text({text: "${spec.example}"}). Nothing was typed.`,
+    });
+    const unreadable = () => fail(`"${raw.slice(0, 80)}" could not be read as one ${spec.noun}.`);
+    if (!raw) return { value: '' };
+    const s = raw.toLowerCase()
+      .replace(/(\d)(?:st|nd|rd|th)\b/g, '$1')
+      .replace(/\b(?:the|of)\b/g, ' ')
+      .replace(/,/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const pad = (number, width = 2) => String(number).padStart(width, '0');
+    const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const named = (names, word) => {
+      const prefix = String(word || '').replace(/\.$/, '');
+      return prefix.length >= 3 ? names.findIndex(name => name.startsWith(prefix)) : -1;
+    };
+    const utc = (year, month, day) => {
+      const at = new Date(0);
+      at.setUTCFullYear(year, month - 1, day);
+      return at;
+    };
+    const daysIn = (year, month) => utc(year, month + 1, 0).getUTCDate();
+    const validYearMonth = (year, month) => year >= 1 && month >= 1 && month <= 12;
+    // {year, month, day}, {error} for a date the text names but that cannot
+    // be (or could be two), or null when the text is no date at all.
+    const readDate = value => {
+      let rest = value;
+      let weekday = -1;
+      const lead = /^([a-z]+)\.? (.+)$/.exec(rest);
+      if (lead && named(WEEKDAYS, lead[1]) >= 0) {
+        weekday = named(WEEKDAYS, lead[1]);
+        rest = lead[2];
+      }
+      let year, month, day, match;
+      if ((match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(rest))) {
+        [year, month, day] = [+match[1], +match[2], +match[3]];
+      } else if ((match = /^([a-z]+)\.?[ -](\d{1,2})[ -](\d{4})$/.exec(rest))) {
+        [year, month, day] = [+match[3], named(MONTHS, match[1]) + 1, +match[2]];
+      } else if ((match = /^(\d{1,2})[ ./-]([a-z]+)\.?[ ./-](\d{4})$/.exec(rest))) {
+        [year, month, day] = [+match[3], named(MONTHS, match[2]) + 1, +match[1]];
+      } else if ((match = /^(\d{4})[ -]([a-z]+)\.?[ -](\d{1,2})$/.exec(rest))) {
+        [year, month, day] = [+match[1], named(MONTHS, match[2]) + 1, +match[3]];
+      } else if ((match = /^(\d{1,2})([./-])(\d{1,2})\2(\d{4})$/.exec(rest))) {
+        const [first, second] = [+match[1], +match[3]];
+        year = +match[4];
+        if (first === second || (first > 12) !== (second > 12)) {
+          [day, month] = first > 12 ? [first, second] : [second, first];
+        } else if (first <= 12 && second <= 12) {
+          return { error: `"${raw.slice(0, 80)}" could be read day-first or month-first.` };
+        } else return { error: `"${raw.slice(0, 80)}" is not a real date.` };
+      } else return null;
+      if (!month) return null;
+      if (!validYearMonth(year, month) || !(day >= 1 && day <= daysIn(year, month))) {
+        return { error: `"${raw.slice(0, 80)}" is not a real date.` };
+      }
+      if (weekday >= 0 && utc(year, month, day).getUTCDay() !== weekday) {
+        return { error: `"${raw.slice(0, 80)}" names a weekday that date does not fall on.` };
+      }
+      return { year, month, day };
+    };
+    // "HH:MM", "HH:MM:SS" or "HH:MM:SS.mmm", or null.
+    const readTime = value => {
+      let hour, minute = 0, second = 0, fraction = 0, match;
+      if ((match = /^(\d{1,2})(?::(\d{2})(?::(\d{2}))?)? ?([ap])\.?m\.?$/.exec(value))) {
+        hour = +match[1];
+        if (hour < 1 || hour > 12) return null;
+        hour = hour % 12 + (match[4] === 'p' ? 12 : 0);
+        [minute, second] = [+(match[2] || 0), +(match[3] || 0)];
+      } else if ((match = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(value))) {
+        [hour, minute, second] = [+match[1], +match[2], +(match[3] || 0)];
+        fraction = match[4] ? +match[4].padEnd(3, '0') : 0;
+      } else return null;
+      if (hour > 23 || minute > 59 || second > 59) return null;
+      return `${pad(hour)}:${pad(minute)}${second || fraction ? `:${pad(second)}${fraction ? `.${pad(fraction, 3)}` : ''}` : ''}`;
+    };
+    const dateValue = date => `${pad(date.year, 4)}-${pad(date.month)}-${pad(date.day)}`;
+    if (type === 'date') {
+      const date = readDate(s);
+      return !date ? unreadable() : date.error ? fail(date.error) : { value: dateValue(date) };
+    }
+    if (type === 'time') {
+      const time = readTime(s);
+      return time ? { value: time } : unreadable();
+    }
+    if (type === 'datetime-local') {
+      const parts = /^(\d{4}-\d{1,2}-\d{1,2})[t ](.+)$/.exec(s)
+        || /^(.+?)(?: at)? (\d{1,2}(?::\d{2}(?::\d{2}(?:\.\d{1,3})?)?)? ?(?:[ap]\.?m\.?)?)$/.exec(s);
+      if (!parts) return readDate(s) ? fail(`"${raw.slice(0, 80)}" has no time of day.`) : unreadable();
+      const date = readDate(parts[1]);
+      const time = readTime(parts[2]);
+      if (date?.error) return fail(date.error);
+      return date && time ? { value: `${dateValue(date)}T${time}` } : unreadable();
+    }
+    if (type === 'month') {
+      let year, month, match;
+      if ((match = /^(\d{4})[-/.](\d{1,2})$/.exec(s))) [year, month] = [+match[1], +match[2]];
+      else if ((match = /^(\d{1,2})[-/.](\d{4})$/.exec(s))) [year, month] = [+match[2], +match[1]];
+      else if ((match = /^([a-z]+)\.?[ -](\d{4})$/.exec(s))) [year, month] = [+match[2], named(MONTHS, match[1]) + 1];
+      else if ((match = /^(\d{4})[ -]([a-z]+)\.?$/.exec(s))) [year, month] = [+match[1], named(MONTHS, match[2]) + 1];
+      else return unreadable();
+      if (!month) return unreadable();
+      return validYearMonth(year, month) ? { value: `${pad(year, 4)}-${pad(month)}` } : fail(`"${raw.slice(0, 80)}" is not a real month.`);
+    }
+    // week
+    let year, week, match;
+    if ((match = /^(\d{4})[ -]?w ?(\d{1,2})$/.exec(s))) [year, week] = [+match[1], +match[2]];
+    else if ((match = /^(?:week|wk|w)\.? ?(\d{1,2}) (\d{4})$/.exec(s))) [year, week] = [+match[2], +match[1]];
+    else if ((match = /^(\d{4}) (?:week|wk)\.? ?(\d{1,2})$/.exec(s))) [year, week] = [+match[1], +match[2]];
+    else return unreadable();
+    // An ISO year has 53 weeks when it starts on a Thursday, or on a
+    // Wednesday in a leap year.
+    const startsOn = year >= 1 ? utc(year, 1, 1).getUTCDay() : -1;
+    const weeks = startsOn === 4 || (startsOn === 3 && daysIn(year, 2) === 29) ? 53 : 52;
+    return year >= 1 && week >= 1 && week <= weeks
+      ? { value: `${pad(year, 4)}-W${pad(week)}` }
+      : fail(`"${raw.slice(0, 80)}" is not a real week (${pad(year, 4)} has ${weeks}).`);
+  }
+
+  // The native date or time type of an <input>, or '' for any other element
+  // (a type the browser does not support reads back as "text").
+  function _nativeDateInputType(el) {
+    if (String(el?.tagName || '').toUpperCase() !== 'INPUT') return '';
+    const type = String(el.type || '').toLowerCase();
+    return Object.prototype.hasOwnProperty.call(_NATIVE_DATE_INPUT_FORMATS, type) ? type : '';
+  }
+
+  async function _fillNativeDateInput(el, type, text, actionDeadlineExpired = () => false) {
+    const spec = _NATIVE_DATE_INPUT_FORMATS[type];
+    const fieldMeta = _fieldMeta(el);
+    let dispatched = false;
+    const deadlineFailure = () => ({
+      success: false,
+      dispatched,
+      ...(dispatched
+        ? { outcomeUnknown: true, retryable: false }
+        : { noDispatch: true, outcomeUnknown: false, retryable: true }),
+      deadlineExpired: true,
+      error: dispatched
+        ? `The page action deadline expired while the ${spec.noun} was being set.`
+        : `The page action deadline expired before the ${spec.noun} was set.`,
+    });
+    const parsed = _parseNativeDateInputValue(type, text);
+    if (typeof parsed.value !== 'string') {
+      return { success: false, dispatched: false, noDispatch: true, retryable: false,
+        nativeDateInput: type, expectedFormat: spec.format, error: parsed.error, fieldMeta };
+    }
+    if (el.disabled || el.readOnly) {
+      return { success: false, dispatched: false, noDispatch: true, retryable: false, nativeDateInput: type,
+        error: `This ${spec.noun} field is ${el.disabled ? 'disabled' : 'read-only'}. Nothing was typed.`, fieldMeta };
+    }
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (actionDeadlineExpired()) return deadlineFailure();
+    const dispatchResult = withLocalPageDispatch(() => {
+      dispatched = true;
+      if (setter) setter.call(el, parsed.value);
+      else el.value = parsed.value;
+      if (actionDeadlineExpired()) return deadlineFailure();
+      el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      if (actionDeadlineExpired()) return deadlineFailure();
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return null;
+    });
+    if (dispatchResult) return dispatchResult;
+    // A controlled field can reformat or revert the value on the next task.
+    await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+    if (actionDeadlineExpired()) return deadlineFailure();
+    const actual = el.isConnected ? String(el.value ?? '') : null;
+    if (actual === null || _parseNativeDateInputValue(type, actual).value !== parsed.value) {
+      return {
+        success: false,
+        dispatched: true,
+        verified: false,
+        mutationMayHaveOccurred: true,
+        retryable: false,
+        method: 'native-date-value',
+        nativeDateInput: type,
+        expectedValue: parsed.value,
+        ...(actual === null ? {} : { actual: actual.slice(0, 100) }),
+        unverified: actual === null
+          ? { reason: 'element_replaced', reader: 'none' }
+          : { reason: 'readback_mismatch', reader: 'exact' },
+        readbackExact: actual !== null,
+        fieldMeta,
+        error: actual === null
+          ? `The ${spec.noun} field was replaced while its value was being set. Look at the page before trying again.`
+          : `The ${spec.noun} field reads back "${actual.slice(0, 100)}" instead of "${parsed.value}" after the page settled: the page rejected or changed the value. Look at the field before trying again.`,
+      };
+    }
+    const pageValidation = el.validity?.valid === false ? String(el.validationMessage || '').trim() : '';
+    return {
+      success: true,
+      dispatched: true,
+      verified: true,
+      method: 'native-date-value',
+      nativeDateInput: type,
+      value: parsed.value,
+      fieldMeta,
+      ...(pageValidation
+        ? { pageValidation, warning: `The field holds ${parsed.value || 'no value'}, but the page reports: ${pageValidation}` }
+        : {}),
+    };
+  }
+
   let _lastTypeFieldIdent = null;
 
   /**
@@ -4330,6 +4561,10 @@
     _withTypingPreparation('focus', el, () => el.focus());
     if (actionDeadlineExpired()) return deadlineFailure();
     showAgentWorkingTarget(el, 'type_text');
+    // A native date or time field takes one value, never keystrokes (and
+    // never trusted typing, whose keys would land in locale-ordered segments).
+    const nativeDateType = _nativeDateInputType(el);
+    if (nativeDateType) return _fillNativeDateInput(el, nativeDateType, typedText, actionDeadlineExpired);
     const beforeValue = String(el.isContentEditable ? (el.textContent || '') : (el.value || ''));
     const routeHrefBeforeType = location.href;
 
