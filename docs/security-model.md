@@ -242,8 +242,8 @@ WebBrain's own hard card, which waits outside the action's deadline: "Type
 this into a sign-in password field on {host}?", with the reason (not a
 password the user gave in this conversation, their profile or their saved
 notes) and the text masked, its first character and a dot for each other
-character (only dots under four characters), the way the submit card shows
-a password field as `[redacted]` rather than its value. With strict secret
+character (only dots under four characters); the submit card likewise shows
+a password field as `[password redacted]` rather than its value. With strict secret
 handling the card shows none of it. The answers are "Type it" and "Don't type
 it".
 

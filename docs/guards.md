@@ -175,7 +175,9 @@ into a sign-in password field on {host}?", saying the text is not a password
 the user gave in this conversation, their profile or their saved notes. The
 buttons are **Type it** (`once`) and **Don't type it** (`deny`), numbered like
 the other cards. Like the submit confirmation card, which shows a password
-field's value as `[redacted]`, it never shows the text in full.
+field's value as `[password redacted]`, it never shows the text in full. A
+Cloud run's update log, which replaces typed text with `[redacted typed
+text]`, still holds the masked preview of a card it relays.
 
 - **Type it.** The call runs again through the same typing-target preflight,
   outside the action deadline the card waited beside, and types only while
