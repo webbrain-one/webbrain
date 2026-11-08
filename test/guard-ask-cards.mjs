@@ -76,6 +76,13 @@ test('both builds share the unverified-step card module', async () => {
   assert.deepEqual(normalizeUnverifiedStepConfirmation({ guardId: 'x', action: 'delete', reason: '<b>', host: 'h',
     content: 'c', contentLabel: 'nope', hard: 'yes', extra: 1 }),
   { guardId: 'x', hard: false, action: 'submit', host: 'h', reason: 'step_unverified', content: 'c', contentLabel: 'page' });
+  // The sign-in password card (credential-not-provided) keeps its vocabulary,
+  // so a scheduled run's card is restored as it was shown.
+  const typing = { guardId: 'credential-not-provided', hard: true, action: 'type', host: 'localhost',
+    reason: 'credential_not_provided', content: 'a••••', contentLabel: 'masked' };
+  assert.deepEqual(normalizeUnverifiedStepConfirmation(typing), typing);
+  assert.deepEqual(normalizeUnverifiedStepConfirmation({ ...typing, content: '', contentLabel: 'hidden' }),
+    { ...typing, content: '', contentLabel: 'hidden' });
 });
 
 for (const { build, Agent, adapters, Scheduler } of builds) {
@@ -1331,13 +1338,60 @@ for (const build of ['chrome', 'firefox']) {
       await page.close();
     }
   });
+
+  // credential-not-provided: the sign-in password card names the site and
+  // the field, says where the text did not come from, shows it masked (or
+  // not at all with strict secret handling), and answers "Type it" or
+  // "Don't type it".
+  test(`${build}: the sign-in password card names the field and shows the text masked`, async () => {
+    const page = await panel(build);
+    try {
+      const credentialCard = (clarifyId, step = {}) => stepCard({ clarifyId, question: 'Type this into a sign-in password field on localhost?',
+        timeoutSec: 0, deadlineTs: undefined, timeoutAnswer: undefined },
+      { guardId: 'credential-not-provided', hard: true, action: 'type', host: 'localhost', reason: 'credential_not_provided',
+        content: 'a••••', contentLabel: 'masked', ...step });
+      const view = async clarifyId => page.evaluate(id => {
+        const card = document.querySelector(`.clarify-card[data-clarify-id="${id}"]`);
+        return { question: card.querySelector('.clarify-question').textContent,
+          reasons: [...card.querySelectorAll('.clarify-reason')].map(node => node.textContent),
+          content: card.querySelector('.clarify-content')?.textContent ?? null,
+          buttons: [...card.querySelectorAll('.clarify-option')].map(button => [button.dataset.value, button.textContent]),
+          input: !!card.querySelector('input, textarea'), memory: card.dataset.memorySource,
+          countdown: !!card.querySelector('.clarify-timeout') };
+      }, clarifyId);
+      await page.evaluate(data => window.panel.render(data), credentialCard('unverified_password'));
+      const masked = await view('unverified_password');
+      assert.equal(masked.question, 'Type this into a sign-in password field on localhost?');
+      assert.deepEqual(masked.reasons, ['It isn’t a password you gave in this conversation, your profile or your saved notes.',
+        'The text WebBrain would type, masked:']);
+      assert.equal(masked.content, 'a••••');
+      assert.deepEqual(masked.buttons, [['once', 'Type it'], ['deny', 'Don’t type it']]);
+      assert.equal(masked.input, false);
+      assert.equal(masked.memory, '', 'the answer is not saved to memory');
+      assert.equal(masked.countdown, false, 'a hard card has no countdown');
+      await page.evaluate(data => window.panel.render(data), credentialCard('unverified_password_strict', { content: '', contentLabel: 'hidden' }));
+      const hidden = await view('unverified_password_strict');
+      assert.deepEqual(hidden.reasons, ['It isn’t a password you gave in this conversation, your profile or your saved notes.',
+        'Strict secret handling is on, so the text isn’t shown.']);
+      assert.equal(hidden.content, null);
+      await page.click('.clarify-card[data-clarify-id="unverified_password"] button[data-value="deny"]');
+      const answered = await page.evaluate(() => ({ sent: window.panel.sent.at(-1),
+        label: document.querySelector('.clarify-card[data-clarify-id="unverified_password"] .clarify-your-answer')?.textContent }));
+      assert.deepEqual(answered.sent, ['clarify_response', { tabId: 9, clarifyId: 'unverified_password', answer: 'deny', source: 'option' }]);
+      assert.equal(answered.label, 'Your answer: Don’t type it');
+    } finally {
+      await page.close();
+    }
+  });
 }
 
 test('every locale of both builds translates the card', async () => {
-  const keys = ['question.commit', 'question.submit', 'question.publish', 'question.click',
+  const keys = ['question.commit', 'question.submit', 'question.publish', 'question.click', 'question.type',
     'reason.editor_unverified', 'reason.draft_unverified', 'reason.draft_unobserved',
     'reason.submit_unclear', 'reason.target_unresolved', 'reason.repeat_unverified', 'reason.step_unverified',
-    'content.editor', 'content.composer', 'content.page', 'check_page', 'go_ahead', 'dont']
+    'reason.credential_not_provided',
+    'content.editor', 'content.composer', 'content.page', 'content.masked', 'content.hidden', 'check_page',
+    'go_ahead', 'dont', 'type_it', 'dont_type']
     .map(key => `sp.unverified.${key}`);
   for (const build of ['chrome', 'firefox']) {
     const directory = new URL(`../src/${build}/src/ui/locales/`, import.meta.url);
@@ -1357,8 +1411,9 @@ test('every locale of both builds translates the card', async () => {
   // The panel and the agent agree on the card's vocabulary.
   for (const build of ['chrome', 'firefox']) {
     const source = await read(`src/${build}/src/ui/sidepanel.js`);
-    const { UNVERIFIED_STEP_ACTIONS, UNVERIFIED_STEP_REASONS } = await import(`../src/${build}/src/agent/unverified-step.js`);
+    const { UNVERIFIED_STEP_ACTIONS, UNVERIFIED_STEP_REASONS, UNVERIFIED_STEP_CONTENT_LABELS } = await import(`../src/${build}/src/agent/unverified-step.js`);
     for (const action of UNVERIFIED_STEP_ACTIONS) assert.match(source, new RegExp(`'${action}'`));
     for (const reason of UNVERIFIED_STEP_REASONS.filter(reason => reason !== 'step_unverified')) assert.match(source, new RegExp(`'${reason}'`));
+    for (const label of UNVERIFIED_STEP_CONTENT_LABELS.filter(label => label !== 'page')) assert.match(source, new RegExp(`'${label}'`));
   }
 });

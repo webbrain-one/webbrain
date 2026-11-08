@@ -122,29 +122,176 @@ The regex: `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credentia
 ### Sign-in passwords the user never gave
 
 WebBrain types into an existing account's password field only a password the
-user gave (guard `credential-not-provided`). The field is one with
-`autocomplete="current-password"`, or a password input whose name, id and
-label do not name a new or repeated password, an API key or a token, that is
-its form's only visible password field, and whose form's submit control does
-not say it creates an account ("Create account", "Sign up", "Register",
-"Join"; `credential-fields.js` `isSignInPasswordField`). The name, label
-and submit rules are English. A sign-up form with one password field, no
-`autocomplete="new-password"`, and a label and submit control that do not
-say so (for example "Password" and "Next", a sign-up panel outside a
-`<form>`, or any non-English form) is treated as a sign-in, so a password the
-model makes up for the new account is refused and the model has to ask the
-user for one.
+user gave, or text the user approved on WebBrain's card (guard
+`credential-not-provided`; `credential-fields.js` `isSignInPasswordField`).
+The field is one with
+`autocomplete="current-password"`, one whose name, id or label names the
+current password, or any other password input that is not left out.
+Left out are fields whose name, id or label names a new or repeated
+password, an API key or a token; fields whose form's submit control says it
+creates an account ("Create account", "Sign up", "Register", "Join"); and
+fields that share their form with another visible password field (a new
+password and its confirmation) when the form shows no sign-in: neither a
+field that names the account nor a button that signs in ("Log in", "Sign
+in" and their translations; not "Next"). A sign-in's second password field
+(a bank's "Password" and "PIN" with "Log in", or an off-screen autofill
+decoy beside an email field) does not make the form a sign-up's: such a
+field is read as a lone one, and a sign-up whose account field nothing else
+marks ("Email", two passwords and "Submit") asks for its "Password" while its
+"Confirm password" stays a new password. A field with
+`autocomplete="new-password"` is a new password too, unless it is its form's
+only password field, its name or label does not say new, and the form signs
+in: its submit control says "Log in" or "Sign in" (or a translation), or
+another of its buttons does while none creates an account. Many sign-in
+forms mark their password that way to stop the browser's autofill, so such a
+field is guarded, and a value typed into it is no password WebBrain set.
+Any other password input is a lone password field. It counts as a
+sign-in's, and the reason the model reads names the sign-in evidence when
+the page shows some:
+
+- a field of its form that names the account: an email or phone (`tel`)
+  input, one with autocomplete `username`, `email` or `tel`, a text or
+  number field whose name, id, label (`<label>`, `aria-label`,
+  `aria-labelledby`), placeholder or title, or the label of the web
+  component it sits in, says user, login, email, account, identifier, phone,
+  mobile, customer, member, client, number or "ID" (and those words in a
+  dozen other languages), or a hidden input named for the account of a
+  password step (`username`, `login`, `login_hint`, `email`, `identifier`,
+  `account_name`; not a generic id such as `user_id` or `flow`);
+- a button of its form that signs in, re-authenticates or goes on to the
+  next step ("Sign in", "Log in", "Login", "Next", "Continue", "Enter",
+  "Verify", "Unlock", "Authenticate", "Confirm", and those words in German,
+  French, Spanish, Portuguese, Italian, Dutch, the Nordic languages, Finnish,
+  Czech, Slovak, Hungarian, Romanian, Greek, Hebrew, Arabic, Persian,
+  Turkish, Russian, Polish, Vietnamese, Indonesian, Thai, Hindi, Japanese,
+  Chinese and Korean): the first submit control or any other visible button,
+  a `type=button` or `role=button` control, or a button component whose
+  label is slotted in, named by its text, `aria-label`, `aria-labelledby` or
+  title;
+- a name or label that says sign-in, login or account ("Account password").
+
+Without such evidence, one kind of lone password field is left out: a field
+whose name, id or label names a network's key (Wi-Fi, WLAN, wireless, WPA,
+WEP, SSID, hotspot, network key, network security key), so "generate a
+strong Wi-Fi password" on a router page is typed. Only wireless words count:
+"Network password" is how many companies name the directory (AD or SSO)
+account's password, so a lock page's lone "Network password" with "OK" asks,
+and SSID, WEP and WPA must not continue a longer word ("sessid", "passid"),
+though a separator may join them (`ssid_pass`, `router_wpa_key`). Every
+other lone password field counts as a sign-in's
+even with no evidence, because a sign-in can show none that WebBrain reads:
+a re-authentication with only a password and "Confirm" or "OK", a "NetID"
+and "Password" form with "Submit" (WebBrain does not know every name for an
+account), a PIN step whose account is a generic hidden id. Typing a guessed
+password there unasked can lock the account, while asking costs the user one
+click on WebBrain's card when the field turns out to be no sign-in's. So
+"fill out this form with random info" on a form's lone "Password" with
+"Submit" asks once before the random value is typed.
+
+A field's form is its form owner; for a field in a web component's shadow
+root, which has no form owner, the `<form>` around the component across
+shadow boundaries; outside a `<form>`, the form-less part of its document,
+across open shadow roots (fields and buttons inside some other form do not
+count). A form without a visible button of its own (one a dialog footer
+submits) also reads the form-less buttons of its document. Outside a form,
+the visible password fields counted are every form-less one of the document,
+so a form-less sign-in shown beside a form-less sign-up counts three, and
+there is no submit control: a button that creates the account, with none
+that signs in, makes it a sign-up's. So beside a "Log in" button the
+sign-in's field is guarded, and so is the sign-up's own "Password" unless
+its name, label or autocomplete marks it as new (its confirmation stays a
+new password).
+
+A username and password form with a "Submit" button, or a password step with
+"Next", is guarded: a random value there is a guessed credential, and the
+user can give a literal one. Only a value typed into a field read as a new
+password counts later as a password WebBrain set (a network's key and a
+sign-in's PIN do not), and only on the site of that field.
+`content.js` `_fieldMeta` and, in Chrome, the CDP selector probe
+(`cdp-client.js` `probeRichTextToolbarSelector`) report these facts
+(`passwordFields`, `usernameFields`, `formSubmitText`, `buttonTexts`, the
+nearest eight button texts, and `formless` for a field in no form) by
+calling the same function, `rich-text-toolbar-heuristic.js`
+`passwordFieldFacts`, which both routes already load; field metadata without
+`usernameFields` comes from a route that did not read the form, and its lone
+password field counts as a sign-in's, a network's key included. The
+new-account, new-password, network-key and label rules are English. The rule
+errs towards guarding: a sign-up form with one password field, no
+`autocomplete="new-password"`, and a label and submit control that do not say
+it creates an account (for example "Email", "Password" and "Next" or
+"Submit"), the same with a "Confirm password" field (its "Password" asks), a
+Wi-Fi key in a setup wizard labelled only "Password", a settings form
+that sets a password ("Room password" with "Save"), or a sign-up's only
+password field marked `new-password` whose form also holds a "Log in"
+button and no control that says it creates the account ("Continue" beside
+"Log in") is treated as a sign-in's: a password the model makes up there
+asks on the card.
+
+The site the card names, and the site an answer is kept for, is the field's
+own: the tab's for the top frame, a subframe's own site for a field in a
+frame, so a sign-in iframe from another origin (a bank's or an identity
+provider's inside a shop's page) is named by its host, and an answer given
+for the page does not cover it. A frame at `about:blank` or `about:srcdoc`
+has the site of the frame above it. The top frame's site comes from the
+tab's address by the same rule, so a top page at `about:blank` (a popup
+another page wrote into), `data:` or an address the tab does not report has
+none; a `blob:` page has its creator's site. When the preflight named no
+frame, the guard asks each frame for the field on its own (a write with no
+frame goes to every frame that has WebBrain's content script, and a probe
+sent to all of them took the first answer, often a frame's that does not
+hold the field), and the frame that holds it gives the site; the document
+that answered must be of that frame's site. A selector or focused field that
+is a sign-in password field in more than one frame has no one site. A field
+whose site cannot be read (one of those, a `data:` frame, a frame that is
+gone) is refused without a card, and the model is told to ask the user. The
+typing-target preflight's own probe of a ref, selector or index asks only
+the top frame, whose answer it is bound to.
 
 A password counts as given when it appears whole in the user's own messages
 in this conversation (without the page context WebBrain adds), a text file
 they attached, a clarify answer they typed or chose, the WebBrain profile
-when it is enabled, a MemCode recall result, or a new-password field WebBrain
-filled earlier in the conversation (signing in to an account it created). The
-agent keeps the passwords it set this way in memory for the tab, whether typed
-alone or in a `browser_batch`, so compacting the context does not drop them; a
+when it is enabled, a note the user wrote in WebBrain's local memory when
+memory is enabled, a MemCode recall result, or, on the same site, a
+new-password field WebBrain filled earlier in the conversation (signing in to
+an account it created). The agent keeps the passwords it set this way in
+memory for the tab, each with the site of its field's frame, read before
+the write went out (a submit may navigate elsewhere): the frame the
+typing-target preflight resolved, or else the frame the guard's own probe
+of each frame found holding the field. The preflight probes only the top
+frame, so a password set in a sign-up frame from another site counts on
+that site, not the page's. A write whose field neither knows (no frame
+answered, or the guard did not probe because the user gave the text or the
+write is not a model's) keeps none. They are kept whether typed alone or in a
+`browser_batch`, so compacting the context does not drop them; a
 conversation restored after the extension restarted reads them from its
-history, folded `browser_batch` answers included. A
-value that is a credential word or a stock login ("password", "pass",
+history, folded `browser_batch` answers included, where the fill's result
+names the site (`newPasswordSite`). A password set on one site is not a
+source for a sign-in on another, and one whose site could not be read (or
+saved before the site was recorded) counts nowhere.
+
+WebBrain's local memory refuses text that says "password", "token" and the
+like, but keeps a note such as "QA portal login: qa-tester / value". Only
+active notes the user wrote count (`user-memory.js`
+`userAuthoredMemoryRecords`): `source` `manual` with confidence 1, saved with
+`/memory --add`, edited in Settings, or brought in with that source by a
+memory or config import or Profile Sync. Notes auto-capture saved (`source`
+`auto`, from a chat turn, clarification answers or a completed form alike)
+do not: an extraction model wrote them from the turn, whose final assistant
+reply and clarify questions can quote the page, and the note does not say
+which part it came from. An auto-capture rewrite of a note the user wrote
+makes it `auto`; the user's edit in Settings that changes the text makes it
+`manual` with confidence 1 again. Auto-capture saving the same words as a
+note the user wrote (up to case and punctuation) leaves that note, its text,
+source and confidence as they were, and the user's own save of the same
+words takes the note over with their text. Before this rule, an auto-capture
+rewrite of a user's note kept `source` `manual` with the extraction model's
+text and confidence; such notes in an existing store are not counted, since
+that confidence is below 1, unless the model reported exactly 1.0 (which
+nothing in the record tells apart), until the user edits them in Settings.
+Like the profile, local memory is not a source in a Cloud bot-memory session,
+whose prompt carries neither.
+
+A value that is a credential word or a stock login ("password", "pass",
 "username", "admin", "root", "test", "demo", ...) counts only where a message
 sets it as a value: quoted, after ":", "=" or "is", after a word such as
 "password", in a pair such as "admin/admin", or as a whole reply. "I don't
@@ -156,11 +303,56 @@ The check runs before anything is typed, on calls the model makes through the
 tool batch (a saved workflow's replay of the user's own steps is not
 checked), against the field the typing-target preflight resolved; when
 nothing tells it the target is a password field, the text is typed as before.
-The refusal tells the model to ask for the credentials or end the run as
-partial, naming them, and to ask for the password to set if the form in fact
-creates an account. New-password fields, one-time codes and API keys are not
+Where the dispatch would type into another field than that one (by default,
+Chrome's focused `type_text` whose bound field lost focus types into the
+field focused now, and a `type_text` selector the preflight did not pin
+types into the selector's current match), that field is checked the same way
+before anything is typed: a two-step sign-in that focuses its password field
+after the username step's Next took the guess there with no card.
+Without a target from the preflight, a `type_text` with no selector is
+checked against the field it types into, which in Firefox is the field the
+last click focused when focus has since gone to the page or to that field's
+own component (a virtual keypad
+that blurs its clicked password field took a guess with no card).
+It holds in lean mode and with or without Strict checks.
+
+Text from none of those sources is not refused outright: the places WebBrain
+reads are not all the places a user can give a password (a test form's
+documented login, a password kept where WebBrain does not look), and a wrong
+refusal left the run stuck. The batch pauses the call and asks on
+WebBrain's own hard card, which waits outside the action's deadline: "Type
+this into a sign-in password field on {host}?", {host} being the field's own
+site (above), with the reason (not a
+password the user gave in this conversation, their profile or their saved
+notes) and the text masked, its first character and a dot for each other
+character (only dots under four characters); the submit card likewise shows
+a password field as `[password redacted]` rather than its value. With strict secret
+handling the card shows none of it. The answers are "Type it" and "Don't type
+it".
+
+- **Type it** runs the call again through the same typing-target preflight
+  and types only into the field and on the site the card named: the
+  re-resolved target must still be a sign-in password field with the same
+  tag, name, id, autocomplete and labels in the same frame, or nothing is
+  typed (`credential_field_changed`). The text then counts as given on that
+  site for the rest of the run (a digest of it is kept in memory, never the
+  text), so the same text does not ask again there; other text, another site
+  or a new run asks again. The tool result notes that the user approved it.
+- **Don't type it**, a timeout answer posted for the card, an unattended
+  scheduled run (which cannot show a card) and a caller without a card all
+  refuse with the refusal the model reads: ask for the credentials or end
+  the run as partial, naming them, and ask for the password to set if the
+  form in fact creates an account. The same text on that site is refused
+  without another card for the rest of the run.
+- The card never times out. Cloud runs and the MCP server relay it as
+  `needs_user_input` (`unverifiedStepConfirmation`, answers `once` / `deny`,
+  the masked text in the structured prompt) for the caller to answer or
+  cancel; Stop and corrections cancel it.
+
+New-password fields, one-time codes, API keys and network keys are not
 checked, since a run may create an account's password, read a code from the
-user's mailbox, or copy a key a page issued. A field a password manager
+user's mailbox, copy a key a page issued, or generate a Wi-Fi password the
+user asked for. A field a password manager
 filled is not affected: the check stops typing, not the click that submits
 the form.
 

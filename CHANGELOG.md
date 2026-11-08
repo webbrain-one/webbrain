@@ -6,6 +6,9 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Fixed
+- Sign-in password guard: instead of refusing, WebBrain now asks on a card ("Type this into a sign-in password field on <site>?", with the text masked, or hidden under strict secret handling) before typing a sign-in password you never gave. The card names the field's own site, including a sign-in frame from another site. "Type it" types that text into that field and accepts it on that site for the rest of the run; "Don't type it" keeps the refusal, and unattended runs still refuse. A login you saved yourself with /memory --add (or edited in Settings) counts as given, while notes WebBrain captured automatically do not. A lone password field with no sign-in around it, such as a "Password" with "Submit", asks once before a made-up value goes in, a Wi-Fi or other network key is typed unasked, and sign-in forms stay guarded, including web-component and form-less logins, re-authentication prompts and forms that mark their password field new-password. Chrome and Firefox.
+
 ## [47.0.0] - 2026-11-08
 
 ### Added

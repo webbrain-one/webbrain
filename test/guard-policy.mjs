@@ -72,6 +72,15 @@ const GRANDFATHERED = new Set([
 ]);
 const GRANDFATHERED_CEILING = 158;
 
+// Hard guards that ask the user on WebBrain's card even when they know the
+// action is wrong, because a wrong refusal would leave the run stuck where
+// one click settles it, and the card still keeps the action from going out
+// unasked. Each is the owner's decision; the list only grows with one.
+// credential-not-provided: a password the guard does not see the user give
+// (a test form, a password from a place it does not read) costs a click,
+// while a guessed one is still never typed silently.
+const HARD_ASKS_WHEN_DECIDED = new Set(['credential-not-provided']);
+
 // Completion refusals (`blockedDone: true`) per build. A new one must be a
 // registered guard routed through _guardRefusesOnce (or a hard-class guard);
 // raise the ceiling only in the change that registers it. Lean mode's done
@@ -141,7 +150,12 @@ test('only the hard list refuses outright', () => {
       assert.notEqual(entry.onDecided, 'block', `${id}: a quality guard advises or asks; it never refuses by default`);
       assert.notEqual(entry.onCannotDecide, 'block', `${id}: a quality guard that cannot decide advises or asks`);
     } else if (HARD_GUARD_CLASSES.includes(entry.class)) {
-      assert.equal(entry.onDecided, 'block', `${id}: a hard guard that knows the action is wrong refuses it`);
+      if (HARD_ASKS_WHEN_DECIDED.has(id)) {
+        assert.equal(entry.onDecided, 'ask', `${id}: listed as a hard guard that asks on its card when it knows`);
+        assert.equal(entry.onCannotDecide, 'ask', `${id}: a hard guard that asks when it knows asks when it cannot tell`);
+      } else {
+        assert.equal(entry.onDecided, 'block', `${id}: a hard guard that knows the action is wrong refuses it`);
+      }
       assert.ok(['block', 'ask'].includes(entry.onCannotDecide), `${id}: a hard guard that cannot decide asks or refuses`);
     } else {
       assert.ok(NON_GUARD_CLASSES.includes(entry.class));

@@ -604,12 +604,16 @@ export class RichTextToolbarProbe {
     if (richTextToolbarUsesFocusedTarget(toolName, args)) {
       return this.probeFocusedTarget(tabId, args, { mapAnnotation });
     }
+    // The answer is bound to the top frame, so only the top frame is asked:
+    // sent to every frame, the first answer won, which could be a subframe's
+    // (one an iframe tool injected the content script into), labelled as the
+    // top frame's or reporting the top frame's ref as missing.
     try {
       const probe = await browser.tabs.sendMessage(tabId, {
         target: 'content',
         action: 'probe_rich_text_toolbar_retry_target',
         params: { toolName, args },
-      });
+      }, { frameId: 0 });
       return withDispatchBinding(probe, 0);
     } catch {
       try {
@@ -618,7 +622,7 @@ export class RichTextToolbarProbe {
           target: 'content',
           action: 'probe_rich_text_toolbar_retry_target',
           params: { toolName, args },
-        });
+        }, { frameId: 0 });
         return withDispatchBinding(probe, 0);
       } catch {
         return null;
