@@ -22,6 +22,7 @@
  * (features/background/api/chatBackdrop.js).
  */
 import { saveChatBackdrop } from '../background/api/chatBackdrop.js';
+import { TLDS } from './tlds.js';
 
 // One key per tab, so concurrent submissions from several new tab pages can never
 // overwrite each other. Mirrors src/*/src/ui/newtab-handoff.js (checked in test/newtab.mjs).
@@ -268,28 +269,49 @@ export function canSearch(api = extApi()) {
 }
 
 const SAFE_URL_SCHEMES = new Set(['http:', 'https:']);
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+// host[:port][/path, ?query or #fragment], read the way an address bar reads
+// typed text: a dotted name (in any script), localhost, an IPv4 address or a
+// bracketed IPv6 one.
+const BARE_HOST_RE = /^(localhost|\[[0-9a-f:.]+\]|\d{1,3}(?:\.\d{1,3}){3}|(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+[\p{L}\p{N}-]{2,63})(:\d{1,5})?(?:[/?#]\S*)?$/iu;
+const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+// This computer and the local network, which an address bar opens over http
+// (dev servers and routers rarely serve https), with the private-use names
+// that are not in IANA's list.
+const LOCAL_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|0\.0\.0\.0|\[::1\])$|\.(?:localhost|local|test|internal|lan|home|corp|intranet|home\.arpa)$/i;
 
-/** Returns a navigable http(s) URL if the text is one, otherwise null. */
+/**
+ * Returns the http(s) URL the text is, when it is only an address, otherwise
+ * null. With a scheme, only http(s). Without one, a name must end in a real
+ * top-level domain, so "node.js", "notes.txt" or "config.yaml" stay text, and
+ * opens over https, except a local host, which opens over http.
+ */
 export function toNavigableUrl(input) {
   const value = String(input || '').trim();
   if (!value || /\s/.test(value)) return null;
-  try {
-    const direct = new URL(value);
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
-      return SAFE_URL_SCHEMES.has(direct.protocol) ? direct.href : null;
-    }
-  } catch {
-    // not an absolute URL; try as a bare host below
-  }
-  if (/^(localhost|(\d{1,3}\.){3}\d{1,3}|([a-z0-9-]+\.)+[a-z]{2,})(:\d+)?([/?#]\S*)?$/i.test(value)) {
+  if (SCHEME_RE.test(value)) {
     try {
-      const url = new URL(`https://${value}`);
-      return SAFE_URL_SCHEMES.has(url.protocol) ? url.href : null;
+      const url = new URL(value);
+      return SAFE_URL_SCHEMES.has(url.protocol) && url.hostname ? url.href : null;
     } catch {
       return null;
     }
   }
-  return null;
+  const typed = BARE_HOST_RE.exec(value)?.[1];
+  if (!typed) return null;
+  // A number with dots is an address only as four parts ("1.2.30" is a version).
+  if (/^[\d.]+$/.test(typed) && !IPV4_RE.test(typed)) return null;
+  let url;
+  try {
+    url = new URL(`http://${value}`);
+  } catch {
+    return null;
+  }
+  const host = url.hostname;
+  if (LOCAL_HOST_RE.test(host)) return url.href;
+  if (!IPV4_RE.test(host) && !TLDS.has(host.slice(host.lastIndexOf('.') + 1))) return null;
+  url.protocol = 'https:';
+  return url.href;
 }
 
 /** Search with the browser's own default engine; never a hard-coded one. */
