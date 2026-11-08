@@ -115,25 +115,6 @@
       <a class="button" href="#get" data-get data-win="نزّل لنظام Windows" data-mac="نزّل لنظام macOS" data-linux="نزّل لنظام Linux"><span>نزّل Murshid</span> <svg class="arrow"><use href="#i-arrow"/></svg></a>
       <a class="button ghost" href="https://webbrain.one">تعرّف على WebBrain</a>
     </div>
-
-    <div class="terminal" data-terminal>
-      <div class="terminal-tabs" role="tablist" aria-label="نظامك">
-        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
-        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
-        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
-      </div>
-      <div class="terminal-body">
-        <div class="terminal-head">
-          <span class="terminal-label">شغّله من المصدر</span>
-          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
-          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>استبعد الملفات الثنائية</span></label>
-        </div>
-        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
-cd webbrain/murshid && npm install && npm start</code></pre>
-        <button class="copy" type="button" aria-label="انسخ الأوامر" data-copied="تم النسخ"><svg><use href="#i-copy"/></svg></button>
-        <p class="terminal-note" data-fast-note hidden>آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار.</p>
-      </div>
-    </div>
   </div>
 
   <figure class="hero-art">
@@ -316,10 +297,30 @@ cd webbrain/murshid && npm install && npm start</code></pre>
       <p class="fine">AppImage: اجعله قابلًا للتنفيذ ثم شغّله. على Debian أو Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
     </article>
   </div>
-  <div class="get-cta">
-    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span>المصدر على GitHub</span></a>
-  </div>
   <p class="checksums"><a href="../download/SHA256SUMS.txt">مجاميع التحقق <bdi>SHA-256</bdi></a></p>
+  <div class="get-source">
+    <div class="get-cta">
+      <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span>المصدر على GitHub</span></a>
+    </div>
+    <div class="terminal source-terminal" data-terminal>
+      <div class="terminal-tabs" role="tablist" aria-label="نظامك">
+        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-head">
+          <span class="terminal-label">شغّله من المصدر</span>
+          <label class="switch"><input type="checkbox" data-fast checked> <span>استبعد الملفات الثنائية</span></label>
+        </div>
+        <pre dir="ltr"><code data-cmd>git clone --depth 1 --filter=blob:none --sparse -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain; git sparse-checkout set murshid src/chrome
+cd murshid; npm install; npm start</code></pre>
+        <button class="copy" type="button" aria-label="انسخ الأوامر" data-copied="تم النسخ"><svg><use href="#i-copy"/></svg></button>
+        <p class="terminal-note" data-fast-note>آخر إيداع فقط، ومجلد <code>murshid/</code> وإضافة WebBrain التي يحمّلها فقط: بلا سجلّ تاريخ، ولا ملفات zip للإصدارات، ولا مقاطع فيديو، ولا ملفات اختبار.</p>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- ============================================================ PRIVACY -->
