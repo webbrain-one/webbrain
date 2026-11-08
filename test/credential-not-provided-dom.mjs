@@ -219,6 +219,20 @@ const NETWORK_EVIDENCE = [
   ['#np-pass', { passwordFields: 1, usernameFields: 0, formSubmitText: 'OK', buttonTexts: ['OK'] }, true],
   ['#ns-key', { passwordFields: 1, usernameFields: 0, formSubmitText: 'Save', buttonTexts: ['Save'] }, false],
 ];
+// Review of 892338c8d: a sign-in form that marks its only password field
+// new-password to stop the browser's autofill is a sign-in's; a sign-up's
+// new-password field with "Sign up" (beside "Sign in with Google") is not.
+const NEW_PASSWORD_TOKEN_PAGE = `<!doctype html>
+  <form id="anti-autofill"><label for="aa-user">Username</label><input id="aa-user" name="username" autocomplete="off">
+    <label for="aa-pass">Password</label><input id="aa-pass" name="password" type="password" autocomplete="new-password">
+    <button>Log in</button></form>
+  <form id="token-signup"><label for="ts-email">Email</label><input id="ts-email" type="email">
+    <label for="ts-pass">Password</label><input id="ts-pass" name="password" type="password" autocomplete="new-password">
+    <button type="button">Sign in with Google</button><button>Sign up</button></form>`;
+const NEW_PASSWORD_TOKEN_EVIDENCE = [
+  ['#aa-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Log in', buttonTexts: ['Log in'] }, true],
+  ['#ts-pass', { passwordFields: 1, usernameFields: 1, formSubmitText: 'Sign up', buttonTexts: ['Sign in with Google', 'Sign up'] }, false],
+];
 // Outside a form: a phone number and a role=button "Log in".
 const TEL_LOGIN_PAGE = `<!doctype html>
   <div id="tel-login"><input id="tl-phone" type="tel" placeholder="Mobile number">
@@ -241,6 +255,7 @@ const PAGES = [
   [SIDE_BY_SIDE_PAGE, SIDE_BY_SIDE_EVIDENCE],
   [SECOND_PASSWORD_PAGE, SECOND_PASSWORD_EVIDENCE],
   [NETWORK_PAGE, NETWORK_EVIDENCE],
+  [NEW_PASSWORD_TOKEN_PAGE, NEW_PASSWORD_TOKEN_EVIDENCE],
 ];
 const facts = meta => Object.fromEntries(['passwordFields', 'usernameFields', 'formSubmitText', 'buttonTexts', 'formless']
   .filter(key => key in meta).map(key => [key, meta[key]]));

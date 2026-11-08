@@ -357,6 +357,8 @@ const namesKeyOrToken = identity => NON_PASSWORD_SECRET_RE.test(identity) && !PA
 // also says sign in or log in ("Sign up or log in") does not count.
 const NEW_ACCOUNT_SUBMIT_RE = /sign[-_\s]?up|regist|create|join|get[-_\s]started|enrol/i;
 const SIGN_IN_SUBMIT_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n/i;
+const createsAccount = text => typeof text === 'string' && NEW_ACCOUNT_SUBMIT_RE.test(text.slice(0, 200))
+  && !SIGN_IN_SUBMIT_RE.test(text.slice(0, 200));
 // A button that signs in: "Sign in", "Log in", "Login", and the same words in
 // German, French, Spanish, Portuguese, Italian, Dutch, Swedish, Norwegian,
 // Danish, Finnish, Czech, Slovak, Hungarian, Romanian, Greek, Hebrew, Arabic,
@@ -372,6 +374,7 @@ const SIGN_IN_BUTTON_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|anmelden|einloggen|c
 const SIGN_IN_STEP_BUTTON_RE = /\b(?:next|continue|enter|verify|unlock|authenticate|authori[sz]e|confirm)\b|weiter|bestätigen|suivant|continuer|confirmer|siguiente|pr[oó]ximo|continuar|confirmar|avanti|conferma|volgende|doorgaan|bevestigen|bekräfta|bekreft|bekræft|vahvista|potvrd|megerősít|confirmă|επιβεβαίωση|אישור|تأكيد|تأیید|xác nhận|konfirmasi|ยืนยัน|पुष्टि|ileri|İleri|devam|onayla|далее|продолжить|подтверд|dalej|potwierd|次へ|確認|下一步|确认|다음|확인/iu;
 const signsIn = text => typeof text === 'string'
   && (SIGN_IN_BUTTON_RE.test(text.slice(0, 200)) || SIGN_IN_STEP_BUTTON_RE.test(text.slice(0, 200)));
+const saysSignIn = text => typeof text === 'string' && SIGN_IN_BUTTON_RE.test(text.slice(0, 200));
 // A password field whose own name or label says it is the account's: "Account
 // password", "login_password", "signin-pass".
 const SIGN_IN_FIELD_RE = /sign[-_\s]?[io]n|log[-_\s]?[io]n|account/i;
@@ -395,14 +398,29 @@ function passwordFieldPurpose(meta) {
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
   const tokens = String(meta.autocomplete ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.includes('current-password')) return { purpose: 'sign-in', reason: 'autocomplete=current-password' };
-  if (tokens.includes('new-password')) return { purpose: 'new' };
-  if (tokens.includes('one-time-code') || String(meta.type ?? '').toLowerCase() !== 'password') return null;
   const identity = fieldIdentity(meta);
+  const buttons = Array.isArray(meta.buttonTexts) ? meta.buttonTexts.slice(0, 16) : [];
+  const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
+  if (tokens.includes('new-password')) {
+    // Many sign-in forms mark their password input new-password to keep the
+    // browser from autofilling it. So the form's only password field is a
+    // new password unless the form signs in: its submit control says sign in
+    // or log in, or, while no control of the form creates an account, another
+    // of its buttons does ("Log in" after a "Show" toggle). One whose own name
+    // or label says new ("New password", "Choose a password"), or one beside
+    // another password field (a sign-up's confirmation, a password change, a
+    // form-less sign-up shown next to a form-less sign-in), stays new.
+    if (Number(meta.passwordFields) > 1 || NEW_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'new' };
+    if (saysSignIn(submit)) return { purpose: 'sign-in', reason: 'autocomplete=new-password, submit control signs in' };
+    if (!createsAccount(submit) && !buttons.some(createsAccount) && buttons.some(saysSignIn)) {
+      return { purpose: 'sign-in', reason: 'autocomplete=new-password beside a sign-in button' };
+    }
+    return { purpose: 'new' };
+  }
+  if (tokens.includes('one-time-code') || String(meta.type ?? '').toLowerCase() !== 'password') return null;
   if (namesKeyOrToken(identity)) return null;
   if (CURRENT_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'sign-in', reason: 'input type=password' };
   if (NEW_PASSWORD_FIELD_RE.test(identity)) return { purpose: 'new' };
-  const buttons = Array.isArray(meta.buttonTexts) ? meta.buttonTexts.slice(0, 16) : [];
-  const submit = typeof meta.formSubmitText === 'string' ? meta.formSubmitText.slice(0, 200) : '';
   if (Number(meta.passwordFields) > 1) {
     // A second visible password field is a sign-up's or a password change's
     // confirmation, but also a sign-in's PIN or memorable word, or an
@@ -415,9 +433,7 @@ function passwordFieldPurpose(meta) {
     // that its own label does not mark as new asks. Outside a form the
     // password fields counted are all the form-less ones of the document, so
     // a form-less sign-in shown beside a form-less sign-up counts three.
-    const signInButton = [submit, ...buttons].some(text => typeof text === 'string' && SIGN_IN_BUTTON_RE.test(text.slice(0, 200)));
-    const createsAccount = text => typeof text === 'string' && NEW_ACCOUNT_SUBMIT_RE.test(text.slice(0, 200))
-      && !SIGN_IN_SUBMIT_RE.test(text.slice(0, 200));
+    const signInButton = [submit, ...buttons].some(saysSignIn);
     const newAccount = submit ? createsAccount(submit) : !signInButton && buttons.some(createsAccount);
     if (newAccount || (!signInButton && !(Number(meta.usernameFields) > 0))) return { purpose: 'new' };
   }
@@ -458,7 +474,11 @@ function passwordFieldPurpose(meta) {
  * while a guess typed silently into a sign-in can lock the account.
  *
  * - autocomplete `current-password`: yes.
- * - autocomplete `new-password` or `one-time-code`: no.
+ * - autocomplete `one-time-code`: no. `new-password`: no, unless the field is
+ *   its form's only password field, its name or label does not say new, and
+ *   the form signs in (its submit control says sign in or log in, or another
+ *   of its buttons does while none creates an account), since many sign-in
+ *   forms mark their password new-password to stop the browser's autofill.
  * - an `<input type="password">` whose name, id or label names a key or token
  *   rather than a password: no; one that names the current password: yes.
  * - one that names a new or repeated password, or whose form's submit control
@@ -617,14 +637,16 @@ export function clarifyReplyWithholdsCredentials(answer) {
 
 /**
  * The password a fill tool call typed into a new-password field (autocomplete
- * `new-password`, or a password-type field that names a new or repeated
- * password, has a confirmation beside it in a form that shows no sign-in, or
- * is in a form that creates an account), trimmed, or null: a password
- * WebBrain chose for an account it created, which a later sign-in to that
- * account may need. A lone password field nothing marks as new (a Wi-Fi key,
- * a form's lone "Password"), or a sign-in's second password field (a PIN), is
- * not one, so a value a run made up for it never becomes a sign-in source. A
- * live result and the copy saved in a conversation give the same answer.
+ * `new-password` outside a sign-in form, or a password-type field that names
+ * a new or repeated password, has a confirmation beside it in a form that
+ * shows no sign-in, or is in a form that creates an account), trimmed, or
+ * null: a password WebBrain chose for an account it created, which a later
+ * sign-in to that account may need. A lone password field nothing marks as
+ * new (a Wi-Fi key, a form's lone "Password"), a sign-in's second password
+ * field (a PIN), or a sign-in form's only password field marked new-password
+ * to stop autofill is not one, so a value a run made up for it never becomes
+ * a sign-in source. A live result and the copy saved in a conversation give
+ * the same answer.
  *
  * @param {string} toolName
  * @param {object} args the tool call's arguments

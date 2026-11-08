@@ -138,9 +138,16 @@ in" and their translations; not "Next"). A sign-in's second password field
 decoy beside an email field) does not make the form a sign-up's: such a
 field is read as a lone one, and a sign-up whose account field nothing else
 marks ("Email", two passwords and "Submit") asks for its "Password" while its
-"Confirm password" stays a new password. Any other password input is a lone
-password field. It counts as a sign-in's, and the reason the model reads
-names the sign-in evidence when the page shows some:
+"Confirm password" stays a new password. A field with
+`autocomplete="new-password"` is a new password too, unless it is its form's
+only password field, its name or label does not say new, and the form signs
+in: its submit control says "Log in" or "Sign in" (or a translation), or
+another of its buttons does while none creates an account. Many sign-in
+forms mark their password that way to stop the browser's autofill, so such a
+field is guarded, and a value typed into it is no password WebBrain set.
+Any other password input is a lone password field. It counts as a
+sign-in's, and the reason the model reads names the sign-in evidence when
+the page shows some:
 
 - a field of its form that names the account: an email or phone (`tel`)
   input, one with autocomplete `username`, `email` or `tel`, a text or
@@ -213,9 +220,12 @@ errs towards guarding: a sign-up form with one password field, no
 `autocomplete="new-password"`, and a label and submit control that do not say
 it creates an account (for example "Email", "Password" and "Next" or
 "Submit"), the same with a "Confirm password" field (its "Password" asks), a
-Wi-Fi key in a setup wizard labelled only "Password", or a settings form
-that sets a password ("Room password" with "Save") is treated as a
-sign-in's: a password the model makes up there asks on the card.
+Wi-Fi key in a setup wizard labelled only "Password", a settings form
+that sets a password ("Room password" with "Save"), or a sign-up's only
+password field marked `new-password` whose form also holds a "Log in"
+button and no control that says it creates the account ("Continue" beside
+"Log in") is treated as a sign-in's: a password the model makes up there
+asks on the card.
 
 The site the card names, and the site an answer is kept for, is the field's
 own: the tab's for the top frame, a subframe's own site for a field in a
@@ -244,8 +254,14 @@ when it is enabled, a note the user wrote in WebBrain's local memory when
 memory is enabled, a MemCode recall result, or, on the same site, a
 new-password field WebBrain filled earlier in the conversation (signing in to
 an account it created). The agent keeps the passwords it set this way in
-memory for the tab, each with the site of its field, read before the write
-went out (a submit may navigate elsewhere), whether typed alone or in a
+memory for the tab, each with the site of its field's frame, read before
+the write went out (a submit may navigate elsewhere): the frame the
+typing-target preflight resolved, or else the frame the guard's own probe
+of each frame found holding the field. The preflight probes only the top
+frame, so a password set in a sign-up frame from another site counts on
+that site, not the page's. A write whose field neither knows (no frame
+answered, or the guard did not probe because the user gave the text or the
+write is not a model's) keeps none. They are kept whether typed alone or in a
 `browser_batch`, so compacting the context does not drop them; a
 conversation restored after the extension restarted reads them from its
 history, folded `browser_batch` answers included, where the fill's result

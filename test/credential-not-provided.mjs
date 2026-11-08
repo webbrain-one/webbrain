@@ -357,6 +357,67 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(isSignInPasswordField({ ...field, labelText: 'Confirm password', usernameFields: 1, formSubmitText: 'Submit' }).guarded, false);
   });
 
+  // Review of 892338c8d: many sign-in forms set autocomplete="new-password"
+  // on their password input to keep the browser from autofilling it. Such a
+  // field read as a new password before its form was read, so a guess was
+  // typed unasked (also on main) and then counted as a password WebBrain
+  // set, for the next sign-in on the site.
+  test(`${build}: a sign-in form's only password field stays a sign-in's when it says new-password`, async () => {
+    const field = { tag: 'input', type: 'password', name: 'password', id: 'password', labelText: 'Password',
+      autocomplete: 'new-password', passwordFields: 1, usernameFields: 1 };
+    for (const [meta, reason] of [
+      [{ ...field, formSubmitText: 'Log in', buttonTexts: ['Log in'] }, 'autocomplete=new-password, submit control signs in'],
+      [{ ...field, usernameFields: 0, formSubmitText: 'Anmelden' }, 'autocomplete=new-password, submit control signs in'],
+      // A "show password" toggle makes the input text.
+      [{ ...field, type: 'text', formSubmitText: 'Sign in' }, 'autocomplete=new-password, submit control signs in'],
+      [{ ...field, formSubmitText: 'Show', buttonTexts: ['Show', 'Sign in'] }, 'autocomplete=new-password beside a sign-in button'],
+      [{ ...field, formless: true, passwordFields: undefined, buttonTexts: ['Log in'] }, 'autocomplete=new-password beside a sign-in button'],
+    ]) {
+      assert.deepEqual(isSignInPasswordField(meta), { guarded: true, reason }, JSON.stringify(meta));
+      assert.equal(newPasswordValue('set_field', { text: 'admin123' }, { success: true, fieldMeta: meta }), null,
+        `a guess there is not a password WebBrain set: ${JSON.stringify(meta)}`);
+    }
+    // A sign-up, a set-password page and a password change stay new: the
+    // form creates an account, shows no sign-in, or the field names a new
+    // password; beside another password field the token decides, as a
+    // form-less sign-up shown next to a form-less sign-in needs.
+    for (const meta of [
+      { ...field, formSubmitText: 'Sign up', buttonTexts: ['Sign in with Google', 'Sign up'] },
+      { ...field, formSubmitText: 'Create account', buttonTexts: ['Log in', 'Create account'] },
+      { ...field, formless: true, buttonTexts: ['Log in', 'Create account'] },
+      { ...field, formSubmitText: 'Continue', buttonTexts: ['Continue'] },
+      { ...field, usernameFields: 0, formSubmitText: 'Submit' },
+      { ...field, usernameFields: 0 },
+      { ...field, labelText: 'New password', formSubmitText: 'Save and sign in' },
+      { ...field, labelText: 'Choose a password', formSubmitText: 'Log in' },
+      { ...field, passwordFields: 2, formSubmitText: 'Log in' },
+      { type: 'password', autocomplete: 'new-password' },
+    ]) {
+      assert.equal(isSignInPasswordField(meta).guarded, false, JSON.stringify(meta));
+      assert.equal(newPasswordValue('set_field', { text: 'Gen-Placeholder-10' }, { success: true, fieldMeta: meta }), 'Gen-Placeholder-10',
+        JSON.stringify(meta));
+    }
+    // The review's case: the guess is refused (no card here), and one typed
+    // there by WebBrain itself is no source for the site's next sign-in.
+    const login = { ...field, formSubmitText: 'Log in', buttonTexts: ['Log in'] };
+    const agent = fresh(73);
+    const executeToolImpl = agent._executeToolImpl.bind(agent);
+    agent._executeToolImpl = async (tab, name, args, ...rest) => {
+      const result = await executeToolImpl(tab, name, args, ...rest);
+      return args.ref_id === 'ref_anti' && result?.success ? { ...result, fieldMeta: login } : result;
+    };
+    const guessed = await agent.executeTool(73, 'set_field', { ref_id: 'ref_anti', text: 'admin123' }, null, modelCall(login));
+    assert.equal(guessed.errorCode, 'credential_not_provided');
+    assert.match(guessed.error, /autocomplete=new-password, submit control signs in/);
+    assert.deepEqual(typed(), []);
+    const owned = await agent.executeTool(73, 'set_field', { ref_id: 'ref_anti', text: 'admin123' }, null,
+      { typingTargetFieldMeta: login, typingTargetFrameId: 0 });
+    assert.equal(owned.success, true);
+    assert.equal('newPasswordSite' in owned, false);
+    assert.equal((await agent.executeTool(73, 'set_field', { ref_id: 'ref_pass', text: 'admin123' }, null, modelCall(FIELDS.ref_pass))).errorCode,
+      'credential_not_provided');
+  });
+
   test(`${build}: a credential counts as given only where the user wrote it whole`, () => {
     assert.equal(credentialValueProvided('', ['anything']), true);
     assert.equal(credentialValueProvided('   ', []), true);
@@ -715,8 +776,10 @@ for (const build of ['chrome', 'firefox']) {
     navigationFrames = null;
     digestFrames = null;
     // page.frameIds: the frame the preflight resolves a ref in (the top
-    // frame when not listed; null: the probe names no frame).
-    const page = { url: PAGE_URL, fields: { ...FIELDS }, frameIds: {} };
+    // frame when not listed; null: the probe names no frame). page.unseen:
+    // fields of a subframe, which the preflight (it probes only the top
+    // frame) does not resolve, while the write reaches them.
+    const page = { url: PAGE_URL, fields: { ...FIELDS }, frameIds: {}, unseen: {} };
     Object.assign(agent, {
       _persist: () => {}, _persistNow: async () => ({ ok: true }), _skipPermissionGate: true,
       _ensureGateSetting: async () => true, _adoptLiveSocialPublishWorkflow: async () => false,
@@ -735,7 +798,7 @@ for (const build of ['chrome', 'firefox']) {
     const dispatched = [];
     agent._executeToolImpl = async (_tab, name, args) => {
       dispatched.push(`${name}:${args.ref_id}${typeof args.text === 'string' ? `=${args.text}` : ''}`);
-      return { success: true, verified: true, fieldMeta: page.fields[args.ref_id] || null };
+      return { success: true, verified: true, fieldMeta: page.fields[args.ref_id] || page.unseen[args.ref_id] || null };
     };
     agent._finalizeTextMutationResult = async (_tab, _name, _args, result) => result;
     agent.conversations.set(tab, messages);
@@ -1373,6 +1436,66 @@ for (const build of ['chrome', 'firefox']) {
     tabUrl = PAGE_URL;
     assert.equal((await blank.executeTool(69, 'set_field', { ref_id: 'ref_pass', text: generated }, null, modelCall(FIELDS.ref_pass))).errorCode,
       'credential_not_provided');
+  });
+
+  // Review of 892338c8d: the site a new password was set on came from the
+  // preflight's frame, and the preflight probes only the top frame, so a
+  // write to a ref in a subframe arrived with no frame and its password was
+  // kept for the top page's site: a password set in a sign-up frame from
+  // another site was then typed unasked into the page's own sign-in. The
+  // site is now the frame's that holds the field.
+  test(`${build}: a password set in a frame from another site counts only on that frame's site`, async () => {
+    const task = 'Create an account in the sign-up widget on this page, then sign in to it and tell me the welcome message.';
+    const { cards, call, run, respond, result, dispatched, page } = batchFixture(72,
+      [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: task, webbrainUserAuthoredText: task }]);
+    page.url = 'https://shop.example.test/account';
+    const widgetUrl = 'https://signup.widget.test/register';
+    navigationFrames = [{ frameId: 0, parentFrameId: -1, url: page.url }, { frameId: 6, parentFrameId: 0, url: widgetUrl }];
+    // The widget frame's fields: the preflight resolves none of them.
+    Object.assign(page.unseen, { ref_widget_new: FIELDS.ref_new, ref_widget_pass: FIELDS.ref_pass, ref_gone: FIELDS.ref_new });
+    for (const ref of Object.keys(page.unseen)) page.frameIds[ref] = null;
+    digestFrames = [
+      { frameId: 0, url: page.url, fields: { ref_pass: FIELDS.ref_pass } },
+      { frameId: 6, url: widgetUrl, fields: { ref_widget_new: FIELDS.ref_new, ref_widget_pass: FIELDS.ref_pass } },
+    ];
+    const create = call('set_field', { ref_id: 'ref_widget_new', text: 'Guess-Pass-77' });
+    sent.length = 0;
+    await run([create]);
+    assert.equal(cards.length, 0, 'a new password asks nothing');
+    assert.equal(result(create).newPasswordSite, 'signup.widget.test', 'the password was set on the widget frame\'s site');
+    assert.deepEqual(sent.filter(message => message.action === 'field_value_digest').map(message => sentFrame.get(message)).sort(),
+      [0, 6], 'the guard and the site read one probe of each frame');
+    // The page's own sign-in does not take it.
+    const onPage = call('set_field', { ref_id: 'ref_pass', text: 'Guess-Pass-77' });
+    await run([onPage], respond('deny'));
+    assert.equal(cards.length, 1, 'the page\'s sign-in asks');
+    assert.equal(cards[0].unverifiedStepConfirmation.host, 'shop.example.test');
+    assert.equal(result(onPage).errorCode, 'credential_not_provided');
+    // The widget's own sign-in does.
+    const inWidget = call('set_field', { ref_id: 'ref_widget_pass', text: 'Guess-Pass-77' });
+    await run([inWidget]);
+    assert.equal(cards.length, 1);
+    assert.equal(result(inWidget).success, true);
+    // A field no frame answers for has no known site: its password is kept
+    // for none.
+    const unknown = call('set_field', { ref_id: 'ref_gone', text: 'Guess-Pass-88' });
+    await run([unknown]);
+    assert.equal(result(unknown).success, true);
+    assert.equal('newPasswordSite' in result(unknown), false);
+    const afterUnknown = call('set_field', { ref_id: 'ref_pass', text: 'Guess-Pass-88' });
+    await run([afterUnknown], respond('deny'));
+    assert.equal(cards.length, 2);
+    assert.equal(result(afterUnknown).errorCode, 'credential_not_provided');
+    // A write the guard does not check (a saved workflow's replay) is not
+    // probed for its site either: with no frame known, nothing is kept.
+    const replay = { ...call('set_field', { ref_id: 'ref_widget_new', text: 'Replay-Pass-99' }), _workflowReplay: true };
+    sent.length = 0;
+    await run([replay]);
+    assert.equal(result(replay).success, true);
+    assert.equal('newPasswordSite' in result(replay), false);
+    assert.equal(sent.some(message => message.action === 'field_value_digest'), false, 'no probe of its own');
+    assert.deepEqual(dispatched, ['set_field:ref_widget_new=Guess-Pass-77', 'set_field:ref_widget_pass=Guess-Pass-77',
+      'set_field:ref_gone=Guess-Pass-88', 'set_field:ref_widget_new=Replay-Pass-99']);
   });
 
   test(`${build}: a folded browser_batch answer gives only the new passwords its own children set`, () => {

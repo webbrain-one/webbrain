@@ -48199,9 +48199,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       dispatchState.fillSite = null;
       if (['set_field', 'type_ax', 'type_text', 'iframe_type'].includes(name) && typeof args?.text === 'string' && args.text.trim()
           && mayBeNewPasswordField(executionContext.typingTargetFieldMeta)) {
-        const frameId = Number.isInteger(executionContext.typingTargetFrameId) ? executionContext.typingTargetFrameId : null;
-        dispatchState.fillSite = name === 'iframe_type' && frameId === null ? null
-          : await this._credentialTargetHost(tabId, frameId, '').catch(() => null);
+        dispatchState.fillSite = await this._newPasswordFillSite(tabId, name, executionContext).catch(() => null);
         this._throwIfAborted(linked.signal);
       }
       // Default mode only notes an earlier unverified write (the call's
@@ -55880,12 +55878,39 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   // The field a model's write goes to, for credential-not-provided: the one
   // the batch's typing-target preflight resolved, in its frame, or else the
-  // guard's own probe of it (_credentialTargetFieldMeta).
+  // guard's own probe of it (_credentialTargetFieldMeta), kept for the call
+  // so the new password's site (_newPasswordFillSite) reads the same answer.
   async _credentialTargetField(tabId, name, args, executionContext) {
     const frameId = Number.isInteger(executionContext?.typingTargetFrameId) ? executionContext.typingTargetFrameId : null;
-    return executionContext?.typingTargetFieldMeta
+    if (executionContext?.typingTargetFieldMeta) {
+      return { fieldMeta: executionContext.typingTargetFieldMeta, frameId, documentUrl: '', ambiguous: false };
+    }
+    if (!executionContext || typeof executionContext !== 'object') return this._credentialTargetFieldMeta(tabId, name, args, frameId);
+    this._credentialTargetProbes ??= new WeakMap();
+    if (!this._credentialTargetProbes.has(executionContext)) {
+      this._credentialTargetProbes.set(executionContext, this._credentialTargetFieldMeta(tabId, name, args, frameId));
+    }
+    return this._credentialTargetProbes.get(executionContext);
+  }
+
+  // The site of the field a write that may set a new password goes to, for
+  // _rememberNewPassword: its frame's, from the typing-target preflight or
+  // else the guard's probe of each frame for this call
+  // (_credentialTargetField). The preflight probes only the top frame, so a
+  // ref in a subframe arrives with no frame, and the top page's site would
+  // keep a password set in a sign-up frame from another site. No probe of
+  // its own: null, so nothing is kept, when neither knows the field (no frame
+  // answered, or the guard did not probe: the user gave the text, or the
+  // write is not a model's), the field does not read as a new password
+  // there, or an iframe write names no frame.
+  async _newPasswordFillSite(tabId, name, executionContext) {
+    const frameId = Number.isInteger(executionContext?.typingTargetFrameId) ? executionContext.typingTargetFrameId : null;
+    const target = executionContext?.typingTargetFieldMeta
       ? { fieldMeta: executionContext.typingTargetFieldMeta, frameId, documentUrl: '', ambiguous: false }
-      : this._credentialTargetFieldMeta(tabId, name, args, frameId);
+      : await this._credentialTargetProbes?.get(executionContext);
+    if (!target?.fieldMeta || target.ambiguous || !mayBeNewPasswordField(target.fieldMeta)) return null;
+    if (name === 'iframe_type' && !Number.isInteger(target.frameId)) return null;
+    return this._credentialTargetHost(tabId, target.frameId, target.documentUrl);
   }
 
   // The typing target's field metadata when the batch preflight did not
