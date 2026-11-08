@@ -5,12 +5,14 @@
 // fields, typed "admin" into the username and password fields and submitted
 // them. The prompt already said to stop when the site needs credentials the
 // user has not provided, and the clarify result told the model to "continue
-// the task". Now the guessed password is refused before anything is typed,
-// and the reply to a credentials question tells the model to end partial
-// instead of guessing. Credentials in the task (case E2), a clarify answer,
-// the WebBrain profile or a memory note the user saved, other fields, new
-// passwords, password fields that are no sign-in's (a Wi-Fi key, a form's lone
-// "Password" with a "Submit" button) and app-owned writes are not affected.
+// the task". Now nothing is typed until the user decides: the tool batch asks
+// on WebBrain's own card ("Type it" / "Don't type it"), and without the user's
+// "Type it" the guess is refused; the reply to a credentials question tells
+// the model to end partial instead of guessing. Credentials in the task (case
+// E2), a clarify answer, the WebBrain profile or a memory note the user saved,
+// other fields, new passwords, password fields that are no sign-in's (a Wi-Fi
+// key, a form's lone "Password" with a "Submit" button) and app-owned writes
+// are not affected.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
@@ -542,53 +544,259 @@ for (const build of ['chrome', 'firefox']) {
     assert.deepEqual(typed().map(message => message.params?.ref_id), ['ref_user', 'ref_new', 'ref_pass', 'ref_pass', 'ref_pass']);
   });
 
-  test(`${build}: the tool batch refuses a guessed sign-in password and runs nothing after it`, async () => {
-    const tab = 46;
+  // The tool batch with the page stubbed: the typing-target preflight
+  // resolves each ref to its field (page.fields), as the content script's
+  // probe does, and every dispatch is recorded. `run` executes one batch and
+  // answers WebBrain's card, when one is shown, with `answer(card)`.
+  const batchFixture = (tab, messages = b4Conversation()) => {
     const provider = { name: 'scripted', model: 'scripted', promptTier: 'full', contextWindow: 128000,
       supportsTools: true, supportsVision: false, chat: async () => ({ content: '' }) };
     const agent = new Agent({ getActive: () => provider, getProvider: () => provider, getVisionProvider: async () => null });
     sent.length = 0;
+    focused = FIELDS.ref_pass;
+    const page = { url: PAGE_URL, fields: { ...FIELDS } };
     Object.assign(agent, {
       _persist: () => {}, _persistNow: async () => ({ ok: true }), _skipPermissionGate: true,
       _ensureGateSetting: async () => true, _adoptLiveSocialPublishWorkflow: async () => false,
       _isFormValidationCandidate: () => false, _auditRichTextToolbarTarget: async () => {},
-      _shouldAutoScreenshot: () => false, _currentUrl: async () => PAGE_URL, _refreshPageFeedbackForCall: async () => false,
+      _shouldAutoScreenshot: () => false, _currentUrl: async () => page.url, _refreshPageFeedbackForCall: async () => false,
     });
     for (const name of ['_chromeProtectedPageFailure', '_captchaMutationPreflight', '_messageRecipientGuardBlock',
       '_detectLikelySubmitAction', '_socialPublicationPreSubmitBlock']) agent[name] = async () => null;
-    // The typing-target preflight resolves each ref to its field, as the
-    // content script's probe does.
-    agent._preflightRichTextToolbarTarget = async (_tab, _name, args) => ({ block: null, shot: null,
-      probe: { resolved: true, refId: args.ref_id, fieldMeta: FIELDS[args.ref_id] || null } });
+    const preflights = [];
+    agent._preflightRichTextToolbarTarget = async (_tab, name, args) => {
+      preflights.push(`${name}:${args.ref_id}`);
+      return { block: null, shot: null, probe: { resolved: true, refId: args.ref_id, fieldMeta: page.fields[args.ref_id] || null } };
+    };
     const dispatched = [];
     agent._executeToolImpl = async (_tab, name, args) => {
-      dispatched.push({ name, args });
-      return { success: true, verified: true, fieldMeta: FIELDS[args.ref_id] || null };
+      dispatched.push(`${name}:${args.ref_id}${typeof args.text === 'string' ? `=${args.text}` : ''}`);
+      return { success: true, verified: true, fieldMeta: page.fields[args.ref_id] || null };
     };
     agent._finalizeTextMutationResult = async (_tab, _name, _args, result) => result;
-    const messages = b4Conversation();
     agent.conversations.set(tab, messages);
     agent.conversationModes.set(tab, 'act');
-    const call = (id, name, args) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
-    const calls = [
-      call('user', 'set_field', { ref_id: 'ref_user', text: 'admin' }),
-      call('pass', 'set_field', { ref_id: 'ref_pass', text: 'admin' }),
-      call('submit', 'click_ax', { ref_id: 'ref_submit' }),
-    ];
-    messages.push({ role: 'assistant', content: '', tool_calls: calls });
-    await agent._executeToolBatch(tab, calls, messages, () => {}, provider, null, new Set(['set_field', 'click_ax', 'done']), 5);
-    assert.deepEqual(dispatched.map(item => `${item.name}:${item.args.ref_id}`), ['set_field:ref_user']);
-    const result = id => JSON.parse(messages.find(message => message.role === 'tool' && message.tool_call_id === id).content.match(/\{[\s\S]*\}/)[0]);
-    assert.equal(result('pass').errorCode, 'credential_not_provided');
-    assert.equal(result('submit').success, false, 'the sign-in click after the refusal is not sent');
-    assert.equal(result('submit').skipped, true);
+    const cards = [];
+    let nextId = 0;
+    const call = (name, args) => ({ id: `call_${++nextId}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+    const run = async (calls, answer = null) => {
+      messages.push({ role: 'assistant', content: '', tool_calls: calls });
+      return agent._executeToolBatch(tab, calls, messages, (type, data) => {
+        if (type !== 'clarify') return;
+        cards.push({ ...data, dispatchedBefore: dispatched.slice() });
+        answer?.(data);
+      }, provider, null, new Set(['set_field', 'type_text', 'click_ax', 'done']), 5);
+    };
+    const respond = (value, source = 'option') => card => agent.submitClarifyResponse(tab, card.clarifyId, value, source);
+    const result = item => JSON.parse(messages.find(message => message.role === 'tool' && message.tool_call_id === item.id)
+      .content.match(/\{[\s\S]*\}/)[0]);
+    return { agent, provider, page, preflights, dispatched, cards, call, run, respond, result, messages };
+  };
+  const CARD_STEP = { guardId: 'credential-not-provided', hard: true, action: 'type', host: 'localhost',
+    reason: 'credential_not_provided', content: 'a••••', contentLabel: 'masked' };
+
+  test(`${build}: the tool batch asks before typing a guessed sign-in password, and "Don't type it" refuses it`, async () => {
+    const { cards, call, run, respond, result, dispatched, agent } = batchFixture(46);
+    const user = call('set_field', { ref_id: 'ref_user', text: 'admin' });
+    const pass = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    const submit = call('click_ax', { ref_id: 'ref_submit' });
+    await run([user, pass, submit], respond('deny'));
+    assert.equal(cards.length, 1, 'one card');
+    const card = cards[0];
+    assert.equal(card.promptKind, 'unverifiedStepConfirmation');
+    assert.match(card.clarifyId, /^unverified_/);
+    assert.deepEqual(card.options, ['once', 'deny']);
+    assert.deepEqual(card.unverifiedStepConfirmation, CARD_STEP);
+    assert.equal(card.question, 'Type this into a sign-in password field on localhost?');
+    assert.equal(card.timeoutAnswer, undefined, 'a hard card has no countdown');
+    assert.equal(card.deadlineTs, undefined);
+    const { dispatchedBefore, ...shown } = card;
+    assert.equal(JSON.stringify(shown).includes('admin'), false, 'the card does not show the text in full');
+    assert.deepEqual(dispatchedBefore, ['set_field:ref_user=admin'], 'nothing is typed into the password field before the answer');
+    // "Don't type it": the refusal the model already knew, and nothing after it runs.
+    assert.deepEqual(dispatched, ['set_field:ref_user=admin']);
+    const refused = result(pass);
+    assert.equal(refused.success, false);
+    assert.equal(refused.noDispatch, true);
+    assert.equal(refused.dispatched, false);
+    assert.equal(refused.retryable, false);
+    assert.equal(refused.credentialNotProvided, true);
+    assert.equal(refused.errorCode, 'credential_not_provided');
+    assert.equal(refused.credentialDeclined, true);
+    assert.equal(refused.credentialConfirmation, undefined, 'the question does not reach the model');
+    assert.match(refused.error, /the user chose not to type it on WebBrain's card/);
+    assert.match(refused.error, /Never guess, invent or try common or default credentials/);
+    assert.match(refused.error, /outcome "partial"/);
+    assert.equal(refused.error.includes('admin'), false);
+    assert.equal(result(submit).skipped, true, 'the sign-in click after the refusal is not sent');
     // The field the preflight resolved decided; the page was not asked again.
     assert.equal(sent.some(message => message.action === 'field_value_digest'), false);
-    // A saved workflow's replay types the value the user gave that run.
-    const replayStep = { ...call('workflow_step', 'set_field', { ref_id: 'ref_pass', text: 'Replay-Placeholder-2' }), _workflowReplay: true };
-    const replayMessages = [{ role: 'assistant', content: null, tool_calls: [replayStep] }];
-    await agent._executeToolBatch(tab, [replayStep], replayMessages, () => {}, provider, null, new Set(['set_field']), 1);
-    assert.deepEqual(dispatched.map(item => `${item.name}:${item.args.ref_id}`), ['set_field:ref_user', 'set_field:ref_pass']);
+    // The same text again in this run is refused without another card.
+    const again = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([again], respond('once'));
+    assert.equal(cards.length, 1, 'no second card for the same text');
+    assert.equal(result(again).errorCode, 'credential_not_provided');
+    assert.equal(result(again).credentialDeclined, true);
+    assert.match(result(again).error, /the user already chose not to type it/);
+    // Another text asks again.
+    const other = call('set_field', { ref_id: 'ref_pass', text: 'admin123' });
+    await run([other], respond('deny'));
+    assert.equal(cards.length, 2, 'a different text asks again');
+    assert.equal(cards[1].unverifiedStepConfirmation.content, 'a•••••••');
+    assert.equal(result(other).errorCode, 'credential_not_provided');
+    assert.deepEqual(dispatched, ['set_field:ref_user=admin']);
+    // A saved workflow's replay types the value the user gave that run, unasked.
+    const replayStep = { ...call('set_field', { ref_id: 'ref_pass', text: 'Replay-Placeholder-2' }), _workflowReplay: true };
+    await run([replayStep]);
+    assert.equal(cards.length, 2);
+    assert.deepEqual(dispatched, ['set_field:ref_user=admin', 'set_field:ref_pass=Replay-Placeholder-2']);
+    assert.equal(agent._pendingClarifications.has(46), false);
+  });
+
+  test(`${build}: "Type it" types into the field the card named, and the same text on that site does not ask again`, async () => {
+    const { cards, call, run, respond, result, dispatched, preflights, page, agent } = batchFixture(47);
+    const pass = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    const submit = call('click_ax', { ref_id: 'ref_submit' });
+    await run([pass, submit], respond('once'));
+    assert.equal(cards.length, 1);
+    assert.deepEqual(cards[0].dispatchedBefore, []);
+    assert.deepEqual(dispatched, ['set_field:ref_pass=admin', 'click_ax:ref_submit'], 'the call goes ahead, and so does the batch');
+    assert.deepEqual(preflights, ['set_field:ref_pass', 'set_field:ref_pass', 'click_ax:ref_submit'],
+      'the target is resolved again after the answer');
+    const typedPass = result(pass);
+    assert.equal(typedPass.success, true);
+    assert.equal(typedPass.credentialNotProvided, undefined);
+    assert.ok(typedPass.guardAdvisories?.some(item => item.guard === 'credential-not-provided'
+      && /The user approved this text for the sign-in password field on WebBrain's card/.test(item.note)), 'the model is told who approved it');
+    // The approved text counts as given on this site for the rest of the run.
+    const again = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([again]);
+    assert.equal(cards.length, 1, 'no second card for the same text on the same site');
+    assert.equal(result(again).success, true);
+    // Another text, or the same text on another site, asks again.
+    const other = call('set_field', { ref_id: 'ref_pass', text: 'Other-Guess-5' });
+    await run([other], respond('deny'));
+    assert.equal(cards.length, 2);
+    assert.equal(result(other).errorCode, 'credential_not_provided');
+    page.url = 'https://accounts.example.test/login';
+    const elsewhere = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([elsewhere], respond('deny'));
+    assert.equal(cards.length, 3);
+    assert.equal(cards[2].unverifiedStepConfirmation.host, 'accounts.example.test');
+    assert.equal(result(elsewhere).errorCode, 'credential_not_provided');
+    // A new run starts without the answer.
+    page.url = PAGE_URL;
+    agent._taskTokens.set(47, 'next-task');
+    const nextRun = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([nextRun], respond('deny'));
+    assert.equal(cards.length, 4, 'the answer covers one run');
+    assert.deepEqual(dispatched, ['set_field:ref_pass=admin', 'click_ax:ref_submit', 'set_field:ref_pass=admin']);
+  });
+
+  test(`${build}: an expired card or Stop types nothing`, async () => {
+    // The side panel's backup timer posts a timeout: a hard card denies.
+    let fixture = batchFixture(48);
+    const timedOut = fixture.call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await fixture.run([timedOut], fixture.respond('once', 'timeout'));
+    assert.equal(fixture.cards.length, 1);
+    assert.equal(fixture.result(timedOut).errorCode, 'credential_not_provided');
+    assert.equal(fixture.result(timedOut).retryable, false);
+    assert.equal(fixture.result(timedOut).noDispatch, true);
+    const repeat = fixture.call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await fixture.run([repeat], fixture.respond('once'));
+    assert.equal(fixture.cards.length, 1, 'an unanswered card is not asked again for the same text');
+    assert.equal(fixture.result(repeat).errorCode, 'credential_not_provided');
+    assert.deepEqual(fixture.dispatched, []);
+    // Stop while the card waits.
+    fixture = batchFixture(49);
+    const stopped = fixture.call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    const outcome = await fixture.run([stopped], () => {
+      fixture.agent.abortFlags.set(49, true);
+      fixture.agent._cancelClarifications(49, 'aborted by user');
+    });
+    assert.equal(outcome.action, 'abort');
+    assert.equal(fixture.result(stopped).cancelled, true);
+    assert.deepEqual(fixture.dispatched, []);
+    assert.deepEqual(fixture.preflights, ['set_field:ref_pass'], 'nothing is resolved again after Stop');
+  });
+
+  test(`${build}: a target that changed while the card waited is not typed into`, async () => {
+    const { cards, call, run, respond, result, dispatched, page } = batchFixture(50);
+    const pass = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([pass], card => {
+      // The ref now resolves to another field.
+      page.fields.ref_pass = { ...FIELDS.ref_pass, name: 'otp', id: 'otp', autocomplete: 'one-time-code', labelText: 'Code' };
+      respond('once')(card);
+    });
+    assert.equal(cards.length, 1);
+    assert.deepEqual(dispatched, []);
+    const changed = result(pass);
+    assert.equal(changed.success, false);
+    assert.equal(changed.noDispatch, true);
+    assert.equal(changed.errorCode, 'credential_field_changed');
+    assert.equal(changed.retryable, true);
+    assert.match(changed.error, /no longer the sign-in password field/);
+    assert.equal(changed.error.includes('admin'), false);
+    // Back on the sign-in field, the approved text is typed without a card.
+    page.fields.ref_pass = FIELDS.ref_pass;
+    const retry = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([retry]);
+    assert.equal(cards.length, 1);
+    assert.deepEqual(dispatched, ['set_field:ref_pass=admin']);
+    // The ref resolving to the username field after the answer is refused too.
+    const other = batchFixture(51);
+    const moved = other.call('set_field', { ref_id: 'ref_pass', text: 'Guess-Placeholder-3' });
+    await other.run([moved], card => { other.page.fields.ref_pass = FIELDS.ref_user; other.respond('once')(card); });
+    assert.equal(other.result(moved).errorCode, 'credential_field_changed');
+    assert.deepEqual(other.dispatched, []);
+  });
+
+  test(`${build}: a run nobody can answer refuses without a card`, async () => {
+    // An unattended scheduled run.
+    const { agent, cards, call, run, result, dispatched } = batchFixture(52);
+    agent.scheduledRunPolicies.set(52, { requireConsequentialConfirmation: false });
+    const pass = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([pass]);
+    assert.equal(cards.length, 0, 'no card is shown');
+    assert.deepEqual(dispatched, []);
+    assert.equal(result(pass).errorCode, 'credential_not_provided');
+    assert.equal(result(pass).retryable, false);
+    assert.match(result(pass).error, /This unattended run cannot ask the user/);
+    // A caller without a card channel (executeTool directly) gets the refusal.
+    const direct = fresh(53);
+    const refused = await direct.executeTool(53, 'set_field', { ref_id: 'ref_pass', text: 'admin' }, null, modelCall(FIELDS.ref_pass));
+    assert.equal(refused.errorCode, 'credential_not_provided');
+    assert.equal(refused.credentialConfirmation, undefined);
+    assert.deepEqual(typed(), []);
+  });
+
+  test(`${build}: the card masks the text, and shows none of it with strict secret handling`, async () => {
+    let fixture = batchFixture(54);
+    const long = fixture.call('set_field', { ref_id: 'ref_pass', text: 'Rx7-random-Q3' });
+    const short = fixture.call('set_field', { ref_id: 'ref_pass', text: 'abc' });
+    await fixture.run([long], fixture.respond('deny'));
+    await fixture.run([short], fixture.respond('deny'));
+    assert.deepEqual(fixture.cards.map(card => card.unverifiedStepConfirmation.content), ['R••••••••••••', '•••'],
+      'the first character and the length; a short text shows no character');
+    assert.equal(JSON.stringify(fixture.cards.map(({ dispatchedBefore, ...shown }) => shown)).includes('Rx7'), false);
+    fixture = batchFixture(55);
+    fixture.agent.strictSecretMode = true;
+    const strict = fixture.call('set_field', { ref_id: 'ref_pass', text: 'Rx7-random-Q3' });
+    await fixture.run([strict], fixture.respond('deny'));
+    assert.deepEqual(fixture.cards[0].unverifiedStepConfirmation, { ...CARD_STEP, content: '', contentLabel: 'hidden' });
+    assert.equal(fixture.result(strict).errorCode, 'credential_not_provided');
+  });
+
+  test(`${build}: lean mode keeps the card`, async () => {
+    const { agent, cards, call, run, respond, result, dispatched } = batchFixture(56);
+    agent._leanRuns = new Map([[56, { active: true }]]);
+    assert.equal(agent._leanRunActive(56), true);
+    assert.equal(agent._guardOutcome('credential-not-provided', { decided: true, tabId: 56 }), 'ask');
+    const pass = call('set_field', { ref_id: 'ref_pass', text: 'admin' });
+    await run([pass], respond('deny'));
+    assert.equal(cards.length, 1);
+    assert.equal(result(pass).errorCode, 'credential_not_provided');
+    assert.deepEqual(dispatched, []);
   });
 
   test(`${build}: a reply to a credentials question tells the model to stop instead of guessing`, async () => {

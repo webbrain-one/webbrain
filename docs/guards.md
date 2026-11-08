@@ -13,7 +13,13 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
   money (`money`), credentials (`credentials`), and publishing or sending
   something the user did not ask for (`unrequested_publication`). When a hard
   guard cannot decide, it asks the user on WebBrain's own card where one
-  exists (`ask`), and refuses otherwise.
+  exists (`ask`), and refuses otherwise. A hard guard asks even when it knows
+  only where the owner chose a card over a refusal (`test/guard-policy.mjs`
+  lists them): `credential-not-provided` asks before typing a sign-in
+  password the user never gave, because the places it reads are not all the
+  places a user can give one (a test form's documented login, a password kept
+  where WebBrain does not look). A wrong refusal then costs one click instead
+  of a stuck run, and a guessed password is still never typed unasked.
 - **Everything else advises.** Verification, exact readback, evidence and
   completion checks are `quality` guards. They tell the model about the
   problem instead of stopping it:
@@ -159,11 +165,52 @@ missing relationship evidence count as verified publication.
 | `clickax-task-click-lock` (hard, Chrome) | An earlier trusted click on the same target may have landed and was never verified | Nothing (check the page) |
 | `social-publication-authorization-guard` (hard) | A publication's authorization, contract, preflight or audit refuses an identified draft | Account, reply/quote target, draft and attachments |
 | `steer-post-correction-commit-guard` (hard) | A form submission after a correction cannot pass the resource authorization checks | Destination and public field values |
+| `credential-not-provided` (hard, asks when it knows) | Text the model chose for a sign-in password field is not a password the user gave | The text masked (its first character and a dot for each other one; only dots under four characters), or nothing with strict secret handling |
+
+### The sign-in password card
+
+`credential-not-provided` pauses a model's `set_field`, `type_ax`,
+`type_text` or `iframe_type` before anything is typed and asks "Type this
+into a sign-in password field on {host}?", saying the text is not a password
+the user gave in this conversation, their profile or their saved notes. The
+buttons are **Type it** (`once`) and **Don't type it** (`deny`), numbered like
+the other cards. Like the submit confirmation card, which shows a password
+field's value as `[redacted]`, it never shows the text in full.
+
+- **Type it.** The call runs again through the same typing-target preflight,
+  outside the action deadline the card waited beside, and types only while
+  its target is still the field and site the card named (the field's tag,
+  name, id, autocomplete and labels, and its frame). A changed target types
+  nothing (`credential_field_changed`, retryable). The text then counts as
+  given on that site for the rest of the run, so the same text there does not
+  ask again; other text, another site or a new run asks again. The result
+  carries a note that the user approved it on the card.
+- **Don't type it.** Nothing is typed, and the result is the refusal the
+  model already knew (`credential_not_provided`, `noDispatch`,
+  `retryable: false`), saying the user declined: ask for the credentials or
+  end the run as partial. The same text on that site in the same run is
+  refused without another card. The card has no countdown; a timeout answer
+  posted for it anyway counts as Don't type it.
+- **Stop or a correction** cancels the card like any other card.
+- **Who can answer.** The card never times out. The side panel shows it, and
+  a scheduled run persists it so a reopened panel restores it. Cloud runs
+  report it as `needs_user_input` with `promptKind`
+  `unverifiedStepConfirmation`, and the MCP server relays it with
+  `allowed_answers: once, deny` and the masked text in `structured_prompt`;
+  the caller answers with `cloud_respond` / `webbrain_respond`, or cancels the
+  run. An unattended scheduled run, or a caller without a card channel,
+  cannot ask, so it refuses at once and does not wait.
+- **Strict checks and lean mode** keep the card: the guard is hard-class.
+  Saved workflow replays are not checked, and page text is never a source.
 
 Code: `_promptUnverifiedStepConfirmation` and `_resolveUnverifiedStepConfirmation`
 in `agent.js`, `agent/unverified-step.js` (shared by the agent, scheduler
 persistence and restored cards), and the `unverifiedStepConfirmation` branch
-of `renderClarifyCard` in `ui/sidepanel.js`. Tests: `test/guard-ask-cards.mjs`.
+of `renderClarifyCard` in `ui/sidepanel.js`. The sign-in password card:
+`_unprovidedCredentialBlock`, `_approvedCredentialTargetBlock` and
+`_resolveCredentialConfirmation` in `agent.js`, called from the tool batch
+after the call's action pipeline returns. Tests: `test/guard-ask-cards.mjs`
+and `test/credential-not-provided.mjs`.
 
 ## What still refuses, and why
 
@@ -172,7 +219,7 @@ of `renderClarifyCard` in `ui/sidepanel.js`. Tests: `test/guard-ask-cards.mjs`.
 | `recipient` | `chat-send-recipient-guards`, `native-chat-receipt-not-durable`, `preparation-timeout-recipient-preflight`, `recipient-active-conversation-pin`, `recipient-dispatch-binding-revalidate`, `recipient-guard-refusal`, `recipient-mismatch-confirm-card`, `schedule-resume-chat-state-not-durable`, `social-preflight-context-mismatch` | A message to the wrong person cannot be taken back. A resumed run without a durable receipt would send a delivered message again. |
 | `deletion` | `deletion-confirm-card`, `deletion-guard-refusal`, `preparation-timeout-submit-preflight`, `truncated-preview-replacement`, `unsaved-changes-data-loss` | Deleted data, including a field value replaced by its own shortened preview, is gone. |
 | `money` | `captcha-paid-solve-protection` | A paid solve spends the user's balance. |
-| `credentials` | `chat-user-input-required`, `credential-not-provided`, `otp-mailbox-scope`, `strict-secret-credential-handling` | One-time codes, passwords and payment details are the user's to enter. A guessed sign-in can lock the account or count as an unauthorized attempt. `credential-not-provided` checks only a password field the page shows to be a sign-in's (a field naming the account, such as a username, email, phone or hidden username, in a lone password field's form, a "Sign in", "Next" or "Verify" button there, a sign-in label, or autocomplete `current-password`; a field in a web component counts with the form around the component), against what the user gave: their messages, attached files, clarify answers, the WebBrain profile, memory notes they wrote (not auto-captured ones), MemCode recall and passwords WebBrain set for an account it created (`docs/security-model.md`). |
+| `credentials` | `chat-user-input-required`, `credential-not-provided`, `otp-mailbox-scope`, `strict-secret-credential-handling` | One-time codes, passwords and payment details are the user's to enter. A guessed sign-in can lock the account or count as an unauthorized attempt. `credential-not-provided` checks only a password field the page shows to be a sign-in's (a field naming the account, such as a username, email, phone or hidden username, in a lone password field's form, a "Sign in", "Next" or "Verify" button there, a sign-in label, or autocomplete `current-password`; a field in a web component counts with the form around the component), against what the user gave: their messages, attached files, clarify answers, the WebBrain profile, memory notes they wrote (not auto-captured ones), MemCode recall and passwords WebBrain set for an account it created (`docs/security-model.md`). Text from none of those is typed only after the user's "Type it" on WebBrain's card ("The sign-in password card" above). |
 | `unrequested_publication` | `bot-memory-reservation`, `click-duplicate-submit`, `clickax-task-click-lock`, `consequential-durability-checkpoint`, `github-conditional-commit-unbound`, `recipient-guard-unrequested-send`, `sched-reconciliation-required`, `social-api-publication-route`, `social-publication-audit`, `social-publication-authorization-guard`, `steer-post-correction-commit-guard`, `steer-prior-submission-unreconciled` | A post, commit, submit or send the user did not ask for, or a second copy of one that may already have gone out, is public or hard to undo. |
 
 After a correction, `steer-post-correction-commit-guard` and

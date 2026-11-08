@@ -447,6 +447,32 @@ export function isSignInPasswordField(meta) {
   return field?.purpose === 'sign-in' ? { guarded: true, reason: field.reason } : { guarded: false, reason: null };
 }
 
+/**
+ * Which field a sign-in password card asked about (credential-not-provided):
+ * the field's own attributes and label, and its frame. The user's "Type it"
+ * goes ahead only while the call's target is still that field. The input
+ * type is left out, so a "show password" toggle does not change it.
+ */
+export function credentialFieldIdentity(meta, frameId = null) {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
+  const part = value => (typeof value === 'string' || typeof value === 'number' ? String(value).trim().slice(0, 200) : '');
+  return JSON.stringify([Number.isInteger(frameId) ? frameId : null,
+    ...['tag', 'name', 'id', 'autocomplete', 'ariaLabel', 'ariaLabelledByText', 'placeholder', 'labelText'].map(key => part(meta[key]))]);
+}
+
+/**
+ * Text WebBrain would type into a sign-in password field, as the card shows
+ * it: its first character and one dot for each other character, so the user
+ * can tell it from a password they know without the card showing it. Text
+ * shorter than four characters shows only dots. Never splits a surrogate
+ * pair.
+ */
+export function maskedCredentialText(value) {
+  const chars = Array.from(String(value ?? '').normalize('NFC'));
+  if (!chars.length) return '';
+  return chars.length < 4 ? '•'.repeat(chars.length) : chars[0] + '•'.repeat(chars.length - 1);
+}
+
 // Words people use to talk about credentials, and the stock logins a guess
 // tries first. Both turn up in ordinary sentences ("I don't know the
 // password", "log in to the admin panel"), so a value that is one of them

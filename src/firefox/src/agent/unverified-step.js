@@ -2,7 +2,10 @@
 // consequential step (guard-policy.js, onCannotDecide 'ask'): a commit,
 // publish or submit whose content or effect could not be confirmed. Instead
 // of refusing the step, WebBrain shows the user what the page holds now and
-// asks "go ahead?" with two fixed answers, 'once' and 'deny'.
+// asks "go ahead?" with two fixed answers, 'once' and 'deny'. The sign-in
+// password guard (credential-not-provided) asks on the same card whether to
+// type text the user never gave ('type'), showing it masked, or not at all
+// with strict secret handling.
 //
 // The card's content is page text, so it is untrusted: it is bounded here,
 // the side panel renders it with textContent only, and it is never sent to
@@ -12,14 +15,17 @@
 
 export const UNVERIFIED_STEP_PROMPT_KIND = 'unverifiedStepConfirmation';
 // What the step does; each has a localized question in the side panel.
-export const UNVERIFIED_STEP_ACTIONS = Object.freeze(['commit', 'submit', 'publish', 'click']);
+export const UNVERIFIED_STEP_ACTIONS = Object.freeze(['commit', 'submit', 'publish', 'click', 'type']);
 // Why WebBrain could not verify it; each has a localized sentence.
 export const UNVERIFIED_STEP_REASONS = Object.freeze([
   'editor_unverified', 'draft_unverified', 'draft_unobserved',
   'submit_unclear', 'target_unresolved', 'repeat_unverified', 'step_unverified',
+  'credential_not_provided',
 ]);
-// Where the shown text comes from; each has a localized label.
-export const UNVERIFIED_STEP_CONTENT_LABELS = Object.freeze(['editor', 'composer', 'page']);
+// Where the shown text comes from, or how it is shown; each has a localized
+// label. 'masked' is text WebBrain would type, all but its first character
+// hidden; 'hidden' shows no text (strict secret handling).
+export const UNVERIFIED_STEP_CONTENT_LABELS = Object.freeze(['editor', 'composer', 'page', 'masked', 'hidden']);
 export const UNVERIFIED_STEP_CONTENT_LIMIT = 1500;
 
 /**
@@ -48,7 +54,7 @@ export function normalizeUnverifiedStepConfirmation(value) {
     action: UNVERIFIED_STEP_ACTIONS.includes(obj.action) ? obj.action : 'submit',
     host: clip(obj.host, 300),
     reason: UNVERIFIED_STEP_REASONS.includes(obj.reason) ? obj.reason : 'step_unverified',
-    content: clipUnverifiedStepContent(obj.content),
+    content: obj.contentLabel === 'hidden' ? '' : clipUnverifiedStepContent(obj.content),
     contentLabel: UNVERIFIED_STEP_CONTENT_LABELS.includes(obj.contentLabel) ? obj.contentLabel : 'page',
   };
 }

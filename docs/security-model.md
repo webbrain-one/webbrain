@@ -122,8 +122,9 @@ The regex: `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credentia
 ### Sign-in passwords the user never gave
 
 WebBrain types into an existing account's password field only a password the
-user gave (guard `credential-not-provided`; `credential-fields.js`
-`isSignInPasswordField`). The field is one with
+user gave, or text the user approved on WebBrain's card (guard
+`credential-not-provided`; `credential-fields.js` `isSignInPasswordField`).
+The field is one with
 `autocomplete="current-password"`, one whose name, id or label names the
 current password, or a password input on which the page shows a sign-in.
 Left out are fields whose name, id or label names a new or repeated
@@ -231,9 +232,41 @@ The check runs before anything is typed, on calls the model makes through the
 tool batch (a saved workflow's replay of the user's own steps is not
 checked), against the field the typing-target preflight resolved; when
 nothing tells it the target is a password field, the text is typed as before.
-The refusal tells the model to ask for the credentials or end the run as
-partial, naming them, and to ask for the password to set if the form in fact
-creates an account. New-password fields, one-time codes, API keys and lone
+It holds in lean mode and with or without Strict checks.
+
+Text from none of those sources is not refused outright: the places WebBrain
+reads are not all the places a user can give a password (a test form's
+documented login, a password kept where WebBrain does not look), and a wrong
+refusal left the run stuck. The batch pauses the call and asks on
+WebBrain's own hard card, which waits outside the action's deadline: "Type
+this into a sign-in password field on {host}?", with the reason (not a
+password the user gave in this conversation, their profile or their saved
+notes) and the text masked, its first character and a dot for each other
+character (only dots under four characters), the way the submit card shows
+a password field as `[redacted]` rather than its value. With strict secret
+handling the card shows none of it. The answers are "Type it" and "Don't type
+it".
+
+- **Type it** runs the call again through the same typing-target preflight
+  and types only into the field and on the site the card named: the
+  re-resolved target must still be a sign-in password field with the same
+  tag, name, id, autocomplete and labels in the same frame, or nothing is
+  typed (`credential_field_changed`). The text then counts as given on that
+  site for the rest of the run (a digest of it is kept in memory, never the
+  text), so the same text does not ask again there; other text, another site
+  or a new run asks again. The tool result notes that the user approved it.
+- **Don't type it**, a timeout answer posted for the card, an unattended
+  scheduled run (which cannot show a card) and a caller without a card all
+  refuse with the refusal the model reads: ask for the credentials or end
+  the run as partial, naming them, and ask for the password to set if the
+  form in fact creates an account. The same text on that site is refused
+  without another card for the rest of the run.
+- The card never times out. Cloud runs and the MCP server relay it as
+  `needs_user_input` (`unverifiedStepConfirmation`, answers `once` / `deny`,
+  the masked text in the structured prompt) for the caller to answer or
+  cancel; Stop and corrections cancel it.
+
+New-password fields, one-time codes, API keys and lone
 password fields without sign-in evidence are not checked, since a run may
 create an account's password, read a code from the user's mailbox, copy a key
 a page issued, or fill a form with values the user asked it to make up. A
