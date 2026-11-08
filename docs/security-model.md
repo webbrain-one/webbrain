@@ -309,6 +309,10 @@ field focused now, and a `type_text` selector the preflight did not pin
 types into the selector's current match), that field is checked the same way
 before anything is typed: a two-step sign-in that focuses its password field
 after the username step's Next took the guess there with no card.
+Without a target from the preflight, a `type_text` with no selector is
+checked against the field it types into, which in Firefox is the field the
+last click focused when focus has since gone to the page (a virtual keypad
+that blurs its clicked password field took a guess with no card).
 It holds in lean mode and with or without Strict checks.
 
 Text from none of those sources is not refused outright: the places WebBrain

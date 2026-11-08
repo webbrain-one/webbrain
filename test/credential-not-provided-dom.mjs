@@ -359,6 +359,126 @@ for (const build of ['chrome', 'firefox']) {
   });
 }
 
+// Review of 8e6e6e5cc: Firefox's selectorless type_text writes to the field
+// the last click focused when focus has since gone to the body or to that
+// field's shadow host (typeText's recent-target fallback; Chrome's has none).
+// A virtual-keypad sign-in blurs its password field on focus, so after a
+// click nothing is focused, the guard's probe of the focused field found
+// nothing, and a guessed password went into the field with no card. The
+// guard's probe reads the field a selectorless `type` writes to.
+const KEYPAD_PAGE = `<!doctype html>
+  <form id="keypad-signin"><label for="kp-user">Username</label><input id="kp-user" name="username" autocomplete="username">
+    <label for="kp-pass">Password</label><input id="kp-pass" name="password" type="password" autocomplete="current-password">
+    <button>Sign in</button></form>
+  <script>document.getElementById('kp-pass').addEventListener('focus', event => setTimeout(() => event.target.blur(), 0));</script>`;
+// The same in a component: its password input hands focus to the component.
+const KEYPAD_COMPONENT_PAGE = `<!doctype html>
+  <form id="keypad-component"><label for="kc-user">Username</label><input id="kc-user" name="username" autocomplete="username">
+    <x-keypad id="kc-pass" tabindex="0"></x-keypad><button>Sign in</button></form>
+  <script>customElements.define('x-keypad', class extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      const root = this.attachShadow({ mode: 'open' });
+      root.innerHTML = '<label for="kc-input">Password</label><input id="kc-input" name="password" type="password" autocomplete="current-password">';
+      root.querySelector('input').addEventListener('focus', () => setTimeout(() => this.focus(), 0));
+    }
+  });</script>`;
+const KEYPAD_URL = 'https://owned-credential-fields.invalid/login';
+
+test('firefox: a clicked sign-in password field that lost focus asks before a selectorless type_text', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const savedGlobals = { chrome: globalThis.chrome, browser: globalThis.browser };
+  // The agent's messages to the tab, answered by the current page's content
+  // script (the top frame, the only one).
+  const sent = [];
+  let content = null;
+  const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
+  const api = {
+    storage: { local: area, session: area },
+    runtime: { getURL: value => `extension://test/${value}`, sendMessage: async () => ({}) },
+    tabs: {
+      get: async id => ({ id, url: KEYPAD_URL, title: 'Sign in' }),
+      query: async () => [],
+      sendMessage: async (_tab, message) => {
+        sent.push(message);
+        return ['field_value_digest', 'type'].includes(message?.action)
+          ? content(message.action, message.params) : { success: true };
+      },
+    },
+    scripting: { executeScript: async () => [{ result: null }] },
+    webNavigation: { getAllFrames: async () => [{ frameId: 0, parentFrameId: -1, url: KEYPAD_URL }] },
+  };
+  try {
+    globalThis.chrome = api;
+    globalThis.browser = api;
+    const { Agent } = await import('../src/firefox/src/agent/agent.js');
+    const cases = [
+      // Focus goes to the body after click({selector}).
+      [KEYPAD_PAGE, async () => ({ selector: '#kp-pass' }), () => document.activeElement === document.body,
+        () => document.getElementById('kp-pass').value],
+      // Focus goes to the component after a click on its input's point.
+      [KEYPAD_COMPONENT_PAGE, page => page.evaluate(() => {
+        const rect = document.getElementById('kc-pass').shadowRoot.getElementById('kc-input').getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, coordinate_space: 'css' };
+      }), () => document.activeElement?.id === 'kc-pass' && !document.activeElement.shadowRoot.activeElement,
+        () => document.getElementById('kc-pass').shadowRoot.getElementById('kc-input').value],
+    ];
+    for (const [html, clickArgs, focusLeft, fieldValue] of cases) {
+      const page = await fixturePage(browser, html);
+      await withContentScript(page, 'firefox');
+      content = (action, params) => page.evaluate(([action, params]) => new Promise(resolve => {
+        for (const handler of window.fixtureHandlers) handler({ target: 'content', action, params }, {}, resolve);
+      }), [action, params]);
+      assert.equal((await content('click', await clickArgs(page)))?.success, true);
+      await page.waitForFunction(focusLeft);
+      sent.length = 0;
+      const agent = new Agent({});
+      agent._persist = () => {};
+      agent._persistNow = async () => true;
+      const task = 'Sign in to my account on this page and tell me what the welcome message says.';
+      agent.conversations.set(7, [{ role: 'system', content: 'Owned system.' }, { role: 'user', content: task, webbrainUserAuthoredText: task }]);
+      agent.conversationModes.set(7, 'act');
+      // The tool batch's context for a model's write whose target its
+      // preflight could not resolve (no field is focused).
+      const asked = await agent.executeTool(7, 'type_text', { text: 'Guess-Pass-77' }, null,
+        { credentialProvenanceCheck: true, credentialCardAvailable: true, typingTargetFieldMeta: null });
+      assert.equal(asked.errorCode, 'credential_not_provided');
+      assert.equal(asked.credentialConfirmation?.host, 'owned-credential-fields.invalid', 'the card is offered');
+      assert.equal(sent.some(message => message?.action === 'type'), false, 'nothing is sent to type');
+      assert.equal(await page.evaluate(fieldValue), '');
+      // The field the probe read is the one a selectorless `type` writes to.
+      assert.equal((await content('type', { text: 'Typed-After-Card' }))?.success, true);
+      assert.equal(await page.evaluate(fieldValue), 'Typed-After-Card');
+      await page.close();
+    }
+  } finally {
+    globalThis.chrome = savedGlobals.chrome;
+    globalThis.browser = savedGlobals.browser;
+    await browser.close();
+  }
+});
+
+// Chrome's selectorless typing has no such fallback: with nothing focused it
+// types nothing, and the focused probe reads no field.
+test('chrome: a selectorless type after the clicked field lost focus types nothing', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await fixturePage(browser, KEYPAD_PAGE);
+    await withContentScript(page, 'chrome');
+    const content = (action, params) => page.evaluate(([action, params]) => new Promise(resolve => {
+      for (const handler of window.fixtureHandlers) handler({ target: 'content', action, params }, {}, resolve);
+    }), [action, params]);
+    assert.equal((await content('click', { selector: '#kp-pass' }))?.success, true);
+    await page.waitForFunction(() => document.activeElement === document.body);
+    assert.equal((await content('field_value_digest', { focused: true, typeTarget: true }))?.success, false);
+    const typed = await content('type', { text: 'Guess-Pass-77' });
+    assert.equal(typed?.success, false);
+    assert.equal(await page.inputValue('#kp-pass'), '');
+  } finally {
+    await browser.close();
+  }
+});
+
 // In Chrome, type_text({selector}) gets its typing target from the CDP
 // selector probe (rich-text-toolbar-probe.js -> cdp-client.js
 // probeRichTextToolbarSelector), not from content.js, and the agent's

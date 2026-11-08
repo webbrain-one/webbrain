@@ -536,11 +536,14 @@ for (const build of ['chrome', 'firefox']) {
       && message.params?.dispatchBinding?.token === binding.token), 'the dispatch binding is released');
     assert.deepEqual(typed(), []);
     // Typing into the focused field (vision mode clicks a field, then types)
-    // with no preflight answer: the page is asked which field has focus.
+    // with no preflight answer: the page is asked which field a selectorless
+    // `type` writes to (the focused one, or in Firefox the field the last
+    // click focused when focus has gone to the body; review of 8e6e6e5cc).
     const focusedRefusal = await agent.executeTool(41, 'type_text', { text: 'admin', clear: true }, null,
       { credentialProvenanceCheck: true, typingTargetFieldMeta: null });
     assert.equal(focusedRefusal.errorCode, 'credential_not_provided');
-    assert.ok(sent.some(message => message.action === 'field_value_digest' && message.params?.focused === true));
+    assert.ok(sent.some(message => message.action === 'field_value_digest' && message.params?.focused === true
+      && message.params?.typeTarget === true));
     assert.deepEqual(typed(), []);
   });
 

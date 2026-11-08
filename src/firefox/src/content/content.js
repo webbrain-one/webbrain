@@ -10927,6 +10927,16 @@
               let active = document.activeElement;
               while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
               el = active && active !== document.body && active !== document.documentElement ? active : null;
+              // `typeTarget` (the sign-in password guard's probe): the field
+              // a selectorless `type` writes to, which takes the field the
+              // last click focused when focus is on the body or on that
+              // field's shadow host (typeText). A page that blurs a clicked
+              // password field (a virtual keypad) still gets that field.
+              if (msg.params?.typeTarget === true) {
+                const recentEditable = _recentEditableTarget();
+                if (!el) el = recentEditable;
+                else if (!_isTypeableElement(el) && recentEditable && _isShadowHostForTarget(el, recentEditable)) el = recentEditable;
+              }
             } catch { el = null; }
             if (!el || !el.isConnected) return { success: false, error: 'no focused editable element' };
           } else {

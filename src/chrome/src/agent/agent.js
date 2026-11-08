@@ -55971,14 +55971,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // element of one document; a selector or the focused element may resolve
   // in more than one frame, and when more than one of them is a sign-in
   // password field the write has no one site (`ambiguous`). fieldMeta is null
-  // when no frame can answer.
+  // when no frame can answer. The focused element is the one a selectorless
+  // `type` writes to (`typeTarget`): Firefox's content script falls back to
+  // the field the last click focused when focus has gone to the body (a page
+  // that blurs a clicked password field), Chrome's types only into the
+  // focused element.
   async _credentialTargetFieldMeta(tabId, name, args = {}, frameId = null) {
     const none = { fieldMeta: null, frameId: null, documentUrl: '', ambiguous: false };
     const params = (name === 'set_field' || name === 'type_ax') && typeof args.ref_id === 'string' && args.ref_id
       ? { ref_id: args.ref_id }
       : (name === 'type_text' || name === 'iframe_type') && typeof args.selector === 'string' && args.selector.trim()
         ? { selector: args.selector.trim() }
-        : name === 'type_text' && args.index == null ? { focused: true } : null;
+        : name === 'type_text' && args.index == null ? { focused: true, typeTarget: true } : null;
     // An iframe selector names an element in a frame this probe cannot pick.
     if (!params || (name === 'iframe_type' && !Number.isInteger(frameId))) return none;
     const ask = async id => {
