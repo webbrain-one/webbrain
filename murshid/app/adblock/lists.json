@@ -1,0 +1,27 @@
+{
+  "engineVersion": 899,
+  "updated": 1794163423571,
+  "lists": [
+    {
+      "name": "EasyList",
+      "url": "https://easylist.to/easylist/easylist.txt",
+      "homepage": "https://easylist.to/",
+      "license": "GPL-3.0-or-later OR CC-BY-SA-3.0",
+      "version": "202611081833"
+    },
+    {
+      "name": "EasyPrivacy",
+      "url": "https://easylist.to/easylist/easyprivacy.txt",
+      "homepage": "https://easylist.to/",
+      "license": "GPL-3.0-or-later OR CC-BY-SA-3.0",
+      "version": "202611081833"
+    },
+    {
+      "name": "uBlock filters – Unbreak",
+      "url": "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
+      "homepage": "https://github.com/uBlockOrigin/uAssets",
+      "license": "GPL-3.0-only",
+      "version": "Fri, 06 Nov 2026 02:39:15 +0000"
+    }
+  ]
+}

@@ -125,6 +125,9 @@ const secureHintUrl = (url) => /^(https:|wss:|http:\/\/(?:localhost|127\.0\.0\.1
  * Make `ses` identify itself as the setting says, now and whenever it changes.
  * Uses the session's onBeforeSendHeaders and onHeadersReceived, which Electron
  * allows one listener each for: anything else that needs them must go here.
+ * The same goes for onBeforeRequest, so the listeners here also forward the
+ * events to WebBrain (ctx.crx) and ask the ad blocker (ctx.adblock,
+ * app/adblock) what to cancel and which Content-Security-Policy to add.
  */
 function install(ses, settings, ctx) {
   readPlatformVersion();
@@ -138,7 +141,10 @@ function install(ses, settings, ctx) {
   const asked = new Map();
 
   ses.webRequest.onBeforeRequest((details, callback) => {
-    Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback({}));
+    // WebBrain still sees a blocked request, then its onErrorOccurred
+    // (net::ERR_BLOCKED_BY_CLIENT), as Chrome extensions do.
+    const response = ctx.adblock?.blockRequest(details) || {};
+    Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRequest', details)).catch(() => {}).finally(() => callback(response));
   });
   ses.webRequest.onBeforeRedirect((details) => { Promise.resolve(ctx.crx?.forwardWebRequest('onBeforeRedirect', details)).catch(() => {}); });
   ses.webRequest.onResponseStarted((details) => { Promise.resolve(ctx.crx?.forwardWebRequest('onResponseStarted', details)).catch(() => {}); });
@@ -148,7 +154,9 @@ function install(ses, settings, ctx) {
   });
 
   ses.webRequest.onHeadersReceived((details, callback) => {
-    Promise.resolve(ctx.crx?.forwardWebRequest('onHeadersReceived', details)).catch(() => {}).finally(() => callback({}));
+    const responseHeaders = ctx.adblock?.responseHeaders(details);
+    Promise.resolve(ctx.crx?.forwardWebRequest('onHeadersReceived', details)).catch(() => {})
+      .finally(() => callback(responseHeaders ? { responseHeaders } : {}));
     if (details.resourceType !== 'mainFrame') return;
     if (!secureHintUrl(details.url)) return;
     const header = Object.entries(details.responseHeaders || {}).find(([k]) => k.toLowerCase() === 'accept-ch');

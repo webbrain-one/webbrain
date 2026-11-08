@@ -57,6 +57,10 @@ const DEFAULTS = {
   // Off: sites see Murshid in the client hints, as Brave shows Brave. On: they
   // see Google Chrome, as Vivaldi does. See app/identity.js.
   identifyAsChrome: false,
+  // Ad and tracker blocking (app/adblock), and the host names it is turned
+  // off for from the ⋮ menu.
+  adblock: true,
+  adblockAllowedSites: [],
   persistBrowserSession: true,
   sidePanelWidth: 420,
   restoreLastSession: false,
@@ -77,6 +81,8 @@ class Settings extends EventEmitter {
     }
     if (!SEARCH_ENGINES[this.data.searchEngine]) this.data.searchEngine = DEFAULTS.searchEngine;
     if (!LANGUAGES.includes(this.data.language)) this.data.language = DEFAULTS.language;
+    if (!Array.isArray(this.data.adblockAllowedSites)) this.data.adblockAllowedSites = [];
+    this.data.adblockAllowedSites = this.data.adblockAllowedSites.filter((site) => typeof site === 'string');
     this.timer = null;
   }
 

@@ -115,6 +115,17 @@ function popupMainMenu(ctx, w, { x, y }) {
   const zoom = tab ? Math.round(tab.wc.getZoomFactor() * 100) : 100;
   const mod = isMac ? 'Cmd' : 'Ctrl';
   const companion = ctx.companion.status();
+  // Ad blocking for the site in this tab; unticking allows its ads.
+  const site = ctx.adblock?.enabled ? ctx.adblock.siteOf(tab?.url) : null;
+  const adblockItems = site ? [{
+    label: t('menu.blockAds', { host: site }),
+    type: 'checkbox',
+    checked: !ctx.adblock.isAllowed(site),
+    click: () => {
+      ctx.adblock.setAllowed(site, !ctx.adblock.isAllowed(site));
+      if (!tab.wc.isDestroyed()) tab.wc.reload();
+    },
+  }] : [];
   const menu = Menu.buildFromTemplate([
     { label: t('menu.newTab'), accelerator: `${mod}+T`, click: () => c.newTab(w) },
     { label: t('menu.newWindow'), accelerator: `${mod}+N`, click: () => c.newWindow() },
@@ -137,6 +148,7 @@ function popupMainMenu(ctx, w, { x, y }) {
     { label: t('menu.find'), accelerator: `${mod}+F`, click: () => c.find(w) },
     { label: t('menu.print'), accelerator: `${mod}+P`, click: () => c.print(w) },
     { label: t('menu.downloadsFolder'), click: () => shell.openPath(ctx.downloads.folder()) },
+    ...adblockItems,
     { type: 'separator' },
     {
       label: t('menu.moreTools'),

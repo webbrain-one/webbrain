@@ -27,6 +27,7 @@ const { registerSchemes, handleProtocol } = require('./protocol');
 const { resolveInput } = require('./url');
 const { urlsFromArgs } = require('./open-arguments');
 const identity = require('./identity');
+const { Adblock } = require('./adblock');
 
 const PERSISTENT_PARTITION = 'persist:murshid';
 const TEMPORARY_PARTITION = 'murshid-temporary';
@@ -82,6 +83,7 @@ if (!app.requestSingleInstanceLock()) {
 
 const ctx = {
   ses: null,
+  adblock: null,
   extensions: null,
   crx: null,
   downloads: null,
@@ -181,7 +183,9 @@ async function start() {
     ? TEMPORARY_PARTITION : PERSISTENT_PARTITION);
   ctx.ses = ses;
   ses.setUserAgent(app.userAgentFallback);
+  ctx.adblock = new Adblock({ settings: ctx.settings, userData: ctx.userData });
   identity.install(ses, ctx.settings, ctx);
+  ctx.adblock.install(ses);
   handleProtocol(ses);
 
   // Order matters: Murshid's "pre" preload adds APIs before
@@ -550,6 +554,7 @@ function installPageIpc() {
             searchSuggestions: ctx.settings.get('searchSuggestions'),
             startCompanion: ctx.settings.get('startCompanion'),
             identifyAsChrome: ctx.settings.get('identifyAsChrome'),
+            adblock: ctx.settings.get('adblock'),
             persistBrowserSession: ctx.settings.get('persistBrowserSession'),
           },
           historyCount: ctx.history.count(),
@@ -568,7 +573,7 @@ function installPageIpc() {
         }
         if (key === 'searchEngine' && SEARCH_ENGINES[value]) ctx.settings.set(key, value);
         if (key === 'startCompanion' || key === 'searchSuggestions') ctx.settings.set(key, Boolean(value));
-        if (key === 'identifyAsChrome') ctx.settings.set(key, Boolean(value));
+        if (key === 'identifyAsChrome' || key === 'adblock') ctx.settings.set(key, Boolean(value));
         if (key === 'persistBrowserSession' && typeof value === 'boolean') {
           ctx.settings.set(key, value);
           ctx.settings.flush();
