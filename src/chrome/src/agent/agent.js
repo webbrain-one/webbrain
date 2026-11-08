@@ -29282,8 +29282,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const continuation = runOptions?.trustedContinuation === true;
     const continuedTask = continuation && previousMode !== 'act' && previousMode !== 'dev'
       ? this._autoModeContinuedTask(tabId) : '';
+    // Whether this turn answers the planner's clarifying question: the answer
+    // has not joined the conversation yet, so the question is its last turn.
+    const history = this.conversations.get(tabId) || [];
+    const answersClarification = !continuation
+      && this._plannerClarificationIndexBefore(history, history.length) >= 0;
     const hard = autoModeHardRoute({
       trustedContinuation: continuation,
+      answersClarification,
       previousMode,
       inBrowserModel: this._isTinyAskRun(runOptions),
       standaloneChat: this._isStandaloneChatRun(runOptions),

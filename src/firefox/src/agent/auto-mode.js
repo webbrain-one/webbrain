@@ -51,6 +51,7 @@ const actionModeForTier = (mode, tier) => (mode === 'dev' && tier === 'compact' 
 export function autoModeHardRoute({
   trustedContinuation = false, previousMode = null, inBrowserModel = false, standaloneChat = false,
   selectionScoped = false, cloudRun = false, attachments = [], tier = '', text = '',
+  answersClarification = false,
 } = {}) {
   // A continuation keeps an action run's mode. One of a read-only run is
   // routed again, so it can still hand itself to an action mode: `text` is
@@ -65,6 +66,14 @@ export function autoModeHardRoute({
   if (carriesUntrustedText(text)) return { mode: 'ask', source: 'page_text' };
   // Managed Cloud runs always name their mode; an unnamed one stays read-only.
   if (cloudRun) return { mode: 'ask', source: 'cloud_run' };
+  // The user's answer to the question an action run's planner asked resumes
+  // that run's task, which was already routed or handed to an action mode.
+  // Routed again from the answer's own words ("the second one") it fell to
+  // Ask, whose hand-off may only quote this turn's words, not the task's, so
+  // the task stopped at the answer.
+  if (answersClarification && (previousMode === 'act' || previousMode === 'dev')) {
+    return { mode: actionModeForTier(previousMode, tier), source: 'clarification_answer' };
+  }
   if (isExplicitGuardOverrideRequest(text)) return { mode: 'act', source: 'guard_override' };
   if ((Array.isArray(attachments) ? attachments : []).some(att => att?.kind === 'video')) {
     return { mode: 'act', source: 'attachment' };
