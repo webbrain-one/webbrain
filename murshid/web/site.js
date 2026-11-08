@@ -5,12 +5,12 @@
   const ua = navigator.userAgent;
   const os = /Mac|iPhone|iPad/.test(ua) ? 'mac' : /Linux|Android|CrOS/.test(ua) ? 'linux' : 'win';
 
-  // The murshid branch lives on esokullu/webbrain until it is merged.
+  // Murshid is included on the repository's default branch.
   const REPO = 'https://github.com/esokullu/webbrain.git';
   // "Exclude binaries": only the latest commit, and only the folders Murshid
   // runs from (murshid/ and the WebBrain extension in src/chrome), so the
   // history, release zips, videos and test fixtures are never downloaded.
-  const FAST_CLONE = `git clone --depth 1 --filter=blob:none --sparse -b murshid ${REPO}`;
+  const FAST_CLONE = `git clone --depth 1 --filter=blob:none --sparse ${REPO}`;
   const COMMANDS = {
     fast: {
       win: `${FAST_CLONE}\ncd webbrain; git sparse-checkout set murshid src/chrome\ncd murshid; npm install; npm start`,
@@ -18,9 +18,9 @@
       linux: `${FAST_CLONE}\ncd webbrain && git sparse-checkout set murshid src/chrome\ncd murshid && npm install && npm start`,
     },
     full: {
-      win: `git clone -b murshid ${REPO}\ncd webbrain\\murshid; npm install; npm start`,
-      mac: `git clone -b murshid ${REPO}\ncd webbrain/murshid && npm install && npm start`,
-      linux: `git clone -b murshid ${REPO}\ncd webbrain/murshid && npm install && npm start`,
+      win: `git clone ${REPO}\ncd webbrain\\murshid; npm install; npm start`,
+      mac: `git clone ${REPO}\ncd webbrain/murshid && npm install && npm start`,
+      linux: `git clone ${REPO}\ncd webbrain/murshid && npm install && npm start`,
     },
   };
 

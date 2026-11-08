@@ -46,13 +46,62 @@ test('new tab storage is namespaced and cannot touch WebBrain keys', () => {
 test('toNavigableUrl only accepts http(s) and bare hosts', () => {
   assert.equal(toNavigableUrl('https://example.com/a'), 'https://example.com/a');
   assert.equal(toNavigableUrl('example.com'), 'https://example.com/');
-  assert.equal(toNavigableUrl('localhost:3000/x'), 'https://localhost:3000/x');
+  assert.equal(toNavigableUrl('localhost:3000/x'), 'http://localhost:3000/x', 'local hosts open over http, as from the address bar');
   assert.equal(toNavigableUrl('javascript:alert(1)'), null);
   assert.equal(toNavigableUrl('data:text/html,hi'), null);
   assert.equal(toNavigableUrl('chrome://settings'), null);
   assert.equal(toNavigableUrl('file:///etc/passwd'), null);
   assert.equal(toNavigableUrl('how do i cook rice'), null);
   assert.equal(toNavigableUrl(''), null);
+});
+
+// What a user types into the box on its own: an address opens, anything else
+// is a prompt. Names need a real top-level domain (tlds.js, from IANA).
+test('toNavigableUrl opens an address typed alone and leaves look-alike prompts', async () => {
+  for (const [input, url] of [
+    ['example.com', 'https://example.com/'],
+    ['www.example.com/path?q=1#top', 'https://www.example.com/path?q=1#top'],
+    ['mastoturk.org/home', 'https://mastoturk.org/home'],
+    ['github.io', 'https://github.io/'],
+    ['Example.COM/A', 'https://example.com/A'],
+    ['http://example.com', 'http://example.com/'],
+    ['HTTPS://example.com/x', 'https://example.com/x'],
+    ['türkiye.gov.tr', 'https://xn--trkiye-3ya.gov.tr/'],
+    ['пример.рф', 'https://xn--e1afmkfd.xn--p1ai/'],
+    ['8.8.8.8', 'https://8.8.8.8/'],
+    ['localhost', 'http://localhost/'],
+    ['localhost:5173', 'http://localhost:5173/'],
+    ['127.0.0.1:8080/api', 'http://127.0.0.1:8080/api'],
+    ['192.168.1.1', 'http://192.168.1.1/'],
+    ['[::1]:3000', 'http://[::1]:3000/'],
+    ['printer.local', 'http://printer.local/'],
+    ['app.test:8000/x', 'http://app.test:8000/x'],
+  ]) {
+    assert.equal(toNavigableUrl(input), url, input);
+  }
+  for (const input of [
+    'node.js', 'next.js', 'notes.txt', 'config.yaml', 'package.json', 'index.html',
+    'summarize example.com', 'what is example.com?', 'open example.com',
+    'john@example.com', 'example.com@evil.com', 'mailto:a@b.com', 'ftp://example.com',
+    '1.2.30', '3.14', 'v2.0', 'e.g.', 'example', 'example.com.', '999.1.1.1', 'localhost:99999',
+  ]) {
+    assert.equal(toNavigableUrl(input), null, input);
+  }
+  const { TLDS, TLDS_VERSION } = await load(nt('features/agent/tlds.js'));
+  assert.match(TLDS_VERSION, /^\d{10}$/);
+  assert.ok(TLDS.size > 1000, 'the whole IANA list');
+  assert.ok([...TLDS].every((tld) => /^(?:[a-z]{2,63}|xn--[a-z0-9-]+)$/.test(tld)), 'lower-case ASCII and punycode, as URL#hostname gives them');
+});
+
+test('the task box opens a typed address in every mode instead of handing it to WebBrain', () => {
+  const src = readFileSync(nt('features/agent/TaskBox.jsx'), 'utf8');
+  const submit = src.slice(src.indexOf('const onSubmit'), src.indexOf('return (\n'));
+  const check = submit.indexOf('const address = toNavigableUrl(value);');
+  assert.ok(check > 0, 'onSubmit checks for an address');
+  assert.match(submit, /if \(address\) \{\s*window\.location\.assign\(address\);\s*return;\s*\}/);
+  for (const later of ["if (mode === 'search')", 'const handOver =']) {
+    assert.ok(submit.indexOf(later) > check, `the address check comes before ${later}`);
+  }
 });
 
 test('buildHandoff clamps text and defaults to ask', () => {

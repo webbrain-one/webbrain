@@ -43,6 +43,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build.mjs",
+    "update:tlds": "node scripts/update-tlds.mjs",
     "lint": "eslint \"./src/**/*.{js,jsx}\"",
     "test": "node --test --test-timeout=60000 ../test/newtab.mjs"
   },

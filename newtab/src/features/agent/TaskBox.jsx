@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MdArrowForward, MdChatBubbleOutline, MdSearch, MdSmartToy } from 'react-icons/md';
 import { wbT } from 'lib/wb-strings';
-import { canSearch, isHandoffPending, openAskChat, pendingHandoffText, primeCurrentTab, runSearch, submitTask, whenClaimed } from './handoff';
+import { canSearch, isHandoffPending, openAskChat, pendingHandoffText, primeCurrentTab, runSearch, submitTask, toNavigableUrl, whenClaimed } from './handoff';
 
 import './taskbox.scss';
 
@@ -57,6 +57,15 @@ function TaskBox() {
     const value = text.trim();
     if (!value || waiting || submittingRef.current) return;
     setError('');
+
+    // Text that is only an address opens it, in every mode, as the address bar
+    // would. A prompt about one ("summarize example.com") has a space, so it
+    // still goes to WebBrain.
+    const address = toNavigableUrl(value);
+    if (address) {
+      window.location.assign(address);
+      return;
+    }
 
     // Both branches start synchronously inside the submit gesture.
     if (mode === 'search') {
