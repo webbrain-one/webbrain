@@ -1,0 +1,399 @@
+{
+  "lang": "hi",
+  "dir": "ltr",
+  "locale": "hi_IN",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "hi": "Murshid (डेवलपमेंट प्रीव्यू) — वह ब्राउज़र जो राह जानता है"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "hi": "डेवलपमेंट प्रीव्यू। Murshid एक Chromium ब्राउज़र है जिसमें WebBrain एजेंट पहले से मौजूद है: किसी भी पेज के बारे में पूछें, उसे एक काम सौंपें, और अपने ही AI प्लान को सिस्टम ट्रे से उसे चलाने दें। ओपन सोर्स।"
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "hi": "Murshid — वह ब्राउज़र जो राह जानता है"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "hi": "WebBrain अंदर से मौजूद Chromium ब्राउज़र। पूछें, योजना बनाएँ, कार्य करें — अपने ही टैबों में।"
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "hi": "सामग्री पर जाएँ"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "hi": "Murshid होम"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "hi": "Murshid एक डेवलपमेंट प्रीव्यू है"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "hi": "प्रीव्यू"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "hi": "सेक्शन"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "hi": "ब्राउज़र"
+    },
+    "nav.way": {
+      "en": "The way",
+      "hi": "राह"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "hi": "Companion"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "hi": "पाएँ"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "hi": "GitHub पर Murshid"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "hi": "Murshid पाएँ"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "hi": "भाषा: हिन्दी"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "hi": "शीर्ष लाल दिखाएँ"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "hi": "शीर्ष लाल करें"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "hi": "शीर्ष पीला करें"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "hi": "वह ब्राउज़र<br>जो राह को<br><em>जानता है।</em>"
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "hi": "Murshid एक Chromium ब्राउज़र है जिसके अंदर <strong>WebBrain</strong> है। आपके सामने के पेज के बारे में पूछें, या उसे एक काम सौंपें। आप देखते रहें, और वह आपके ही टैबों में पढ़ता, क्लिक करता और टाइप करता है; यह उन्हीं AI प्लानों पर चलता है जिनका आप पहले से भुगतान करते हैं।"
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "hi": "Windows के लिए डाउनलोड करें"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "hi": "macOS के लिए डाउनलोड करें"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "hi": "Linux के लिए डाउनलोड करें"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "hi": "Murshid पाएँ"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "hi": "WebBrain से मिलिए"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "hi": "आपका सिस्टम"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "hi": "स्रोत से चलाएँ"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "hi": "बाइनरी फ़ाइलें छोड़ें"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "hi": "कमांड कॉपी करें"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "hi": "कॉपी हो गया"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "hi": "केवल सबसे नया commit, और केवल <code>murshid/</code> तथा WebBrain का वह एक्सटेंशन जो यह लोड करता है: कोई इतिहास, रिलीज़ ज़िप, वीडियो या टेस्ट फ़िक्सचर नहीं।"
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "hi": "सफ़ेद पगड़ी में एक उस्मानी विद्वान, सिर हाथ पर टिकाए, क़ुरआन पढ़ते हुए: ओस्मान हमदी बे की 1902 की पेंटिंग का हाफ़टोन प्रिंट।"
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "hi": "मुरशिद · मार्गदर्शक"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "hi": "काम करते Murshid"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "hi": "Windows पर Murshid ब्राउज़र। एक टैब में मेवलवी सिलसिले पर Wikipedia का लेख खुला है, और बग़ल का WebBrain साइड पैनल पूरा पेज पढ़ चुका है और &quot;इस पेज का सारांश बताएँ&quot; के जवाब में बिंदुवार सारांश दे रहा है।"
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "hi": "Windows पर Murshid का असली स्क्रीनशॉट, जिससे अपने पेज का सारांश माँगा गया। डेवलपमेंट प्रीव्यू बिल्ड, बिना किसी अकाउंट वाली एक नई प्रोफ़ाइल पर।"
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "hi": "मार्गदर्शक की झोली में क्या है"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "hi": "पूरा का पूरा ब्राउज़र,<br><em>और उसके लिए एक दिमाग़ भी।</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "hi": "Chrome से जो कुछ भी आप उम्मीद करते हैं, वह सब; बस WebBrain एजेंट ऊपर से जोड़ा नहीं गया, बल्कि बुनाई में समाय है।"
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "hi": "#1 ब्राउज़ करें"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "hi": "Chromium, अपने टैबों के साथ"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "hi": "टैब जिन्हें आप खींचकर दोबारा खोल सकते हैं, एक पता बार जो खोज भी करता है, डाउनलोड्स, पेज में खोज, ज़ूम, डेवलपर टूल्स, और वे शॉर्टकट जो आपके हाथ पहले से जानते हैं।"
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "hi": "#2 पूछें और करवाएँ"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "hi": "साइड पैनल में WebBrain"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "hi": "किसी भी पेज, PDF या चुने हुए हिस्से के बारे में पूछें। या बताइए कि क्या कराना है; वह आपके लिए फ़ॉर्म भर देगा, कदम-दर-कदम क्लिक कर देगा और टैबों की तुलना कर देगा।"
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "hi": "#3 ट्रे"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "hi": "आपके AI प्लान, ट्रे से"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "hi": "WebBrain Companion सिस्टम ट्रे में रहता है और आपके Claude, ChatGPT, Gemini, Grok, Kimi, Muse और Devin सब्सक्रिप्शन 127.0.0.1 पर WebBrain को उपलब्ध कराता है। कोई API कीज़ नहीं।"
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "hi": "#4 नया टैब"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "hi": "नया टैब जो सुनता है"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "hi": "हर नया टैब WebBrain के पेज पर खुलता है: सवाल, काम या खोज लिखें, वह सीधे पैनल में पहुँच जाती है। पहले से इंस्टॉल और चालू।"
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "hi": "#5 लोकल"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "hi": "अपनी ही मशीन पर मॉडल"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "hi": "Companion, PrismML के Bonsai 2 27B और WebBrain के d1 डिसीज़न मॉडल को लोकल चला सकता है; आपके GPU के हिसाब से नाप, और SHA-256 से जाँच।"
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "hi": "#6 ओपन"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "hi": "शुरू से आख़िर तक ओपन"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "hi": "GPL-3.0; WebBrain के साथ सबकी निगाहों के सामने बना। ब्राउज़र में कोई टेलीमेट्री नहीं। आपके पेजों को छूने वाली हर लाइन पढ़िए।"
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "hi": "राह"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "hi": "तलाशने वाला पूछता है।<br>मार्गदर्शक दिखाता है।<br><em>फिर आप साथ चलते हैं।</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "hi": "I"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "hi": "पूछें"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "hi": "अपने सामने के पेज के बारे में पूछें। WebBrain उसे पढ़ता है — टेक्स्ट, टेबल, फ़ॉर्म, PDF, यहाँ तक कि जो सिर्फ़ स्क्रीन पर दिखता है — और बग़ल में जवाब देता है।"
+    },
+    "way.step2.num": {
+      "en": "II",
+      "hi": "II"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "hi": "योजना देखें"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "hi": "जिस भी काम में क्लिक या टाइपिंग हो, Plan before Act पहले कदम सामने रखता है। उन्हें मंज़ूर करें, बदलें, या रोक दें।"
+    },
+    "way.step3.num": {
+      "en": "III",
+      "hi": "III"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "hi": "चलें"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "hi": "फिर वह आपके असली टैबों में, आपकी असली साइन-इन के साथ काम करता है। हर कदम दिखता है, और आप किसी भी पल कमांड संभाल सकते हैं।"
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "hi": "सिस्टम ट्रे में"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "hi": "जिन प्लानों का आप पहले से भुगतान करते हैं,<br><em>अब WebBrain के लिए।</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "hi": "Murshid चलते ही WebBrain Companion भी शुरू कर देता है। छोटे ट्रे ऐप में एक बार साइन इन करें; आपके सब्सक्रिप्शन एक लोकल एंडपॉइंट बन जाते हैं, जिन तक पहुँच केवल इसी कंप्यूटर को होती है, और हर प्लान में कितना बचा है यह एक नज़र में दिखता है।"
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "hi": "वे सब्सक्रिप्शन जो Companion उपलब्ध कराता है"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "hi": "Bonsai 2 27B · लोकल"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "hi": "d1 · लोकल"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "hi": "Companion एंडपॉइंट"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "hi": "Murshid पाएँ"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "hi": "मार्गदर्शक को <em>अपने साथ लें।</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "hi": "Murshid एक डेवलपमेंट प्रीव्यू है। Windows, macOS और Linux के इंस्टॉलर में WebBrain Companion भी शामिल है। WebBrain और उसका नया टैब पेज पहले से इंस्टॉल आते हैं।"
+    },
+    "get.yours": {
+      "en": "Your system",
+      "hi": "आपका सिस्टम"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "hi": "10 और 11, x64। Arm64 पर स्रोत से चलता है।"
+    },
+    "get.download": {
+      "en": "Download installer",
+      "hi": "इंस्टॉलर डाउनलोड करें"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "hi": "0.1.0 · x64 · 150 MB"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "hi": "अभी कोड-साइन्ड नहीं है, इसलिए Windows SmartScreen इसे रोक सकता है: पहले <b>अधिक जानकारी</b> चुनें, फिर <b>फिर भी चलाएँ</b>।"
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "hi": "12 Monterey और उसके बाद; Apple Silicon और Intel।"
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "hi": "0.1.0 · Apple Silicon और Intel · 294 MB"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "hi": "Apple द्वारा नोटाइज़्ड नहीं: ऐप पर राइट-क्लिक करें और <b>खोलें</b> चुनें, या <b>सिस्टम सेटिंग्स &gt; गोपनीयता और सुरक्षा &gt; फिर भी खोलें</b> इस्तेमाल करें।"
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "hi": "x64। Arm64 पर स्रोत से चलता है।"
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "hi": "0.1.0 · x64 · 171 MB · 135 MB"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "hi": "AppImage: इसे एग्ज़ेक्यूटेबल बनाकर चलाएँ। Debian या Ubuntu पर: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "hi": "GitHub पर स्रोत"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "hi": "SHA-256 चेकसम"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "hi": "गोपनीयता, ख़ूब सोच-समझकर"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "hi": "जहाँ ज़रूरत है<br><em>वहाँ निजी।</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "hi": "Murshid ब्राउज़िंग-इतिहास की सूची नहीं सहेजता। कुकीज़, साइन-इन और साइट स्टोरेज डिफ़ॉल्ट बने रहते हैं, ताकि लौटने पर आपके सेशन तैयार मिलें।"
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "hi": "फ़ुटर"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "hi": "गोपनीयता"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "hi": "GPL-3.0-or-later · फ़ॉन्ट SIL Open Font License के अंतर्गत · <span>तस्वीरें सार्वजनिक परिसर की कृतियों पर आधारित: ओस्मान हमदी बे की <i>इस्लामी धर्मशास्त्री</i> (1902), <i>कछुआ प्रशिक्षक</i> (1906) और <i>सार्वजनिक कातिब</i> (1910); वनमूर श्रृंखला का एक मेवलवी दर्वेश (1700–37); और क़ुस्तुंतुनिया के मेवलवी दर्वेशों की तस्वीरें, लगभग 1870–1910, एक Sébah &amp; Joaillier की। दर्वेश और तस्वीरें Rijksmuseum में हैं। गोपनीयता का चित्र: Open Culture के ज़रिए <i>Dame Turque</i> से AI-शैली में।</span>"
+    }
+  }
+}

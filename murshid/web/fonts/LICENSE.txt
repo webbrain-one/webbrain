@@ -1,4 +1,4 @@
-Cormorant Garamond, IBM Plex Sans, IBM Plex Mono, IBM Plex Sans Arabic, Amiri and Aref Ruqaa are licensed under the SIL Open Font License 1.1.
+Cormorant Garamond, IBM Plex Sans, IBM Plex Mono, IBM Plex Sans Arabic, IBM Plex Sans Hebrew, IBM Plex Sans Devanagari, Amiri and Aref Ruqaa are licensed under the SIL Open Font License 1.1.
 Files copied from the @fontsource packages.
 
 Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant) CormorantGaramond-Italic[wght].ttf: Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)

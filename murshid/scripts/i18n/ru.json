@@ -1,0 +1,399 @@
+{
+  "lang": "ru",
+  "dir": "ltr",
+  "locale": "ru_RU",
+  "strings": {
+    "meta.title": {
+      "en": "Murshid (Development Preview) — the browser that knows the way",
+      "ru": "Murshid (предварительная версия) — браузер, знающий путь"
+    },
+    "meta.description": {
+      "en": "Development preview. Murshid is a Chromium browser with the WebBrain agent built in: ask about any page, hand it a task, and let your own AI plans run it from the system tray. Open source.",
+      "ru": "Предварительная версия. Murshid — это браузер Chromium со встроенным агентом WebBrain: спросите о любой странице, поручите ему задачу — и пусть ваши ИИ-подписки, за которые вы уже платите, выполняют это из системного трея. Открытый исходный код."
+    },
+    "meta.og.title": {
+      "en": "Murshid — the browser that knows the way",
+      "ru": "Murshid — браузер, знающий путь"
+    },
+    "meta.og.description": {
+      "en": "A Chromium browser with WebBrain built in. Ask, plan, act — in your own tabs.",
+      "ru": "Браузер Chromium со встроенным WebBrain. Спрашивайте, планируйте, действуйте — в своих вкладках."
+    },
+    "nav.skip": {
+      "en": "Skip to content",
+      "ru": "Перейти к содержимому"
+    },
+    "nav.home": {
+      "en": "Murshid home",
+      "ru": "Главная страница Murshid"
+    },
+    "nav.badge.title": {
+      "en": "Murshid is a development preview",
+      "ru": "Murshid — это предварительная версия"
+    },
+    "nav.badge": {
+      "en": "Dev Preview",
+      "ru": "Предпросмотр"
+    },
+    "nav.sections": {
+      "en": "Sections",
+      "ru": "Разделы"
+    },
+    "nav.browser": {
+      "en": "Browser",
+      "ru": "Браузер"
+    },
+    "nav.way": {
+      "en": "The way",
+      "ru": "Путь"
+    },
+    "nav.companion": {
+      "en": "Companion",
+      "ru": "Companion"
+    },
+    "nav.get-it": {
+      "en": "Get it",
+      "ru": "Скачать"
+    },
+    "nav.github": {
+      "en": "Murshid on GitHub",
+      "ru": "Murshid на GitHub"
+    },
+    "nav.get": {
+      "en": "Get Murshid",
+      "ru": "Скачать Murshid"
+    },
+    "lang.label": {
+      "en": "Language: English",
+      "ru": "Язык: русский"
+    },
+    "hue.label": {
+      "en": "Show the top in red",
+      "ru": "Показать верх красным"
+    },
+    "hue.to-red": {
+      "en": "Make the top red",
+      "ru": "Сделать верх красным"
+    },
+    "hue.to-yellow": {
+      "en": "Make the top yellow",
+      "ru": "Сделать верх жёлтым"
+    },
+    "hero.title": {
+      "en": "The browser<br>that knows<br><em>the way.</em>",
+      "ru": "Браузер,<br>который знает<br><em>путь.</em>"
+    },
+    "hero.lede": {
+      "en": "Murshid is a Chromium browser with <strong>WebBrain</strong> inside. Ask about the page in front of you, or hand it a task. It reads, clicks and types in your own tabs while you watch, and runs on the AI plans you already pay for.",
+      "ru": "Murshid — это браузер Chromium, внутри которого живёт <strong>WebBrain</strong>. Спросите о странице перед вами или поручите ему задачу. Он читает, нажимает и печатает в ваших вкладках, пока вы наблюдаете, и работает на ИИ-подписках, за которые вы уже платите."
+    },
+    "hero.get.win": {
+      "en": "Download for Windows",
+      "ru": "Скачать для Windows"
+    },
+    "hero.get.mac": {
+      "en": "Download for macOS",
+      "ru": "Скачать для macOS"
+    },
+    "hero.get.linux": {
+      "en": "Download for Linux",
+      "ru": "Скачать для Linux"
+    },
+    "hero.get": {
+      "en": "Get Murshid",
+      "ru": "Скачать Murshid"
+    },
+    "hero.meet": {
+      "en": "Meet WebBrain",
+      "ru": "Познакомьтесь с WebBrain"
+    },
+    "hero.terminal.system": {
+      "en": "Your system",
+      "ru": "Ваша система"
+    },
+    "hero.terminal.label": {
+      "en": "Run from source",
+      "ru": "Запустить из исходников"
+    },
+    "hero.terminal.fast": {
+      "en": "Exclude binaries",
+      "ru": "Без бинарных файлов"
+    },
+    "hero.terminal.copy": {
+      "en": "Copy commands",
+      "ru": "Копировать команды"
+    },
+    "hero.terminal.copied": {
+      "en": "Copied",
+      "ru": "Скопировано"
+    },
+    "hero.terminal.note": {
+      "en": "Only the latest commit, and only <code>murshid/</code> and the WebBrain extension it loads: no history, release zips, videos or test fixtures.",
+      "ru": "Только последний коммит, и только <code>murshid/</code> да загружаемое им расширение WebBrain: без истории, релизных архивов, видео и тестовых файлов."
+    },
+    "hero.alt": {
+      "en": "An Ottoman scholar in a white turban, his head on his hand, reading the Quran: a halftone after Osman Hamdi Bey's painting of 1902.",
+      "ru": "Османский учёный в белом тюрбане, подперев голову рукой, читает Коран: полутоновая репродукция с картины Османа Хамди-бея 1902 года."
+    },
+    "hero.caption": {
+      "en": "Mürşid · the guide",
+      "ru": "Mürşid · наставник"
+    },
+    "shot.title": {
+      "en": "Murshid at work",
+      "ru": "Murshid в работе"
+    },
+    "shot.alt": {
+      "en": "The Murshid browser on Windows. The Wikipedia article on the Mevlevi Order is open in a tab, and the WebBrain side panel beside it has read the whole page and is answering &quot;Summarize this page&quot; with a bulleted summary.",
+      "ru": "Браузер Murshid в Windows. Во вкладке открыта статья Википедии об ордене мевлеви, а боковая панель WebBrain рядом прочитала всю страницу и отвечает на «Summarize this page» («перескажи эту страницу») списком пунктов."
+    },
+    "shot.caption": {
+      "en": "A real capture of Murshid on Windows, asked to summarise the page it is on. Development preview build, on a fresh profile with no accounts.",
+      "ru": "Подлинный снимок экрана Murshid в Windows: его попросили пересказать открытую страницу. Сборка предварительной версии, на свежем профиле без аккаунтов."
+    },
+    "carries.eyebrow": {
+      "en": "What the guide carries",
+      "ru": "Что несёт наставник"
+    },
+    "carries.title": {
+      "en": "A whole browser,<br><em>and a mind for it.</em>",
+      "ru": "Полноценный браузер,<br><em>и разум для него.</em>"
+    },
+    "carries.lede": {
+      "en": "Everything you expect from Chrome, with the WebBrain agent woven in instead of bolted on.",
+      "ru": "Всё, чего вы ждёте от Chrome, только агент WebBrain вплетён в него, а не прикручен сверху."
+    },
+    "card1.num": {
+      "en": "#1 Browse",
+      "ru": "#1 Просмотр"
+    },
+    "card1.title": {
+      "en": "Chromium, with tabs",
+      "ru": "Chromium со вкладками"
+    },
+    "card1.text": {
+      "en": "Tabs you can drag and reopen, an address bar that searches, downloads, find in page, zoom, devtools, the shortcuts your hands already know.",
+      "ru": "Вкладки, которые можно перетаскивать и восстанавливать, адресная строка, которая ищет, загрузки, поиск на странице, масштаб, инструменты разработчика и сочетания клавиш, которые ваши руки уже знают."
+    },
+    "card2.num": {
+      "en": "#2 Ask &amp; act",
+      "ru": "#2 Спроси и действуй"
+    },
+    "card2.title": {
+      "en": "WebBrain in the side panel",
+      "ru": "WebBrain в боковой панели"
+    },
+    "card2.text": {
+      "en": "Ask about any page, PDF or selection. Or tell it what you want done, and it fills the forms, clicks through the steps and compares the tabs for you.",
+      "ru": "Спросите о любой странице, PDF или выделенном фрагменте. Или скажите, что нужно сделать, — он заполнит формы, прокликает шаги и сравнит вкладки за вас."
+    },
+    "card3.num": {
+      "en": "#3 Tray",
+      "ru": "#3 Трей"
+    },
+    "card3.title": {
+      "en": "Your AI plans, from the tray",
+      "ru": "Ваши ИИ-подписки — из трея"
+    },
+    "card3.text": {
+      "en": "WebBrain Companion sits in the system tray and serves your Claude, ChatGPT, Gemini, Grok, Kimi, Muse and Devin subscriptions to WebBrain on 127.0.0.1. No API keys.",
+      "ru": "WebBrain Companion сидит в системном трее и предоставляет ваши подписки Claude, ChatGPT, Gemini, Grok, Kimi, Muse и Devin агенту WebBrain по адресу 127.0.0.1. Никаких API-ключей."
+    },
+    "card4.num": {
+      "en": "#4 New tab",
+      "ru": "#4 Новая вкладка"
+    },
+    "card4.title": {
+      "en": "A new tab that listens",
+      "ru": "Новая вкладка, которая слушает"
+    },
+    "card4.text": {
+      "en": "Every new tab opens on WebBrain's page: type a question, a task or a search, and it goes straight to the panel. Preinstalled and on.",
+      "ru": "Каждая новая вкладка открывается на странице WebBrain: напишите вопрос, задачу или поисковый запрос — и всё попадёт прямо в панель. Предустановлено и включено."
+    },
+    "card5.num": {
+      "en": "#5 Local",
+      "ru": "#5 Локально"
+    },
+    "card5.title": {
+      "en": "Models on your own machine",
+      "ru": "Модели на вашем собственном компьютере"
+    },
+    "card5.text": {
+      "en": "The Companion can run PrismML's Bonsai 2 27B and WebBrain's d1 decision model locally, sized to your GPU, checked by SHA-256.",
+      "ru": "Companion может локально запускать Bonsai 2 27B от PrismML и модель решений d1 от WebBrain — под ваш GPU, с проверкой по SHA-256."
+    },
+    "card6.num": {
+      "en": "#6 Open",
+      "ru": "#6 Открытость"
+    },
+    "card6.title": {
+      "en": "Open, all the way down",
+      "ru": "Открыт насквозь"
+    },
+    "card6.text": {
+      "en": "GPL-3.0, built in the open with WebBrain. No telemetry in the browser. Read every line that touches your pages.",
+      "ru": "GPL-3.0, открытая разработка вместе с WebBrain. Никакой телеметрии в браузере. Читайте каждую строку, что касается ваших страниц."
+    },
+    "way.eyebrow": {
+      "en": "The way",
+      "ru": "Путь"
+    },
+    "way.title": {
+      "en": "The seeker asks.<br>The guide shows.<br><em>Then you walk together.</em>",
+      "ru": "Ищущий спрашивает.<br>Наставник показывает.<br><em>Затем вы идёте вместе.</em>"
+    },
+    "way.step1.num": {
+      "en": "I",
+      "ru": "I"
+    },
+    "way.step1.title": {
+      "en": "Ask",
+      "ru": "Спросите"
+    },
+    "way.step1.text": {
+      "en": "Ask about the page in front of you. WebBrain reads it — text, tables, forms, PDFs, even what is only on screen — and answers beside it.",
+      "ru": "Спросите о странице перед вами. WebBrain прочитает её — текст, таблицы, формы, PDF и даже то, что лишь на экране, — и ответит рядом."
+    },
+    "way.step2.num": {
+      "en": "II",
+      "ru": "II"
+    },
+    "way.step2.title": {
+      "en": "See the plan",
+      "ru": "Увидеть план"
+    },
+    "way.step2.text": {
+      "en": "For anything that clicks or types, Plan before Act lays out the steps first. Approve them, change them, or stop.",
+      "ru": "Для всего, что требует кликов или ввода, режим «Plan before Act» (сначала план, потом действие) выкладывает шаги заранее. Одобрьте их, измените или остановите."
+    },
+    "way.step3.num": {
+      "en": "III",
+      "ru": "III"
+    },
+    "way.step3.title": {
+      "en": "Walk",
+      "ru": "Идти"
+    },
+    "way.step3.text": {
+      "en": "Then it works in your real tabs, with your real sign-ins. Every move is visible, and you can take the wheel at any moment.",
+      "ru": "Затем он работает в ваших настоящих вкладках, с вашими настоящими аккаунтами. Каждый ход виден, и вы можете взять штурвал в любой момент."
+    },
+    "tray.eyebrow": {
+      "en": "In the system tray",
+      "ru": "В системном трее"
+    },
+    "tray.title": {
+      "en": "The plans you already pay for,<br><em>poured for WebBrain.</em>",
+      "ru": "Подписки, за которые вы уже платите,<br><em>в службу WebBrain.</em>"
+    },
+    "tray.text": {
+      "en": "Murshid starts WebBrain Companion when it starts. Sign in once in the small tray app, and your subscriptions become one local endpoint that only this computer can reach, with a glance at how much of each plan is left.",
+      "ru": "Murshid при запуске запускает WebBrain Companion. Один раз войдите в маленьком приложении в трее — и ваши подписки станут единой локальной точкой доступа, доступной только этому компьютеру, с возможностью одним взглядом увидеть, сколько осталось от каждой."
+    },
+    "tray.providers": {
+      "en": "Subscriptions the Companion serves",
+      "ru": "Подписки, которые обслуживает Companion"
+    },
+    "tray.local.bonsai": {
+      "en": "Bonsai 2 27B · local",
+      "ru": "Bonsai 2 27B · локально"
+    },
+    "tray.local.d1": {
+      "en": "d1 · local",
+      "ru": "d1 · локально"
+    },
+    "tray.endpoint": {
+      "en": "Companion endpoint",
+      "ru": "Точка доступа Companion"
+    },
+    "get.eyebrow": {
+      "en": "Get Murshid",
+      "ru": "Скачать Murshid"
+    },
+    "get.title": {
+      "en": "Take the guide <em>with you.</em>",
+      "ru": "Возьмите наставника <em>с собой.</em>"
+    },
+    "get.lede": {
+      "en": "Murshid is a development preview. Windows, macOS and Linux have installers with WebBrain Companion included. WebBrain and its new tab page come preinstalled.",
+      "ru": "Murshid — это предварительная версия. Для Windows, macOS и Linux есть установщики, включающие WebBrain Companion. WebBrain и его страница новой вкладки предустановлены."
+    },
+    "get.yours": {
+      "en": "Your system",
+      "ru": "Ваша система"
+    },
+    "get.win.req": {
+      "en": "10 and 11, x64. Arm64 runs from source.",
+      "ru": "10 и 11, x64. На Arm64 — из исходников."
+    },
+    "get.download": {
+      "en": "Download installer",
+      "ru": "Скачать установщик"
+    },
+    "get.win.status": {
+      "en": "0.1.0 · x64 · 150 MB",
+      "ru": "0.1.0 · x64 · 150 MB"
+    },
+    "get.win.fine": {
+      "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
+      "ru": "Подписи кодом ещё нет, поэтому Windows SmartScreen может его остановить: выберите <b>Дополнительные сведения</b>, затем <b>Выполнить в любом случае</b>."
+    },
+    "get.mac.req": {
+      "en": "12 Monterey and later, Apple Silicon and Intel.",
+      "ru": "12 Monterey и новее, Apple Silicon и Intel."
+    },
+    "get.mac.status": {
+      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
+      "ru": "0.1.0 · Apple Silicon и Intel · 294 MB"
+    },
+    "get.mac.fine": {
+      "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
+      "ru": "Apple его не нотаризовал: щёлкните приложение правой кнопкой мыши и выберите <b>Открыть</b> или используйте <b>Системные настройки &gt; Конфиденциальность и безопасность &gt; Всё равно открыть</b>."
+    },
+    "get.linux.req": {
+      "en": "x64. Arm64 runs from source.",
+      "ru": "x64. На Arm64 — из исходников."
+    },
+    "get.linux.status": {
+      "en": "0.1.0 · x64 · 171 MB · 135 MB",
+      "ru": "0.1.0 · x64 · 171 MB · 135 MB"
+    },
+    "get.linux.fine": {
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
+      "ru": "AppImage: сделайте его исполняемым и запустите. В Debian или Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+    },
+    "get.source": {
+      "en": "Source on GitHub",
+      "ru": "Исходный код на GitHub"
+    },
+    "get.checksums": {
+      "en": "SHA-256 checksums",
+      "ru": "Контрольные суммы SHA-256"
+    },
+    "privacy.eyebrow": {
+      "en": "Privacy, thoughtfully",
+      "ru": "Приватность, продуманно"
+    },
+    "privacy.title": {
+      "en": "Private<br><em>where it matters.</em>",
+      "ru": "Приватно<br><em>там, где это важно.</em>"
+    },
+    "privacy.text": {
+      "en": "Murshid doesn’t save a browsing-history list. Cookies, sign-ins and site storage persist by default, so your sessions are ready when you return.",
+      "ru": "Murshid не хранит список истории просмотров. Файлы cookie, входы в аккаунты и хранилища сайтов сохраняются по умолчанию, так что к вашему возвращению сеансы будут готовы."
+    },
+    "footer.nav": {
+      "en": "Footer",
+      "ru": "Подвал"
+    },
+    "footer.privacy": {
+      "en": "Privacy",
+      "ru": "Конфиденциальность"
+    },
+    "footer.credits": {
+      "en": "GPL-3.0-or-later · Fonts under the SIL Open Font License · <span>Pictures after public-domain works: Osman Hamdi Bey's <i>Islamic Theologian</i> (1902), <i>The Tortoise Trainer</i> (1906) and <i>Public Scribe</i> (1910); a Mevlevi dervish of the Vanmour series (1700–37); and photographs of Mevlevi dervishes in Constantinople, about 1870–1910, one by Sébah &amp; Joaillier. The dervish and the photographs are in the Rijksmuseum. Privacy illustration: AI-stylized after <i>Dame Turque</i>, via Open Culture.</span>",
+      "ru": "GPL-3.0-or-later · Шрифты по лицензии SIL Open Font License · <span>Изображения — по мотивам произведений в общественном достоянии: <i>Исламский богослов</i> (1902), <i>Дрессировщик черепах</i> (1906) и <i>Публичный писец</i> (1910) Османа Хамди-бея; дервиш-мевлеви из серии Ванмура (1700–37); и фотографии дервишей-мевлеви в Константинополе, около 1870–1910 годов, одна — из ателье Sébah &amp; Joaillier. Портрет дервиша и фотографии хранятся в Рейксмузее. Иллюстрация о приватности: стилизация под ИИ по картине <i>Dame Turque</i>, через Open Culture.</span>"
+    }
+  }
+}

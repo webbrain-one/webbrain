@@ -1,0 +1,351 @@
+<!doctype html>
+<!-- Written by scripts/i18n/build.mjs from web/index.html and scripts/i18n/ru.json: edit those, then run npm run web:i18n. -->
+<html lang="ru" data-hero="yellow">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Murshid (предварительная версия) — браузер, знающий путь</title>
+<meta name="description" content="Предварительная версия. Murshid — это браузер Chromium со встроенным агентом WebBrain: спросите о любой странице, поручите ему задачу — и пусть ваши ИИ-подписки, за которые вы уже платите, выполняют это из системного трея. Открытый исходный код.">
+<meta name="theme-color" content="#e2aa3a">
+<script>
+  // The top of the page is yellow unless this visitor chose red with the
+  // circle in the nav (site.js); set it before the first paint.
+  try {
+    if (localStorage.getItem('murshid-hero') === 'red') {
+      document.documentElement.dataset.hero = 'red';
+      document.querySelector('meta[name="theme-color"]').content = '#9e1b2b';
+    }
+  } catch {}
+</script>
+<meta property="og:title" content="Murshid — браузер, знающий путь">
+<meta property="og:description" content="Браузер Chromium со встроенным WebBrain. Спрашивайте, планируйте, действуйте — в своих вкладках.">
+<meta property="og:image" content="../art/murshid-icon.svg">
+<meta property="og:locale" content="ru_RU">
+<link rel="canonical" href="https://murshid.one/ru/">
+<!-- the same page in each language (scripts/i18n/build.mjs writes the tr/, ar/, fa/, hi/, az/, he/, el/, ru/ and uk/ pages) -->
+<link rel="alternate" hreflang="en" href="https://murshid.one/">
+<link rel="alternate" hreflang="tr" href="https://murshid.one/tr/">
+<link rel="alternate" hreflang="ar" href="https://murshid.one/ar/">
+<link rel="alternate" hreflang="fa" href="https://murshid.one/fa/">
+<link rel="alternate" hreflang="hi" href="https://murshid.one/hi/">
+<link rel="alternate" hreflang="az" href="https://murshid.one/az/">
+<link rel="alternate" hreflang="he" href="https://murshid.one/he/">
+<link rel="alternate" hreflang="el" href="https://murshid.one/el/">
+<link rel="alternate" hreflang="ru" href="https://murshid.one/ru/">
+<link rel="alternate" hreflang="uk" href="https://murshid.one/uk/">
+<link rel="alternate" hreflang="x-default" href="https://murshid.one/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preload" href="../fonts/cormorant-garamond-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- the Ottoman ogee arch, in the units of whatever it frames -->
+    <clipPath id="arch-clip" clipPathUnits="objectBoundingBox">
+      <path d="M0 1 L0 .40 C0 .23 .16 .13 .34 .07 C.43 .04 .47 .03 .5 0 C.53 .03 .57 .04 .66 .07 C.84 .13 1 .23 1 .40 L1 1 Z"/>
+    </clipPath>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 .55 0"/>
+    </filter>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Перейти к содержимому</a>
+
+<header class="nav" id="top">
+  <a class="brand" href="#top" aria-label="Главная страница Murshid">
+    <img src="../art/murshid-icon.svg" alt="" width="34" height="34">
+    <span lang="en">Murshid</span>
+    <span class="badge" title="Murshid — это предварительная версия">Предпросмотр</span>
+  </a>
+  <nav class="links" aria-label="Разделы">
+    <a href="#carries">Браузер</a>
+    <a href="#way">Путь</a>
+    <a href="#tray">Companion</a>
+    <a href="#get">Скачать</a>
+  </nav>
+  <div class="nav-end">
+    <a class="icon-link" href="https://github.com/webbrain-one/webbrain" aria-label="Murshid на GitHub"><svg><use href="#i-github"/></svg></a>
+    <a class="button small" href="#get">Скачать Murshid</a>
+    <details class="lang" data-lang>
+      <summary aria-label="Язык: русский"><svg><use href="#i-globe"/></svg><span lang="en" data-lang-code>RU</span></summary>
+      <ul>
+        <li><a href="../" hreflang="en" lang="en" data-lang-link="en">English</a></li>
+        <li><a href="../tr/" hreflang="tr" lang="tr" data-lang-link="tr">Türkçe</a></li>
+        <li><a href="../ar/" hreflang="ar" lang="ar" dir="rtl" data-lang-link="ar">العربية</a></li>
+        <li><a href="../fa/" hreflang="fa" lang="fa" dir="rtl" data-lang-link="fa">فارسی</a></li>
+        <li><a href="../hi/" hreflang="hi" lang="hi" data-lang-link="hi">हिन्दी</a></li>
+        <li><a href="../az/" hreflang="az" lang="az" data-lang-link="az">Azərbaycanca</a></li>
+        <li><a href="../he/" hreflang="he" lang="he" dir="rtl" data-lang-link="he">עברית</a></li>
+        <li><a href="../el/" hreflang="el" lang="el" data-lang-link="el">Ελληνικά</a></li>
+        <li><a href="../ru/" hreflang="ru" lang="ru" data-lang-link="ru" aria-current="page">Русский</a></li>
+        <li><a href="../uk/" hreflang="uk" lang="uk" data-lang-link="uk">Українська</a></li>
+      </ul>
+    </details>
+    <button class="hue" type="button" data-hue aria-pressed="false" aria-label="Показать верх красным" title="Сделать верх красным" data-to-red="Сделать верх красным" data-to-yellow="Сделать верх жёлтым"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================================================ HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-grain" aria-hidden="true"><svg width="100%" height="100%"><rect width="100%" height="100%" filter="url(#grain)"/></svg></div>
+  <div class="hero-rays" aria-hidden="true"></div>
+
+  <div class="hero-copy">
+    <h1 id="hero-title">Браузер,<br>который знает<br><em>путь.</em></h1>
+    <p class="lede">Murshid — это браузер Chromium, внутри которого живёт <strong>WebBrain</strong>. Спросите о странице перед вами или поручите ему задачу. Он читает, нажимает и печатает в ваших вкладках, пока вы наблюдаете, и работает на ИИ-подписках, за которые вы уже платите.</p>
+    <div class="cta">
+      <a class="button" href="#get" data-get data-win="Скачать для Windows" data-mac="Скачать для macOS" data-linux="Скачать для Linux"><span>Скачать Murshid</span> <svg class="arrow"><use href="#i-arrow"/></svg></a>
+      <a class="button ghost" href="https://webbrain.one">Познакомьтесь с WebBrain</a>
+    </div>
+
+    <div class="terminal" data-terminal>
+      <div class="terminal-tabs" role="tablist" aria-label="Ваша система">
+        <button role="tab" aria-selected="false" data-os="mac" lang="en">macOS</button>
+        <button role="tab" aria-selected="false" data-os="linux" lang="en">Linux</button>
+        <button role="tab" aria-selected="true" data-os="win" lang="en">Windows</button>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-head">
+          <span class="terminal-label">Запустить из исходников</span>
+          <!-- Keep the optional sparse clone switch for future use; include binaries by default. -->
+          <label class="switch" hidden><input type="checkbox" data-fast disabled> <span>Без бинарных файлов</span></label>
+        </div>
+        <pre dir="ltr"><code data-cmd>git clone -b murshid https://github.com/esokullu/webbrain.git
+cd webbrain/murshid && npm install && npm start</code></pre>
+        <button class="copy" type="button" aria-label="Копировать команды" data-copied="Скопировано"><svg><use href="#i-copy"/></svg></button>
+        <p class="terminal-note" data-fast-note hidden>Только последний коммит, и только <code>murshid/</code> да загружаемое им расширение WebBrain: без истории, релизных архивов, видео и тестовых файлов.</p>
+      </div>
+    </div>
+  </div>
+
+  <figure class="hero-art">
+    <div class="arch">
+      <img class="photo" src="../art/halftone/hero-yellow.webp" data-yellow="../art/halftone/hero-yellow.webp" data-red="../art/halftone/hero.webp" width="1120" height="1434" fetchpriority="high" alt="Османский учёный в белом тюрбане, подперев голову рукой, читает Коран: полутоновая репродукция с картины Османа Хамди-бея 1902 года.">
+      <script>if (document.documentElement.dataset.hero === 'red') { const p = document.currentScript.previousElementSibling; p.src = p.dataset.red; }</script>
+    </div>
+    <svg class="arch-line" viewBox="0 0 100 128" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 128 L0 51.2 C0 29.4 16 16.6 34 9 C43 5.1 47 3.8 50 0 C53 3.8 57 5.1 66 9 C84 16.6 100 29.4 100 51.2 L100 128"/>
+      <path class="inner" d="M3 128 L3 52 C3 31.6 18 19.5 35 12.4 C43.4 8.9 47 7.6 50 4.6 C53 7.6 56.6 8.9 65 12.4 C82 19.5 97 31.6 97 52 L97 128"/>
+    </svg>
+    <span class="finial" aria-hidden="true"></span>
+    <figcaption><span class="arabic" lang="ar">مرشد</span><span>Mürşid · наставник</span></figcaption>
+  </figure>
+</section>
+
+<div class="border-band" aria-hidden="true"></div>
+
+<!-- ========================================================== SCREENSHOT -->
+<section class="shot" aria-labelledby="shot-title">
+  <h2 class="visually-hidden" id="shot-title">Murshid в работе</h2>
+  <figure>
+    <picture>
+      <source type="image/avif" srcset="../art/screenshot/murshid-webbrain-1x.avif 1280w, ../art/screenshot/murshid-webbrain-2x.avif 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <source type="image/webp" srcset="../art/screenshot/murshid-webbrain-1x.webp 1280w, ../art/screenshot/murshid-webbrain-2x.webp 2560w" sizes="(max-width: 1240px) calc(100vw - 32px), 1180px">
+      <img src="../art/screenshot/murshid-webbrain.jpg" width="2560" height="1599" loading="lazy" decoding="async" alt="Браузер Murshid в Windows. Во вкладке открыта статья Википедии об ордене мевлеви, а боковая панель WebBrain рядом прочитала всю страницу и отвечает на «Summarize this page» («перескажи эту страницу») списком пунктов.">
+    </picture>
+    <figcaption>Подлинный снимок экрана Murshid в Windows: его попросили пересказать открытую страницу. Сборка предварительной версии, на свежем профиле без аккаунтов.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================= CARRIES -->
+<section class="carries" id="carries" aria-labelledby="carries-title">
+  <header class="section-head">
+    <p class="eyebrow">Что несёт наставник</p>
+    <h2 id="carries-title">Полноценный браузер,<br><em>и разум для него.</em></h2>
+    <p>Всё, чего вы ждёте от Chrome, только агент WebBrain вплетён в него, а не прикручен сверху.</p>
+  </header>
+
+  <div class="cards">
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-browse.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#1 Просмотр</p>
+      <h3>Chromium со вкладками</h3>
+      <p>Вкладки, которые можно перетаскивать и восстанавливать, адресная строка, которая ищет, загрузки, поиск на странице, масштаб, инструменты разработчика и сочетания клавиш, которые ваши руки уже знают.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-ask.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#2 Спроси и действуй</p>
+      <h3>WebBrain в боковой панели</h3>
+      <p>Спросите о любой странице, PDF или выделенном фрагменте. Или скажите, что нужно сделать, — он заполнит формы, прокликает шаги и сравнит вкладки за вас.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-tray.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#3 Трей</p>
+      <h3>Ваши ИИ-подписки — из трея</h3>
+      <p>WebBrain Companion сидит в системном трее и предоставляет ваши подписки Claude, ChatGPT, Gemini, Grok, Kimi, Muse и Devin агенту WebBrain по адресу 127.0.0.1. Никаких API-ключей.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-newtab.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#4 Новая вкладка</p>
+      <h3>Новая вкладка, которая слушает</h3>
+      <p>Каждая новая вкладка открывается на странице WebBrain: напишите вопрос, задачу или поисковый запрос — и всё попадёт прямо в панель. Предустановлено и включено.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-local.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#5 Локально</p>
+      <h3>Модели на вашем собственном компьютере</h3>
+      <p>Companion может локально запускать Bonsai 2 27B от PrismML и модель решений d1 от WebBrain — под ваш GPU, с проверкой по SHA-256.</p>
+    </article>
+
+    <article class="card">
+      <div class="plate" aria-hidden="true">
+        <img class="photo" src="../art/halftone/card-open.webp" width="800" height="500" loading="lazy" alt="">
+      </div>
+      <p class="num">#6 Открытость</p>
+      <h3>Открыт насквозь</h3>
+      <p>GPL-3.0, открытая разработка вместе с WebBrain. Никакой телеметрии в браузере. Читайте каждую строку, что касается ваших страниц.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ================================================================ WAY -->
+<section class="way" id="way" aria-labelledby="way-title">
+  <div class="way-art" aria-hidden="true">
+    <img class="photo" src="../art/halftone/way.webp" width="1000" height="1432" loading="lazy" alt="">
+  </div>
+  <div class="way-copy">
+    <p class="eyebrow gold">Путь</p>
+    <h2 id="way-title">Ищущий спрашивает.<br>Наставник показывает.<br><em>Затем вы идёте вместе.</em></h2>
+    <ol class="steps">
+      <li>
+        <span class="step-num">I</span>
+        <div>
+          <h3>Спросите</h3>
+          <p>Спросите о странице перед вами. WebBrain прочитает её — текст, таблицы, формы, PDF и даже то, что лишь на экране, — и ответит рядом.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">II</span>
+        <div>
+          <h3>Увидеть план</h3>
+          <p>Для всего, что требует кликов или ввода, режим «Plan before Act» (сначала план, потом действие) выкладывает шаги заранее. Одобрьте их, измените или остановите.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">III</span>
+        <div>
+          <h3>Идти</h3>
+          <p>Затем он работает в ваших настоящих вкладках, с вашими настоящими аккаунтами. Каждый ход виден, и вы можете взять штурвал в любой момент.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- =============================================================== TRAY -->
+<section class="tray" id="tray" aria-labelledby="tray-title">
+  <div class="tray-inner">
+    <div>
+      <p class="eyebrow">В системном трее</p>
+      <h2 id="tray-title">Подписки, за которые вы уже платите,<br><em>в службу WebBrain.</em></h2>
+      <p>Murshid при запуске запускает WebBrain Companion. Один раз войдите в маленьком приложении в трее — и ваши подписки станут единой локальной точкой доступа, доступной только этому компьютеру, с возможностью одним взглядом увидеть, сколько осталось от каждой.</p>
+    </div>
+    <ul class="providers" aria-label="Подписки, которые обслуживает Companion">
+      <li>Claude</li><li>ChatGPT · Codex</li><li>Gemini · Antigravity</li><li>Grok</li><li>Kimi</li><li>Meta Muse</li><li>Devin</li><li class="local">Bonsai 2 27B · локально</li><li class="local">d1 · локально</li>
+    </ul>
+    <pre class="endpoint" aria-label="Точка доступа Companion"><code dir="ltr">http://127.0.0.1:8327/v1</code></pre>
+  </div>
+</section>
+
+<!-- ================================================================ GET -->
+<section class="get" id="get" aria-labelledby="get-title">
+  <header class="section-head center">
+    <p class="eyebrow">Скачать Murshid</p>
+    <h2 id="get-title">Возьмите наставника <em>с собой.</em></h2>
+    <p>Murshid — это предварительная версия. Для Windows, macOS и Linux есть установщики, включающие WebBrain Companion. WebBrain и его страница новой вкладки предустановлены.</p>
+  </header>
+  <div class="platforms">
+    <article class="platform" data-platform="win" data-you="Ваша система">
+      <h3>Windows</h3>
+      <p>10 и 11, x64. На Arm64 — из исходников.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-windows-x64-setup.exe" download>Скачать установщик</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 150 MB</span>
+      <p class="fine">Подписи кодом ещё нет, поэтому Windows SmartScreen может его остановить: выберите <b>Дополнительные сведения</b>, затем <b>Выполнить в любом случае</b>.</p>
+    </article>
+    <article class="platform" data-platform="mac" data-you="Ваша система">
+      <h3>macOS</h3>
+      <p>12 Monterey и новее, Apple Silicon и Intel.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-macos-universal.dmg" download>Скачать установщик</a>
+      </div>
+      <span class="status">0.1.0 · Apple Silicon и Intel · 294 MB</span>
+      <p class="fine">Apple его не нотаризовал: щёлкните приложение правой кнопкой мыши и выберите <b>Открыть</b> или используйте <b>Системные настройки &gt; Конфиденциальность и безопасность &gt; Всё равно открыть</b>.</p>
+    </article>
+    <article class="platform" data-platform="linux" data-you="Ваша система">
+      <h3>Linux</h3>
+      <p>x64. На Arm64 — из исходников.</p>
+      <div class="downloads">
+        <a class="button crimson download" href="../download/Murshid-0.1.0-linux-x86_64.AppImage" download lang="en">AppImage</a>
+        <a class="button crimson" href="../download/Murshid-0.1.0-linux-amd64.deb" download>.deb</a>
+      </div>
+      <span class="status">0.1.0 · x64 · 171 MB · 135 MB</span>
+      <p class="fine">AppImage: сделайте его исполняемым и запустите. В Debian или Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code></p>
+    </article>
+  </div>
+  <div class="get-cta">
+    <a class="button crimson" href="https://github.com/webbrain-one/webbrain"><svg><use href="#i-github"/></svg> <span>Исходный код на GitHub</span></a>
+  </div>
+  <p class="checksums"><a href="../download/SHA256SUMS.txt">Контрольные суммы SHA-256</a></p>
+</section>
+
+<!-- ============================================================ PRIVACY -->
+<section class="privacy" id="privacy" aria-labelledby="privacy-title">
+  <div class="privacy-inner">
+    <div class="section-head privacy-copy">
+      <p class="eyebrow gold">Приватность, продуманно</p>
+      <h2 id="privacy-title">Приватно<br><em>там, где это важно.</em></h2>
+      <p>Murshid не хранит список истории просмотров. Файлы cookie, входы в аккаунты и хранилища сайтов сохраняются по умолчанию, так что к вашему возвращению сеансы будут готовы.</p>
+    </div>
+    <div class="privacy-art" aria-hidden="true">
+      <img src="../art/halftone/privacy-dame-turque.webp" width="1402" height="1122" loading="lazy" alt="">
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-mark" aria-hidden="true"><span class="arabic" lang="ar">مرشد</span></div>
+  <div class="footer-row">
+    <a class="brand" href="#top"><img src="../art/murshid-icon.svg" alt="" width="28" height="28"><span lang="en">Murshid</span></a>
+    <nav aria-label="Подвал">
+      <a href="https://webbrain.one" lang="en">WebBrain</a>
+      <a href="https://webbrain.one/companion/" lang="en">Companion</a>
+      <a href="https://github.com/webbrain-one/webbrain" lang="en">GitHub</a>
+      <a href="https://webbrain.one/privacy">Конфиденциальность</a>
+    </nav>
+    <p>GPL-3.0-or-later · Шрифты по лицензии SIL Open Font License · <span>Изображения — по мотивам произведений в общественном достоянии: <i>Исламский богослов</i> (1902), <i>Дрессировщик черепах</i> (1906) и <i>Публичный писец</i> (1910) Османа Хамди-бея; дервиш-мевлеви из серии Ванмура (1700–37); и фотографии дервишей-мевлеви в Константинополе, около 1870–1910 годов, одна — из ателье Sébah &amp; Joaillier. Портрет дервиша и фотографии хранятся в Рейксмузее. Иллюстрация о приватности: стилизация под ИИ по картине <i>Dame Turque</i>, через Open Culture.</span></p>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>
