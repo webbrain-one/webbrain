@@ -89,7 +89,9 @@ server.listen(0, '127.0.0.1', () => {
       assert.ok(!seen.some((s) => s.startsWith(AD_HOST) || s.startsWith(TRACKER_HOST)), `nothing reached the ad hosts: ${seen}`);
       await waitFor(async () => (await evaluate('adEvents')).some((e) => e.name === 'onErrorOccurred'), 'WebBrain to see the blocked request');
       const events = await evaluate('adEvents');
-      const adEvents = events.filter((e) => e.url.includes(AD_HOST));
+      const adEvents = events.filter((e) => {
+        try { return new URL(e.url).hostname === AD_HOST; } catch { return false; }
+      });
       assert.deepEqual(adEvents.map((e) => [e.name, e.tabId, e.error]), [['onBeforeRequest', tab.id, undefined], ['onErrorOccurred', tab.id, 'net::ERR_BLOCKED_BY_CLIENT']]);
       assert.ok(events.some((e) => e.name === 'onResponseStarted' && e.url.endsWith('/local.js') && e.tabId === tab.id), 'WebBrain sees the page\'s other requests');
       console.log('Ads and trackers blocked, ad slots hidden; WebBrain\'s webRequest sees the blocked request');
