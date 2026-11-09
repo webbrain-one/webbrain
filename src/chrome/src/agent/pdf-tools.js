@@ -25,6 +25,10 @@
 
 import { ensureOffscreen } from '../offscreen/ensure.js';
 import {
+  getAllowLocalNetwork,
+  registrableDomain,
+} from '../network/network-tools.js';
+import {
   PDF_EXTRACTION_MESSAGE,
   PDF_EXTRACTION_READY_MESSAGE,
   PDF_PASSTHROUGH_MAX_BYTES,
@@ -104,7 +108,25 @@ export function isPdfUrl(url) {
  * the planner "you need a vision model for this PDF" without us
  * having to render every page to PNG ourselves.
  */
-export async function extractPdfText(url, opts = {}) {
+export async function extractPdfText(url, opts = {}, ctx = {}) {
+  const allowLocal = getAllowLocalNetwork();
+  let attachCookies = false;
+  if (ctx && ctx.tabId != null) {
+    try {
+      const tab = await chrome.tabs.get(ctx.tabId);
+      if (tab && tab.url) {
+        try {
+          const tabHost = new URL(tab.url).hostname;
+          const fetchHost = new URL(url).hostname;
+          const tabRegDomain = registrableDomain(tabHost);
+          if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
+            attachCookies = true;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   await ensureOffscreen();
   await waitForPdfExtractionHost();
   const response = await chrome.runtime.sendMessage({
@@ -115,6 +137,8 @@ export async function extractPdfText(url, opts = {}) {
       toPage: opts.toPage,
       maxChars: opts.maxChars,
       includeBase64: opts.includeDocument === true,
+      allowLocalNetwork: allowLocal,
+      attachCookies,
     },
   });
   if (!response?.ok || !response.result) {

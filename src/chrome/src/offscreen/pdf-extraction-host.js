@@ -57,7 +57,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   (async () => {
     const url = normalizePdfUrl(message.url);
-    const bytes = await fetchPdfBytes(url);
+    const bytes = await fetchPdfBytes(url, {
+      timeoutMs: message.options?.timeoutMs || 60000,
+      allowLocalNetwork: message.options?.allowLocalNetwork === true,
+      attachCookies: message.options?.attachCookies === true,
+    });
     // PDF.js can transfer and detach the input buffer, so keep a copy of the
     // optional Claude document taken before parsing: text and document then
     // come from the same fetch. The ~4/3 base64 message overhead is

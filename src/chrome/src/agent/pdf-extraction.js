@@ -6,6 +6,12 @@
  * browser-only PDF.js runtime while the agent facade remains lightweight.
  */
 
+import {
+  validateFetchUrl,
+  watchFetchAddresses,
+  rejectNetworkRedirect,
+} from '../network/network-tools.js';
+
 export const PDF_EXTRACTION_MESSAGE = 'offscreen-pdf-extract';
 export const PDF_EXTRACTION_READY_MESSAGE = 'offscreen-pdf-extract-ready';
 export const PDF_PASSTHROUGH_MAX_BYTES = 16 * 1024 * 1024;
@@ -112,14 +118,31 @@ export function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-export async function fetchPdfBytes(url, { timeoutMs = 60000 } = {}) {
+export async function fetchPdfBytes(url, {
+  timeoutMs = 60000,
+  allowLocalNetwork = false,
+  attachCookies = false,
+} = {}) {
   const normalizedUrl = normalizePdfUrl(url);
+  if (!normalizedUrl.startsWith('file:')) {
+    const urlCheck = validateFetchUrl(normalizedUrl, { allowLocalNetwork });
+    if (!urlCheck.ok) {
+      throw new Error(`PDF URL is blocked: ${urlCheck.error}`);
+    }
+  }
+  const addresses = !normalizedUrl.startsWith('file:')
+    ? watchFetchAddresses(normalizedUrl, allowLocalNetwork)
+    : null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     let response;
     try {
-      response = await fetch(normalizedUrl, { credentials: 'include', signal: controller.signal });
+      response = await fetch(normalizedUrl, {
+        credentials: attachCookies ? 'include' : 'omit',
+        redirect: 'manual',
+        signal: controller.signal,
+      });
     } catch (error) {
       if (normalizedUrl.startsWith('file:')) {
         throw new Error(
@@ -131,11 +154,17 @@ export async function fetchPdfBytes(url, { timeoutMs = 60000 } = {}) {
       }
       throw new Error(`PDF fetch failed: ${error.message}`);
     }
+    rejectNetworkRedirect(response);
+    const addressFailure = await addresses?.settledFailure('fetch');
+    if (addressFailure) {
+      throw new Error(`PDF fetch failed: ${addressFailure}`);
+    }
     if (!response.ok) {
       throw new Error(`PDF fetch returned HTTP ${response.status} ${response.statusText}`);
     }
     return new Uint8Array(await response.arrayBuffer());
   } finally {
+    addresses?.close();
     clearTimeout(timeout);
   }
 }

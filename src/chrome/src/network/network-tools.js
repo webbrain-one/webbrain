@@ -421,7 +421,7 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
 
 // The extension's own background fetch: tab -1, keyed by its URL (webRequest
 // reports URLs without the fragment).
-function watchFetchAddresses(url, allowLocal) {
+export function watchFetchAddresses(url, allowLocal) {
   let target;
   try {
     const u = new URL(url);
@@ -1973,7 +1973,7 @@ function networkRequestDeadline(ctx = {}) {
   return createRequestDeadline({ signal: ctx.signal, timeoutMs });
 }
 
-function rejectNetworkRedirect(res) {
+export function rejectNetworkRedirect(res) {
   if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
     throw new Error('Redirect was not followed because its target cannot be validated before sending the request. Use an explicit destination URL.');
   }

@@ -329,18 +329,137 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
       {
         type: 'offscreen-pdf-extract',
         url: 'https://example.test/document.pdf',
-        options: { fromPage: 2, toPage: 4, maxChars: 5000, includeBase64: false },
+        options: { fromPage: 2, toPage: 4, maxChars: 5000, includeBase64: false, allowLocalNetwork: false, attachCookies: false },
       },
       { type: 'offscreen-pdf-extract-ready' },
       {
         type: 'offscreen-pdf-extract',
         url: 'https://example.test/document.pdf',
-        options: { fromPage: undefined, toPage: undefined, maxChars: undefined, includeBase64: true },
+        options: { fromPage: undefined, toPage: undefined, maxChars: undefined, includeBase64: true, allowLocalNetwork: false, attachCookies: false },
       },
     ]);
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = originalChrome;
+    globalThis.fetch = originalFetch;
+  }
+}
+
+async function testPdfExtractionSsrfAndCookieHardening() {
+  const { fetchPdfBytes } = await import(pathToFileURL(pdfExtractionModulePath).href);
+  const originalFetch = globalThis.fetch;
+  let lastFetchInit = null;
+  globalThis.fetch = async (url, init) => {
+    lastFetchInit = init;
+    return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
+  };
+
+  try {
+    // 1. Always-blocked cloud metadata
+    await assert.rejects(
+      fetchPdfBytes('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: false }),
+      /Blocked link-local IPv4 \(cloud metadata\)/,
+    );
+    await assert.rejects(
+      fetchPdfBytes('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: true }),
+      /Blocked link-local IPv4 \(cloud metadata\)/,
+    );
+    await assert.rejects(
+      fetchPdfBytes('http://metadata.google.internal/computeMetadata/v1/', { allowLocalNetwork: true }),
+      /Blocked hostname/,
+    );
+
+    // 2. Local network blocked by default
+    await assert.rejects(
+      fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: false }),
+      /Blocked loopback IPv4/,
+    );
+    await assert.rejects(
+      fetchPdfBytes('http://localhost:3000/report.pdf', { allowLocalNetwork: false }),
+      /Blocked local hostname/,
+    );
+    await assert.rejects(
+      fetchPdfBytes('http://192.168.1.1/router.pdf', { allowLocalNetwork: false }),
+      /Blocked private IPv4/,
+    );
+    await assert.rejects(
+      fetchPdfBytes('http://10.0.0.5/doc.pdf', { allowLocalNetwork: false }),
+      /Blocked private IPv4/,
+    );
+
+    // 3. Local network allowed when explicitly opted in
+    const localBytes = await fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: true });
+    assert.deepEqual(Array.from(localBytes), [37, 80, 68, 70]);
+
+    // 4. Scoped cookie credentials policy
+    await fetchPdfBytes('https://example.test/public.pdf', { attachCookies: false });
+    assert.equal(lastFetchInit?.credentials, 'omit');
+    assert.equal(lastFetchInit?.redirect, 'manual');
+
+    await fetchPdfBytes('https://example.test/private.pdf', { attachCookies: true });
+    assert.equal(lastFetchInit?.credentials, 'include');
+    assert.equal(lastFetchInit?.redirect, 'manual');
+
+    // 5. Reject manual redirect responses
+    globalThis.fetch = async () => ({
+      status: 302,
+      type: 'opaqueredirect',
+    });
+    await assert.rejects(
+      fetchPdfBytes('https://example.test/redirect.pdf'),
+      /Redirect was not followed because its target cannot be validated/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+async function testFirefoxPdfExtractionSsrfAndCookieHardening() {
+  const firefoxPdfToolsPath = path.join(root, 'src', 'firefox', 'src', 'agent', 'pdf-tools.js');
+  const { fetchPdfBytes } = await import(pathToFileURL(firefoxPdfToolsPath).href);
+  const originalFetch = globalThis.fetch;
+  let lastFetchInit = null;
+  globalThis.fetch = async (url, init) => {
+    lastFetchInit = init;
+    return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
+  };
+
+  try {
+    // 1. Cloud metadata always blocked
+    await assert.rejects(
+      fetchPdfBytes('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: true }),
+      /Blocked link-local IPv4 \(cloud metadata\)/,
+    );
+
+    // 2. Loopback blocked without opt-in
+    await assert.rejects(
+      fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: false }),
+      /Blocked loopback IPv4/,
+    );
+
+    // 3. Loopback permitted with opt-in
+    const localBytes = await fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: true });
+    assert.deepEqual(Array.from(localBytes), [37, 80, 68, 70]);
+
+    // 4. Scoped cookie credentials policy
+    await fetchPdfBytes('https://example.test/public.pdf', { attachCookies: false });
+    assert.equal(lastFetchInit?.credentials, 'omit');
+    assert.equal(lastFetchInit?.redirect, 'manual');
+
+    await fetchPdfBytes('https://example.test/private.pdf', { attachCookies: true });
+    assert.equal(lastFetchInit?.credentials, 'include');
+    assert.equal(lastFetchInit?.redirect, 'manual');
+
+    // 5. Reject manual redirect responses
+    globalThis.fetch = async () => ({
+      status: 302,
+      type: 'opaqueredirect',
+    });
+    await assert.rejects(
+      fetchPdfBytes('https://example.test/redirect.pdf'),
+      /Redirect was not followed because its target cannot be validated/,
+    );
+  } finally {
     globalThis.fetch = originalFetch;
   }
 }
@@ -352,6 +471,8 @@ const tests = [
   ['PDF facade waits for host readiness and reuses Claude bytes', testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes],
   ['Vendored PDF.js extracts text through the compat entry points', testVendoredPdfjsExtractsTextThroughCompatEntryPoints],
   ['PDF.js compat fills missing built-ins without replacing native ones', testPdfjsCompatFillsMissingBuiltIns],
+  ['Chrome PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testPdfExtractionSsrfAndCookieHardening],
+  ['Firefox PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testFirefoxPdfExtractionSsrfAndCookieHardening],
 ];
 
 let failed = 0;

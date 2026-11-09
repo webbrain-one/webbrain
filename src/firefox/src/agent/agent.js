@@ -47291,7 +47291,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           fromPage: args.fromPage,
           toPage: args.toPage,
           maxChars: args.maxChars,
-        });
+        }, { tabId });
 
         // Tier 2 — Anthropic Claude PDF passthrough.
         const provider = this.providerManager.getActive();

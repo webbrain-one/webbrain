@@ -340,7 +340,7 @@ function blockedAddressError(url, reason) {
  * to the request itself, since a configured proxy may still reach the host;
  * the response address check still applies.
  */
-async function resolvedHostFailure(rawUrl, allowLocal) {
+export async function resolvedHostFailure(rawUrl, allowLocal) {
   if (typeof globalThis.browser?.dns?.resolve !== 'function') return null;
   let host;
   try { host = new URL(rawUrl).hostname; } catch (_) { return null; }
@@ -414,7 +414,7 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
 
 // The extension's own background fetch: tab -1, keyed by its URL (webRequest
 // reports URLs without the fragment).
-function watchFetchAddresses(url, allowLocal) {
+export function watchFetchAddresses(url, allowLocal) {
   let target;
   try {
     const u = new URL(url);
@@ -1975,7 +1975,7 @@ function networkRequestDeadline(ctx = {}) {
   return createRequestDeadline({ signal: ctx.signal, timeoutMs });
 }
 
-function rejectNetworkRedirect(res) {
+export function rejectNetworkRedirect(res) {
   if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
     throw new Error('Redirect was not followed because its target cannot be validated before sending the request. Use an explicit destination URL.');
   }
