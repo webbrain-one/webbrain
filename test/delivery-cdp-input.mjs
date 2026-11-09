@@ -298,6 +298,77 @@ test('[mocked transport] CDP click by text: a normal click delivers one press/re
   } finally { restoreCdp(); }
 });
 
+// The agent cursor glides onto the target before the click (_leadAgentCursor).
+// The page may move meanwhile, so the click must use where the target is
+// after the glide, never the geometry read before it.
+function leadingCursor(agent, order) {
+  agent.isAgentIndicatorShown = () => true;
+  agent._showAgentTarget = (_tab, _target, _source, phase) => {
+    if (phase !== 'approach') return null;
+    order.push('approach');
+    return Promise.resolve({ ok: true, arriveInMs: 40 });
+  };
+}
+
+test('[mocked transport] CDP click by text: a target that moves while the cursor glides is clicked where it lands', async () => {
+  const agent = newAgent();
+  agent._annotateClickProgress = async (_t, _n, _a, response) => response;
+  const order = [];
+  leadingCursor(agent, order);
+  const presses = [];
+  let resolutions = 0;
+  cdpClient.attach = async () => {};
+  cdpClient.armFileInputClickGuard = async () => {};
+  cdpClient.consumeFileInputClickGuard = async () => ({ blocked: false });
+  cdpClient.evaluate = async (_tab, expression) => {
+    // The click's own text resolution (not the auto-select probe before it).
+    if (/const needle =/.test(expression) && /wbmn_/.test(expression)) {
+      order.push('resolve');
+      // Content loads above the button while the cursor glides: it moves down.
+      const y = resolutions++ === 0 ? 5 : 105;
+      return { result: { value: { found: true, mode: 'exact', x: 205, y, width: 10, height: 10, tag: 'BUTTON', text: 'Post',
+        isSubmitControl: false, isEditableControl: false } } };
+    }
+    return { result: { value: null } };
+  };
+  cdpClient.sendCommand = async (_tab, method, params) => {
+    if (method === 'Input.dispatchMouseEvent' && params.type === 'mousePressed') presses.push([params.x, params.y]);
+    return {};
+  };
+  try {
+    const result = await agent._executeToolImpl(17, 'click', { text: 'Post' }, null,
+      { _contentActionAbortSignal: new AbortController().signal, _contentActionDispatchState: { started: false } });
+    assert.equal(result.success, true);
+    assert.deepEqual(order, ['resolve', 'approach', 'resolve'], 'the text is resolved again after the glide');
+    assert.deepEqual(presses, [[205, 105]], 'the press goes where the button is after the glide');
+  } finally { restoreCdp(); }
+});
+
+test('[mocked transport] CDP click by coordinates: the point is checked only after the cursor glides there', async () => {
+  const agent = newAgent();
+  agent._annotateClickProgress = async (_t, _n, _a, response) => response;
+  const order = [];
+  leadingCursor(agent, order);
+  cdpClient.attach = async () => {};
+  cdpClient.armFileInputClickGuard = async () => {};
+  cdpClient.consumeFileInputClickGuard = async () => ({ blocked: false });
+  cdpClient.evaluate = async (_tab, expression) => {
+    if (/elementFromPoint/.test(expression)) order.push('check point');
+    return { result: { value: null } };
+  };
+  cdpClient.sendCommand = async (_tab, method, params) => {
+    if (method === 'Input.dispatchMouseEvent' && params.type === 'mousePressed') order.push('press');
+    return {};
+  };
+  try {
+    await agent._executeToolImpl(17, 'click', { x: 120, y: 80, coordinate_space: 'css' }, null,
+      { _contentActionAbortSignal: new AbortController().signal, _contentActionDispatchState: { started: false } });
+    assert.equal(order[0], 'approach', order.join(' > '));
+    assert.ok(order.includes('check point') && order.includes('press'), order.join(' > '));
+    assert.ok(order.indexOf('check point') > order.indexOf('approach'), order.join(' > '));
+  } finally { restoreCdp(); }
+});
+
 const buttonHtml = `<!doctype html><main><h1>Compose</h1>
 <button id="post" type="button" style="position:absolute;left:100px;top:100px;width:120px;height:40px">Post</button></main>
 <script>window.qaClicks = []; post.addEventListener('click', event => qaClicks.push(event.isTrusted));</script>`;

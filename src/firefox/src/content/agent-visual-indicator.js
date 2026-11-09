@@ -12,9 +12,10 @@
  *       classic           — the original pulsing inset glow
  *   - a "Stop WebBrain" floating button,
  *   - the agent cursor and a ring on the element being acted on. The cursor
- *     keeps one size: it glides to each target, presses once with a ripple on
- *     clicks, and between actions rests where it last acted, slowly fading in
- *     and out instead of disappearing.
+ *     keeps one size: ahead of each action it glides to the target (the agent
+ *     waits for it to land before its input), presses once with a ripple when
+ *     the click goes through, and between actions rests where it last acted,
+ *     blinking instead of disappearing.
  *
  * Lifecycle messages from the service worker:
  *
@@ -26,6 +27,10 @@
  *                                capture our own UI
  *   WB_SHOW_AFTER_TOOL_USE    — restore visibility after the screenshot
  *                                has been captured
+ *   WB_SHOW_AGENT_TARGET      — point the cursor at a target. With phase
+ *                                'approach' it glides there ahead of the
+ *                                input and replies `arriveInMs`; with phase
+ *                                'done' it takes the input's verdict.
  *
  * Stop button click → service worker via WB_STOP_AGENT, which calls
  * agent.abort(tabId) the same way the sidepanel's Stop button does.
@@ -1364,12 +1369,14 @@
 
   /* ------------------------------------------------------------------------
    * Agent cursor
-   * One size (75% of the original 48×56 arrow). It glides to each target and
-   * on clicks presses once with a ripple: the only size change, so a size
-   * change always means a click. Between actions it rests on the spot and
-   * fades in and out. Position uses a CSS transition and the press, ripple and
-   * resting breath use the Web Animations API, so no style is written per
-   * frame.
+   * One size (75% of the original 48×56 arrow). Ahead of an action it glides
+   * to the target and holds there; a click presses once with a ripple (the
+   * only size change, so a size change always means a click) when the input
+   * reaches the page, or at the latest on the agent's success verdict.
+   * Between actions it rests on the spot and blinks. Position, press, ripple
+   * and blink all use the Web Animations API: no style is written per frame,
+   * and unlike a CSS transition a glide keeps its timing through the
+   * display:none of a screenshot instead of being cancelled by it.
    * ---------------------------------------------------------------------- */
 
   const CURSOR_SCALE = 0.75;
@@ -1377,8 +1384,24 @@
   const CURSOR_H = 56 * CURSOR_SCALE;
   const TIP_X = 5 * CURSOR_SCALE;
   const TIP_Y = 4 * CURSOR_SCALE;
-  const GLIDE_MS = 420;
-  const CURSOR_TRANSITION = `transform ${GLIDE_MS}ms cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.25s ease`;
+  // A glide's length grows with its distance, so a short hop stays quick and
+  // a long one reads as travel. The agent waits for the landing before it
+  // clicks (agent.js AGENT_CURSOR_LEAD_MAX_MS caps that wait), so
+  // GLIDE_MAX_MS stays under that cap.
+  const GLIDE_MIN_MS = 360;
+  const GLIDE_MAX_MS = 760;
+  const GLIDE_MS_PER_PX = 0.45;
+  const GLIDE_EASING = 'cubic-bezier(0.37, 0, 0.18, 1)';
+  const FADE_IN_MS = 250;
+  // After the verdict the press and ripple play out before the rest.
+  const SETTLE_MS = 900;
+  // A cursor that landed and never heard how the action went rests anyway.
+  const APPROACH_TTL_MS = 8000;
+  // A press held back by a screenshot plays once the cursor is back, unless
+  // it has gone this stale.
+  const PENDING_PRESS_MAX_MS = 1500;
+  const CURSOR_TRANSITION = 'opacity 0.25s ease';
+  const tipTransform = (x, y) => `translate(${(x - TIP_X).toFixed(1)}px, ${(y - TIP_Y).toFixed(1)}px)`;
   const CURSOR_SVG = `
     <svg width="100%" height="100%" viewBox="0 0 48 56" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
       <path d="M5 4L39 31L24 34L31 50L20 54L14 38L5 48V4Z"
@@ -1390,10 +1413,17 @@
   class AgentCursor {
     constructor() {
       this.el = null; this.body = null; this.ripple = null;
-      this.mode = 'hidden'; // 'active' | 'resting' | 'hidden'
-      this.x = 0; this.y = 0;
+      // 'approach' — gliding to, or holding at, a target the agent is about to act on
+      // 'active'   — just acted; the press plays out
+      // 'resting'  — waiting for the next action, blinking on the spot
+      // 'hidden'
+      this.mode = 'hidden';
+      this.x = 0; this.y = 0; // where the tip is headed, or is
+      this.glide = null; // { animation, fromX, fromY, toX, toY, endsAt }
+      this.pressed = false; // pressed since the last approach or aim
+      this.suspended = false; this.pendingPressAt = 0;
       this.breath = null; this.pressAnimation = null;
-      this.restTimer = null; this.hideTimer = null;
+      this.restTimer = null; this.hideTimer = null; this.pressTimer = null;
     }
     mount(root) {
       if (this.el) return;
@@ -1430,49 +1460,123 @@
       root.append(ripple, el);
       this.el = el; this.body = body; this.ripple = ripple;
     }
-    place(x, y, instant) {
-      const transform = `translate(${(x - TIP_X).toFixed(1)}px, ${(y - TIP_Y).toFixed(1)}px)`;
-      if (instant) {
-        this.el.style.transition = 'opacity 0.25s ease';
-        this.el.style.transform = transform;
-        void this.el.offsetWidth; // commit the jump before the glide transition returns
-        this.el.style.transition = CURSOR_TRANSITION;
-      } else {
-        this.el.style.transform = transform;
-      }
-      this.x = x; this.y = y;
+    // Where the tip is drawn right now, mid-glide included.
+    current() {
+      const glide = this.glide;
+      if (!glide) return { x: this.x, y: this.y };
+      let progress = null;
+      try { progress = glide.animation.effect?.getComputedTiming?.().progress; } catch {}
+      if (progress == null) return { x: this.x, y: this.y };
+      return {
+        x: glide.fromX + (glide.toX - glide.fromX) * progress,
+        y: glide.fromY + (glide.toY - glide.fromY) * progress,
+      };
     }
-    // The agent acts with the tip at (x, y).
-    aim(x, y, click) {
+    // How long until the tip lands.
+    remaining() {
+      return this.glide ? Math.max(0, this.glide.endsAt - performance.now()) : 0;
+    }
+    // Send the tip to (x, y): a glide, or a jump when `instant`. Only the
+    // landing transform is written to the style; the glide on top of it is
+    // a Web Animation. Returns how long the glide takes.
+    moveTo(x, y, instant = false, duration = 0) {
+      const glide = this.glide;
+      if (!instant && !duration && glide && Math.abs(glide.toX - x) < 0.5 && Math.abs(glide.toY - y) < 0.5) {
+        return this.remaining();
+      }
+      const from = this.current();
+      glide?.animation.cancel();
+      this.glide = null;
+      const to = tipTransform(x, y);
+      this.el.style.transform = to;
+      this.x = x; this.y = y;
+      const distance = Math.hypot(x - from.x, y - from.y);
+      if (instant || distance < 2 || typeof this.el.animate !== 'function') return 0;
+      const ms = Math.round(duration || clamp(GLIDE_MIN_MS + distance * GLIDE_MS_PER_PX, GLIDE_MIN_MS, GLIDE_MAX_MS));
+      const animation = this.el.animate(
+        [{ transform: tipTransform(from.x, from.y) }, { transform: to }],
+        { duration: ms, easing: GLIDE_EASING },
+      );
+      const next = { animation, fromX: from.x, fromY: from.y, toX: x, toY: y, endsAt: performance.now() + ms };
+      this.glide = next;
+      animation.onfinish = () => { if (this.glide === next) this.glide = null; };
+      return ms;
+    }
+    // Glide to a target ahead of the agent's input. Returns ms until it lands.
+    approach(x, y) {
       clearTimeout(this.restTimer);
-      clearTimeout(this.hideTimer);
       const still = prefersReducedMotion();
       const fresh = this.mode === 'hidden';
-      const moved = !fresh && Math.hypot(x - this.x, y - this.y) > 2;
-      this.place(x, y, fresh || still);
+      const ms = this.moveTo(x, y, fresh || still);
+      this.mode = 'approach';
+      this.pressed = false;
+      this.reveal();
+      this.restTimer = setTimeout(() => this.rest(), APPROACH_TTL_MS);
+      if (still) return 0;
+      return fresh ? FADE_IN_MS : ms;
+    }
+    // The agent acts with the tip at (x, y) now. During an approach this is
+    // the input it announced: a click presses as the tip lands, and the
+    // verdict ends the approach. Otherwise it is a glide of its own.
+    aim(x, y, click) {
+      const fresh = this.mode === 'hidden';
+      this.moveTo(x, y, fresh || prefersReducedMotion());
+      this.reveal();
+      if (this.mode === 'approach') {
+        if (click) this.click();
+        return;
+      }
+      clearTimeout(this.restTimer);
       this.mode = 'active';
-      this.el.style.opacity = '1';
-      this.settle();
-      if (click && !still) this.press(moved ? GLIDE_MS : 0);
+      this.pressed = false;
+      if (click) this.click();
       this.restTimer = setTimeout(() => this.rest(), TARGET_RING_TTL_MS);
+    }
+    // Press once, as the tip lands.
+    click() {
+      if (this.pressed || this.mode === 'hidden') return;
+      this.pressed = true;
+      if (prefersReducedMotion()) return;
+      clearTimeout(this.pressTimer);
+      const wait = this.remaining();
+      if (wait > 0) this.pressTimer = setTimeout(() => this.playPress(), wait);
+      else this.playPress();
+    }
+    // How the announced action went. A success presses if the click hasn't
+    // yet; either way the cursor stays on the spot, then rests.
+    finish(ok) {
+      if (this.mode !== 'approach') return false;
+      if (ok) this.click();
+      this.mode = 'active';
+      clearTimeout(this.restTimer);
+      this.restTimer = setTimeout(() => this.rest(), this.remaining() + SETTLE_MS);
+      return true;
     }
     // Keep up with scrolling without re-triggering the click.
     follow(x, y) {
       if (this.mode === 'hidden') return;
       if (Math.abs(x - this.x) < 0.5 && Math.abs(y - this.y) < 0.5) return;
-      this.place(x, y, true);
+      const left = this.remaining();
+      if (left > 0) this.moveTo(x, y, false, Math.max(120, left));
+      else this.moveTo(x, y, true);
     }
     rest() {
-      if (this.mode !== 'active') return;
+      if (this.mode !== 'active' && this.mode !== 'approach') return;
       this.mode = 'resting';
       if (prefersReducedMotion() || typeof this.body.animate !== 'function') return;
+      this.breath?.cancel();
       this.breath = this.body.animate([
         { opacity: 1, easing: 'ease-in-out' },
-        { opacity: 0.32, easing: 'ease-in-out' },
+        { opacity: 0.2, easing: 'ease-in-out' },
         { opacity: 1 },
-      ], { duration: 2600, iterations: Infinity });
+      ], { duration: 1800, iterations: Infinity });
     }
-    // Leave the resting breath without an opacity jump.
+    reveal() {
+      clearTimeout(this.hideTimer);
+      this.el.style.opacity = '1';
+      this.settle();
+    }
+    // Leave the resting blink without an opacity jump.
     settle() {
       if (!this.breath) return;
       let current = 1;
@@ -1483,25 +1587,30 @@
         this.body.animate([{ opacity: current }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
       }
     }
-    press(delay) {
-      if (typeof this.body.animate !== 'function') return;
+    playPress() {
+      this.pressTimer = null;
+      if (!this.body || this.mode === 'hidden' || typeof this.body.animate !== 'function') return;
+      // Hidden for a screenshot: play it when the cursor is back.
+      if (this.suspended) { this.pendingPressAt = performance.now(); return; }
       this.pressAnimation?.cancel();
       this.pressAnimation = this.body.animate([
         { transform: 'scale(1)' },
         { transform: 'scale(0.84)', offset: 0.45 },
         { transform: 'scale(1)' },
-      ], { duration: 320, delay, easing: 'ease-out' });
+      ], { duration: 320, easing: 'ease-out' });
       const at = `translate(${this.x.toFixed(1)}px, ${this.y.toFixed(1)}px)`;
       this.ripple.getAnimations?.().forEach(animation => animation.cancel());
       this.ripple.animate([
         { transform: `${at} scale(0.3)`, opacity: 0.95 },
         { transform: `${at} scale(1.6)`, opacity: 0 },
-      ], { duration: 560, delay, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)' });
+      ], { duration: 560, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)' });
     }
     hide() {
       clearTimeout(this.restTimer);
+      clearTimeout(this.pressTimer);
       if (this.mode === 'hidden' || !this.el) return;
       this.mode = 'hidden';
+      this.pendingPressAt = 0;
       this.el.style.opacity = '0';
       clearTimeout(this.hideTimer);
       this.hideTimer = setTimeout(() => {
@@ -1511,16 +1620,24 @@
       }, 300);
     }
     suspend() {
+      this.suspended = true;
       if (this.el) this.el.style.display = 'none';
       if (this.ripple) this.ripple.style.display = 'none';
     }
     resume() {
+      this.suspended = false;
       if (this.el) this.el.style.display = '';
       if (this.ripple) this.ripple.style.display = '';
+      const heldFor = this.pendingPressAt ? performance.now() - this.pendingPressAt : Infinity;
+      this.pendingPressAt = 0;
+      if (heldFor <= PENDING_PRESS_MAX_MS) this.playPress();
     }
     destroy() {
       clearTimeout(this.restTimer);
       clearTimeout(this.hideTimer);
+      clearTimeout(this.pressTimer);
+      this.glide?.animation.cancel();
+      this.glide = null;
       this.breath?.cancel();
       this.pressAnimation?.cancel();
       this.el?.remove();
@@ -1708,28 +1825,7 @@
     cursor?.hide();
   }
 
-  function pointAtTarget(source) {
-    injectStyles();
-    const root = document.body || document.documentElement;
-    if (!root) return;
-    const rect = getTargetRect();
-    if (!rect) return;
-
-    if (!targetOutlineEl) {
-      targetOutlineEl = createTargetOutline();
-      root.appendChild(targetOutlineEl);
-    }
-    targetOutlineEl.style.display = suspendedForToolUse ? 'none' : '';
-    placeTargetRing(rect);
-    targetOutlineEl.style.opacity = '1';
-
-    if (!cursor) cursor = new AgentCursor();
-    cursor.mount(root);
-    if (suspendedForToolUse) cursor.suspend();
-    const tip = cursorTip(rect);
-    cursor.aim(tip.x, tip.y, /^click/.test(String(source || '')));
-    effect?.target?.(rect);
-
+  function armRingTimer(ms) {
     if (ringTimer) clearTimeout(ringTimer);
     ringTimer = setTimeout(() => {
       ringTimer = null;
@@ -1746,7 +1842,38 @@
           targetOutlineEl = null;
         }, 400);
       }
-    }, TARGET_RING_TTL_MS);
+    }, ms);
+  }
+
+  // Ring the target and bring the cursor to it. With phase 'approach' the
+  // cursor glides there ahead of the input and this returns ms until it
+  // lands; otherwise the input happens now.
+  function pointAtTarget(source, phase = null) {
+    injectStyles();
+    const root = document.body || document.documentElement;
+    if (!root) return 0;
+    const rect = getTargetRect();
+    if (!rect) return 0;
+
+    if (!targetOutlineEl) {
+      targetOutlineEl = createTargetOutline();
+      root.appendChild(targetOutlineEl);
+    }
+    targetOutlineEl.style.display = suspendedForToolUse ? 'none' : '';
+    placeTargetRing(rect);
+    targetOutlineEl.style.opacity = '1';
+
+    if (!cursor) cursor = new AgentCursor();
+    cursor.mount(root);
+    if (suspendedForToolUse) cursor.suspend();
+    const tip = cursorTip(rect);
+    let arriveInMs = 0;
+    if (phase === 'approach') arriveInMs = cursor.approach(tip.x, tip.y);
+    else cursor.aim(tip.x, tip.y, /^click/.test(String(source || '')));
+    effect?.target?.(rect);
+    // The ring stays up while the agent is still on its way to act.
+    armRingTimer(cursor.mode === 'approach' ? APPROACH_TTL_MS : TARGET_RING_TTL_MS);
+    return arriveInMs;
   }
 
   function showTarget(el, source = 'interaction') {
@@ -1756,13 +1883,13 @@
     pointAtTarget(source);
   }
 
-  function showTargetRect(rect, source = 'interaction') {
-    if (!rect) return;
+  function setTargetRect(rect) {
+    if (!rect) return false;
     const x = Number(rect.x);
     const y = Number(rect.y);
     const w = Math.max(1, Number(rect.w ?? rect.width ?? 1));
     const h = Math.max(1, Number(rect.h ?? rect.height ?? 1));
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return false;
 
     const width = Math.max(w, 28);
     const height = Math.max(h, 28);
@@ -1775,7 +1902,65 @@
       rawWidth: width,
       rawHeight: height,
     };
-    pointAtTarget(source);
+    return true;
+  }
+
+  function showTargetRect(rect, source = 'interaction') {
+    if (setTargetRect(rect)) pointAtTarget(source);
+  }
+
+  function inView(el) {
+    try {
+      const r = el.getBoundingClientRect();
+      return r.width >= 1 && r.height >= 1 && r.bottom > 0 && r.right > 0
+        && r.top < window.innerHeight && r.left < window.innerWidth;
+    } catch {
+      return false;
+    }
+  }
+
+  // The agent is about to act on this target (a rect, an accessibility-tree
+  // ref_id or a selector): glide there first. Returns ms until the tip
+  // lands, which the agent waits out before its input; 0 when nobody can
+  // see the glide. A target not in view yet is left to the action, which
+  // scrolls it into view and points at it then.
+  function approachTarget(msg = {}) {
+    let el = null;
+    if (typeof msg.ref_id === 'string') {
+      if (msg.pageUrl && msg.pageUrl !== location.href) return 0;
+      try { el = window.__wb_ax_lookup?.(msg.ref_id) || null; } catch {}
+      if (!el) return 0;
+    } else if (typeof msg.selector === 'string') {
+      try { el = document.querySelector(msg.selector); } catch {}
+      if (!el) return 0;
+    }
+    if (el) {
+      if (!inView(el)) return 0;
+      targetElement = el;
+      targetRectOverride = null;
+    } else if (!setTargetRect(msg.rect)) {
+      return 0;
+    }
+    const arriveInMs = pointAtTarget(msg.source || 'click', 'approach');
+    return document.visibilityState === 'visible' && !suspendedForToolUse ? arriveInMs : 0;
+  }
+
+  // The announced action's verdict.
+  function finishTarget(ok) {
+    if (cursor?.finish(ok === true)) armRingTimer(TARGET_RING_TTL_MS);
+  }
+
+  // CDP input reaches the page as trusted events: a press on the target the
+  // cursor is holding at is the click it announced, so it presses with it.
+  function onPagePress(event) {
+    if (!event.isTrusted || cursor?.mode !== 'approach' || cursor.pressed) return;
+    const rect = getTargetRect();
+    if (!rect) return;
+    const pad = 12;
+    if (event.clientX >= rect.left - pad && event.clientX <= rect.left + rect.width + pad
+        && event.clientY >= rect.top - pad && event.clientY <= rect.top + rect.height + pad) {
+      cursor.click();
+    }
   }
 
   function show() {
@@ -1881,7 +2066,8 @@
 
   window.addEventListener('scroll', scheduleTargetUpdate, true);
   window.addEventListener('resize', scheduleTargetUpdate, true);
-  window.__webbrainAgentIndicator = { showTarget, showTargetRect, hideTarget: clearTarget };
+  window.addEventListener('pointerdown', onPagePress, { capture: true, passive: true });
+  window.__webbrainAgentIndicator = { showTarget, showTargetRect, approachTarget, finishTarget, hideTarget: clearTarget };
 
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg.type !== 'string') return;
@@ -1906,7 +2092,12 @@
         sendResponse({ ok: true });
         break;
       case 'WB_SHOW_AGENT_TARGET':
-        if (msg.rect) showTargetRect(msg.rect, msg.source || 'message');
+        if (msg.phase === 'approach') {
+          sendResponse({ ok: true, arriveInMs: approachTarget(msg) });
+          break;
+        }
+        if (msg.phase === 'done') finishTarget(msg.ok === true);
+        else if (msg.rect) showTargetRect(msg.rect, msg.source || 'message');
         sendResponse({ ok: true });
         break;
       // Unknown messages are silently ignored — other content scripts in

@@ -2199,6 +2199,8 @@ browser.browserAction.onClicked.addListener((tab) => {
  * content script and on tabs that haven't loaded yet.
  */
 const activeIndicatorTabs = new Set();
+// The agent leads a click with its cursor only on a tab that shows the run.
+agent.isAgentIndicatorShown = tabId => activeIndicatorTabs.has(tabId);
 const indicatorHeartbeatTimers = new Map();
 const INDICATOR_HEARTBEAT_INTERVAL_MS = 20_000;
 
