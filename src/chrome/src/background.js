@@ -2219,6 +2219,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
  * await — these are decorative and shouldn't block the run.
  */
 const activeIndicatorTabs = new Set();
+// The agent leads a click with its cursor only on a tab that shows the run.
+agent.isAgentIndicatorShown = tabId => activeIndicatorTabs.has(tabId);
 const indicatorHeartbeatTimers = new Map();
 const INDICATOR_HEARTBEAT_INTERVAL_MS = 20_000;
 
