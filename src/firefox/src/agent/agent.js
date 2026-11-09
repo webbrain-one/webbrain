@@ -19020,12 +19020,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * page as it is after the wait. Bounded by AGENT_CURSOR_LEAD_MAX_MS; no
    * wait when the cursor is not visible (background tab, screenshot,
    * reduced motion). Stops early on abort; the caller's own abort check
-   * then ends the input.
+   * then ends the input. Resolves to whether it waited: a caller holding
+   * geometry from before the wait resolves its target again.
    */
   async _leadAgentCursor(tabId, target, source, abortSignal = null) {
-    if (!(AGENT_CURSOR_LEAD_MAX_MS > 0) || !target || !this._agentCursorShown(tabId)) return;
+    if (!(AGENT_CURSOR_LEAD_MAX_MS > 0) || !target || !this._agentCursorShown(tabId)) return false;
     const signals = [abortSignal, this._runAbortSignal?.(tabId)].filter(signal => signal && typeof signal.addEventListener === 'function');
-    if (signals.some(signal => signal.aborted)) return;
+    if (signals.some(signal => signal.aborted)) return false;
     let replyTimer = null;
     const reply = await Promise.race([
       Promise.resolve(this._showAgentTarget(tabId, target, source, 'approach')).catch(() => null),
@@ -19033,7 +19034,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ]);
     clearTimeout(replyTimer);
     const wait = Math.min(AGENT_CURSOR_LEAD_MAX_MS, Math.max(0, Number(reply?.arriveInMs) || 0));
-    if (!wait) return;
+    if (!wait) return false;
     await new Promise(resolve => {
       const done = () => {
         clearTimeout(timer);
@@ -19043,6 +19044,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const timer = setTimeout(done, wait);
       for (const signal of signals) signal.addEventListener('abort', done, { once: true });
     });
+    return true;
   }
 
   /** Whether the tab shows the run's indicator (background.js sets the check). */

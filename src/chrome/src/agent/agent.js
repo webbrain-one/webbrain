@@ -19974,12 +19974,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * page as it is after the wait. Bounded by AGENT_CURSOR_LEAD_MAX_MS; no
    * wait when the cursor is not visible (background tab, screenshot,
    * reduced motion). Stops early on abort; the caller's own abort check
-   * then ends the input.
+   * then ends the input. Resolves to whether it waited: a caller holding
+   * geometry from before the wait resolves its target again.
    */
   async _leadAgentCursor(tabId, target, source, abortSignal = null) {
-    if (!(AGENT_CURSOR_LEAD_MAX_MS > 0) || !target || !this._agentCursorShown(tabId)) return;
+    if (!(AGENT_CURSOR_LEAD_MAX_MS > 0) || !target || !this._agentCursorShown(tabId)) return false;
     const signals = [abortSignal, this._runAbortSignal?.(tabId)].filter(signal => signal && typeof signal.addEventListener === 'function');
-    if (signals.some(signal => signal.aborted)) return;
+    if (signals.some(signal => signal.aborted)) return false;
     let replyTimer = null;
     const reply = await Promise.race([
       Promise.resolve(this._showAgentTarget(tabId, target, source, 'approach')).catch(() => null),
@@ -19987,7 +19988,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ]);
     clearTimeout(replyTimer);
     const wait = Math.min(AGENT_CURSOR_LEAD_MAX_MS, Math.max(0, Number(reply?.arriveInMs) || 0));
-    if (!wait) return;
+    if (!wait) return false;
     await new Promise(resolve => {
       const done = () => {
         clearTimeout(timer);
@@ -19997,6 +19998,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const timer = setTimeout(done, wait);
       for (const signal of signals) signal.addEventListener('abort', done, { once: true });
     });
+    return true;
   }
 
   /** Whether the tab shows the run's indicator (background.js sets the check). */
@@ -53338,7 +53340,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // Names this main-world scan echoes to the model are resolved by
           // element in the content scripts' world (_modelFacingMarkedNames).
           const modelNameNonce = `wbmn_${globalThis.crypto.randomUUID()}`;
-          const result = await cdpClient.evaluate(tabId, `
+          const textTargetScript = `
             (() => {
               const needle = ${JSON.stringify(args.text.toLowerCase())};
               const explicit = ${JSON.stringify(args.textMatch || '')};
@@ -53588,8 +53590,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 isEditableControl: isEditableControl(el),
               };
             })()
-          `);
+          `;
+          const result = await cdpClient.evaluate(tabId, textTargetScript);
           let info = result?.result?.value;
+          // The cursor glides onto the target before the click. The page can
+          // move meanwhile, so after a wait the text is resolved again, and the
+          // checks and the click below all use that fresh resolution.
+          if (info?.found && Number.isFinite(Number(info.x)) && Number.isFinite(Number(info.y))) {
+            const led = await this._leadAgentCursor(tabId, {
+              x: Math.round(info.x - (Number(info.width) || 1) / 2),
+              y: Math.round(info.y - (Number(info.height) || 1) / 2),
+              w: Math.round(Number(info.width) || 1),
+              h: Math.round(Number(info.height) || 1),
+            }, 'click_text', earlyCdpAbortSignal);
+            throwIfEarlyCdpAborted();
+            if (led) {
+              info = (await cdpClient.evaluate(tabId, textTargetScript))?.result?.value;
+              throwIfEarlyCdpAborted();
+            }
+          }
 
           // Auto-scroll retry: if element not found, scroll down and try again
           // (up to 3 scrolls) to find elements below the fold.
@@ -54059,15 +54078,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // Snapshot existing tabs first so we can detect a target=_blank
           // link that spawns a background tab instead of navigating in-place
           // (see _redirectTargetBlankClick).
-          // The cursor reaches the target first; the click and its progress
-          // baseline follow it.
-          await this._leadAgentCursor(tabId, {
-            x: Math.round(info.x - (Number(info.width) || 1) / 2),
-            y: Math.round(info.y - (Number(info.height) || 1) / 2),
-            w: Math.round(Number(info.width) || 1),
-            h: Math.round(Number(info.height) || 1),
-          }, 'click_text', earlyCdpAbortSignal);
-          throwIfEarlyCdpAborted();
           const clickUrl = await this._currentUrl(tabId);
           const progressBeforeText = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsText = new Set((await chrome.tabs.query({})).map(t => t.id));
@@ -54256,6 +54266,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         if (args.x != null && args.y != null) {
           return this._withCoordinateReconciliation(await (async () => {
+          // The cursor reaches the point first; the checks and the redirect
+          // below see the page as it is when the click follows.
+          await this._leadAgentCursor(tabId, { x: Math.round(Number(args.x)), y: Math.round(Number(args.y)), w: 1, h: 1 },
+            'click_coordinates', earlyCdpAbortSignal);
+          throwIfEarlyCdpAborted();
           // Check if the element at these coordinates is or is near a <select>.
           const coordTagCheck = await cdpClient.evaluate(tabId, `
             (() => {
@@ -54392,9 +54407,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const clickX = redir ? redir.x : args.x;
           const clickY = redir ? redir.y : args.y;
 
-          await this._leadAgentCursor(tabId, { x: Math.round(clickX), y: Math.round(clickY), w: 1, h: 1 },
-            'click_coordinates', earlyCdpAbortSignal);
-          throwIfEarlyCdpAborted();
           const clickUrl = await this._currentUrl(tabId);
           const progressBeforeCoord = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsCoord = new Set((await chrome.tabs.query({})).map(t => t.id));
