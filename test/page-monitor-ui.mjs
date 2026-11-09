@@ -2262,6 +2262,58 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
+  test(`${build}: random activity effect stays steady within a run and fixed settings override it`, async () => {
+    const { browser, page } = await fixture(engine, build);
+    try {
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await page.evaluate(() => {
+        window.storageListeners = [];
+        chrome.storage = {
+          local: { get: async defaults => defaults },
+          onChanged: { addListener: fn => storageListeners.push(fn) },
+        };
+        window.indicatorMessage = (type, randomStyle) => messageListeners.forEach(fn => fn({ type, randomStyle }, {}, () => {}));
+        window.chooseStyle = newValue => storageListeners.forEach(fn => fn({ agentIndicatorStyle: { newValue } }, 'local'));
+      });
+      await page.addScriptTag({ content: read(build, 'content/agent-visual-indicator.js') });
+      // No saved preference: use this run's random choice supplied by the background.
+      await page.evaluate(() => indicatorMessage('WB_SHOW_AGENT_INDICATORS', 'scan'));
+      await page.waitForSelector('#webbrain-agent-effect', { state: 'attached' });
+      await page.evaluate(() => { window.firstEffect = document.getElementById('webbrain-agent-effect'); });
+      await page.evaluate(() => {
+        indicatorMessage('WB_HIDE_FOR_TOOL_USE');
+        indicatorMessage('WB_SHOW_AFTER_TOOL_USE');
+        indicatorMessage('WB_AGENT_INDICATOR_HEARTBEAT');
+        indicatorMessage('WB_SHOW_AGENT_INDICATORS', 'scan');
+      });
+      assert.equal(await page.evaluate(() => firstEffect === document.getElementById('webbrain-agent-effect')), true);
+      // An immediate next run may begin while the old effect is still fading.
+      await page.evaluate(() => {
+        indicatorMessage('WB_HIDE_AGENT_INDICATORS');
+        indicatorMessage('WB_SHOW_AGENT_INDICATORS', 'classic');
+      });
+      assert.equal(await page.locator('#webbrain-agent-glow-border').count(), 1);
+      assert.equal(await page.locator('#webbrain-agent-effect').count(), 0);
+      await page.evaluate(() => chooseStyle('scan'));
+      await page.waitForTimeout(550);
+      assert.equal(await page.locator('#webbrain-agent-glow-border').count(), 0);
+      assert.equal(await page.locator('#webbrain-agent-effect').count(), 1);
+      await page.evaluate(() => {
+        indicatorMessage('WB_HIDE_AGENT_INDICATORS');
+        indicatorMessage('WB_SHOW_AGENT_INDICATORS', 'classic');
+      });
+      assert.equal(await page.locator('#webbrain-agent-effect').count(), 1, 'fixed scan overrides the random classic choice');
+      assert.equal(await page.locator('#webbrain-agent-glow-border').count(), 0);
+      await page.evaluate(() => chooseStyle('random'));
+      await page.waitForTimeout(550);
+      assert.equal(await page.locator('#webbrain-agent-glow-border').count(), 1, 'switching back to random restores the run choice');
+      assert.equal(await page.locator('#webbrain-agent-effect').count(), 0);
+      assert.deepEqual(errors, []);
+      assert.equal((await page.evaluate(() => feedback)).length, 0, 'random effects stay outside page feedback');
+    } finally { await browser.close(); }
+  });
+
   test(`${build}: agent cursor, target ring and every activity effect stay out of page feedback`, async () => {
     const { browser, page } = await fixture(engine, build);
     try {

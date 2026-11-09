@@ -123,8 +123,8 @@ const apocalypseModeStatus = document.getElementById('apocalypse-mode-status');
 const verboseToggle = document.getElementById('toggle-verbose');
 const composerDeliveryModeSelect = document.getElementById('select-composer-delivery-mode');
 const agentIndicatorStyleSelect = document.getElementById('select-agent-indicator-style');
-// Read by content/agent-visual-indicator.js; 'circuit' is the default.
-const AGENT_INDICATOR_STYLES = ['circuit', 'aurora', 'scan', 'gears', 'classic'];
+// Read by content/agent-visual-indicator.js; 'random' is the default.
+const AGENT_INDICATOR_STYLES = ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'];
 const selectionShortcutToggle = document.getElementById('toggle-selection-shortcut');
 const pdfViewerToggle = document.getElementById('toggle-pdf-viewer');
 const autoGroupTabsToggle = document.getElementById('toggle-auto-group-tabs');
@@ -694,7 +694,7 @@ async function init() {
     composerDeliveryModeSelect.value = stored.composerDeliveryMode === 'steer' ? 'steer' : 'queue';
   }
   if (agentIndicatorStyleSelect) {
-    agentIndicatorStyleSelect.value = AGENT_INDICATOR_STYLES.includes(stored.agentIndicatorStyle) ? stored.agentIndicatorStyle : 'circuit';
+    agentIndicatorStyleSelect.value = AGENT_INDICATOR_STYLES.includes(stored.agentIndicatorStyle) ? stored.agentIndicatorStyle : 'random';
   }
   if (selectionShortcutToggle) selectionShortcutToggle.checked = stored.selectionShortcutEnabled !== false;
   if (pdfViewerToggle) pdfViewerToggle.checked = stored.pdfViewerEnabled === undefined || stored.pdfViewerEnabled === true;
@@ -1459,7 +1459,7 @@ composerDeliveryModeSelect?.addEventListener('change', async () => {
 });
 
 agentIndicatorStyleSelect?.addEventListener('change', async () => {
-  const style = AGENT_INDICATOR_STYLES.includes(agentIndicatorStyleSelect.value) ? agentIndicatorStyleSelect.value : 'circuit';
+  const style = AGENT_INDICATOR_STYLES.includes(agentIndicatorStyleSelect.value) ? agentIndicatorStyleSelect.value : 'random';
   await chrome.storage.local.set({ agentIndicatorStyle: style }).catch(() => {});
 });
 
