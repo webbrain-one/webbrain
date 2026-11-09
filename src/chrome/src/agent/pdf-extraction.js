@@ -6,8 +6,14 @@
  * browser-only PDF.js runtime while the agent facade remains lightweight.
  */
 
+import {
+  validateFetchUrl,
+  rejectNetworkRedirect,
+} from '../network/network-tools.js';
+
 export const PDF_EXTRACTION_MESSAGE = 'offscreen-pdf-extract';
 export const PDF_EXTRACTION_READY_MESSAGE = 'offscreen-pdf-extract-ready';
+export const PDF_FETCH_VERDICT_MESSAGE = 'offscreen-pdf-fetch-verdict';
 export const PDF_PASSTHROUGH_MAX_BYTES = 16 * 1024 * 1024;
 
 const ALLOWED_PDF_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
@@ -112,14 +118,30 @@ export function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-export async function fetchPdfBytes(url, { timeoutMs = 60000 } = {}) {
+export async function fetchPdfBytes(url, {
+  timeoutMs = 60000,
+  allowLocalNetwork = false,
+  attachCookies = false,
+  verifyResponse,
+} = {}) {
   const normalizedUrl = normalizePdfUrl(url);
+  if (!normalizedUrl.startsWith('file:')) {
+    const urlCheck = validateFetchUrl(normalizedUrl, { allowLocalNetwork });
+    if (!urlCheck.ok) {
+      throw new Error(`PDF URL is blocked: ${urlCheck.error}`);
+    }
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     let response;
     try {
-      response = await fetch(normalizedUrl, { credentials: 'include', signal: controller.signal });
+      response = await fetch(normalizedUrl, {
+        credentials: attachCookies ? 'include' : 'omit',
+        redirect: 'manual',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
     } catch (error) {
       if (normalizedUrl.startsWith('file:')) {
         throw new Error(
@@ -131,12 +153,20 @@ export async function fetchPdfBytes(url, { timeoutMs = 60000 } = {}) {
       }
       throw new Error(`PDF fetch failed: ${error.message}`);
     }
+    rejectNetworkRedirect(response);
+    // Offscreen documents lack webRequest. Wait for the service worker's
+    // verdict before consuming bytes, parsing text, or attaching a document.
+    if (!normalizedUrl.startsWith('file:')) {
+      if (typeof verifyResponse !== 'function') throw new Error('PDF response address verification is required.');
+      await verifyResponse();
+    }
     if (!response.ok) {
       throw new Error(`PDF fetch returned HTTP ${response.status} ${response.statusText}`);
     }
     return new Uint8Array(await response.arrayBuffer());
   } finally {
     clearTimeout(timeout);
+    controller.abort();
   }
 }
 

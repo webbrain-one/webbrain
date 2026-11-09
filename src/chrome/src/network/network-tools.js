@@ -370,10 +370,11 @@ function blockedAddressError(url, reason) {
  * names the request or tab an event belongs to (null to ignore it). Returns
  * null when webRequest is unavailable.
  */
-function watchResponseAddresses(filter, keyOf, allowLocal) {
+function watchResponseAddresses(filter, keyOf, allowLocal, requireAddress = false) {
   const webRequest = globalThis.chrome?.webRequest;
   if (RESPONSE_ADDRESS_EVENTS.some(name => typeof webRequest?.[name]?.addListener !== 'function')) return null;
   const seen = new Set();
+  const verified = new Set();
   const failures = new Map();
   const waiters = new Set();
   const listener = (details) => {
@@ -383,6 +384,7 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
     if (details.ip && !failures.has(key)) {
       const check = validateResolvedAddress(details.ip, { allowLocalNetwork: allowLocal });
       if (!check.ok) failures.set(key, blockedAddressError(details.url, check.error));
+      else verified.add(key);
     }
     for (const wake of waiters) wake();
   };
@@ -401,15 +403,17 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
     // fetch() and webRequest events are delivered separately, so fetch() can
     // resolve before the response's event arrives. Wait briefly for it.
     async settledFailure(key, timeoutMs = RESPONSE_ADDRESS_WAIT_MS) {
-      if (!seen.has(key)) {
+      const settled = () => requireAddress ? verified.has(key) || failures.has(key) : seen.has(key);
+      if (!settled()) {
         await new Promise((resolve) => {
           const done = () => { clearTimeout(timer); waiters.delete(wake); resolve(); };
-          const wake = () => { if (seen.has(key)) done(); };
+          const wake = () => { if (settled()) done(); };
           const timer = setTimeout(done, timeoutMs);
           waiters.add(wake);
         });
       }
-      return failures.get(key) || null;
+      return failures.get(key) || (requireAddress && !verified.has(key)
+        ? 'Cannot verify the PDF response resolved address.' : null);
     },
     close() {
       for (const name of added) {
@@ -421,14 +425,14 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
 
 // The extension's own background fetch: tab -1, keyed by its URL (webRequest
 // reports URLs without the fragment).
-function watchFetchAddresses(url, allowLocal) {
+export function watchFetchAddresses(url, allowLocal, { requireAddress = false } = {}) {
   let target;
   try {
     const u = new URL(url);
     u.hash = '';
     target = u.href;
   } catch (_) { return null; }
-  return watchResponseAddresses({ tabId: -1 }, d => (d.url === target ? 'fetch' : null), allowLocal);
+  return watchResponseAddresses({ tabId: -1 }, d => (d.url === target ? 'fetch' : null), allowLocal, requireAddress);
 }
 
 // ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
@@ -1973,7 +1977,7 @@ function networkRequestDeadline(ctx = {}) {
   return createRequestDeadline({ signal: ctx.signal, timeoutMs });
 }
 
-function rejectNetworkRedirect(res) {
+export function rejectNetworkRedirect(res) {
   if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
     throw new Error('Redirect was not followed because its target cannot be validated before sending the request. Use an explicit destination URL.');
   }

@@ -419,6 +419,12 @@ const { validateFetchUrl: validateFetchUrlFx, validateResolvedAddress: validateR
 const { firefoxRestrictedDomainForUrl, firefoxRestrictedDomainFailure, firefoxHostPermissionFailure } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/firefox-restricted-domains.js').replace(/\\/g, '/')
 );
+const { fetchPdfBytes: fetchPdfBytesCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/pdf-extraction.js').replace(/\\/g, '/')
+);
+const { fetchPdfBytes: fetchPdfBytesFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/pdf-tools.js').replace(/\\/g, '/')
+);
 const WikipediaOfflineCh = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/wikipedia-offline.js').replace(/\\/g, '/')
 );
@@ -22965,6 +22971,55 @@ test('research_url rejects blocked redirect targets before returning hidden-tab 
     else globalThis.chrome = previousChrome;
     if (previousBrowser === undefined) delete globalThis.browser;
     else globalThis.browser = previousBrowser;
+  }
+});
+
+test('fetchPdfBytes rejects loopback, metadata, and RFC1918 addresses in Chrome and Firefox', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  let webRequest;
+  let fetchCalls = 0;
+  globalThis.fetch = async url => {
+    fetchCalls++;
+    webRequest.emit('onResponseStarted', { tabId: -1, url, type: 'xmlhttprequest', ip: '8.8.8.8' });
+    return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
+  };
+  try {
+    for (const [label, fetchPdfBytes] of [
+      ['chrome', fetchPdfBytesCh],
+      ['firefox', fetchPdfBytesFx],
+    ]) {
+      webRequest = makeAddressWebRequest();
+      globalThis[label === 'chrome' ? 'chrome' : 'browser'] = {
+        webRequest: webRequest.api, dns: { resolve: async () => ({ addresses: ['8.8.8.8'] }) },
+      };
+      // Loopback blocked by default
+      await assert.rejects(
+        fetchPdfBytes('http://127.0.0.1:8080/report.pdf'),
+        /Blocked loopback/,
+        `${label}: loopback must be blocked by default`,
+      );
+      // Cloud metadata blocked unconditionally
+      await assert.rejects(
+        fetchPdfBytes('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: true }),
+        /Blocked link-local/,
+        `${label}: cloud metadata must stay blocked even with local network allowed`,
+      );
+      // RFC1918 blocked by default
+      await assert.rejects(
+        fetchPdfBytes('http://192.168.1.1/secret.pdf'),
+        /Blocked private/,
+        `${label}: RFC1918 must be blocked by default`,
+      );
+      // Public URL allowed
+      const res = await fetchPdfBytes('https://example.com/safe.pdf', { verifyResponse: async () => {} });
+      assert.ok(res instanceof Uint8Array, `${label}: public PDF should fetch successfully`);
+    }
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.chrome = previousChrome;
+    globalThis.browser = previousBrowser;
   }
 });
 

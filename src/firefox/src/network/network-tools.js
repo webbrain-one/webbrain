@@ -338,17 +338,20 @@ function blockedAddressError(url, reason) {
  * Resolve the URL's hostname before sending and refuse it when any answer is
  * blocked: the browser may connect to any of them. A failed lookup is left
  * to the request itself, since a configured proxy may still reach the host;
- * the response address check still applies.
+ * the response address check still applies. Strict callers require a nonempty,
+ * validated DNS answer before trusting a proxy that hides the destination IP.
  */
-async function resolvedHostFailure(rawUrl, allowLocal) {
-  if (typeof globalThis.browser?.dns?.resolve !== 'function') return null;
+export async function resolvedHostFailure(rawUrl, allowLocal, { requireAddress = false } = {}) {
+  const unverified = requireAddress ? 'Cannot verify the PDF destination resolved address.' : null;
   let host;
-  try { host = new URL(rawUrl).hostname; } catch (_) { return null; }
+  try { host = new URL(rawUrl).hostname; } catch (_) { return unverified; }
   // IP literals were already classified by validateFetchUrl().
   if (!host || host.startsWith('[') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
+  if (typeof globalThis.browser?.dns?.resolve !== 'function') return unverified;
   let record;
-  try { record = await globalThis.browser.dns.resolve(host); } catch (_) { return null; }
-  for (const address of record?.addresses || []) {
+  try { record = await globalThis.browser.dns.resolve(host); } catch (_) { return unverified; }
+  if (!record?.addresses?.length) return unverified;
+  for (const address of record.addresses) {
     const check = validateResolvedAddress(address, { allowLocalNetwork: allowLocal });
     if (!check.ok) return blockedAddressError(rawUrl, check.error);
   }
@@ -360,10 +363,11 @@ async function resolvedHostFailure(rawUrl, allowLocal) {
  * names the request or tab an event belongs to (null to ignore it). Returns
  * null when webRequest is unavailable.
  */
-function watchResponseAddresses(filter, keyOf, allowLocal) {
+function watchResponseAddresses(filter, keyOf, allowLocal, requireAddress = false, proxyDestinationVerified = false) {
   const webRequest = globalThis.browser?.webRequest;
   if (RESPONSE_ADDRESS_EVENTS.some(name => typeof webRequest?.[name]?.addListener !== 'function')) return null;
   const seen = new Set();
+  const verified = new Set();
   const failures = new Map();
   const waiters = new Set();
   const listener = (details) => {
@@ -373,9 +377,13 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
     // A proxied request reports the proxy's address, not the destination's;
     // only the DNS check before sending applies to it.
     const proxied = details.proxyInfo && details.proxyInfo.type !== 'direct';
+    // Strict PDF reads may accept a proxy event only after the caller has
+    // validated every destination DNS answer (or the literal URL address).
+    if (proxied && proxyDestinationVerified) verified.add(key);
     if (details.ip && !proxied && !failures.has(key)) {
       const check = validateResolvedAddress(details.ip, { allowLocalNetwork: allowLocal });
       if (!check.ok) failures.set(key, blockedAddressError(details.url, check.error));
+      else verified.add(key);
     }
     for (const wake of waiters) wake();
   };
@@ -394,15 +402,17 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
     // fetch() and webRequest events are delivered separately, so fetch() can
     // resolve before the response's event arrives. Wait briefly for it.
     async settledFailure(key, timeoutMs = RESPONSE_ADDRESS_WAIT_MS) {
-      if (!seen.has(key)) {
+      const settled = () => requireAddress ? verified.has(key) || failures.has(key) : seen.has(key);
+      if (!settled()) {
         await new Promise((resolve) => {
           const done = () => { clearTimeout(timer); waiters.delete(wake); resolve(); };
-          const wake = () => { if (seen.has(key)) done(); };
+          const wake = () => { if (settled()) done(); };
           const timer = setTimeout(done, timeoutMs);
           waiters.add(wake);
         });
       }
-      return failures.get(key) || null;
+      return failures.get(key) || (requireAddress && !verified.has(key)
+        ? 'Cannot verify the PDF response resolved address.' : null);
     },
     close() {
       for (const name of added) {
@@ -414,14 +424,14 @@ function watchResponseAddresses(filter, keyOf, allowLocal) {
 
 // The extension's own background fetch: tab -1, keyed by its URL (webRequest
 // reports URLs without the fragment).
-function watchFetchAddresses(url, allowLocal) {
+export function watchFetchAddresses(url, allowLocal, { requireAddress = false, proxyDestinationVerified = false } = {}) {
   let target;
   try {
     const u = new URL(url);
     u.hash = '';
     target = u.href;
   } catch (_) { return null; }
-  return watchResponseAddresses({ tabId: -1 }, d => (d.url === target ? 'fetch' : null), allowLocal);
+  return watchResponseAddresses({ tabId: -1 }, d => (d.url === target ? 'fetch' : null), allowLocal, requireAddress, proxyDestinationVerified);
 }
 
 // ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
@@ -1975,7 +1985,7 @@ function networkRequestDeadline(ctx = {}) {
   return createRequestDeadline({ signal: ctx.signal, timeoutMs });
 }
 
-function rejectNetworkRedirect(res) {
+export function rejectNetworkRedirect(res) {
   if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
     throw new Error('Redirect was not followed because its target cannot be validated before sending the request. Use an explicit destination URL.');
   }

@@ -22,7 +22,17 @@
  * additional context.
  */
 
+import {
+  validateFetchUrl,
+  registrableDomain,
+  getAllowLocalNetwork,
+  watchFetchAddresses,
+  resolvedHostFailure,
+  rejectNetworkRedirect,
+} from '../network/network-tools.js';
+
 let pdfjsModule = null;
+const ALLOWED_PDF_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
 const DEFAULT_PDF_HANDLER_PAGE = 'src/ui/pdf-handler.html';
 
 function pdfHandlerPage(runtime) {
@@ -47,6 +57,20 @@ function unwrapPdfHandlerUrl(url, runtime) {
   } catch {
     return url;
   }
+}
+
+export function normalizePdfUrl(value, runtime = globalThis.browser?.runtime || globalThis.chrome?.runtime) {
+  let url;
+  try {
+    url = new URL(String(value || '').trim());
+  } catch {
+    throw new Error('PDF extraction requires a valid URL.');
+  }
+  url = unwrapPdfHandlerUrl(url, runtime);
+  if (!ALLOWED_PDF_PROTOCOLS.has(url.protocol)) {
+    throw new Error('PDF URL must use http:, https:, or file:.');
+  }
+  return url.href;
 }
 
 export function pdfUrlFromTabUrl(value, runtime = globalThis.browser?.runtime || globalThis.chrome?.runtime) {
@@ -130,6 +154,22 @@ export function isPdfUrl(url) {
   return false;
 }
 
+// Compare the validated document URLs, including when either side is wrapped
+// in our PDF viewer. Viewer hostnames identify the extension, not the site.
+export async function pdfFetchCredentials(url, tabId) {
+  const target = new URL(normalizePdfUrl(url));
+  if (!/^https?:$/.test(target.protocol) || tabId == null) return 'omit';
+  try {
+    const tab = await browser.tabs.get(tabId);
+    const active = new URL(normalizePdfUrl(tab?.url));
+    if (!/^https?:$/.test(active.protocol)) return 'omit';
+    const domain = registrableDomain(target.hostname);
+    return domain && domain === registrableDomain(active.hostname) ? 'include' : 'omit';
+  } catch {
+    return 'omit';
+  }
+}
+
 /**
  * Fetch the PDF binary from `url`. Returns a Uint8Array.
  * Throws with a helpful message on failure — file:// URLs in Firefox
@@ -138,15 +178,39 @@ export function isPdfUrl(url) {
  * be modified, which is not user-friendly. We surface a descriptive
  * error instead of leaving the agent guessing.
  */
-export async function fetchPdfBytes(url) {
+export async function fetchPdfBytes(url, {
+  timeoutMs = 60000,
+  allowLocalNetwork = false,
+  attachCookies = false,
+} = {}) {
+  const normalizedUrl = normalizePdfUrl(url);
+  if (!normalizedUrl.startsWith('file:')) {
+    const urlCheck = validateFetchUrl(normalizedUrl, { allowLocalNetwork });
+    if (!urlCheck.ok) {
+      throw new Error(`PDF URL is blocked: ${urlCheck.error}`);
+    }
+    const hostFailure = await resolvedHostFailure(normalizedUrl, allowLocalNetwork, { requireAddress: true });
+    if (hostFailure) {
+      throw new Error(`PDF URL is blocked: ${hostFailure}`);
+    }
+  }
+  const addresses = !normalizedUrl.startsWith('file:')
+    ? watchFetchAddresses(normalizedUrl, allowLocalNetwork, { requireAddress: true, proxyDestinationVerified: true })
+    : null;
+  if (!normalizedUrl.startsWith('file:') && !addresses) throw new Error('PDF response address verification is unavailable.');
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     let res;
     try {
-      res = await fetch(url, { credentials: 'include', signal: controller.signal });
+      res = await fetch(normalizedUrl, {
+        credentials: attachCookies ? 'include' : 'omit',
+        redirect: 'manual',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
     } catch (e) {
-      if (typeof url === 'string' && url.startsWith('file://')) {
+      if (typeof normalizedUrl === 'string' && normalizedUrl.startsWith('file://')) {
         throw new Error(
           'Cannot fetch local PDF from a file:// URL. Firefox blocks ' +
           'extension fetches against file:// for privacy. Workaround: ' +
@@ -156,13 +220,20 @@ export async function fetchPdfBytes(url) {
       }
       throw new Error(`PDF fetch failed: ${e.message}`);
     }
+    rejectNetworkRedirect(res);
+    const addressFailure = await addresses?.settledFailure('fetch');
+    if (addressFailure) {
+      throw new Error(`PDF fetch failed: ${addressFailure}`);
+    }
     if (!res.ok) {
       throw new Error(`PDF fetch returned HTTP ${res.status} ${res.statusText}`);
     }
     const buf = await res.arrayBuffer();
     return new Uint8Array(buf);
   } finally {
+    addresses?.close();
     clearTimeout(timeout);
+    controller.abort();
   }
 }
 
@@ -181,12 +252,18 @@ export async function fetchPdfBytes(url) {
  * the planner "you need a vision model for this PDF" without us
  * having to render every page to PNG ourselves.
  */
-export async function extractPdfText(url, opts = {}) {
+export async function extractPdfText(url, opts = {}, ctx = {}) {
   const fromPage = Math.max(1, Math.floor(opts.fromPage || 1));
   const requestedTo = opts.toPage ? Math.floor(opts.toPage) : fromPage + 49;
   const maxChars = Math.max(1000, Math.floor(opts.maxChars || 50000));
 
-  const bytes = await fetchPdfBytes(url);
+  const allowLocal = getAllowLocalNetwork();
+  const attachCookies = (await pdfFetchCredentials(url, ctx?.tabId ?? opts.tabId)) === 'include';
+
+  const bytes = await fetchPdfBytes(url, {
+    allowLocalNetwork: allowLocal,
+    attachCookies,
+  });
   const pdfjs = await getPdfjs();
 
   const loadingTask = pdfjs.getDocument({

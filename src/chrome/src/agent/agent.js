@@ -51469,7 +51469,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           toPage: args.toPage,
           maxChars: args.maxChars,
           includeDocument: supportsPdfPassthrough,
-        });
+        }, { tabId });
 
         // Tier 2 — Anthropic Claude PDF passthrough. If the active provider
         // can natively consume PDFs as a `document` content block AND the

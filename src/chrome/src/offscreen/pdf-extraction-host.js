@@ -1,6 +1,7 @@
 import {
   PDF_EXTRACTION_MESSAGE,
   PDF_EXTRACTION_READY_MESSAGE,
+  PDF_FETCH_VERDICT_MESSAGE,
   PDF_PASSTHROUGH_MAX_BYTES,
   bytesToBase64,
   extractPdfTextFromBytes,
@@ -57,7 +58,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   (async () => {
     const url = normalizePdfUrl(message.url);
-    const bytes = await fetchPdfBytes(url);
+    const bytes = await fetchPdfBytes(url, {
+      timeoutMs: message.options?.timeoutMs || 60000,
+      allowLocalNetwork: message.options?.allowLocalNetwork === true,
+      attachCookies: message.options?.attachCookies === true,
+      verifyResponse: async () => {
+        const verdict = await chrome.runtime.sendMessage({
+          type: PDF_FETCH_VERDICT_MESSAGE, requestId: message.requestId,
+        });
+        if (verdict?.ok !== true) throw new Error(verdict?.error || 'PDF response address verification failed.');
+      },
+    });
     // PDF.js can transfer and detach the input buffer, so keep a copy of the
     // optional Claude document taken before parsing: text and document then
     // come from the same fetch. The ~4/3 base64 message overhead is
