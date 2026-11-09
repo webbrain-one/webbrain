@@ -206,6 +206,7 @@ export async function fetchPdfBytes(url, {
       res = await fetch(normalizedUrl, {
         credentials: attachCookies ? 'include' : 'omit',
         redirect: 'manual',
+        cache: 'no-store',
         signal: controller.signal,
       });
     } catch (e) {
