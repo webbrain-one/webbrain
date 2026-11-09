@@ -36,6 +36,17 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(cloudgpu.supportsAskStreaming, true);
   assert.ok(providerIconUrl('cloudgpu').endsWith('/cloudgpu.svg'));
 
+  const standardcompute = ADDITIONAL_PROVIDER_DEFAULTS.standardcompute;
+  assert.equal(standardcompute.type, 'openai', `${browser}: Standard Compute must use the OpenAI-compatible adapter`);
+  assert.equal(standardcompute.baseUrl, 'https://api.stdcmpt.com/v1', `${browser}: Standard Compute endpoint changed`);
+  assert.equal(standardcompute.model, 'StandardCompute');
+  assert.equal(standardcompute.contextWindow, 1000000);
+  assert.equal(standardcompute.enabled, false);
+  assert.equal(standardcompute.apiKey, '');
+  assert.equal(standardcompute.supportsTools, true);
+  assert.equal(standardcompute.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('standardcompute').endsWith('/standardcompute.svg'));
+
   const runcrate = ADDITIONAL_PROVIDER_DEFAULTS.runcrate;
   assert.equal(runcrate.type, 'openai', `${browser}: Runcrate must use the OpenAI-compatible adapter`);
   assert.equal(runcrate.baseUrl, 'https://api.runcrate.ai/v1', `${browser}: Runcrate endpoint changed`);
