@@ -340,6 +340,12 @@ const DEFAULT_INPUT_COST_PER_MILLION_USD = 3;
 const DEFAULT_OUTPUT_COST_PER_MILLION_USD = 15;
 const VISION_SUB_CALL_TIMEOUT_MS = 90_000;
 const CONTENT_ACTION_TIMEOUT_MS = 60_000;
+// The longest a click waits for the agent cursor to glide onto its target
+// (content/agent-visual-indicator.js GLIDE_MAX_MS stays under it). 0 turns
+// the wait off; the cursor then lands after the click.
+const AGENT_CURSOR_LEAD_MAX_MS = 800;
+// A cursor reply slower than this (a busy page) is not waited for.
+const AGENT_CURSOR_REPLY_MAX_MS = 250;
 // Read-only CAPTCHA checks must not consume a full page-action timeout.
 const CAPTCHA_PREFLIGHT_TIMEOUT_MS = 8_000;
 const RUN_STARTUP_TIMEOUT_MS = 15_000;
@@ -19932,15 +19938,82 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch { /* ignore */ }
   }
 
-  _showAgentTarget(tabId, rect, source = 'interaction') {
-    if (!rect) return;
+  /**
+   * Points the agent cursor (content/agent-visual-indicator.js) at a target.
+   * Decorative only. `phase`:
+   *   null       — the input happens now; a click source presses as the
+   *                cursor lands
+   *   'approach' — glide to `target` (a rect, { ref_id, pageUrl } or
+   *                { selector }) ahead of the input; resolves to the reply,
+   *                whose `arriveInMs` says when the cursor lands
+   *   'done'     — the announced input's verdict, `target.ok`
+   */
+  _showAgentTarget(tabId, target, source = 'interaction', phase = null) {
+    if (!target) return null;
+    const message = { type: 'WB_SHOW_AGENT_TARGET', source };
+    if (phase) message.phase = phase;
+    if (phase === 'done') {
+      message.ok = target.ok === true;
+    } else if (typeof target.ref_id === 'string') {
+      message.ref_id = target.ref_id;
+      if (target.pageUrl) message.pageUrl = target.pageUrl;
+    } else if (typeof target.selector === 'string') {
+      message.selector = target.selector;
+    } else {
+      message.rect = target;
+    }
     try {
-      chrome.tabs.sendMessage(tabId, {
-        type: 'WB_SHOW_AGENT_TARGET',
-        rect,
-        source,
-      }).catch(() => {});
-    } catch { /* decorative only */ }
+      return chrome.tabs.sendMessage(tabId, message).catch(() => null);
+    } catch { return null; /* decorative only */ }
+  }
+
+  /**
+   * Glides the agent cursor onto the target and waits for it to land, so a
+   * watcher sees the cursor reach the target before the click instead of
+   * after it. Called before an input's page checks, which then run on the
+   * page as it is after the wait. Bounded by AGENT_CURSOR_LEAD_MAX_MS; no
+   * wait when the cursor is not visible (background tab, screenshot,
+   * reduced motion). Stops early on abort; the caller's own abort check
+   * then ends the input.
+   */
+  async _leadAgentCursor(tabId, target, source, abortSignal = null) {
+    if (!(AGENT_CURSOR_LEAD_MAX_MS > 0) || !target || !this._agentCursorShown(tabId)) return;
+    const signals = [abortSignal, this._runAbortSignal?.(tabId)].filter(signal => signal && typeof signal.addEventListener === 'function');
+    if (signals.some(signal => signal.aborted)) return;
+    let replyTimer = null;
+    const reply = await Promise.race([
+      Promise.resolve(this._showAgentTarget(tabId, target, source, 'approach')).catch(() => null),
+      new Promise(resolve => { replyTimer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+    ]);
+    clearTimeout(replyTimer);
+    const wait = Math.min(AGENT_CURSOR_LEAD_MAX_MS, Math.max(0, Number(reply?.arriveInMs) || 0));
+    if (!wait) return;
+    await new Promise(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        for (const signal of signals) signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const timer = setTimeout(done, wait);
+      for (const signal of signals) signal.addEventListener('abort', done, { once: true });
+    });
+  }
+
+  /** Whether the tab shows the run's indicator (background.js sets the check). */
+  _agentCursorShown(tabId) {
+    try {
+      return typeof this.isAgentIndicatorShown === 'function' && this.isAgentIndicatorShown(tabId) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Tells the agent cursor how the click it glided ahead of went. */
+  _settleAgentCursor(tabId, result) {
+    if (!this._agentCursorShown(tabId)) return;
+    const ok = !!result && typeof result === 'object' && result.success === true
+      && result.noDispatch !== true && result.dispatched !== false;
+    this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
   }
 
   static BLANK_SCREENSHOT_RETRY_DELAYS_MS = [500, 1000, 1500];
@@ -21795,6 +21868,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     throwIfAborted();
     await cdpClient.attach(tabId);
     throwIfAborted();
+    // The cursor reaches the point first; the checks below see the page as it
+    // is when the click follows.
+    await this._leadAgentCursor(tabId, { x: Math.round(x), y: Math.round(y), w: 1, h: 1 }, 'click_coordinates');
+    throwIfAborted();
     // A native <select> opens an OS popup no screenshot can show (it is
     // focused for type_text instead), and a double/triple click on a control
     // would repeat the one action the checks approved.
@@ -22436,6 +22513,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (nativeTelegramReadRepairRequired
         && !this._nativeTelegramReadPreparationCurrent(tabId, args, messageRecipientContext)) {
       return nativeTelegramPreparationFailure();
+    }
+    // The cursor reaches the element first; the snapshots, preparation and
+    // click below all run on the page as it is after the wait.
+    if (typeof args?.ref_id === 'string') {
+      await this._leadAgentCursor(tabId, { ref_id: args.ref_id, pageUrl: axScope?.pageUrl || null },
+        'click_ax', upstreamAbortSignal);
+      throwIfAborted();
     }
     const interactionUrl = await this._currentUrl(tabId);
     throwIfAborted();
@@ -48157,7 +48241,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // this call's list; the result carries them to the model.
     const guardAdvisories = this._trackGuardAdvisories(
       Array.isArray(executionContext?.guardAdvisories) ? executionContext.guardAdvisories : [], tabId);
-    const result = await this._executeToolWithLifecycleInner(tabId, name, args, onUpdate, { ...(executionContext || {}), guardAdvisories });
+    let result;
+    try {
+      result = await this._executeToolWithLifecycleInner(tabId, name, args, onUpdate, { ...(executionContext || {}), guardAdvisories });
+    } finally {
+      if (name === 'click' || name === 'click_ax') this._settleAgentCursor(tabId, result);
+    }
     // A note says what went through despite a check. When another check
     // then refused the call, nothing went through and the note would mislead.
     const refused = !!result && typeof result === 'object' && (result.noDispatch === true || result.dispatched === false);
@@ -53970,6 +54059,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // Snapshot existing tabs first so we can detect a target=_blank
           // link that spawns a background tab instead of navigating in-place
           // (see _redirectTargetBlankClick).
+          // The cursor reaches the target first; the click and its progress
+          // baseline follow it.
+          await this._leadAgentCursor(tabId, {
+            x: Math.round(info.x - (Number(info.width) || 1) / 2),
+            y: Math.round(info.y - (Number(info.height) || 1) / 2),
+            w: Math.round(Number(info.width) || 1),
+            h: Math.round(Number(info.height) || 1),
+          }, 'click_text', earlyCdpAbortSignal);
+          throwIfEarlyCdpAborted();
           const clickUrl = await this._currentUrl(tabId);
           const progressBeforeText = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsText = new Set((await chrome.tabs.query({})).map(t => t.id));
@@ -54103,6 +54201,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return await this._annotateClickProgress(tabId, 'click', args, clickResponse, progressBeforeText, { editable: isEditableTarget });
         }
         if (args.selector) {
+          // The cursor reaches the element first (when it is in view); the
+          // click resolves the selector afresh after that.
+          await this._leadAgentCursor(tabId, { selector: args.selector }, 'click_selector', earlyCdpAbortSignal);
+          throwIfEarlyCdpAborted();
           const progressBeforeSel = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsSel = new Set((await chrome.tabs.query({})).map(t => t.id));
           throwIfEarlyCdpAborted();
@@ -54290,6 +54392,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const clickX = redir ? redir.x : args.x;
           const clickY = redir ? redir.y : args.y;
 
+          await this._leadAgentCursor(tabId, { x: Math.round(clickX), y: Math.round(clickY), w: 1, h: 1 },
+            'click_coordinates', earlyCdpAbortSignal);
+          throwIfEarlyCdpAborted();
           const clickUrl = await this._currentUrl(tabId);
           const progressBeforeCoord = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsCoord = new Set((await chrome.tabs.query({})).map(t => t.id));

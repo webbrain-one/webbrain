@@ -2337,6 +2337,99 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
+  test(`${build}: the agent cursor reaches its target before the click, presses with it, then blinks`, async () => {
+    const { browser, page } = await fixture(engine, build);
+    try {
+      await page.addScriptTag({ content: read(build, 'content/agent-visual-indicator.js') });
+      await page.evaluate(() => {
+        messageListeners.forEach(listener => listener({ type: 'WB_SHOW_AGENT_INDICATORS' }, {}, () => {}));
+        window.cursorMessage = message => {
+          let answer = null;
+          messageListeners.forEach(listener => listener(message, {}, reply => { if (reply && 'ok' in reply) answer = reply; }));
+          return answer;
+        };
+        window.cursorParts = () => {
+          const cursor = document.getElementById('webbrain-agent-target-cursor');
+          const r = cursor.getBoundingClientRect();
+          return { cursor, ripple: cursor.previousElementSibling, body: cursor.firstElementChild, x: r.left, y: r.top };
+        };
+      });
+      const approach = rect => page.evaluate(rect => cursorMessage({ type: 'WB_SHOW_AGENT_TARGET', phase: 'approach', source: 'click_text', rect }), rect);
+      const verdict = ok => page.evaluate(ok => cursorMessage({ type: 'WB_SHOW_AGENT_TARGET', phase: 'done', ok }), ok);
+      const position = () => page.evaluate(() => { const { x, y } = cursorParts(); return { x, y }; });
+      const pressing = () => page.evaluate(() => {
+        const { ripple, body } = cursorParts();
+        return {
+          ripples: ripple.getAnimations().map(animation => animation.currentTime),
+          press: body.getAnimations().some(animation => animation.effect.getComputedTiming().duration === 320),
+        };
+      });
+      const breathing = () => page.evaluate(() => cursorParts().body.getAnimations()
+        .some(animation => animation.effect.getComputedTiming().iterations === Infinity));
+
+      // The first target: the cursor fades in where it is.
+      assert.equal((await approach({ x: 40, y: 40, w: 40, h: 20 })).arriveInMs, 250);
+      await verdict(true);
+      await page.waitForTimeout(1200);
+      const start = await position();
+
+      // A far target: a gradual glide whose length the agent waits out.
+      const target = { x: 700, y: 500, w: 40, h: 20 };
+      const { arriveInMs } = await approach(target);
+      assert.ok(arriveInMs >= 360 && arriveInMs <= 760, String(arriveInMs));
+      await page.waitForTimeout(Math.round(arriveInMs / 4));
+      const midway = await position();
+      assert.ok(midway.x > start.x + 5 && midway.y > start.y + 5, `the cursor is on its way: ${JSON.stringify({ start, midway })}`);
+
+      // A screenshot hides the cursor mid-glide; the glide keeps going.
+      const glideThroughCapture = await page.evaluate(() => {
+        cursorMessage({ type: 'WB_HIDE_FOR_TOOL_USE' });
+        const { cursor } = cursorParts();
+        const hidden = getComputedStyle(cursor).display;
+        const running = cursor.getAnimations().filter(animation => animation.playState === 'running').length;
+        cursorMessage({ type: 'WB_SHOW_AFTER_TOOL_USE' });
+        return { hidden, running };
+      });
+      assert.deepEqual(glideThroughCapture, { hidden: 'none', running: 1 });
+      assert.equal((await pressing()).press, false, 'no press before the click');
+
+      // The click follows the landing: the trusted press presses the cursor,
+      // and the success verdict does not press it again.
+      await page.waitForTimeout(arriveInMs);
+      const landed = await position();
+      assert.ok(landed.x > midway.x && landed.y > midway.y, JSON.stringify({ midway, landed }));
+      await page.mouse.click(720, 510);
+      await page.waitForTimeout(60);
+      const pressed = await pressing();
+      assert.equal(pressed.press, true, 'the cursor presses with the click');
+      assert.equal(pressed.ripples.length, 1);
+      await page.waitForTimeout(60);
+      await verdict(true);
+      const afterVerdict = await pressing();
+      assert.equal(afterVerdict.ripples.length, 1);
+      assert.ok(afterVerdict.ripples[0] > pressed.ripples[0], 'the verdict does not restart the press');
+
+      // Between actions the cursor stays on the spot and blinks.
+      await page.waitForTimeout(1100);
+      assert.equal(await breathing(), true);
+      assert.deepEqual(await position(), landed);
+
+      // A failed click: the cursor gets there but does not press.
+      const failed = await approach({ x: 200, y: 300, w: 40, h: 20 });
+      assert.equal(await breathing(), false, 'an approach ends the blink');
+      await page.waitForTimeout(failed.arriveInMs + 60);
+      await verdict(false);
+      await page.waitForTimeout(60);
+      assert.deepEqual(await pressing(), { ripples: [], press: false });
+
+      // Nothing to wait for: an unknown ref, reduced motion.
+      assert.equal((await page.evaluate(() => cursorMessage({ type: 'WB_SHOW_AGENT_TARGET', phase: 'approach', ref_id: 'ref_404' }))).arriveInMs, 0);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      assert.equal((await approach(target)).arriveInMs, 0);
+      assert.equal((await page.evaluate(() => feedback)).filter(event => event.source !== 'user').length, 0);
+    } finally { await browser.close(); }
+  });
+
   test(`${build}: companion native markers renew per key without hiding a later human edit`, async () => {
     const { browser, page } = await fixture(engine, build);
     try {
