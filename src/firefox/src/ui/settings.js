@@ -102,8 +102,8 @@ const apocalypseModeStatus = document.getElementById('apocalypse-mode-status');
 const verboseToggle = document.getElementById('toggle-verbose');
 const composerDeliveryModeSelect = document.getElementById('select-composer-delivery-mode');
 const agentIndicatorStyleSelect = document.getElementById('select-agent-indicator-style');
-// Read by content/agent-visual-indicator.js; 'circuit' is the default.
-const AGENT_INDICATOR_STYLES = ['circuit', 'aurora', 'scan', 'gears', 'classic'];
+// Read by content/agent-visual-indicator.js; 'random' is the default.
+const AGENT_INDICATOR_STYLES = ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'];
 const selectionShortcutToggle = document.getElementById('toggle-selection-shortcut');
 const autoGroupTabsToggle = document.getElementById('toggle-auto-group-tabs');
 const helpImproveToggle = document.getElementById('toggle-help-improve');
@@ -626,7 +626,7 @@ async function init() {
     composerDeliveryModeSelect.value = stored.composerDeliveryMode === 'steer' ? 'steer' : 'queue';
   }
   if (agentIndicatorStyleSelect) {
-    agentIndicatorStyleSelect.value = AGENT_INDICATOR_STYLES.includes(stored.agentIndicatorStyle) ? stored.agentIndicatorStyle : 'circuit';
+    agentIndicatorStyleSelect.value = AGENT_INDICATOR_STYLES.includes(stored.agentIndicatorStyle) ? stored.agentIndicatorStyle : 'random';
   }
   if (selectionShortcutToggle) selectionShortcutToggle.checked = stored.selectionShortcutEnabled !== false;
   if (autoGroupTabsToggle) autoGroupTabsToggle.checked = stored[AUTO_GROUP_TABS_KEY] !== false;
@@ -1376,7 +1376,7 @@ composerDeliveryModeSelect?.addEventListener('change', async () => {
 });
 
 agentIndicatorStyleSelect?.addEventListener('change', async () => {
-  const style = AGENT_INDICATOR_STYLES.includes(agentIndicatorStyleSelect.value) ? agentIndicatorStyleSelect.value : 'circuit';
+  const style = AGENT_INDICATOR_STYLES.includes(agentIndicatorStyleSelect.value) ? agentIndicatorStyleSelect.value : 'random';
   await browser.storage.local.set({ agentIndicatorStyle: style }).catch(() => {});
 });
 

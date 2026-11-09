@@ -119766,7 +119766,7 @@ test('agent viewport indicator heartbeat auto-cleans stale page UI', () => {
     assert.match(background, /onRemoved\.addListener\(\(tabId\)[\s\S]*stopIndicatorHeartbeat\(tabId\)/, `${label}: tab removal leaks heartbeat`);
 
     assert.match(indicator, /const INDICATOR_HEARTBEAT_TIMEOUT_MS = 65_000;/, `${label}: page lease timeout missing`);
-    assert.match(indicator, /function show\(\)[\s\S]*armIndicatorHeartbeat\(\)/, `${label}: show does not arm page lease`);
+    assert.match(indicator, /function show\(randomStyle\)[\s\S]*armIndicatorHeartbeat\(\)/, `${label}: show does not arm page lease`);
     assert.match(indicator, /function hide\(\)[\s\S]*clearIndicatorHeartbeat\(\)/, `${label}: hide does not clear page lease`);
     assert.match(indicator, /case 'WB_AGENT_INDICATOR_HEARTBEAT':[\s\S]*if \(indicatorsActive\) armIndicatorHeartbeat\(\)/, `${label}: page heartbeat does not refresh active lease`);
     assert.match(indicator, /setTimeout\(\(\) => \{[\s\S]*if \(indicatorsActive\) hide\(\);[\s\S]*INDICATOR_HEARTBEAT_TIMEOUT_MS/, `${label}: expired page lease does not hide stale indicator`);
@@ -121393,10 +121393,10 @@ test('agent activity effect is a General setting, portable, and read live by the
     const select = settingsPanelHtml(settingsHtml, 'display').match(/<select id="select-agent-indicator-style"[\s\S]*?<\/select>/)?.[0];
     assert.ok(select, `${label}: the effect choice belongs to Settings → General`);
     assert.deepEqual([...select.matchAll(/<option value="([a-z]+)"/g)].map(match => match[1]),
-      ['circuit', 'aurora', 'scan', 'gears', 'classic'], `${label}: effect options changed`);
+      ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'], `${label}: effect options changed`);
     assert.match(settingsJs, new RegExp(`${runtimeApi}\\.storage\\.local\\.set\\(\\{ agentIndicatorStyle: style \\}\\)`), `${label}: the select must save agentIndicatorStyle`);
     assert.match(indicator, /const STYLE_STORAGE_KEY = 'agentIndicatorStyle';/, `${label}: the indicator reads another key`);
-    assert.match(indicator, /const DEFAULT_STYLE = 'circuit';/, `${label}: Neural circuit should be the default effect`);
+    assert.match(indicator, /const DEFAULT_STYLE = 'random';/, `${label}: random should be the default effect`);
     assert.match(indicator, new RegExp(`${runtimeApi}\\.storage\\?\\.onChanged`), `${label}: a new choice should apply to a running task`);
     // The cursor animates through CSS transitions and Web Animations: the page
     // monitor observes style attributes, so nothing may write them per frame.
@@ -121404,12 +121404,63 @@ test('agent activity effect is a General setting, portable, and read live by the
     assert.ok(cursorClass.length > 0, `${label}: AgentCursor missing`);
     assert.doesNotMatch(cursorClass, /requestAnimationFrame/, `${label}: the cursor must not run a per-frame style loop`);
 
-    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.agentIndicatorStyle, 'circuit', `${label}: portable default changed`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.agentIndicatorStyle, 'random', `${label}: portable default changed`);
     assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes('agentIndicatorStyle'), `${label}: config export/import omitted the effect`);
     const exported = JSON.stringify(configTransfer.createConfigExport({ agentIndicatorStyle: 'gears' }));
     assert.equal(configTransfer.parseConfigImport(exported).settings.agentIndicatorStyle, 'gears', `${label}: a chosen effect should survive export and import`);
+    const randomExport = JSON.stringify(configTransfer.createConfigExport({ agentIndicatorStyle: 'random' }));
+    assert.equal(configTransfer.parseConfigImport(randomExport).settings.agentIndicatorStyle, 'random', `${label}: random should survive export and import`);
     const unknown = JSON.stringify({ ...JSON.parse(exported), settings: { ...JSON.parse(exported).settings, agentIndicatorStyle: 'sparkles' } });
     assert.throws(() => configTransfer.parseConfigImport(unknown), /agentIndicatorStyle/, `${label}: an unknown effect should be rejected on import`);
+  }
+});
+
+test('random activity effect rotates per run and survives navigation and heartbeat restoration', async () => {
+  for (const build of ['chrome', 'firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, `src/${build}/src/background.js`), 'utf8');
+    const start = source.indexOf('const activeIndicatorTabs = new Set();');
+    const removedStart = source.indexOf('.tabs.onRemoved.addListener((tabId)', start);
+    const end = source.indexOf('\n});', removedStart) + '\n});'.length;
+    assert.ok(start >= 0 && end > start);
+    const messages = [], timers = new Map(), retries = [];
+    let updated, removed;
+    const api = { tabs: {
+      sendMessage: async (tabId, message) => { messages.push({ tabId, ...message }); return { active: false }; },
+      onUpdated: { addListener: fn => { updated = fn; } },
+      onRemoved: { addListener: fn => { removed = fn; } },
+    } };
+    const context = vm.createContext({
+      chrome: api, browser: api, agent: {},
+      // A constant draw still has to produce a different style next run.
+      Math: { random: () => 0, floor: Math.floor },
+      setInterval: fn => { const id = timers.size + 1; timers.set(id, fn); return id; },
+      clearInterval: id => timers.delete(id), setTimeout: fn => retries.push(fn),
+      syncPdfContextMenuForActiveTab: async () => {},
+      withTeacherSessionStoreLock: async fn => fn(), teacherSessionStore: { clear() {} },
+      clearRunUiSnapshot() {}, clearDetachedRunFailure() {},
+      flashedBadgeTabs: new Set(), attentionBadgeOwners: new Map(),
+    });
+    vm.runInContext(source.slice(start, end), context);
+    const send = type => context.sendIndicatorMessage(7, type);
+    const last = () => messages.at(-1);
+    send('WB_SHOW_AGENT_INDICATORS');
+    const first = last().randomStyle;
+    assert.ok(['circuit', 'aurora', 'scan', 'gears', 'classic'].includes(first));
+    send('WB_SHOW_AGENT_INDICATORS');
+    assert.equal(last().randomStyle, first, `${build}: duplicate SHOW rerolled`);
+    updated(7, { status: 'complete' });
+    retries.splice(0).forEach(fn => fn());
+    assert.equal(last().randomStyle, first, `${build}: navigation rerolled`);
+    timers.values().next().value();
+    await Promise.resolve();
+    assert.equal(last().randomStyle, first, `${build}: heartbeat restoration rerolled`);
+    send('WB_HIDE_AGENT_INDICATORS');
+    assert.equal(timers.size, 0);
+    send('WB_SHOW_AGENT_INDICATORS');
+    assert.notEqual(last().randomStyle, first, `${build}: next run should differ`);
+    removed(7);
+    assert.equal(timers.size, 0);
+    assert.equal(vm.runInContext('indicatorRandomStyles.has(7)', context), false, `${build}: closed tab leaks its choice`);
   }
 });
 

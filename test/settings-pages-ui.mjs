@@ -133,6 +133,7 @@ try {
       for (const lang of ['en', 'tr', 'ar']) {
         const { page, errors } = await open(browser, build, 'settings.html', { lang });
         await page.waitForFunction(() => document.getElementById('select-auto-screenshot')?.value === 'navigation');
+        assert.equal(await page.locator('#select-agent-indicator-style').inputValue(), 'random', `${build} ${lang}: activity effect defaults to random`);
         assert.deepEqual(await tabsOf(page), SETTINGS_TABS, `${build} ${lang}: settings tabs`);
         assert.equal(await activeTab(page), 'display', `${build} ${lang}: Settings opens on General`);
         for (const label of await page.locator('.tab-btn').allTextContents()) {
@@ -148,6 +149,12 @@ try {
 
       const { page, errors } = await open(browser, build, 'settings.html');
       await page.waitForFunction(() => document.getElementById('select-auto-screenshot')?.value === 'navigation');
+      await page.locator('#select-agent-indicator-style').selectOption('gears');
+      assert.equal(await store(page, 'agentIndicatorStyle'), 'gears', `${build}: a fixed effect is saved`);
+      await page.reload();
+      await page.waitForFunction(() => document.getElementById('select-agent-indicator-style')?.value === 'gears');
+      await page.locator('#select-agent-indicator-style').selectOption('random');
+      assert.equal(await store(page, 'agentIndicatorStyle'), 'random', `${build}: random can be restored`);
       assert.deepEqual(
         await page.locator('[data-panel="budgets"] [id]').evaluateAll((els, ids) => els.map(el => el.id).filter(id => ids.includes(id)), BUDGET_CONTROLS),
         BUDGET_CONTROLS, `${build}: Budgets holds the moved limits in order`);

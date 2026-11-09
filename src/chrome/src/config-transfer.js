@@ -27,7 +27,7 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   [UI_SCALE_STORAGE_KEY]: 100,
   verboseMode: false,
   composerDeliveryMode: 'queue',
-  agentIndicatorStyle: 'circuit',
+  agentIndicatorStyle: 'random',
   selectionShortcutEnabled: true,
   [AUTO_GROUP_TABS_KEY]: true,
   helpImproveWebBrain: true,
@@ -264,7 +264,7 @@ function validSettingValue(key, value) {
   // 'on' is Auto's name from before the option was renamed (currentSettingValue).
   if (key === 'visionMode') return ['auto', 'on', 'off'].includes(value);
   if (key === 'visionQuality') return ['economy', 'balanced', 'sharp'].includes(value);
-  if (key === 'agentIndicatorStyle') return ['circuit', 'aurora', 'scan', 'gears', 'classic'].includes(value);
+  if (key === 'agentIndicatorStyle') return ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'].includes(value);
   if (key === 'decisionBaseUrl') {
     if (typeof value !== 'string') return false;
     try { resolveDecisionConfig({ decisionProvider: 'local', decisionBaseUrl: value }); return true; }

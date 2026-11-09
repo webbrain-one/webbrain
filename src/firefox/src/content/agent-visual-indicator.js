@@ -4,7 +4,8 @@
  * While the agent is operating on this tab it draws:
  *   - an effect around the viewport edges, chosen in Settings → General →
  *     "Agent activity effect" (storage key `agentIndicatorStyle`):
- *       circuit (default) — circuit traces grow in from the edges; signals run
+ *       random (default)  — choose a different effect for each run
+ *       circuit           — circuit traces grow in from the edges; signals run
  *                           along them and their pads fire neighbouring pads
  *       aurora            — a soft light band drifts around the frame
  *       scan              — corner brackets and a slow scanning beam
@@ -58,10 +59,11 @@
   // instead of leaving a permanent effect and Stop button.
   const INDICATOR_HEARTBEAT_TIMEOUT_MS = 65_000;
   const STYLE_STORAGE_KEY = 'agentIndicatorStyle';
-  const DEFAULT_STYLE = 'circuit';
+  const DEFAULT_STYLE = 'random';
   const STYLES = ['circuit', 'aurora', 'scan', 'gears', 'classic'];
 
   let effectStyle = DEFAULT_STYLE;
+  let runRandomStyle = null;
   let styleLoaded = false;
   let effect = null;
   let stopContainerEl = null;
@@ -1312,7 +1314,7 @@
   }
 
   function normalizeStyle(value) {
-    return STYLES.includes(value) ? value : DEFAULT_STYLE;
+    return value === 'random' || STYLES.includes(value) ? value : DEFAULT_STYLE;
   }
 
   function createEffect(style) {
@@ -1323,16 +1325,17 @@
       gears: () => new Gears(),
       classic: () => new ClassicGlow(),
     };
-    const created = effectFor[normalizeStyle(style)]();
-    created.styleName = normalizeStyle(style);
+    const created = effectFor[style]();
+    created.styleName = style;
     return created;
   }
 
   function startEffect() {
     const root = document.body || document.documentElement;
     if (!root || !indicatorsActive) return;
-    if (effect && effect.styleName !== effectStyle) { effect.destroy(); effect = null; }
-    if (!effect) effect = createEffect(effectStyle);
+    const style = effectStyle === 'random' ? runRandomStyle : effectStyle;
+    if (effect && effect.styleName !== style) { effect.destroy(); effect = null; }
+    if (!effect) effect = createEffect(style);
     effect.show(root);
     if (suspendedForToolUse) effect.suspend();
   }
@@ -1963,7 +1966,11 @@
     }
   }
 
-  function show() {
+  function show(randomStyle) {
+    // The background keeps this choice across reloads and repeated SHOWs.
+    // Older callers without a choice still get one effect per activation.
+    if (STYLES.includes(randomStyle)) runRandomStyle = randomStyle;
+    else if (!indicatorsActive) runRandomStyle = pick(STYLES.filter(style => style !== runRandomStyle));
     indicatorsActive = true;
     suspendedForToolUse = false;
     armIndicatorHeartbeat();
@@ -2073,7 +2080,7 @@
     if (!msg || typeof msg.type !== 'string') return;
     switch (msg.type) {
       case 'WB_SHOW_AGENT_INDICATORS':
-        show();
+        show(msg.randomStyle);
         sendResponse({ ok: true });
         break;
       case 'WB_HIDE_AGENT_INDICATORS':
