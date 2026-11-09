@@ -8,12 +8,12 @@
 
 import {
   validateFetchUrl,
-  watchFetchAddresses,
   rejectNetworkRedirect,
 } from '../network/network-tools.js';
 
 export const PDF_EXTRACTION_MESSAGE = 'offscreen-pdf-extract';
 export const PDF_EXTRACTION_READY_MESSAGE = 'offscreen-pdf-extract-ready';
+export const PDF_FETCH_VERDICT_MESSAGE = 'offscreen-pdf-fetch-verdict';
 export const PDF_PASSTHROUGH_MAX_BYTES = 16 * 1024 * 1024;
 
 const ALLOWED_PDF_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
@@ -122,6 +122,7 @@ export async function fetchPdfBytes(url, {
   timeoutMs = 60000,
   allowLocalNetwork = false,
   attachCookies = false,
+  verifyResponse,
 } = {}) {
   const normalizedUrl = normalizePdfUrl(url);
   if (!normalizedUrl.startsWith('file:')) {
@@ -130,9 +131,6 @@ export async function fetchPdfBytes(url, {
       throw new Error(`PDF URL is blocked: ${urlCheck.error}`);
     }
   }
-  const addresses = !normalizedUrl.startsWith('file:')
-    ? watchFetchAddresses(normalizedUrl, allowLocalNetwork)
-    : null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -155,17 +153,19 @@ export async function fetchPdfBytes(url, {
       throw new Error(`PDF fetch failed: ${error.message}`);
     }
     rejectNetworkRedirect(response);
-    const addressFailure = await addresses?.settledFailure('fetch');
-    if (addressFailure) {
-      throw new Error(`PDF fetch failed: ${addressFailure}`);
+    // Offscreen documents lack webRequest. Wait for the service worker's
+    // verdict before consuming bytes, parsing text, or attaching a document.
+    if (!normalizedUrl.startsWith('file:')) {
+      if (typeof verifyResponse !== 'function') throw new Error('PDF response address verification is required.');
+      await verifyResponse();
     }
     if (!response.ok) {
       throw new Error(`PDF fetch returned HTTP ${response.status} ${response.statusText}`);
     }
     return new Uint8Array(await response.arrayBuffer());
   } finally {
-    addresses?.close();
     clearTimeout(timeout);
+    controller.abort();
   }
 }
 

@@ -154,6 +154,22 @@ export function isPdfUrl(url) {
   return false;
 }
 
+// Compare the validated document URLs, including when either side is wrapped
+// in our PDF viewer. Viewer hostnames identify the extension, not the site.
+export async function pdfFetchCredentials(url, tabId) {
+  const target = new URL(normalizePdfUrl(url));
+  if (!/^https?:$/.test(target.protocol) || tabId == null) return 'omit';
+  try {
+    const tab = await browser.tabs.get(tabId);
+    const active = new URL(normalizePdfUrl(tab?.url));
+    if (!/^https?:$/.test(active.protocol)) return 'omit';
+    const domain = registrableDomain(target.hostname);
+    return domain && domain === registrableDomain(active.hostname) ? 'include' : 'omit';
+  } catch {
+    return 'omit';
+  }
+}
+
 /**
  * Fetch the PDF binary from `url`. Returns a Uint8Array.
  * Throws with a helpful message on failure — file:// URLs in Firefox
@@ -173,14 +189,15 @@ export async function fetchPdfBytes(url, {
     if (!urlCheck.ok) {
       throw new Error(`PDF URL is blocked: ${urlCheck.error}`);
     }
-    const hostFailure = await resolvedHostFailure(normalizedUrl, allowLocalNetwork);
+    const hostFailure = await resolvedHostFailure(normalizedUrl, allowLocalNetwork, { requireAddress: true });
     if (hostFailure) {
       throw new Error(`PDF URL is blocked: ${hostFailure}`);
     }
   }
   const addresses = !normalizedUrl.startsWith('file:')
-    ? watchFetchAddresses(normalizedUrl, allowLocalNetwork)
+    ? watchFetchAddresses(normalizedUrl, allowLocalNetwork, { requireAddress: true, proxyDestinationVerified: true })
     : null;
+  if (!normalizedUrl.startsWith('file:') && !addresses) throw new Error('PDF response address verification is unavailable.');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -215,6 +232,7 @@ export async function fetchPdfBytes(url, {
   } finally {
     addresses?.close();
     clearTimeout(timeout);
+    controller.abort();
   }
 }
 
@@ -239,22 +257,7 @@ export async function extractPdfText(url, opts = {}, ctx = {}) {
   const maxChars = Math.max(1000, Math.floor(opts.maxChars || 50000));
 
   const allowLocal = getAllowLocalNetwork();
-  let attachCookies = false;
-  if (ctx && ctx.tabId != null) {
-    try {
-      const tab = await browser.tabs.get(ctx.tabId);
-      if (tab && tab.url) {
-        try {
-          const tabHost = new URL(tab.url).hostname;
-          const fetchHost = new URL(url).hostname;
-          const tabRegDomain = registrableDomain(tabHost);
-          if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
-            attachCookies = true;
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-  }
+  const attachCookies = (await pdfFetchCredentials(url, ctx?.tabId ?? opts.tabId)) === 'include';
 
   const bytes = await fetchPdfBytes(url, {
     allowLocalNetwork: allowLocal,

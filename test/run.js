@@ -22976,9 +22976,13 @@ test('research_url rejects blocked redirect targets before returning hidden-tab 
 
 test('fetchPdfBytes rejects loopback, metadata, and RFC1918 addresses in Chrome and Firefox', async () => {
   const previousFetch = globalThis.fetch;
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  let webRequest;
   let fetchCalls = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async url => {
     fetchCalls++;
+    webRequest.emit('onResponseStarted', { tabId: -1, url, type: 'xmlhttprequest', ip: '8.8.8.8' });
     return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
   };
   try {
@@ -22986,6 +22990,10 @@ test('fetchPdfBytes rejects loopback, metadata, and RFC1918 addresses in Chrome 
       ['chrome', fetchPdfBytesCh],
       ['firefox', fetchPdfBytesFx],
     ]) {
+      webRequest = makeAddressWebRequest();
+      globalThis[label === 'chrome' ? 'chrome' : 'browser'] = {
+        webRequest: webRequest.api, dns: { resolve: async () => ({ addresses: ['8.8.8.8'] }) },
+      };
       // Loopback blocked by default
       await assert.rejects(
         fetchPdfBytes('http://127.0.0.1:8080/report.pdf'),
@@ -23005,11 +23013,13 @@ test('fetchPdfBytes rejects loopback, metadata, and RFC1918 addresses in Chrome 
         `${label}: RFC1918 must be blocked by default`,
       );
       // Public URL allowed
-      const res = await fetchPdfBytes('https://example.com/safe.pdf');
+      const res = await fetchPdfBytes('https://example.com/safe.pdf', { verifyResponse: async () => {} });
       assert.ok(res instanceof Uint8Array, `${label}: public PDF should fetch successfully`);
     }
   } finally {
     globalThis.fetch = previousFetch;
+    globalThis.chrome = previousChrome;
+    globalThis.browser = previousBrowser;
   }
 });
 

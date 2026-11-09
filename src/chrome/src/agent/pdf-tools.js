@@ -27,10 +27,14 @@ import { ensureOffscreen } from '../offscreen/ensure.js';
 import {
   getAllowLocalNetwork,
   registrableDomain,
+  validateFetchUrl,
+  watchFetchAddresses,
 } from '../network/network-tools.js';
 import {
   PDF_EXTRACTION_MESSAGE,
   PDF_EXTRACTION_READY_MESSAGE,
+  PDF_FETCH_VERDICT_MESSAGE,
+  normalizePdfUrl,
   PDF_PASSTHROUGH_MAX_BYTES,
   bytesToBase64,
 } from './pdf-extraction.js';
@@ -93,6 +97,22 @@ export function isPdfUrl(url) {
   return false;
 }
 
+// Compare the validated document URLs, including when either side is wrapped
+// in our PDF viewer. Viewer hostnames identify the extension, not the site.
+export async function pdfFetchCredentials(url, tabId) {
+  const target = new URL(normalizePdfUrl(url));
+  if (!/^https?:$/.test(target.protocol) || tabId == null) return 'omit';
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const active = new URL(normalizePdfUrl(tab?.url));
+    if (!/^https?:$/.test(active.protocol)) return 'omit';
+    const domain = registrableDomain(target.hostname);
+    return domain && domain === registrableDomain(active.hostname) ? 'include' : 'omit';
+  } catch {
+    return 'omit';
+  }
+}
+
 /**
  * Extract text from a PDF.
  *
@@ -109,42 +129,56 @@ export function isPdfUrl(url) {
  * having to render every page to PNG ourselves.
  */
 export async function extractPdfText(url, opts = {}, ctx = {}) {
+  const normalizedUrl = normalizePdfUrl(url);
   const allowLocal = getAllowLocalNetwork();
-  let attachCookies = false;
-  if (ctx && ctx.tabId != null) {
-    try {
-      const tab = await chrome.tabs.get(ctx.tabId);
-      if (tab && tab.url) {
-        try {
-          const tabHost = new URL(tab.url).hostname;
-          const fetchHost = new URL(url).hostname;
-          const tabRegDomain = registrableDomain(tabHost);
-          if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
-            attachCookies = true;
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
+  const isNetwork = !normalizedUrl.startsWith('file:');
+  if (isNetwork) {
+    const check = validateFetchUrl(normalizedUrl, { allowLocalNetwork: allowLocal });
+    if (!check.ok) throw new Error(check.error);
   }
-
+  const attachCookies = (await pdfFetchCredentials(normalizedUrl, ctx?.tabId ?? opts.tabId)) === 'include';
   await ensureOffscreen();
   await waitForPdfExtractionHost();
-  const response = await chrome.runtime.sendMessage({
-    type: PDF_EXTRACTION_MESSAGE,
-    url,
-    options: {
-      fromPage: opts.fromPage,
-      toPage: opts.toPage,
-      maxChars: opts.maxChars,
-      includeBase64: opts.includeDocument === true,
-      allowLocalNetwork: allowLocal,
-      attachCookies,
-    },
-  });
-  if (!response?.ok || !response.result) {
-    throw new Error(response?.error || 'The offscreen PDF parser returned no result.');
+  // Register in the service worker before telling the offscreen host to fetch.
+  const addresses = isNetwork ? watchFetchAddresses(normalizedUrl, allowLocal, { requireAddress: true }) : null;
+  if (isNetwork && !addresses) throw new Error('PDF response address verification is unavailable.');
+  const requestId = crypto.randomUUID();
+  const verdictListener = (message, sender, sendResponse) => {
+    if (message?.type !== PDF_FETCH_VERDICT_MESSAGE || message.requestId !== requestId) return false;
+    if (sender?.id !== chrome.runtime.id || sender?.tab != null
+      || sender?.url !== chrome.runtime.getURL('src/offscreen/offscreen.html')) {
+      sendResponse({ ok: false, error: 'Unauthorized PDF response verification sender.' });
+      return false;
+    }
+    (async () => {
+      const error = await addresses?.settledFailure('fetch');
+      sendResponse(error ? { ok: false, error } : { ok: true });
+    })().catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  };
+  try {
+    chrome.runtime.onMessage.addListener(verdictListener);
+    const response = await chrome.runtime.sendMessage({
+      type: PDF_EXTRACTION_MESSAGE,
+      requestId,
+      url: normalizedUrl,
+      options: {
+        fromPage: opts.fromPage,
+        toPage: opts.toPage,
+        maxChars: opts.maxChars,
+        includeBase64: opts.includeDocument === true,
+        allowLocalNetwork: allowLocal,
+        attachCookies,
+      },
+    });
+    if (!response?.ok || !response.result) {
+      throw new Error(response?.error || 'The offscreen PDF parser returned no result.');
+    }
+    return response.result;
+  } finally {
+    chrome.runtime.onMessage.removeListener(verdictListener);
+    addresses?.close();
   }
-  return response.result;
 }
 
 /**

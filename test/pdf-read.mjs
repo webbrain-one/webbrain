@@ -13,6 +13,21 @@ const pdfExtractionHostPath = path.join(root, 'src', 'chrome', 'src', 'offscreen
 const offscreenHtmlPath = path.join(root, 'src', 'chrome', 'src', 'offscreen', 'offscreen.html');
 const pdfjsVendorPath = path.join(root, 'src', 'chrome', 'vendor', 'pdfjs');
 
+function eventHub() {
+  const listeners = new Set();
+  return {
+    addListener: listener => listeners.add(listener),
+    removeListener: listener => listeners.delete(listener),
+    emit: (...args) => [...listeners].map(listener => listener(...args)),
+    get size() { return listeners.size; },
+  };
+}
+
+function addressEvents() {
+  return Object.fromEntries(['onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred']
+    .map(name => [name, eventHub()]));
+}
+
 function buildSinglePagePdf(text) {
   const contents = `BT /F1 24 Tf 72 720 Td (${text}) Tj ET`;
   const objects = [
@@ -274,15 +289,31 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
   const messages = [];
   let readyAttempts = 0;
   let fetchCalls = 0;
+  const webRequest = addressEvents();
+  const onMessage = eventHub();
   globalThis.chrome = {
+    webRequest,
     offscreen: { hasDocument: async () => true },
     runtime: {
+      id: 'trusted-extension',
+      getURL: path => `chrome-extension://trusted-extension/${path}`,
+      onMessage,
       sendMessage: async message => {
         messages.push(message);
         if (message.type === 'offscreen-pdf-extract-ready') {
           readyAttempts += 1;
           return readyAttempts < 3 ? undefined : { ok: true, ready: true };
         }
+        assert.equal(webRequest.onResponseStarted.size, 1, 'The service worker must watch before offscreen fetch starts.');
+        webRequest.onResponseStarted.emit({ url: message.url, tabId: -1, ip: '8.8.8.8' });
+        const verdictMessage = { type: 'offscreen-pdf-fetch-verdict', requestId: message.requestId };
+        let refused;
+        onMessage.emit(verdictMessage, { id: 'trusted-extension', url: 'chrome-extension://trusted-extension/src/ui/settings.html' }, r => { refused = r; });
+        assert.equal(refused.ok, false, 'Only the offscreen host may request a verdict.');
+        const verdict = await new Promise(resolve => {
+          onMessage.emit(verdictMessage, { id: 'trusted-extension', url: 'chrome-extension://trusted-extension/src/offscreen/offscreen.html' }, resolve);
+        });
+        assert.deepEqual(verdict, { ok: true });
         return {
           ok: true,
           result: {
@@ -322,7 +353,13 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
     assert.equal(claudeResult._pdfBase64, 'BAUG');
     assert.equal(buildClaudeDocumentBlock(claudeResult._pdfBase64, 'fixture.pdf').source.data, 'BAUG');
     assert.equal(fetchCalls, 0);
-    assert.deepEqual(messages, [
+    assert.equal(onMessage.size, 0, 'Verdict listeners must be removed after extraction.');
+    assert.equal(webRequest.onResponseStarted.size, 0, 'Address listeners must be removed after extraction.');
+    for (const message of messages.filter(m => m.type === 'offscreen-pdf-extract')) {
+      assert.match(message.requestId, /^[0-9a-f-]{36}$/);
+      assert.equal(message.options.attachCookies, false);
+    }
+    assert.deepEqual(messages.map(({ requestId, credentials, ...message }) => message), [
       { type: 'offscreen-pdf-extract-ready' },
       { type: 'offscreen-pdf-extract-ready' },
       { type: 'offscreen-pdf-extract-ready' },
@@ -345,12 +382,162 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
   }
 }
 
+async function testPdfCookieDomainsUseDocumentUrlsInBothBrowsers() {
+  const previous = { chrome: globalThis.chrome, browser: globalThis.browser };
+  try {
+    for (const name of ['chrome', 'firefox']) {
+      const scheme = name === 'chrome' ? 'chrome-extension:' : 'moz-extension:';
+      const runtime = { getURL: path => `${scheme}//trusted-extension/${path}` };
+      const viewer = url => `${runtime.getURL('src/ui/pdf-handler.html')}?url=${encodeURIComponent(url)}`;
+      let activeUrl;
+      const api = { runtime, tabs: { get: async () => ({ url: activeUrl }) } };
+      globalThis.chrome = api;
+      globalThis.browser = name === 'firefox' ? api : undefined;
+      const { pdfFetchCredentials } = await import(new URL(`../src/${name}/src/agent/pdf-tools.js`, import.meta.url));
+      activeUrl = viewer('https://private.example.com/document.pdf');
+      assert.equal(await pdfFetchCredentials('https://private.example.com/document.pdf', 7), 'include', name);
+      assert.equal(await pdfFetchCredentials(viewer('https://private.example.com/document.pdf'), 7), 'include', name);
+      assert.equal(await pdfFetchCredentials(viewer('https://mail.other.com/private.pdf'), 7), 'omit', name);
+      assert.equal(await pdfFetchCredentials('https://mail.other.com/private.pdf', 7), 'omit', name);
+      assert.equal(await pdfFetchCredentials('https://private.example.com/document.pdf'), 'omit', name);
+      activeUrl = viewer('javascript:alert(1)');
+      assert.equal(await pdfFetchCredentials(viewer('https://private.example.com/document.pdf'), 7), 'omit', name);
+      activeUrl = viewer('https://alice.github.io/a.pdf');
+      assert.equal(await pdfFetchCredentials(viewer('https://bob.github.io/b.pdf'), 7), 'omit', name);
+      await assert.rejects(pdfFetchCredentials(viewer('javascript:alert(1)'), 7), /must use http/);
+    }
+  } finally {
+    globalThis.chrome = previous.chrome;
+    globalThis.browser = previous.browser;
+  }
+}
+
+async function testPdfAddressChecksFailClosedBeforeReadingBytes() {
+  const previous = { chrome: globalThis.chrome, browser: globalThis.browser, fetch: globalThis.fetch };
+  try {
+    const { fetchPdfBytes } = await import(pathToFileURL(pdfExtractionModulePath).href);
+    let bodyReads = 0;
+    globalThis.fetch = async (_url, options) => {
+      assert.equal(options.redirect, 'manual');
+      assert.equal(options.credentials, 'omit');
+      return { ok: true, status: 200, arrayBuffer: async () => { bodyReads++; return new ArrayBuffer(1); } };
+    };
+    globalThis.chrome = { runtime: {} }; // Real offscreen documents have no webRequest.
+    await assert.rejects(fetchPdfBytes('https://public.example/p.pdf'), /verification is required/);
+    await assert.rejects(fetchPdfBytes('https://public.example/p.pdf', {
+      verifyResponse: async () => { throw new Error('blocked address'); },
+    }), /blocked address/);
+    assert.equal(bodyReads, 0, 'An absent or denied worker verdict must prevent body consumption.');
+    await fetchPdfBytes('https://public.example/p.pdf', { verifyResponse: async () => {} });
+    assert.equal(bodyReads, 1);
+    globalThis.fetch = async () => ({ ok: false, status: 404, statusText: 'Not Found' });
+    await assert.rejects(fetchPdfBytes('https://public.example/p.pdf', {
+      verifyResponse: async () => { throw new Error('blocked address'); },
+    }), /blocked address/, 'A blocked response must not disclose its HTTP status.');
+    globalThis.fetch = async () => ({ ok: false, type: 'opaqueredirect', status: 0 });
+    await assert.rejects(fetchPdfBytes('https://public.example/p.pdf'), /Redirect was not followed/);
+
+    for (const name of ['chrome', 'firefox']) {
+      const webRequest = addressEvents();
+      const api = { webRequest };
+      globalThis.chrome = api;
+      globalThis.browser = api;
+      const { watchFetchAddresses } = await import(new URL(`../src/${name}/src/network/network-tools.js`, import.meta.url));
+      const watcher = watchFetchAddresses('https://public.example/p.pdf#page=1', false, { requireAddress: true });
+      webRequest.onResponseStarted.emit({ tabId: -1, url: 'https://public.example/p.pdf' });
+      assert.match(await watcher.settledFailure('fetch', 1), /Cannot verify/);
+      webRequest.onResponseStarted.emit({ tabId: -1, url: 'https://public.example/p.pdf', ip: '127.0.0.1' });
+      assert.match(await watcher.settledFailure('fetch'), /blocked address/);
+      watcher.close();
+      assert.equal(webRequest.onResponseStarted.size, 0);
+      delete api.webRequest;
+      assert.equal(watchFetchAddresses('https://public.example/p.pdf', false, { requireAddress: true }), null);
+    }
+    const webRequest = addressEvents();
+    globalThis.browser = { webRequest, dns: { resolve: async () => ({ addresses: ['8.8.8.8'] }) } };
+    globalThis.fetch = async () => {
+      webRequest.onResponseStarted.emit({ tabId: -1, url: 'https://public.example/p.pdf', ip: '127.0.0.1' });
+      return { ok: true, status: 200, arrayBuffer: async () => { bodyReads++; } };
+    };
+    const firefox = await import(new URL('../src/firefox/src/agent/pdf-tools.js', import.meta.url));
+    await assert.rejects(firefox.fetchPdfBytes('https://public.example/p.pdf'), /blocked address/);
+    assert.equal(bodyReads, 1, 'Firefox must also discard a blocked response before reading it.');
+    assert.equal(webRequest.onResponseStarted.size, 0);
+  } finally {
+    globalThis.chrome = previous.chrome;
+    globalThis.browser = previous.browser;
+    globalThis.fetch = previous.fetch;
+  }
+}
+
+async function testFirefoxPdfProxyRequiresValidatedDestination() {
+  const previous = { browser: globalThis.browser, fetch: globalThis.fetch };
+  const url = 'https://public.example/proxied.pdf';
+  const firefox = await import(new URL('../src/firefox/src/agent/pdf-tools.js', import.meta.url));
+  try {
+    for (const [label, addresses, lookupFails, allowed, expectedFetches] of [
+      ['public destination through local HTTP proxy', ['93.184.216.34'], false, true, 1],
+      ['mixed public IPv4 and IPv6 answers', ['93.184.216.34', '2606:4700::1111'], false, true, 1],
+      ['loopback destination', ['127.0.0.1'], false, false, 0],
+      ['private destination mixed with public', ['93.184.216.34', '10.0.0.5'], false, false, 0],
+      ['metadata destination', ['169.254.169.254'], false, false, 0],
+      ['failed lookup', [], true, false, 0],
+      ['empty lookup', [], false, false, 0],
+      ['missing DNS API', null, false, false, 0],
+    ]) {
+      const webRequest = addressEvents();
+      let fetches = 0;
+      let bodyReads = 0;
+      globalThis.browser = {
+        webRequest,
+        ...(addresses === null ? {} : { dns: { resolve: async host => {
+          assert.equal(host, 'public.example');
+          if (lookupFails) throw new Error('Lookup failed');
+          return { addresses };
+        } } }),
+      };
+      globalThis.fetch = async (_url, options) => {
+        fetches++;
+        assert.equal(options.credentials, 'omit');
+        // Like Firefox, report the proxy socket, not the destination address.
+        // Deliver the event after headers to exercise the watcher wait path.
+        setTimeout(() => webRequest.onResponseStarted.emit({
+          tabId: -1, url, ip: '127.0.0.1',
+          proxyInfo: { type: 'http', host: '127.0.0.1', port: 8080 },
+        }), 5);
+        return { ok: true, status: 200, arrayBuffer: async () => { bodyReads++; return new Uint8Array([1, 2, 3]).buffer; } };
+      };
+      if (allowed) assert.deepEqual(await firefox.fetchPdfBytes(url), new Uint8Array([1, 2, 3]), label);
+      else await assert.rejects(firefox.fetchPdfBytes(url), /blocked address|Cannot verify/, label);
+      assert.equal(fetches, expectedFetches, label);
+      assert.equal(bodyReads, allowed ? 1 : 0, label);
+      assert.equal(webRequest.onResponseStarted.size, 0, `${label}: listeners must be removed`);
+    }
+    // A proxy event alone must never satisfy a strict watcher without the
+    // caller's explicit guarantee that destination validation has succeeded.
+    const webRequest = addressEvents();
+    globalThis.browser = { webRequest };
+    const { watchFetchAddresses } = await import(new URL('../src/firefox/src/network/network-tools.js', import.meta.url));
+    const watcher = watchFetchAddresses(url, false, { requireAddress: true });
+    webRequest.onResponseStarted.emit({ tabId: -1, url, ip: '127.0.0.1', proxyInfo: { type: 'http' } });
+    assert.match(await watcher.settledFailure('fetch', 1), /Cannot verify/);
+    watcher.close();
+  } finally {
+    globalThis.browser = previous.browser;
+    globalThis.fetch = previous.fetch;
+  }
+}
+
 async function testPdfExtractionSsrfAndCookieHardening() {
   const { fetchPdfBytes } = await import(pathToFileURL(pdfExtractionModulePath).href);
   const originalFetch = globalThis.fetch;
+  const originalBrowser = globalThis.browser;
+  const webRequest = addressEvents();
+  globalThis.browser = { webRequest, dns: { resolve: async () => ({ addresses: ['8.8.8.8'] }) } };
   let lastFetchInit = null;
   globalThis.fetch = async (url, init) => {
     lastFetchInit = init;
+    webRequest.onResponseStarted.emit({ tabId: -1, url, ip: url.includes('127.0.0.1') ? '127.0.0.1' : '8.8.8.8' });
     return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
   };
 
@@ -388,15 +575,15 @@ async function testPdfExtractionSsrfAndCookieHardening() {
     );
 
     // 3. Local network allowed when explicitly opted in
-    const localBytes = await fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: true });
+    const localBytes = await fetchPdfBytes('http://127.0.0.1:8080/secret.pdf', { allowLocalNetwork: true, verifyResponse: async () => {} });
     assert.deepEqual(Array.from(localBytes), [37, 80, 68, 70]);
 
     // 4. Scoped cookie credentials policy
-    await fetchPdfBytes('https://example.test/public.pdf', { attachCookies: false });
+    await fetchPdfBytes('https://example.test/public.pdf', { attachCookies: false, verifyResponse: async () => {} });
     assert.equal(lastFetchInit?.credentials, 'omit');
     assert.equal(lastFetchInit?.redirect, 'manual');
 
-    await fetchPdfBytes('https://example.test/private.pdf', { attachCookies: true });
+    await fetchPdfBytes('https://example.test/private.pdf', { attachCookies: true, verifyResponse: async () => {} });
     assert.equal(lastFetchInit?.credentials, 'include');
     assert.equal(lastFetchInit?.redirect, 'manual');
 
@@ -411,6 +598,7 @@ async function testPdfExtractionSsrfAndCookieHardening() {
     );
   } finally {
     globalThis.fetch = originalFetch;
+    globalThis.browser = originalBrowser;
   }
 }
 
@@ -418,9 +606,13 @@ async function testFirefoxPdfExtractionSsrfAndCookieHardening() {
   const firefoxPdfToolsPath = path.join(root, 'src', 'firefox', 'src', 'agent', 'pdf-tools.js');
   const { fetchPdfBytes } = await import(pathToFileURL(firefoxPdfToolsPath).href);
   const originalFetch = globalThis.fetch;
+  const originalBrowser = globalThis.browser;
+  const webRequest = addressEvents();
+  globalThis.browser = { webRequest, dns: { resolve: async () => ({ addresses: ['8.8.8.8'] }) } };
   let lastFetchInit = null;
   globalThis.fetch = async (url, init) => {
     lastFetchInit = init;
+    webRequest.onResponseStarted.emit({ tabId: -1, url, ip: url.includes('127.0.0.1') ? '127.0.0.1' : '8.8.8.8' });
     return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
   };
 
@@ -461,18 +653,22 @@ async function testFirefoxPdfExtractionSsrfAndCookieHardening() {
     );
   } finally {
     globalThis.fetch = originalFetch;
+    globalThis.browser = originalBrowser;
   }
 }
 
 const tests = [
+  ['Chrome PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testPdfExtractionSsrfAndCookieHardening],
+  ['Firefox PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testFirefoxPdfExtractionSsrfAndCookieHardening],
+  ['Firefox PDF proxy reads require validated destination DNS answers', testFirefoxPdfProxyRequiresValidatedDestination],
+  ['PDF cookie scope compares unwrapped document domains in Chrome and Firefox', testPdfCookieDomainsUseDocumentUrlsInBothBrowsers],
+  ['PDF address checks require an observed address and discard denied bodies', testPdfAddressChecksFailClosedBeforeReadingBytes],
   ['MV3 PDF extraction uses the shared offscreen host', testMv3PdfExtractionUsesTheSharedOffscreenHost],
   ['PDF extraction rejects unsafe URLs and untrusted senders', testPdfUrlAndSenderBoundaries],
   ['PDF extraction preserves bounded page metadata and truncation', testPdfExtractionPreservesBoundedPageMetadataAndTruncation],
   ['PDF facade waits for host readiness and reuses Claude bytes', testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes],
   ['Vendored PDF.js extracts text through the compat entry points', testVendoredPdfjsExtractsTextThroughCompatEntryPoints],
   ['PDF.js compat fills missing built-ins without replacing native ones', testPdfjsCompatFillsMissingBuiltIns],
-  ['Chrome PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testPdfExtractionSsrfAndCookieHardening],
-  ['Firefox PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testFirefoxPdfExtractionSsrfAndCookieHardening],
 ];
 
 let failed = 0;
