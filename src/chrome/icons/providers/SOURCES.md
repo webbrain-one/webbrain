@@ -23,6 +23,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | opper | Opper official logo mark (opper.ai) |
 | cloudgpu | CloudGPU logo mark (cloudgpu.app) |
 | runcrate | Runcrate logo mark (runcrate.ai) |
+| standardcompute | Standard Compute logo mark (standardcompute.com) |
 
 Brand trademarks remain property of their owners; used only for provider identification in the settings UI.
 

@@ -77000,13 +77000,13 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     minimax-coding-plan moark modelscope morph nano-gpt nearai nebius nova novita-ai
     ollama-cloud opencode opencode-go opper orcarouter ovhcloud perplexity
     perplexity-agent poe pollinations privatemode-ai qihang-ai qiniu-ai requesty runcrate scaleway siliconflow
-    siliconflow-cn stackit stepfun submodel synthetic tencent-coding-plan
+    siliconflow-cn stackit standardcompute stepfun submodel synthetic tencent-coding-plan
     upstage v0 venice vercel vivgrid vultr wandb xiaomi zai-coding-plan zenmux
     zhipuai zhipuai-coding-plan
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 86);
+  assert.equal(expectedIds.length, 87);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77021,8 +77021,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 120/119 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 121 : 120;
+    // deliberately omitted from the 121/120 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 122 : 121;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77245,6 +77245,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.cloudgpu.suggestions,
     ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.3', 'kimi-k3', 'qwen3.5-397b'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.standardcompute.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://api.stdcmpt.com/v1',
+      model: 'StandardCompute',
+      contextWindow: 1000000,
+      supportsVision: false,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://standardcompute.com/dashboard',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.standardcompute.suggestions,
+    ['StandardCompute', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash', 'z-ai/glm-5.3', 'moonshotai/kimi-k3'],
   );
   assert.deepEqual(
     {
