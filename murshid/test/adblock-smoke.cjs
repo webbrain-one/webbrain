@@ -119,6 +119,35 @@ server.listen(0, '127.0.0.1', () => {
       ctx.adblock.setAllowed(SITE, false);
       console.log('Allowing ads on one site lets its ads load');
 
+      // 3b. The toolbar shield does the same from the browser chrome, both ways.
+      const shield = () => w.ui.executeJavaScript(`(() => { const b = document.getElementById('adblock');
+        return { hidden: b.hidden, allowed: b.classList.contains('allowed'), pressed: b.getAttribute('aria-pressed'), title: b.title }; })()`);
+      await waitFor(async () => { const s = await shield(); return !s.hidden && !s.allowed; }, 'the shield showing blocking');
+      assert.equal((await shield()).pressed, 'true');
+      assert.ok((await shield()).title.includes(`blocked on ${SITE}`), (await shield()).title);
+      await tab.wc.reload();
+      await load(tab);
+      await w.ui.executeJavaScript("document.getElementById('adblock').click()"); // allows, and reloads the tab
+      await waitFor(() => (ctx.settings.get('adblockAllowedSites') || []).includes(SITE), 'the site allowed');
+      await sleep(300);
+      result = await load(tab);
+      assert.equal(result.ad, 'load');
+      assert.equal(result.tracker, 'load');
+      await waitFor(async () => (await shield()).allowed, 'the shield showing allowed');
+      await w.ui.executeJavaScript("document.getElementById('adblock').click()"); // blocks again
+      await waitFor(() => !(ctx.settings.get('adblockAllowedSites') || []).includes(SITE), 'the site blocked again');
+      await sleep(300);
+      result = await load(tab);
+      assert.equal(result.ad, 'error');
+      assert.equal(result.tracker, 'error');
+      await waitFor(async () => !(await shield()).allowed, 'the shield showing blocking again');
+      // Not on Murshid's own pages.
+      const settingsTab = w.addTab({ url: 'murshid://settings/' });
+      await waitFor(async () => (await shield()).hidden, 'no shield on murshid://');
+      await w.closeTab(settingsTab);
+      w.selectTab(tab);
+      console.log('The toolbar shield allows and blocks ads on the site');
+
       // 4. Settings > "Block ads and trackers" turns it off.
       seen.length = 0;
       await tab.wc.loadURL('murshid://settings/');
