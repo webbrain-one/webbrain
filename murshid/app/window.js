@@ -407,6 +407,7 @@ class MurshidWindow {
       panel: this.panelGeometry ? { ...this.panelGeometry, title: /^chrome-extension:/.test(panelTitle) ? 'WebBrain' : panelTitle } : null,
       webBrain: this.ctx.webBrainInfo(),
       downloads: this.ctx.downloads?.summary() || null,
+      updates: this.ctx.updates?.snapshot() || null,
     });
   }
 

@@ -1,7 +1,7 @@
 {
   "name": "murshid",
   "productName": "Murshid",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Murshid — a Chromium browser with the WebBrain agent built in.",
   "private": true,
   "main": "app/main.js",
@@ -9,7 +9,7 @@
   "author": "Emre Sokullu",
   "homepage": "https://github.com/webbrain-one/webbrain/tree/main/murshid",
   "scripts": {
-    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs test/tab-strip.test.cjs test/adblock.test.cjs",
+    "test": "node --test test/review-fixes.test.cjs test/i18n.test.cjs test/history.test.cjs test/tab-strip.test.cjs test/adblock.test.cjs test/updates.test.cjs",
     "test:integration": "node test/run-smoke.cjs",
     "test:session": "node test/run-session-smoke.cjs",
     "test:adblock": "node test/run-adblock-smoke.cjs",
@@ -23,7 +23,9 @@
     "web:i18n": "node scripts/i18n/build.mjs",
     "adblock": "node scripts/build-adblock.mjs",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "test:updates": "node test/run-updates-smoke.cjs",
+    "updates:feed": "node scripts/build-update-feed.mjs"
   },
   "dependencies": {
     "@ghostery/adblocker": "2.20.3",
@@ -119,6 +121,12 @@
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "universal"
           ]

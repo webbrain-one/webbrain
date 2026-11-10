@@ -1,0 +1,12 @@
+{
+  "headers": [
+    {
+      "source": "/updates/:path*",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }]
+    },
+    {
+      "source": "/download/SHA256SUMS.txt",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }]
+    }
+  ]
+}

@@ -64,6 +64,7 @@ function createCommands(ctx) {
     webBrain: (w) => w && ctx.crx.togglePanelForActiveTab(w),
     webBrainCommand: (w, name) => ctx.sendExtensionCommand(w, name),
     settings: (w) => (w || ctx.createWindow({ empty: true })).addTab({ url: 'murshid://settings' }),
+    updates: (w) => (w || ctx.createWindow({ empty: true })).addTab({ url: 'murshid://updates' }),
     about: (w) => (w || ctx.createWindow({ empty: true })).addTab({ url: 'murshid://about' }),
     quit: () => ctx.quit(),
   };

@@ -59,6 +59,9 @@
       }
       select.value = values.searchEngine;
       select.addEventListener('change', () => api.setSetting('searchEngine', select.value));
+      const updates = $('check-updates');
+      updates.checked = values.checkUpdates !== false;
+      updates.addEventListener('change', () => api.setSetting('checkUpdates', updates.checked));
       const companion = $('companion');
       companion.checked = Boolean(values.startCompanion);
       companion.addEventListener('change', () => api.setSetting('startCompanion', companion.checked));
@@ -73,6 +76,32 @@
       persistSession.addEventListener('change', () => api.setSetting('persistBrowserSession', persistSession.checked));
     });
     $('open-companion').addEventListener('click', () => api.companion());
+  }
+
+  // Updates --------------------------------------------------------------------------
+  if (page === 'updates' && api) {
+    const render = (state) => {
+      if (!state) return;
+      $('installed-version').textContent = state.installedVersion;
+      const status = ['idle', 'checking', 'current', 'available', 'downloading', 'ready', 'installing', 'error', 'unsupported', 'opened'].includes(state.status) ? state.status : 'error';
+      $('update-status').textContent = t(`page.updates.${status}`, { version: status === 'current' ? state.installedVersion : state.latestVersion || state.installedVersion });
+      $('update-hint').textContent = t(state.native ? 'page.updates.native' : 'page.updates.manual');
+      $('check-update').disabled = ['checking', 'downloading', 'ready', 'installing'].includes(status);
+      $('download-update').hidden = status !== 'available';
+      $('install-update').hidden = status !== 'ready';
+    };
+    const act = async (call) => {
+      try { render(await call()); } catch { $('update-status').textContent = t('page.updates.error'); }
+    };
+    $('check-update').addEventListener('click', () => act(() => api.checkUpdates()));
+    $('download-update').addEventListener('click', () => act(() => api.downloadUpdate()));
+    $('install-update').addEventListener('click', () => act(() => api.installUpdate()));
+    act(async () => {
+      const state = await api.updateStatus();
+      return ['idle', 'error', 'current', 'unsupported'].includes(state?.status) ? api.checkUpdates() : state;
+    });
+    const timer = setInterval(() => { if (!document.hidden) act(() => api.updateStatus()); }, 1000);
+    window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
   }
 
   // About ----------------------------------------------------------------------------

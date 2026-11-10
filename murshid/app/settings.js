@@ -62,6 +62,7 @@ const DEFAULTS = {
   adblock: true,
   adblockAllowedSites: [],
   persistBrowserSession: true,
+  checkUpdates: true,
   sidePanelWidth: 420,
   restoreLastSession: false,
   lastSession: [],
