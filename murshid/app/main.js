@@ -441,7 +441,8 @@ function installUiIpc() {
         endPanelDrag(w);
         return null;
       case 'updates':
-        return ctx.commands.run.updates(w);
+        ctx.commands.run.updates(w);
+        return null;
       case 'mainMenu':
         popupMainMenu(ctx, w, args[0] || { x: 0, y: 0 });
         return null;

@@ -70,6 +70,14 @@ const { _electron } = require('playwright');
     });
     assert.equal(calls.filter(c => c[0] === 'download').length, 1);
     assert.equal(calls.filter(c => c[0] === 'install').length, 1);
+    const opened = await application.evaluate(async ({ app }) => {
+      const require = process.mainModule.require.bind(process.mainModule);
+      const ctx = require(require('node:path').join(app.getAppPath(), 'app/main.js')).ctx;
+      const w = ctx.windows[0], count = w.tabs.length;
+      const result = await w.ui.executeJavaScript("window.murshidUI.invoke('updates')");
+      return { result, added: w.tabs.length - count };
+    });
+    assert.deepEqual(opened, { result: null, added: 1 });
     console.log('Updates UI passed: available version, explicit native download, ready state, and explicit restart/install.');
   } finally {
     if (application) await application.close();
