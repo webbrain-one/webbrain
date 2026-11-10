@@ -344,8 +344,8 @@
       "tr": "12 Monterey ve sonrası; Apple Silicon ve Intel."
     },
     "get.mac.status": {
-      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
-      "tr": "0.1.0 · <span lang=\"en\">Apple Silicon</span> ve <span lang=\"en\">Intel</span> · 294 MB"
+      "en": "0.1.1 · Apple Silicon and Intel · 297 MB",
+      "tr": "0.1.1 · <span lang=\"en\">Apple Silicon</span> ve <span lang=\"en\">Intel</span> · 297 MB"
     },
     "get.mac.fine": {
       "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",

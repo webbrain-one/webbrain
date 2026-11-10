@@ -1,7 +1,7 @@
 {
   "name": "murshid",
   "productName": "Murshid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Murshid — a Chromium browser with the WebBrain agent built in.",
   "private": true,
   "main": "app/main.js",
