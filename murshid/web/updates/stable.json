@@ -16,19 +16,19 @@
       }
     },
     "win32-x64": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "installer": {
-        "url": "https://murshid.one/download/Murshid-0.1.1-windows-x64-setup.exe",
-        "size": 159675326,
-        "sha256": "fa12629099cff361670ec3d13deb7b08536dfa07d63c4e670ea61d21b9abce45"
+        "url": "https://murshid.one/download/Murshid-0.1.2-windows-x64-setup.exe",
+        "size": 159683616,
+        "sha256": "63580ebd52c87c231c6c542ec5ceb8a274aa1000cfc9b2d83ae41406211126bd"
       }
     },
     "linux-x64": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "installer": {
-        "url": "https://murshid.one/download/Murshid-0.1.1-linux-x86_64.AppImage",
-        "size": 182258756,
-        "sha256": "3f1ec82fa98e2e096ae0ee43e1cfc59e98b6e00e50a8b552600b13d875bb7310"
+        "url": "https://murshid.one/download/Murshid-0.1.2-linux-x86_64.AppImage",
+        "size": 182271053,
+        "sha256": "05409ac4e9dc91c660fa828055767684633cce9a47d65051d793b43a55a08ccc"
       }
     }
   },
@@ -39,7 +39,7 @@
         "version": "0.1.3",
         "name": "0.1.3",
         "notes": "Murshid browser update.",
-        "pub_date": "2026-11-10T16:42:08.937Z",
+        "pub_date": "2026-11-10T16:48:07.086Z",
         "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.zip",
         "size": 287209676,
         "sha256": "4b4ef4e6c01da05223868c585a38866fe83dabcacffaadfa1040ec1e2617eaef"

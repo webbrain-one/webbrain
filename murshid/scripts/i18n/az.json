@@ -332,8 +332,8 @@
       "az": "Quraşdırıcını yükləyin"
     },
     "get.win.status": {
-      "en": "0.1.1 · x64 · 160 MB",
-      "az": "0.1.1 · x64 · 160 MB"
+      "en": "0.1.2 · x64 · 160 MB",
+      "az": "0.1.2 · x64 · 160 MB"
     },
     "get.win.fine": {
       "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
@@ -356,12 +356,12 @@
       "az": "x64. Arm64-də mənbə kodundan işləyir."
     },
     "get.linux.status": {
-      "en": "0.1.1 · x64 · 182 MB · 144 MB",
-      "az": "0.1.1 · x64 · 182 MB · 144 MB"
+      "en": "0.1.2 · x64 · 182 MB · 144 MB",
+      "az": "0.1.2 · x64 · 182 MB · 144 MB"
     },
     "get.linux.fine": {
-      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.1-linux-amd64.deb</code>",
-      "az": "AppImage: icra oluna bilən edin və işlədin. Debian və ya Ubuntu-da: <code>sudo apt install ./Murshid-0.1.1-linux-amd64.deb</code>"
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>",
+      "az": "AppImage: icra oluna bilən edin və işlədin. Debian və ya Ubuntu-da: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>"
     },
     "get.source": {
       "en": "Source on GitHub",

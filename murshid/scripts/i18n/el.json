@@ -332,8 +332,8 @@
       "el": "Λήψη εγκαταστάτη"
     },
     "get.win.status": {
-      "en": "0.1.1 · x64 · 160 MB",
-      "el": "0.1.1 · x64 · 160 MB"
+      "en": "0.1.2 · x64 · 160 MB",
+      "el": "0.1.2 · x64 · 160 MB"
     },
     "get.win.fine": {
       "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
@@ -356,12 +356,12 @@
       "el": "x64. Το Arm64 εκτελείται από την πηγή."
     },
     "get.linux.status": {
-      "en": "0.1.1 · x64 · 182 MB · 144 MB",
-      "el": "0.1.1 · x64 · 182 MB · 144 MB"
+      "en": "0.1.2 · x64 · 182 MB · 144 MB",
+      "el": "0.1.2 · x64 · 182 MB · 144 MB"
     },
     "get.linux.fine": {
-      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.1-linux-amd64.deb</code>",
-      "el": "AppImage: κάντε το εκτελέσιμο και εκτελέστε το. Σε Debian ή Ubuntu: <code>sudo apt install ./Murshid-0.1.1-linux-amd64.deb</code>"
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>",
+      "el": "AppImage: κάντε το εκτελέσιμο και εκτελέστε το. Σε Debian ή Ubuntu: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>"
     },
     "get.source": {
       "en": "Source on GitHub",
