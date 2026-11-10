@@ -336,6 +336,11 @@ html[dir="rtl"] .tab .title { mask-image: linear-gradient(270deg, #000 calc(100%
 .toolbar-pill[disabled] { opacity: 0.45; }
 @media (max-width: 760px) { .toolbar-pill span { display: none; } .toolbar-pill { padding: 0 6px; } }
 
+/* The ad blocker for this site: a gold shield while it blocks, a crossed-out
+   faint one where ads are allowed. */
+#adblock svg { width: 19px; height: 19px; color: var(--gold); }
+#adblock.allowed svg { color: var(--muted); }
+
 #downloads i {
   position: absolute;
   inset: 3px;
