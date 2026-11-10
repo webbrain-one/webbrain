@@ -6,6 +6,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "اعمال بررسی‌های پیش از اقدام",
+  "st.display.action_guards.desc": "گیرنده و اقدام‌های مهم را پیش از اجرا بررسی می‌کند. با خاموش کردن این گزینه، مدل دربارهٔ ارسال، تلاش دوباره، حذف یا انتشار تصمیم می‌گیرد. مجوزهای سایت همچنان برقرارند. از اجرای بعدی اعمال می‌شود.",
   'st.providers.title': 'نام ارائه‌دهنده',
   ...getGenerativeMediaCopy('fa'),
   ...bidiCopy,

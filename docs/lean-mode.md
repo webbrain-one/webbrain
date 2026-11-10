@@ -14,7 +14,9 @@ Settings → Advanced → **Lean mode** (storage key `leanMode`):
 - **On**: always, for every provider and tier.
 - **Off**: never.
 
-It applies to Act mode only. Ask, Dev and the standalone chat keep their behavior. A run decides once, when it starts, from the setting, the run's mode and its provider, and keeps that answer to the end, so a change takes effect on the next run. Settings → General → **Strict checks** has no effect on a lean run: the quality checks it would make strict do not run at all.
+It applies to Act mode only. Ask, Dev and the standalone chat keep their behavior. A run decides once, when it starts, from the setting, the run's mode and its provider, and keeps that answer to the end, so a change takes effect on the next run. Settings → Advanced → **Strict checks** has no effect on a lean run: the quality checks it would make strict do not run at all.
+
+**Enforce action guards** is a separate Advanced setting, on by default. Lean mode keeps recipient and other consequential-action checks while enforcement is on. Turning enforcement off allows the model to send or retry directly regardless of Lean mode. Both settings take effect on the next run.
 
 The resolved mode is recorded:
 
@@ -63,7 +65,7 @@ The page reads and model calls that only those guards use are skipped as well:
 
 ## What stays
 
-Lean mode keeps:
+With action guards enabled, Lean mode keeps:
 
 - **The hard classes, with their cards:** a wrong or unverified **recipient**, **deletions**, **money**, **credentials** and **publishing** something the user did not ask for.
 - **Permission gates:** site permissions, the submit confirmation card ("Ask before consequential actions"), Ask mode's read-only rule, `/allow-api`, and the refusal of tools the run does not offer.

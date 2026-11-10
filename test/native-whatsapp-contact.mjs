@@ -45,7 +45,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         document.querySelector('[data-testid="conversation-info-header"]').onclick = fixtureDrawer;
         fixtureAdd('opaque-initial-Z', 'Incoming question one');
       });
-      for (const file of ['rich-text-toolbar-heuristic.js','accessibility-tree.js','chat-observation.js','content.js']) {
+      for (const file of ['rich-text-toolbar-heuristic.js','accessibility-tree.js','whatsapp-phone.js','chat-observation.js','content.js']) {
         await page.addScriptTag({ content: await readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8') });
       }
       const call = (action, params = {}) => page.evaluate(message => new Promise(resolve => {

@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "เปิดใช้การตรวจสอบการดำเนินการ",
+  "st.display.action_guards.desc": "ตรวจสอบผู้รับและการดำเนินการสำคัญก่อนทำงาน เมื่อปิด โมเดลจะตัดสินใจว่าจะส่ง ลองอีกครั้ง ลบ หรือเผยแพร่ สิทธิ์ของเว็บไซต์ยังมีผล เริ่มใช้ในการทำงานครั้งถัดไป",
   'st.providers.title': 'ชื่อผู้ให้บริการ',
   ...getGenerativeMediaCopy('th'),
   ...bidiCopy,

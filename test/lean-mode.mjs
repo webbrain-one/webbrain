@@ -386,6 +386,27 @@ for (const build of ['chrome', 'firefox']) {
     }
   });
 
+  test(`${build}: switching off action guards skips every hard and quality check independently of Lean and Strict`, () => {
+    const agent = new Agent({ getActive: () => STRONG });
+    for (const leanMode of ['off', 'on']) {
+      for (const strict of [false, true]) {
+        const tab = nextTab++;
+        agent.leanMode = leanMode;
+        agent.strictGuards = strict;
+        agent.enforceActionGuards = false;
+        agent._beginLeanRun(tab, 'act');
+        agent.enforceActionGuards = true;
+        for (const [id, entry] of Object.entries(policy.GUARDS)) {
+          const skip = entry.class === 'quality' || policy.isHardGuardClass(entry.class);
+          for (const decided of [true, false]) {
+            assert.equal(agent._guardOutcome(id, { decided, tabId: tab }),
+              skip ? 'skip' : policy.guardOutcome(id, { decided, strict }), id);
+          }
+        }
+      }
+    }
+  });
+
   test(`${build}: a skipped guard lets the action through with no note and the completion with no caveat`, () => {
     const agent = new Agent({ getActive: () => STRONG });
     agent.strictGuards = true; // Lean mode ignores Strict checks.
@@ -567,16 +588,19 @@ for (const build of ['chrome', 'firefox']) {
     assert.match(String(result), /./);
   });
 
-  test(`${build}: a lean run still asks the site permission gate before acting`, async () => {
-    const tab = nextTab++;
-    const h = runAgent(n => (n === 1 ? call('save', 'click_ax', { ref_id: 'ref_save' }) : call('done', 'done', { summary: 'Could not save.', outcome: 'failed' })));
-    h.agent._skipPermissionGate = false;
-    h.agent._ensureGateSetting = async () => false;
-    h.agent.permissions.check = () => ({ allowed: false, needsPrompt: false }); // a standing deny for this site
-    await h.agent.processMessage(tab, 'Save the owned profile.', () => {}, 'act', [], { detachedRequestId: `lean-${tab}` });
-    assert.equal(h.dispatched.includes('click_ax'), false, 'the denied click was not dispatched');
-    assert.ok(h.agent.conversations.get(tab).some(message => message.role === 'tool' && /denied permission/.test(String(message.content))));
-  });
+  for (const enforceActionGuards of [true, false]) {
+    test(`${build}: a site denial blocks the action with enforcement ${enforceActionGuards ? 'on' : 'off'}`, async () => {
+      const tab = nextTab++;
+      const h = runAgent(n => (n === 1 ? call('save', 'click_ax', { ref_id: 'ref_save' }) : call('done', 'done', { summary: 'Could not save.', outcome: 'failed' })));
+      h.agent.enforceActionGuards = enforceActionGuards;
+      h.agent._skipPermissionGate = false;
+      h.agent._ensureGateSetting = async () => false;
+      h.agent.permissions.check = () => ({ allowed: false, needsPrompt: false }); // a standing deny for this site
+      await h.agent.processMessage(tab, 'Save the owned profile.', () => {}, 'act', [], { detachedRequestId: `lean-${tab}` });
+      assert.equal(h.dispatched.includes('click_ax'), false, 'the denied click was not dispatched');
+      assert.ok(h.agent.conversations.get(tab).some(message => message.role === 'tool' && /denied permission/.test(String(message.content))));
+    });
+  }
 
   // ── Handlers ────────────────────────────────────────────────────────────
   test(`${build}: a lean done takes no screenshot and asks no judge; a chat receipt that cannot be saved still refuses`, async () => {
@@ -881,6 +905,10 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(block.mutationConfirmation?.reason, 'not_named', 'the deletion card is offered');
     assert.equal(block.noDispatch, true);
     assert.equal(calls.filter(item => item.kind === 'deletion_request').length, 1, 'the deletion decision still runs');
+    agent.enforceActionGuards = false;
+    agent._beginLeanRun(tab, 'act');
+    assert.equal(await agent._resourceMutationPreSubmitBlock(tab, 'click_ax', { ref_id: 'ref_42' }, detected, provider), null);
+    assert.equal(calls.filter(item => item.kind === 'deletion_request').length, 1, 'no second deletion decision or card');
   });
 
   test(`${build}: settings, background, export and locales carry the setting`, async () => {
@@ -893,7 +921,7 @@ for (const build of ['chrome', 'firefox']) {
     assert.match(settings, /'strictGuards', 'leanMode'/);
     assert.match(settings, /leanModeSelect\.value = normalizeLeanModeSetting\(stored\.leanMode\)/);
     assert.match(settings, new RegExp(`await ${runtime}\\.storage\\.local\\.set\\(\\{ leanMode: normalizeLeanModeSetting\\(leanModeSelect\\.value\\) \\}\\)`));
-    assert.match(background, /get\(\['strictSecretMode', 'strictGuards', 'leanMode'\]\)/);
+    assert.match(background, /get\(\['strictSecretMode', 'enforceActionGuards', 'strictGuards', 'leanMode'\]\)/);
     assert.match(background, /agent\.leanMode = normalizeLeanModeSetting\(stored\?\.leanMode\);/);
     assert.match(background, /if \(changes\.leanMode\) \{\s*agent\.leanMode = normalizeLeanModeSetting\(changes\.leanMode\.newValue\);/);
     const config = await import(`../src/${build}/src/config-transfer.js`);
@@ -903,7 +931,12 @@ for (const build of ['chrome', 'firefox']) {
     const exported = config.createConfigExport({});
     assert.equal(config.parseConfigImport(JSON.stringify({ ...exported, settings: { ...exported.settings, leanMode: 'off' } })).settings.leanMode, 'off');
     assert.throws(() => config.parseConfigImport(JSON.stringify({ ...exported, settings: { ...exported.settings, leanMode: 'maybe' } })), /leanMode/);
-    // Every locale has real copy for the five strings.
+    assert.equal(exported.settings.enforceActionGuards, true);
+    assert.equal(config.parseConfigImport(JSON.stringify({ ...exported, settings: { leanMode: 'on' } })).settings.enforceActionGuards, true);
+    const off = config.createConfigExport({ enforceActionGuards: false, leanMode: 'off' });
+    assert.equal(config.parseConfigImport(JSON.stringify(off)).settings.enforceActionGuards, false);
+    assert.throws(() => config.parseConfigImport(JSON.stringify({ ...exported, settings: { enforceActionGuards: 'false' } })), /enforceActionGuards/);
+    // Every locale has a label and explanation for each setting.
     const dir = path.join(ROOT, `src/${build}/src/ui/locales`);
     const english = (await import(`../src/${build}/src/ui/locales/en.js`)).default;
     assert.match(english['st.display.lean_mode.desc'], /^For strong models: no automatic checks of typing[\s\S]*who receives a message, deleting data, spending money, credentials, publishing something you didn’t ask for, and site permissions/);
@@ -916,11 +949,39 @@ for (const build of ['chrome', 'firefox']) {
       for (const key of ['label', 'desc', 'auto', 'on', 'off']) {
         assert.ok(String(dict[`st.display.lean_mode.${key}`] || '').trim(), `${file}: ${key}`);
       }
+      for (const key of ['label', 'desc']) {
+        const id = 'st.display.action_guards.' + key;
+        assert.ok(dict[id]?.trim(), file + ' ' + id);
+        if (file !== 'en.js') assert.notEqual(dict[id], english[id], file + ' ' + id);
+      }
       if (file !== 'en.js') {
         assert.notEqual(dict['st.display.lean_mode.desc'], english['st.display.lean_mode.desc'], `${file}: translated description`);
         assert.notEqual(dict['st.display.lean_mode.label'], english['st.display.lean_mode.label'], `${file}: translated label`);
       }
     }
+  });
+
+  test(`${build}: a delayed storage read cannot undo a newer action-guard preference`, async () => {
+    const source = read(`src/${build}/src/background.js`);
+    const load = source.slice(source.indexOf('let actionGuardsSettingsRevision'), source.indexOf('const strictSecretModeReady'));
+    const change = source.match(/if \(areaName === 'local' && changes\.enforceActionGuards\) \{[^}]*\}/)[0];
+    let answer;
+    const agent = { enforceActionGuards: true };
+    const api = { storage: { local: { get: () => new Promise(resolve => { answer = resolve; }) } } };
+    const settings = vm.runInNewContext(`${load}; ({ load: loadStrictSecretMode, change(changes, areaName) { ${change} } })`,
+      { agent, chrome: api, browser: api, normalizeLeanModeSetting: lean.normalizeLeanModeSetting });
+    for (const value of [false, true]) {
+      const pending = settings.load();
+      settings.change({ enforceActionGuards: { newValue: value } }, 'local');
+      answer({ enforceActionGuards: !value });
+      await pending;
+      assert.equal(agent.enforceActionGuards, value);
+    }
+    settings.change({ enforceActionGuards: { newValue: false } }, 'sync');
+    assert.equal(agent.enforceActionGuards, true);
+    settings.change({ enforceActionGuards: { newValue: false } }, 'local');
+    settings.change({ enforceActionGuards: { oldValue: false } }, 'local');
+    assert.equal(agent.enforceActionGuards, true, 'removing the preference restores the default');
   });
 
   test(`${build}: traces and the scheduler know which mode ran`, async () => {
@@ -934,6 +995,10 @@ for (const build of ['chrome', 'firefox']) {
     const config = agent._runtimeTraceConfig(STRONG, { tabId: tab, mode: 'act' });
     assert.equal(config.lean_mode, true);
     assert.equal(config.lean_mode_setting, 'auto');
+    assert.equal(runtimeConfig.normalizeRuntimeTraceConfig(config).enforce_action_guards, true);
+    agent.enforceActionGuards = false;
+    agent._beginLeanRun(tab, 'act');
+    assert.equal(runtimeConfig.normalizeRuntimeTraceConfig(agent._runtimeTraceConfig(STRONG, { tabId: tab, mode: 'act' })).enforce_action_guards, false);
     assert.match(read(`src/${build}/src/agent/agent.js`), /trace\.recordNote\(runId, null, 'lean_mode', \{/);
     // The scheduler's opt-in System One judge is a quality check.
     const { ScheduledJobManager } = await import(`../src/${build}/src/agent/scheduler.js`);

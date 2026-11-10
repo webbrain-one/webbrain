@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "操作時のチェックを有効にする",
+  "st.display.action_guards.desc": "実行前に宛先や重要な操作を確認します。オフにすると、送信、再試行、削除、公開の判断をモデルに任せます。サイトの権限は引き続き適用されます。次回の実行から有効です。",
   'st.providers.title': 'プロバイダー名',
   ...getGenerativeMediaCopy('ja'),
   ...bidiCopy,

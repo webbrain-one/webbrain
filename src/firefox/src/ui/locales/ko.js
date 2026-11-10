@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "작업 전 검사 적용",
+  "st.display.action_guards.desc": "실행 전에 수신자와 중요한 작업을 확인합니다. 끄면 전송, 재시도, 삭제, 게시 여부를 모델이 결정합니다. 사이트 권한은 계속 적용됩니다. 다음 실행부터 반영됩니다.",
   'st.providers.title': '공급자 이름',
   ...getGenerativeMediaCopy('ko'),
   ...bidiCopy,

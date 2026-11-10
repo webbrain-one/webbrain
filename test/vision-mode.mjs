@@ -10,7 +10,7 @@ import { test } from 'node:test';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
-const SHARED = ['vision-budget.js', 'vision-diff.js', 'vision-session.js', 'vision-tools.js', 'vision-mode.js', 'vision-encoder.js', 'vision-runtime.js', 'vision-dom-probe.js'];
+const SHARED = ['vision-budget.js', 'vision-diff.js', 'vision-session.js', 'vision-tools.js', 'vision-mode.js', 'vision-encoder.js', 'vision-runtime.js', 'vision-dom-probe.js', 'page-feedback.js', 'page-feedback-policy.js'];
 
 const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
 const api = {
@@ -679,30 +679,23 @@ test('click_at at the top-left CSS pixel is nudged off the normalized-fraction r
   assert.deepEqual(visionTools.translateVisionClick({ x: 0, y: 40 }, session).args, { x: 0, y: 40, coordinate_space: 'css' });
 });
 
-test('page feedback: vision points survive page churn, keyboard follow-ups ride on their click', async () => {
-  const policyModule = await import('../src/chrome/src/agent/page-feedback-policy.js');
-  const { pageFeedbackCallPolicy, canRetainPageFeedbackCalls } = policyModule;
-  for (const build of ['chrome', 'firefox']) {
-    assert.equal(read(`src/${build}/src/agent/page-feedback-policy.js`), read('src/chrome/src/agent/page-feedback-policy.js'));
-  }
-  for (const name of ['click_at', 'hover_at', 'drag_at']) assert.equal(pageFeedbackCallPolicy(name, { x: 1, y: 2 }).kind, 'vision_point', name);
-  assert.equal(pageFeedbackCallPolicy('scroll_at', { direction: 'down' }).kind, 'scroll');
-  for (const name of ['take_screenshot', 'zoom', 'wait']) assert.equal(pageFeedbackCallPolicy(name, {}).kind, 'observe', name);
-  const call = (name, args = {}) => ({ id: name, function: { name, arguments: JSON.stringify(args) } });
-  const passive = [{ kind: 'dom', source: 'page', frameId: 0, target: 'div.timeline' }];
-  const user = [{ kind: 'input', source: 'user', frameId: 0, target: 'input#name' }];
-  const state = { url: 'https://owned.example.test/', actionBinding: { snapshotToken: 's', focusedTargetAvailable: false } };
-  assert.equal(canRetainPageFeedbackCalls([call('click_at', { x: 5, y: 5 }), call('type_text', { text: 'hi' }), call('press_keys', { key: 'Enter' })], state, null, passive), true,
-    'a timeline ticking elsewhere does not supersede a click-and-type decision');
-  assert.equal(canRetainPageFeedbackCalls([call('type_text', { text: 'hi' })], state, null, passive), false,
-    'typing without a click of the same response keeps the legacy fence');
-  assert.equal(canRetainPageFeedbackCalls([call('click_at', { x: 5, y: 5 })], state, null, user), false, 'user input still supersedes');
-  // The page-feedback module consults vision state only through agent hooks.
-  const feedback = read('src/chrome/src/agent/page-feedback.js');
-  assert.equal(feedback, read('src/firefox/src/agent/page-feedback.js'));
-  assert.match(feedback, /if \(this\._visionRunState\?\.\(tabId\)\?\.active !== true\) \{\s*messages\.push\(this\._ownedFeedbackMessage\(run, '\[BROWSER STATE: current page observed/);
-  assert.match(feedback, /\.\.\.\(visionRun \? \{\} : \{ page: /);
-});
+for (const build of ['chrome', 'firefox']) {
+  test(`${build}: page feedback: vision points survive page churn, keyboard follow-ups ride on their click`, async () => {
+    const { pageFeedbackCallPolicy, canRetainPageFeedbackCalls } = await import(`../src/${build}/src/agent/page-feedback-policy.js`);
+    for (const name of ['click_at', 'hover_at', 'drag_at']) assert.equal(pageFeedbackCallPolicy(name, { x: 1, y: 2 }).kind, 'vision_point', name);
+    assert.equal(pageFeedbackCallPolicy('scroll_at', { direction: 'down' }).kind, 'scroll');
+    for (const name of ['take_screenshot', 'zoom', 'wait']) assert.equal(pageFeedbackCallPolicy(name, {}).kind, 'observe', name);
+    const call = (name, args = {}) => ({ id: name, function: { name, arguments: JSON.stringify(args) } });
+    const passive = [{ kind: 'dom', source: 'page', frameId: 0, target: 'div.timeline' }];
+    const user = [{ kind: 'input', source: 'user', frameId: 0, target: 'input#name' }];
+    const state = { url: 'https://owned.example.test/', actionBinding: { snapshotToken: 's', focusedTargetAvailable: false } };
+    assert.equal(canRetainPageFeedbackCalls([call('click_at', { x: 5, y: 5 }), call('type_text', { text: 'hi' }), call('press_keys', { key: 'Enter' })], state, null, passive), true,
+      'a timeline ticking elsewhere does not supersede a click-and-type decision');
+    assert.equal(canRetainPageFeedbackCalls([call('type_text', { text: 'hi' })], state, null, passive), false,
+      'typing without a click of the same response keeps the legacy fence');
+    assert.equal(canRetainPageFeedbackCalls([call('click_at', { x: 5, y: 5 })], state, null, user), false, 'user input still supersedes');
+  });
+}
 
 test('a blocked file chooser is reported in vision terms in both builds', () => {
   const { visionFilePickerBlockedResult } = visionTools;

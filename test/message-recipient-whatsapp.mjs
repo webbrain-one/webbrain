@@ -43,7 +43,7 @@ async function fixture(kind, engine, Agent, options = {}) {
     window.sent = 0;
     document.querySelector('#send').addEventListener('click', () => window.sent++);
   });
-  for (const file of ['file-upload-policy.js', 'rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'content.js']) {
+  for (const file of ['whatsapp-phone.js', 'file-upload-policy.js', 'rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'content.js']) {
     await page.addScriptTag({ content: await readFile(path.resolve('src', kind, 'src/content', file), 'utf8') });
   }
   const agent = new Agent({ getActive: () => ({ supportsVision: false }) });
@@ -65,6 +65,36 @@ async function fixture(kind, engine, Agent, options = {}) {
 }
 
 for (const [kind, engine, Agent] of [['chrome', chromium, ChromeAgent], ['firefox', firefox, FirefoxAgent]]) {
+  test(`${kind}: a numeric target follows the scoped WhatsApp composer destination on every send`, async () => {
+    const f = await fixture(kind, engine, Agent);
+    try {
+      const plan = f.agent._planExecutionGuards.get(71);
+      plan.messaging = { target_kind: 'named', recipients: ['+905550000001'] };
+      for (const label of ['+90 555 000 00 01 numarasına mesaj yaz', '+90 555 000 00 01 にメッセージを送信', 'Message to 0090 (555) 000-00-01']) {
+        await f.page.locator('#body').evaluate((node, value) => node.setAttribute('aria-label', value), label);
+        assert.equal((await f.bind()).blocked, null, label);
+      }
+      const first = await f.bind();
+      assert.equal(first.blocked, null, JSON.stringify(first.blocked));
+      assert.equal((await call(f.page, 'click', { ...sendArgs, ...first.context })).success, true);
+      for (const label of ['Type a message to +90 555 000 00 02', 'Recipients +905550000002 and +905550000001']) {
+        // The saved name stays the same when the destination changes.
+        await f.page.locator('#body').evaluate((node, value) => node.setAttribute('aria-label', value), label);
+        const moved = await f.bind();
+        assert.equal(moved.blocked?.noDispatch, true, label);
+        assert.equal(moved.context.messageRecipientDispatchBinding, undefined);
+      }
+      await f.page.locator('#body').evaluate(node => node.setAttribute('aria-label', 'Message to +90 555 000 00 01'));
+      await f.page.locator('#contact span').evaluate(node => { node.textContent = '905550000002'; node.title = node.textContent; });
+      assert.equal((await f.bind()).blocked?.noDispatch, true, 'a conflicting numeric header rejects the send even without its plus sign');
+      const pinnedPeer = 'whatsapp:phone:' + f.agent._sha256TextSync('+905550000001').slice(0, 32);
+      plan.messaging = { target_kind: 'named', recipients: [pinnedPeer] };
+      await f.page.locator('#contact span').evaluate((node, peer) => { node.textContent = peer; node.title = peer; }, pinnedPeer);
+      assert.equal((await f.bind()).blocked?.noDispatch, true, 'typing a native id into a display name cannot impersonate Contact info');
+      assert.equal(await f.page.evaluate(() => window.sent), 1);
+    } finally { await f.browser.close(); }
+  });
+
   test(`${kind}: WhatsApp contact button permits the named chat without a clarification`, async () => {
     const f = await fixture(kind, engine, Agent);
     try {
@@ -73,7 +103,7 @@ for (const [kind, engine, Agent] of [['chrome', chromium, ChromeAgent], ['firefo
       assert.equal(observed.conclusive, true);
       assert.ok(observed.strongRecipientCandidates.some(recipient => recipient.identity === 'Anne'), JSON.stringify(observed));
       assert.equal(observed.strongRecipientCandidates.length, 1, 'sidebar, app title and toolbar must not become recipients');
-      assert.ok(observed.observedRecipientCandidates[0].aliases.includes(phone), 'the authored destination must stay tied to the observed contact');
+      assert.ok(observed.observedRecipientCandidates[0].aliases.includes('+905550000001'), 'the authored destination must stay tied to the observed contact');
       const { blocked, context } = await f.bind();
       assert.equal(blocked, null, JSON.stringify(blocked));
       assert.equal(context.messageRecipientGuardRequired, true);

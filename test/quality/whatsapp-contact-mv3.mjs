@@ -17,14 +17,18 @@ const out = path.resolve(process.env.WEBBRAIN_QUALITY_ARTIFACTS || 'ci/artifacts
 await fs.mkdir(out, { recursive: true });
 const marker = 'OWNED_WA_CONTACT_MV3';
 const scenario = process.argv.find(value => value.startsWith('--case='))?.slice(7) || 'positive';
-assert.ok(['positive', 'bootstrap_native', 'native_scroll_latest', 'native_prepared_repair', 'postwrite_debt', 'stop', 'stop_pending', 'steering', 'peer_switch', 'virtual_floor', 'restart_pending', 'restart_same_prompt', 'worker_resume', 'document_resume', 'late_drawer'].includes(scenario));
+assert.ok(['positive', 'action_guards_off', 'bootstrap_native', 'native_scroll_latest', 'native_prepared_repair', 'postwrite_debt', 'stop', 'stop_pending', 'steering', 'peer_switch', 'virtual_floor', 'restart_pending', 'restart_same_prompt', 'worker_resume', 'document_resume', 'late_drawer'].includes(scenario));
+const guardsOff = scenario === 'action_guards_off';
 const preparedCase = scenario === 'native_prepared_repair';
 const latestCase = preparedCase || scenario === 'native_scroll_latest';
 const restartCase = ['restart_pending', 'restart_same_prompt', 'worker_resume', 'document_resume', 'stop_pending'].includes(scenario);
 const heldRestartCase = ['restart_pending', 'restart_same_prompt', 'document_resume', 'stop_pending'].includes(scenario);
 const peer = 'WebBrain Contact QA';
+// The native bootstrap run starts with only the user's phone. WhatsApp shows
+// a saved name in its header and formats this number separately in Contact info.
+const recipient = guardsOff ? '+15550100999' : scenario === 'bootstrap_native' ? '+15550100123' : peer;
 const reply = 'Keep the recipient bound to its native contact identity and verify each new outgoing message before retrying.';
-const task = `This is an isolated QA conversation with ${peer}, the only authorized recipient in the open conversation. Answer its two existing questions together in one useful generated reply about browser-agent reliability. Verify that reply was delivered and stop after the contact confirms it was recorded. Do not send any other message. ${marker}`;
+const task = guardsOff ? `In this isolated fixture, send the same QA message three times, exercising Send, Enter and chat_send. The requested number is ${recipient}. ${marker}` : `This is an isolated QA conversation with ${recipient}, the only authorized recipient in the open conversation. Answer its two existing questions together in one useful generated reply about browser-agent reliability. Verify that reply was delivered and stop after the contact confirms it was recorded. Do not send any other message. ${marker}`;
 const fixtureUrl = 'https://web.whatsapp.com/?owned-contact-qa';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Keep a single real task bounded; the paired actual-Agent bootstrap suite
@@ -78,7 +82,7 @@ composer.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){qaEdito
 ${scenario === 'postwrite_debt' ? `composer.addEventListener('beforeinput',e=>{qaNativeInputs.push({trusted:e.isTrusted,inputType:e.inputType,data:e.data});if(e.inputType!=='insertText'||qaEditor.handled)return;e.preventDefault();qaEditor.handled++;composer.textContent=e.data;setTimeout(()=>{qaEditor.rerenders++;document.querySelector('#qa-action-wrap').innerHTML='<button aria-label="Send">Send</button>';},15);});` : ''}
 </script></body></html>`;
 const intent = { request_kind: 'execute', scope_relation: 'new', requires_state_change: true, requires_submission: true,
-  messaging: { target_kind: 'named', recipients: [peer] }, deliverables: ['One generated reply answering both QA questions and independently verified delivery.'],
+  messaging: { target_kind: 'named', recipients: [recipient] }, deliverables: ['One generated reply answering both QA questions and independently verified delivery.'],
   expected_items: null, allows_planner_shaped_result: false, allows_app_state_tool_evidence: false,
   completion_requirements: { download: false }, read_scope: 'visible_page',
   summary: 'Answer the two questions together in one reply, verify native delivery and the final confirmation.',
@@ -227,7 +231,37 @@ const server = http.createServer(async (request, response) => {
         stage = 'observed';
       }
       let name, args = {};
-      if (latestCase && ['latest_read', 'latest_scrolled'].includes(stage) && last?.name === 'chat_observe') {
+      if (guardsOff && stage === 'observed') {
+        observation = last.result;
+        assert.equal(observation.success, true, last.content);
+        stage = 'off_drafted'; name = 'set_field'; args = { ref_id: observation.composer.ref, text: reply, clear: true };
+      } else if (stage === 'off_drafted') {
+        assert.equal(await page.locator('[contenteditable]').innerText(), reply, last.content);
+        stage = 'off_read_send'; name = 'get_accessibility_tree'; args = { filter: 'visible' };
+      } else if (stage === 'off_read_send') {
+        const ref = refFor(last.result?.pageContent || last.content, 'Send'); assert.ok(ref);
+        stage = 'off_clicked'; name = 'click_ax'; args = { ref_id: ref };
+      } else if (stage === 'off_clicked') {
+        assert.equal(await page.evaluate(() => qaReplies.length), 1, last.content);
+        stage = 'off_second'; name = 'set_field'; args = { ref_id: observation.composer.ref, text: reply, clear: true };
+      } else if (stage === 'off_second') {
+        assert.equal(await page.locator('[contenteditable]').innerText(), reply, last.content);
+        stage = 'off_entered'; name = 'press_keys'; args = { key: 'Enter' };
+      } else if (stage === 'off_entered') {
+        assert.equal(await page.evaluate(() => qaReplies.length), 2, last.content);
+        stage = 'off_chat_sent'; name = 'chat_send'; args = { thread_key: observation.threadKey, composer_ref: observation.composer.ref, text: reply };
+      } else if (stage === 'off_chat_sent' && last.name === 'press_keys') {
+        // Incoming page feedback may cancel a proposed model turn before
+        // the tool executes. Re-propose only after inspecting our fixture.
+        assert.equal(await page.evaluate(() => qaReplies.length), 2);
+        assert.ok(metrics.calls.filter(call => call.name === 'chat_send').length < 3);
+        name = 'chat_send'; args = { thread_key: observation.threadKey, composer_ref: observation.composer.ref, text: reply };
+      } else if (stage === 'off_chat_sent') {
+        assert.equal(last.name, 'chat_send', last.content);
+        assert.equal(await page.evaluate(() => qaReplies.length), 3, last.content);
+        assert.equal(last.result?.deliveryVerified, false, 'a dispatched Enter is not a delivery receipt');
+        name = 'done'; args = { outcome: 'success', summary: 'The fixture recorded three submissions.' };
+      } else if (latestCase && ['latest_read', 'latest_scrolled'].includes(stage) && last?.name === 'chat_observe') {
         observation = await consumeOwnedLatestRepair(input.messages, tools);
         stage = 'sent'; name = 'chat_send'; args = { thread_key: observation.threadKey,
           composer_ref: observation.composer.ref, text: reply };
@@ -499,10 +533,10 @@ const server = http.createServer(async (request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'webbrain-whatsapp-contact-mv3-'));
 let context, harness, page, worker, tabId, run;
-try {
+async function runInstalledFixture() {
   const extension = path.join(profile, 'owned-extension');
   await fs.cp(path.resolve(process.env.WEBBRAIN_QUALITY_EXTENSION || 'src/chrome'), extension, { recursive: true });
-  metrics.sourceSha256 = Object.fromEntries(await Promise.all(['agent/agent.js', 'agent/completion-invariant.js', 'content/chat-observation.js', 'content/content.js'].map(async name =>
+  metrics.sourceSha256 = Object.fromEntries(await Promise.all(['agent/agent.js', 'agent/completion-invariant.js', 'agent/whatsapp-recipient.js', 'content/whatsapp-phone.js', 'content/chat-observation.js', 'content/content.js'].map(async name =>
     [name, createHash('sha256').update(await fs.readFile(path.join(extension, 'src', name))).digest('hex')])));
   await fs.appendFile(path.join(extension, 'src/background.js'), '\nglobalThis.__ownedWhatsAppBoot = crypto.randomUUID();\n');
   if (scenario === 'postwrite_debt') await fs.appendFile(path.join(extension, 'src/background.js'),
@@ -646,6 +680,13 @@ for (const [object, name, doneOnly] of [[agent, '_executeToolImpl', true], [agen
       screenshotFallback: false, autoScreenshot: false, visionMode: 'off', maxAgentSteps: scenario === 'postwrite_debt' ? 32 : scenario === 'bootstrap_native' ? 28 : 20, systemOneEnabled: false, tracingEnabled: false,
       agentAllowLocalNetwork: true, askBeforeConsequentialActions: false, openaiAskStreamingEnabled: false,
       ...(scenario === 'postwrite_debt' ? { onboardingComplete: true, pinCoachmarkPending: false } : {}) }); }, scenario);
+  if (guardsOff) {
+    await harness.locator('[data-tab="advanced"]').click();
+    const toggle = harness.locator('#toggle-enforce-action-guards');
+    assert.equal(await toggle.isChecked(), true);
+    await toggle.locator('..').click();
+    await harness.waitForFunction(async () => (await chrome.storage.local.get('enforceActionGuards')).enforceActionGuards === false);
+  }
   assert.equal((await message('update_provider', { providerId: 'openrouter', config: { apiKey: 'owned-fixture-fake-key',
     baseUrl: `http://127.0.0.1:${server.address().port}/v1`, model: 'minimax/minimax-m3', contextWindow: 1000000, enabled: true, supportsAskStreaming: false } })).ok, true);
   assert.equal((await message('set_active_provider', { providerId: 'openrouter' })).ok, true);
@@ -820,6 +861,15 @@ for (const [object, name, doneOnly] of [[agent, '_executeToolImpl', true], [agen
   await fs.writeFile(path.join(out, 'evidence.json'), JSON.stringify({ scenario, elapsedMs: Date.now() - started, metrics, native, run, runUi, durableChat, providerError, finalUrl: page.url() },
     (_key, value) => typeof value === 'string' && value.startsWith('data:image/') ? '[owned screenshot omitted]' : value, 2));
   assert.equal(providerError, null, providerError);
+  if (guardsOff) {
+    assert.deepEqual(native.replies, [reply, reply, reply]);
+    assert.equal(native.drawer.opened, 0);
+    assert.equal(native.editor.sendClicks, 1);
+    assert.equal(native.editor.enter, 2);
+    assert.equal(terminal?.status, 'completed');
+    console.log(JSON.stringify({ passed: true, scenario, installedMV3: true, send: 1, enter: 1, chatSend: 1, externalMessages: 0 }));
+    return;
+  }
   assert.deepEqual(metrics.initialObservationResults.map(result => result.phase),
     restartCase || scenario === 'late_drawer' ? [1, 2] : [1],
     'Every phase must consume its own genuinely executed native observation before advancing.');
@@ -912,6 +962,9 @@ for (const [object, name, doneOnly] of [[agent, '_executeToolImpl', true], [agen
   }
   assert.equal(page.url(), fixtureUrl); assert.equal(metrics.calls.filter(call => call.name === 'chat_send').length, scenario === 'postwrite_debt' ? 2 : 1);
   console.log(JSON.stringify({ passed: true, scenario, installedMV3: true, contacts: 1, questions: 2, replies: native.replies.length, guardedDrawer: true, externalMessages: 0 }));
+}
+try {
+  await runInstalledFixture();
 } catch (error) {
   await fs.writeFile(path.join(out, 'failure.json'), JSON.stringify({ error: error.message, providerError, metrics,
     run: run || await harness?.evaluate(() => qaRun).catch(() => null),

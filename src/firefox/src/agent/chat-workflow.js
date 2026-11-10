@@ -314,16 +314,22 @@ export function normalizeChatSession(value, now = Date.now()) {
   };
 }
 
+export function verifiedEmptyWhatsappBaseline(value) {
+  return Array.isArray(value?.messageIds) && value.messageIds.length === 0 && value.tailId === ''
+    && typeof value.emptyTranscriptId === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value.emptyTranscriptId || '');
+}
+
 export function normalizeNativeOpaqueBaseline(value, threadKey = value?.threadKey) {
   if (!value || value.schema !== 'webbrain-native-opaque-baseline/1'
       || !/^dom:whatsapp:phone:[a-f0-9]{32}$/.test(threadKey || '') || value.threadKey !== threadKey
       || !/^[a-f\d-]{36}$/.test(value.documentEpoch || '')
       || !Number.isFinite(value.timeOrigin) || value.timeOrigin <= 0
-      || !Array.isArray(value.messageIds) || !value.messageIds.length || value.messageIds.length > MAX_MESSAGES
+      || !Array.isArray(value.messageIds) || value.messageIds.length > MAX_MESSAGES
+      || (!value.messageIds.length && !verifiedEmptyWhatsappBaseline(value))
       || new Set(value.messageIds).size !== value.messageIds.length
       || !value.messageIds.every(id => typeof id === 'string' && id.startsWith(threadKey.slice(4) + ':')
         && /^[A-Za-z0-9_-]{1,32}$/.test(id.slice(threadKey.length - 3)))
-      || value.tailId !== value.messageIds.at(-1)
+      || value.tailId !== (value.messageIds.at(-1) || '')
       || typeof value.body !== 'string' || !value.body || value.body.length > 20000
       || !/^tk_[a-f\d]{8}$/.test(value.taskKey || '')
       || !/^[a-f\d]{64}$/.test(value.taskSha256 || '') || !/^[a-f\d]{64}$/.test(value.providerSha256 || '')
@@ -335,6 +341,7 @@ export function normalizeNativeOpaqueBaseline(value, threadKey = value?.threadKe
   } catch { return null; }
   return { schema: value.schema, threadKey, documentEpoch: value.documentEpoch, timeOrigin: value.timeOrigin,
     url: value.url, messageIds: [...value.messageIds], tailId: value.tailId, body: value.body, taskKey: value.taskKey,
+    ...(verifiedEmptyWhatsappBaseline(value) ? { emptyTranscriptId: value.emptyTranscriptId } : {}),
     taskSha256: value.taskSha256, providerSha256: value.providerSha256, resumeTaskId: bounded(value.resumeTaskId),
     originRunToken: bounded(value.originRunToken), originActionSequence: value.originActionSequence };
 }
@@ -347,6 +354,7 @@ function nativeOpaqueDeliveryMatch(pending, snapshot, rawSnapshot) {
       || snapshot.composer.available !== true || snapshot.composer.empty !== true
       || proof?.schema !== 'webbrain-native-mounted-delivery/1' || proof.threadKey !== baseline.threadKey
       || proof.documentEpoch !== baseline.documentEpoch || proof.timeOrigin !== baseline.timeOrigin || proof.url !== baseline.url
+      || proof.emptyTranscriptId !== baseline.emptyTranscriptId
       || normalizeChatText(proof.body) !== normalizeChatText(pending.text)
       || !Array.isArray(proof.baselineMessageIds) || proof.baselineMessageIds.length !== baseline.messageIds.length
       || !proof.baselineMessageIds.every((id, index) => id === baseline.messageIds[index])

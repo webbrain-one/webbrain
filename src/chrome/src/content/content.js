@@ -3459,8 +3459,8 @@
   /**
    * Type text into an input/textarea.
    */
-  function typeText(params, actionDeadlineExpired = () => false) {
-    return _typeTextInner(params, actionDeadlineExpired);
+  function typeText(params, actionDeadlineExpired = () => false, enforceActionGuards = true) {
+    return _typeTextInner(params, actionDeadlineExpired, enforceActionGuards);
   }
 
   function withLocalPageDispatch(callback) {
@@ -3823,7 +3823,7 @@
     };
   }
 
-  async function _typeTextInner(params, actionDeadlineExpired = () => false) {
+  async function _typeTextInner(params, actionDeadlineExpired = () => false, enforceActionGuards = true) {
     let dispatched = false;
     const deadlineFailure = () => ({
       success: false,
@@ -3910,7 +3910,7 @@
     }
 
     // A cleared field must not be refilled with only a preview of itself.
-    const truncatedPreview = params.clear ? _truncatedPreviewReplacementFailure(el, typedText) : null;
+    const truncatedPreview = params.clear && enforceActionGuards ? _truncatedPreviewReplacementFailure(el, typedText) : null;
     if (truncatedPreview) return { ...truncatedPreview, fieldMeta: _fieldMeta(el) };
 
     if (actionDeadlineExpired()) return deadlineFailure();
@@ -7467,7 +7467,7 @@
     if (expected?.timer) clearTimeout(expected.timer);
     const validated = _validateMessageRecipientDispatchBinding(expected, params, actualTarget);
     if (validated.success === true && window.__wb_get_native_chat_context?.(expected?.composer)?.service === 'whatsapp'
-        && window.__wb_prepare_native_chat_send?.(expected.composer, expected.messageBody) !== true) {
+        && window.__wb_prepare_native_chat_send?.(expected.composer, expected.messageBody, expected.nativeChatBaseline, expected.actionTarget) !== true) {
       const nativeChatReadRepair = window.__wb_native_chat_read_repair?.(expected.composer);
       return { success: false, noDispatch: true, dispatched: false, messageRecipientGuard: true,
         reasonCode: 'native_chat_baseline_unavailable',
@@ -9742,7 +9742,8 @@
       if (nativeLayoutContext?.service === 'whatsapp') {
         const context = nativeLayoutContext;
         const footer = composer.closest('footer');
-        const contextNodes = [context.carrier, context.header, context.root, context.transcript, context.selectedRow, context.selected, context.rowTitle, footer, composer];
+        const contextNodes = [context.carrier, context.header, context.root, context.transcript, context.title, footer, composer];
+        if (context.selected) contextNodes.push(context.selectedRow, context.selected, context.rowTitle);
         if (composer !== layoutCandidate || !footer || contextNodes.some(node => !node?.isConnected)) {
           return { success: true, messageSend: observationOnly ? false : null, conclusive: false,
             composerAvailable: true, identityCandidates: [], reasonCode: 'native_whatsapp_contact_binding_required' };
@@ -9751,20 +9752,11 @@
           footer, composer, labelledByNodes: [], contextNodes, aliases: [context.id, context.name],
           signature: JSON.stringify([context.id, context.name, location.href,
             contextNodes.map(node => ['data-testid','aria-selected','aria-label','hidden','inert','aria-hidden'].map(attribute => node.getAttribute(attribute)))]) };
-        const nativeRows = Array.from(context.transcript.querySelectorAll('[role="row"] [data-id][data-testid^="conv-msg-"]'));
-        const nativeIds = nativeRows.map(node => node.getAttribute('data-id'));
-        // An own message counts as settled once a model reads its status, in
-        // any language, as delivered or read; an unread status is not.
-        const pendingNative = nativeRows.some(node => node.querySelector('[data-icon="tail-out"]')
-          && !Array.from(node.querySelectorAll('[data-testid="msg-meta"] [aria-label]'))
-            .some(status => _pageReading('message_status', status.getAttribute('aria-label')) === 'delivered'));
-        nativeChatMessageBaseline = { schema: 'webbrain-native-opaque-baseline/1', threadKey: 'dom:' + context.id,
-          documentEpoch: context.documentEpoch, timeOrigin: context.timeOrigin, url: context.url,
-          tailId: context.id + ':' + nativeIds.at(-1),
-          messageIds: nativeIds.map(id => context.id + ':' + id),
-          complete: context.atLatest && nativeRows.length > 0 && nativeRows.length <= 200
-            && nativeIds.every((id, index) => id && nativeRows[index].getAttribute('data-testid') === 'conv-msg-' + id)
-            && new Set(nativeIds).size === nativeIds.length && !pendingNative };
+        nativeChatMessageBaseline = window.__wb_get_native_whatsapp_message_baseline?.(context);
+        if (!nativeChatMessageBaseline) {
+          return { success: true, conclusive: false, messageSend: null, composerAvailable: true, identityCandidates: [],
+            reasonCode: 'native_chat_baseline_unavailable', error: 'The WhatsApp conversation reader is unavailable. Reload the tab before sending.' };
+        }
         strongIdentities.push(context.id);
         strongRecipients.push({ identity: context.id, role: 'to' });
         observedRecipientCandidates.push({ identity: context.id, role: 'to', aliases: [context.id, context.name] });
@@ -10071,11 +10063,17 @@
                 strongIdentities.push(name);
                 // The composer's own label may name the destination's phone
                 // number, in any language; a single number there is an alias.
-                const numbers = String(composer.getAttribute('aria-label') || '').match(/\+?\d[\d ()-]{5,30}\d/g) || [];
-                const phone = numbers.length === 1 ? numbers[0].trim() : '';
-                const phoneDigits = phone.replace(/\D/g, '').length;
-                conversationRecipientEvidence.aliases = phone && phoneDigits >= 7 && phoneDigits <= 15
-                  ? [name, phone] : [name];
+                const label = composer.getAttribute('aria-label') || '';
+                if (location.origin === 'https://web.whatsapp.com') {
+                  const phone = globalThis.__wbWhatsappPhone?.fromComposerLabel(label);
+                  conversationRecipientEvidence.whatsappComposerPhone = phone;
+                  conversationRecipientEvidence.aliases = phone ? [name, phone] : [name];
+                } else {
+                  const numbers = label.match(/\+?\d[\d ()-]{5,30}\d/g) || [];
+                  const phone = numbers.length === 1 ? numbers[0].trim() : '';
+                  const phoneDigits = phone.replace(/\D/g, '').length;
+                  conversationRecipientEvidence.aliases = phone && phoneDigits >= 7 && phoneDigits <= 15 ? [name, phone] : [name];
+                }
                 break;
               }
             }
@@ -10293,6 +10291,9 @@
         composerAvailable: true,
         // The recipient-set mode this composer actually sends with.
         ...(recipientSets ? { recipientSets: true } : {}),
+        ...(location.origin === 'https://web.whatsapp.com' ? { whatsappOrigin: location.origin,
+          ...(nativeLayoutContext?.service === 'whatsapp' ? { whatsappPeer: nativeLayoutContext.id } : {}),
+          ...(conversationRecipientEvidence?.whatsappComposerPhone ? { whatsappComposerPhone: conversationRecipientEvidence.whatsappComposerPhone } : {}) } : {}),
         ...(nativeChatMessageBaseline ? { nativeChatMessageBaseline } : {}),
         ...(tool === 'upload_file' ? { messageAttachment: true } : {}),
         ...(composerRef ? { composerRef } : {}),
@@ -10385,7 +10386,8 @@
 
     if (location.hostname === 'web.whatsapp.com'
         && ['observe_chat','probe_message_recipient_guard','click_ax'].includes(msg.action)) {
-      window.__wb_update_native_chat_owner?.(msg.params?._nativeChatOwner || '', msg.params?._nativeChatPendingRestore || null);
+      window.__wb_update_native_chat_owner?.(msg.params?._nativeChatOwner || '', msg.params?._nativeChatPendingRestore || null,
+        msg.params?._nativeWhatsappPhonePeer);
     }
     if (location.hostname === 'web.telegram.org' && /^\/k\/?$/.test(location.pathname)
         && ['observe_chat','probe_message_recipient_guard','click_ax'].includes(msg.action)) {
@@ -10402,7 +10404,7 @@
       'click': () => clickElement(msg.params || {}, actionDeadlineExpired),
       'vision_input': () => visionInput(msg.params || {}, actionDeadlineExpired),
       'consume_file_picker_guard': () => consumeFilePickerGuard(msg.params?.guardId),
-      'type': () => typeText(msg.params || {}, actionDeadlineExpired),
+      'type': () => typeText(msg.params || {}, actionDeadlineExpired, msg.enforceActionGuards !== false),
       'probe_rich_text_toolbar_retry_target': () => _probeRichTextToolbarRetryTarget(msg.params || {}),
       'release_dispatch_binding': () => _releaseDispatchBinding(msg.params || {}),
       'consume_focused_dispatch_binding': () => _consumeFocusedDispatchBinding(msg.params || {}),
@@ -11246,7 +11248,7 @@
           );
           // Before the setter and the trusted contenteditable handoff, as in
           // set_field: a cleared field must not get only a preview of itself.
-          const truncatedPreview = clear ? _truncatedPreviewReplacementFailure(el, text) : null;
+          const truncatedPreview = clear && msg.enforceActionGuards !== false ? _truncatedPreviewReplacementFailure(el, text) : null;
           if (truncatedPreview) return { ...truncatedPreview, ref_id, rect: typeRect, fieldMeta };
           let previous = '';
           let method = '';
@@ -11506,7 +11508,7 @@
           // Before the setter and before the trusted contenteditable handoff:
           // a replacement that only repeats a shortened preview of this
           // field's value would erase the rest. Draft recovery writes nothing.
-          const truncatedPreview = clear && !recoveringDraft
+          const truncatedPreview = clear && !recoveringDraft && msg.enforceActionGuards !== false
             ? _truncatedPreviewReplacementFailure(el, text) : null;
           if (truncatedPreview) return { ...truncatedPreview, ref_id, rect, fieldMeta };
           let prevValue = '';

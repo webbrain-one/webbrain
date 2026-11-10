@@ -6,6 +6,8 @@ import apocalypseModeCopy from './apocalypse-copy.mjs';
 import emergencyCopy from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Enforce action guards",
+  "st.display.action_guards.desc": "Check recipients and other consequential actions before acting. Turning this off lets the model decide whether to send, retry, delete or publish. Site permissions still apply. Takes effect on the next run.",
   'st.providers.title': 'Provider title',
   ...getGenerativeMediaCopy('en'),
   ...bidiCopy,

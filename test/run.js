@@ -112986,6 +112986,7 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
       '/src/content/file-upload-policy.js',
       '/src/content/rich-text-toolbar-heuristic.js',
       '/src/content/accessibility-tree.js',
+      '/src/content/whatsapp-phone.js',
       '/src/content/chat-observation.js',
       '/src/content/content.js',
       '/src/content/agent-visual-indicator.js',
@@ -120059,7 +120060,7 @@ test('content-script actions have a bounded unknown-outcome timeout', async () =
       : /await beforePageAgentDispatch\(globalThis\.browser \|\| globalThis\.chrome, tabId, \{\s*kind: 'input', selector, frameId: targetFrameId, fenceOnly: true,/g,
       `${label}: bound iframe typing skips the target-frame feedback fence`);
 
-    const fallbackTypeStart = contentSource.indexOf('async function _typeTextInner(params, actionDeadlineExpired = () => false)');
+    const fallbackTypeStart = contentSource.indexOf('async function _typeTextInner(');
     const fallbackTypeEnd = contentSource.indexOf('\n\n  /**', fallbackTypeStart + 20);
     const fallbackType = contentSource.slice(fallbackTypeStart, fallbackTypeEnd);
     assert.ok(fallbackTypeStart >= 0 && fallbackTypeEnd > fallbackTypeStart, `${label}: fallback typing deadline boundary missing`);
@@ -120075,7 +120076,7 @@ test('content-script actions have a bounded unknown-outcome timeout', async () =
     );
     assert.match(
       contentSource,
-      /'type': \(\) => typeText\(msg\.params \|\| \{\}, actionDeadlineExpired\)/,
+      /'type': \(\) => typeText\(msg\.params \|\| \{\}, actionDeadlineExpired, msg\.enforceActionGuards !== false\)/,
       `${label}: fallback typing handler does not receive the owning action deadline`,
     );
     const fallbackScrollStart = contentSource.indexOf('function smartScrollPage(params, actionDeadlineExpired = () => false)');

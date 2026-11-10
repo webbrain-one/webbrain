@@ -158,7 +158,7 @@ try {
       assert.deepEqual(
         await page.locator('[data-panel="budgets"] [id]').evaluateAll((els, ids) => els.map(el => el.id).filter(id => ids.includes(id)), BUDGET_CONTROLS),
         BUDGET_CONTROLS, `${build}: Budgets holds the moved limits in order`);
-      for (const id of ['toggle-tracing', 'toggle-screenshot-redaction', 'toggle-help-improve', 'select-lean-mode', 'toggle-strict-secret']) {
+      for (const id of ['toggle-tracing', 'toggle-screenshot-redaction', 'toggle-help-improve', 'select-lean-mode', 'toggle-enforce-action-guards', 'toggle-strict-secret']) {
         assert.equal(await page.locator(`[data-panel="advanced"] #${id}`).count(), 1, `${build}: Advanced has #${id}`);
       }
       assert.equal(await page.locator('[data-panel="captcha"] #captcha-card').count(), 1, `${build}: CAPTCHA has its own tab`);
@@ -168,6 +168,17 @@ try {
 
       // One switch records traces with full request details, or neither.
       await page.locator('[data-tab="advanced"]').click();
+      const actionGuards = page.locator('#toggle-enforce-action-guards');
+      assert.equal(await actionGuards.isChecked(), true);
+      const leanBefore = await page.locator('#select-lean-mode').inputValue();
+      await actionGuards.locator('..').click();
+      assert.equal(await store(page, 'enforceActionGuards'), false);
+      await page.reload();
+      await page.waitForFunction(() => document.getElementById('toggle-enforce-action-guards')?.checked === false);
+      assert.equal(await page.locator('#select-lean-mode').inputValue(), leanBefore);
+      await page.locator('[data-tab="advanced"]').click();
+      await actionGuards.locator('..').click();
+      assert.equal(await store(page, 'enforceActionGuards'), true);
       await page.locator('#toggle-tracing').locator('..').click();
       assert.equal(await store(page, 'tracingEnabled'), true, `${build}: Record traces on`);
       assert.equal(await store(page, 'losslessTrace'), true, `${build}: full details follow Record traces`);

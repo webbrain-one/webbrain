@@ -15,7 +15,7 @@ for(const [build,engine,Agent] of [['chrome',chromium,ChromeAgent],['firefox',fi
   const browser=await engine.launch({headless:true});
   let agent;
   try{
-    const files=['page-monitor-shadow.js','rich-text-toolbar-heuristic.js','accessibility-tree.js','chat-observation.js','page-monitor.js','content.js'];
+    const files=['page-monitor-shadow.js','rich-text-toolbar-heuristic.js','accessibility-tree.js','whatsapp-phone.js','chat-observation.js','page-monitor.js','content.js'];
     const sources=await Promise.all(files.map(file=>readFile(file==='page-monitor.js'&&process.env.WEBBRAIN_NATIVE_PREPARATION_MONITOR?process.env.WEBBRAIN_NATIVE_PREPARATION_MONITOR:new URL(`../src/${build}/src/content/${file}`,import.meta.url),'utf8')));
     const page=await browser.newPage({viewport:{width:1280,height:800}});
     await page.route('**/*',route=>route.fulfill({contentType:'text/html',body:html}));

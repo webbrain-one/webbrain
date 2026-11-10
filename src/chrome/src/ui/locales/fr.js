@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Appliquer les contrôles des actions",
+  "st.display.action_guards.desc": "Vérifie le destinataire et les actions importantes avant leur exécution. Si cette option est désactivée, le modèle décide quand envoyer, réessayer, supprimer ou publier. Les autorisations du site restent en vigueur. Prend effet à la prochaine exécution.",
   'st.providers.title': 'Nom du fournisseur',
   ...getGenerativeMediaCopy('fr'),
   ...bidiCopy,
