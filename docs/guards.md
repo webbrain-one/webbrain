@@ -6,7 +6,15 @@ call, a write, a submit or a completion. Every guard is registered in
 the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
 `block`, `ask` or `advise`. The file is shared verbatim by both builds.
 
-## The policy
+## Enforce action guards
+
+Settings → Advanced → **Enforce action guards** is on by default in Chrome and Firefox. Each run reads the switch when it starts. Switching it off gives the model control over browser actions such as sending, retrying, deleting and publishing. A Send click, Enter or `chat_send` can then reach the visible chat without WebBrain checking the recipient or blocking a possible duplicate. Only an observed delivery receipt confirms delivery.
+
+**Lean mode** independently controls how much of its work the model verifies itself. **Strict checks** controls how quality checks handle uncertainty while enforcement is on. Site permissions, explicit submit confirmation, browser access restrictions, Stop and run budgets apply with either setting. Scheduled jobs still reconcile an interrupted action before automatic replay, and managed bots still use the remote service’s action reservations.
+
+The trace records this preference as `enforce_action_guards`. The guarded WhatsApp flow accepts a full international number starting with `+` or `00` and asks for the country code when given only a local number.
+
+## The policy with enforcement on
 
 - **Only the hard list refuses.** Five classes may refuse an action outright:
   the wrong recipient (`recipient`), deleting data (`deletion`), spending

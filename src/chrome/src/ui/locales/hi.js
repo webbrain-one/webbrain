@@ -6,6 +6,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "कार्रवाई की जाँच लागू करें",
+  "st.display.action_guards.desc": "कार्रवाई से पहले प्राप्तकर्ता और महत्वपूर्ण कदमों की जाँच करता है। बंद करने पर मॉडल तय करता है कि भेजना, फिर से प्रयास करना, हटाना या प्रकाशित करना है। साइट की अनुमतियाँ लागू रहती हैं। अगली बार चलाने से प्रभावी होगा।",
   'st.providers.title': 'प्रदाता का नाम',
   ...getGenerativeMediaCopy('hi'),
   ...bidiCopy,

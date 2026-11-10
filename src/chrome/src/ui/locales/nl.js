@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Actiecontroles uitvoeren",
+  "st.display.action_guards.desc": "Controleert de ontvanger en ingrijpende acties vooraf. Als dit uitstaat, beslist het model over verzenden, opnieuw proberen, verwijderen en publiceren. Sitemachtigingen blijven gelden. Geldt vanaf de volgende taak.",
   'st.providers.title': 'Providernaam',
   ...getGenerativeMediaCopy('nl'),
   ...bidiCopy,

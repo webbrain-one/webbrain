@@ -18,8 +18,10 @@ async function fixture(engine, build) {
     static STATE_CHANGE_TOOLS = new Set(['click_ax']);
     isRunning() { return true; }
     _checkAbort() { return false; }
+    _runAbortSignal() { return null; }
     _throwIfAborted() {}
     _persist() {}
+    _shouldAutoScreenshot() { return false; }
     _effectiveRunMode() { return 'act'; }
     _appOwnedUserMessage(content, webbrainAppOwnedKind) { return { role: 'user', content, webbrainAppOwnedKind }; }
     _wrapUntrusted(_kind, content) { return content; }
@@ -67,6 +69,40 @@ async function fixture(engine, build) {
 }
 
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
+  test(`${build}: vision-mode page feedback keeps the tree private while reporting page changes`, async () => {
+    const f = await fixture(engine, build);
+    try {
+      const messages = [];
+      const heading = f.page.locator('h1');
+      await f.page.exposeFunction('qaReportedClick', () => [...f.run.events.values()]
+        .some(event => event.kind === 'click' && event.source === 'user'));
+      for (const vision of [false, true]) {
+        f.host._visionRunState = () => ({ active: vision });
+        const title = vision ? 'Heading during vision mode' : 'Heading during tree mode';
+        await heading.evaluate((node, text) => { node.textContent = text; }, title);
+        await f.host._capturePageFeedbackModelState(1, messages);
+        assert.ok(f.run.modelState.actionBinding?.snapshotToken, 'the page still binds actions in either mode');
+        assert.ok(f.run.modelState.page.pageContent.includes(title));
+        const observed = messages.filter(message => message.webbrainAppOwnedKind === 'page_action_observation');
+        assert.equal(observed.length, vision ? 0 : 1);
+        if (!vision) assert.ok(observed[0].content.includes(title));
+
+        const updatedTitle = title + ' after the page changed';
+        await heading.evaluate((node, text) => { node.textContent = text; }, updatedTitle);
+        await f.page.locator('#other').click();
+        await f.page.waitForFunction(() => window.qaReportedClick());
+        await f.host._applyPendingPageFeedback(1, messages);
+        const feedback = messages.findLast(message => message.webbrainAppOwnedKind === 'page_feedback');
+        assert.ok(feedback);
+        const payload = JSON.parse(feedback.content.slice(feedback.content.indexOf('\n') + 1));
+        assert.ok(payload.events.some(event => event.kind === 'click' && event.source === 'user'));
+        assert.equal(Object.hasOwn(payload, 'page'), !vision);
+        if (vision) assert.ok(!feedback.content.includes(title));
+        else assert.ok(payload.page.pageContent.includes(updatedTitle));
+      }
+    } finally { await f.browser.close(); }
+  });
+
   test(`${build}: failed offscreen action then explicit rooted reads keeps a fresh exact menu target`, { timeout: 60000 }, async () => {
     const f = await fixture(engine, build);
     try {

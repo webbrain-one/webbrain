@@ -74,7 +74,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
           + '<span data-icon="tail-in">◁</span><span data-testid="msg-meta"></span></div></div>';
         document.querySelector('[data-testid="conversation-panel-messages"]').append(message);
       }, phones);
-      for (const file of ['rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'chat-observation.js', 'content.js']) {
+      for (const file of ['rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'whatsapp-phone.js', 'chat-observation.js', 'content.js']) {
         await page.addScriptTag({ content: await readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8') });
       }
       const owner = JSON.stringify(['owned-run-1', 'tk_aaaaaaaa', 1, 'owned-provider-1', 'owned-model', 'a'.repeat(64),

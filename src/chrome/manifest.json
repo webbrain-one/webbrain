@@ -80,6 +80,7 @@
         "src/content/rich-text-toolbar-heuristic.js",
         "src/content/accessibility-tree.js",
         "src/content/teacher-capture.js",
+        "src/content/whatsapp-phone.js",
         "src/content/chat-observation.js",
         "src/content/content.js",
         "src/content/agent-visual-indicator.js",

@@ -14,7 +14,7 @@ const owner = JSON.stringify(['owned-drawer-run','tk_aaaaaaaa',1,'owned-provider
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) test(`${build}: canonical drawer identity survives only unrelated native visual updates`, async t => {
   const browser = await engine.launch({ headless: true });
   try {
-    const sources = await Promise.all(['rich-text-toolbar-heuristic.js','accessibility-tree.js','chat-observation.js','content.js']
+    const sources = await Promise.all(['rich-text-toolbar-heuristic.js','accessibility-tree.js','whatsapp-phone.js','chat-observation.js','content.js']
       .map(file => readFile(file === 'chat-observation.js' && process.env.WEBBRAIN_WA_DRAWER_READER
         ? process.env.WEBBRAIN_WA_DRAWER_READER : new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8')));
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });

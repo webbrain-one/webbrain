@@ -1,3 +1,5 @@
+import { verifiedEmptyWhatsappBaseline } from './chat-workflow.js';
+
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const DIRECT_ACTION_TOOLS = new Set([
@@ -916,7 +918,7 @@ function validNativeChatBinding(binding) {
   return binding?.complete === true && typeof binding.body === 'string'
     && binding.body.length > 0 && binding.body.length <= 20000 && (telegram || whatsapp)
     && Array.isArray(binding.messageIds) && binding.messageIds.length <= 200
-    && (!whatsapp || binding.messageIds.length > 0)
+    && (!whatsapp || binding.messageIds.length > 0 || verifiedEmptyWhatsappBaseline(binding))
     && new Set(binding.messageIds).size === binding.messageIds.length
     && binding.messageIds.every(id => typeof id === 'string'
       && id.startsWith(binding.threadKey.slice(4) + ':')

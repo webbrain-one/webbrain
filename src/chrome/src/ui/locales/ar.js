@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "تفعيل التحقق من الإجراءات",
+  "st.display.action_guards.desc": "يتحقق من المستلم والإجراءات المهمة قبل تنفيذها. عند إيقافه يقرر النموذج متى يرسل أو يعيد المحاولة أو يحذف أو ينشر. تظل أذونات الموقع سارية. يسري التغيير في التشغيل التالي.",
   'st.providers.title': 'عنوان المزوّد',
   ...getGenerativeMediaCopy('ar'),
   ...bidiCopy,

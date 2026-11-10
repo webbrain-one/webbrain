@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Перевіряти дії перед виконанням",
+  "st.display.action_guards.desc": "Перевіряє отримувача та важливі дії перед виконанням. Якщо вимкнути, модель сама вирішує, коли надсилати, повторювати, видаляти чи публікувати. Дозволи сайту залишаються чинними. Зміна діє з наступного запуску.",
   'st.providers.title': 'Назва постачальника',
   ...getGenerativeMediaCopy('uk'),
   ...bidiCopy,

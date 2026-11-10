@@ -16,7 +16,7 @@ const html = `<!doctype html><style>body{margin:0;font:16px sans-serif}aside{pos
 for (const [build, engine, Agent] of [['chrome', chromium, ChromeAgent], ['firefox', firefox, FirefoxAgent]]) test(`${build}: historical native viewport has actionable recovery without a send exemption`, async t => {
   const browser = await engine.launch({ headless: true });
   try {
-    const sources = await Promise.all(['rich-text-toolbar-heuristic.js','accessibility-tree.js','chat-observation.js','content.js']
+    const sources = await Promise.all(['rich-text-toolbar-heuristic.js','accessibility-tree.js','whatsapp-phone.js','chat-observation.js','content.js']
       .map(file => readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8')));
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: html }));
