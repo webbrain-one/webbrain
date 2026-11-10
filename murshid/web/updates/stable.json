@@ -6,13 +6,13 @@
       "version": "0.1.3",
       "installer": {
         "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.dmg",
-        "size": 296875430,
-        "sha256": "78cc83c08b333f051d2a86802185a182c63a88a5c3225a9949b0a9c2d4c7de73"
+        "size": 296876417,
+        "sha256": "a2f0518fd673c0517726774c0739d2ee8e5c7ccf465537272dc0aad62cc2d82f"
       },
       "update": {
         "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.zip",
-        "size": 287209676,
-        "sha256": "4b4ef4e6c01da05223868c585a38866fe83dabcacffaadfa1040ec1e2617eaef"
+        "size": 287209782,
+        "sha256": "2ad84fcd2171536b90424ebc56e694819565c0685de6cc548add339e1ce89f94"
       }
     },
     "win32-x64": {
@@ -39,10 +39,10 @@
         "version": "0.1.3",
         "name": "0.1.3",
         "notes": "Murshid browser update.",
-        "pub_date": "2026-11-10T16:48:07.086Z",
+        "pub_date": "2026-11-10T16:59:38.969Z",
         "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.zip",
-        "size": 287209676,
-        "sha256": "4b4ef4e6c01da05223868c585a38866fe83dabcacffaadfa1040ec1e2617eaef"
+        "size": 287209782,
+        "sha256": "2ad84fcd2171536b90424ebc56e694819565c0685de6cc548add339e1ce89f94"
       }
     }
   ]
