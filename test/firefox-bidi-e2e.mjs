@@ -37,6 +37,20 @@ const server = createServer(async (_req, res) => {
     } catch (error) { res.end(JSON.stringify([{ id: message.id, error: error.message }])); }
     return;
   }
+  if (_req.url === '/messages/') {
+    res.setHeader('Content-Type', 'text/html');
+    res.end(`<!doctype html><main style="height:90vh;display:flex;flex-direction:column;justify-content:space-between">
+      <header><h1>Different recipient</h1></header><footer>
+      <div id="draft" role="textbox" contenteditable="true" aria-label="Message">Test message</div>
+      <button id="send" aria-label="Send">Send</button></footer></main>
+      <script>const actions = [];
+        const record = action => { actions.push(action); document.documentElement.dataset.actions = JSON.stringify(actions); };
+        draft.focus();
+        send.onclick = () => { record('Send'); draft.focus(); };
+        draft.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); record('Enter'); } };
+      </script>`);
+    return;
+  }
   res.setHeader('Content-Type', 'text/html');
   res.end(`<button id="click">Click</button><input id="text"><input id="file" type="file"><script>
     window.events=[]; document.addEventListener('click',e=>events.push(['click',e.isTrusted]));
@@ -46,7 +60,9 @@ const server = createServer(async (_req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}/`;
-const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin' ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'), ['--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin' ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'), ['--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0'], {
+  env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+});
 let session;
 try {
   const port = await new Promise((resolve, reject) => {
@@ -97,6 +113,60 @@ try {
     if (result.type === 'exception') throw new Error(result.exceptionDetails.text.replace(/data:image[^\s)]+/g, '[image omitted]').slice(0, 600));
     return result.result;
   };
+  // Run the installed extension's actual recipient check and input transport
+  // against the same local message page before and after using Settings.
+  const messageUrl = url + 'messages/';
+  const chatTab = (await extensionEval(`browser.tabs.create({url:${JSON.stringify(messageUrl)}}).then(tab => tab.id)`)).value;
+  const prefs = await session.send('browsingContext.create', { type: 'tab' });
+  await session.send('browsingContext.navigate', { context: prefs.context, url: extensionOrigin + '/src/ui/settings.html', wait: 'complete' });
+  const checkPreference = async enabled => {
+    const event = await session.send('script.callFunction', { target: { context: prefs.context }, awaitPromise: true,
+      arguments: [{ type: 'boolean', value: enabled }], functionDeclaration: (async value => {
+        document.querySelector('[data-tab="advanced"]').click();
+        const input = document.getElementById('toggle-enforce-action-guards');
+        if (input.checked !== value) input.click();
+        for (let i = 0; i < 50; i++) {
+          const stored = await browser.storage.local.get('enforceActionGuards');
+          if ((stored.enforceActionGuards !== false) === value) return input.checked;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Settings did not persist the preference');
+      }).toString() });
+    assert.equal(event.result?.value, enabled);
+  };
+  const exerciseSend = async (tab, messageUrl) => {
+    const { Agent } = await import(browser.runtime.getURL('src/agent/agent.js'));
+    const agent = new Agent({ getActive: () => null });
+    agent.enforceActionGuards = (await browser.storage.local.get('enforceActionGuards')).enforceActionGuards !== false;
+    agent._beginLeanRun(tab, 'act');
+    agent._planExecutionGuards.set(tab, { requiresSubmission: true, requiresStateChange: true,
+      messaging: { target_kind: 'named', recipients: ['Requested recipient'] } });
+    await browser.tabs.update(tab, { active: true });
+    await browser.tabs.executeScript(tab, { code: "document.getElementById('draft').focus()" });
+    const outcomes = [];
+    for (const [tool, args] of [['click', { selector: '#send' }], ['press_keys', { key: 'Enter' }]]) {
+      const context = {};
+      const blocked = await agent._messageRecipientGuardBlock(tab, tool, args, messageUrl, context);
+      if (blocked) outcomes.push(blocked.messageRecipientGuard === true && blocked.noDispatch === true ? 'guarded' : blocked.error);
+      else {
+        const result = await agent.executeTool(tab, tool, args, null, context);
+        outcomes.push(result.success === true ? 'dispatched' : result.error);
+      }
+    }
+    const [actions] = await browser.tabs.executeScript(tab, { code: "document.documentElement.dataset.actions || '[]'" });
+    return JSON.stringify({ outcomes, actions: JSON.parse(actions) });
+  };
+  const actualActions = [];
+  for (const enabled of [true, false, true]) {
+    await checkPreference(enabled);
+    const result = JSON.parse((await extensionEval(`(${exerciseSend})(${chatTab},${JSON.stringify(messageUrl)})`)).value);
+    assert.deepEqual(result.outcomes, enabled ? ['guarded', 'guarded'] : ['dispatched', 'dispatched']);
+    if (!enabled) actualActions.push('Send', 'Enter');
+    assert.deepEqual(result.actions, actualActions);
+  }
+  await extensionEval(`browser.tabs.remove(${chatTab})`);
+  await session.send('browsingContext.close', { context: prefs.context });
+  console.log('PASS: Firefox Advanced action guards blocked Send and Enter, allowed both when off, and blocked both again when re-enabled.');
   const tabId = (await extensionEval(`browser.tabs.query({}).then(tabs => tabs.find(tab => tab.url === ${JSON.stringify(url)}).id)`)).value;
   await evaluate(`document.body.insertAdjacentHTML('beforeend','<canvas id="point-canvas" style="position:fixed;left:10px;top:200px;width:300px;height:60px"></canvas>'); document.querySelector('#point-canvas').onclick=e=>window.clickedPoint={x:e.clientX,y:e.clientY,trusted:e.isTrusted};`);
   const pointToken = crypto.randomUUID();
@@ -155,7 +225,7 @@ try {
       };
     }}};
     await browser.storage.local.set({firefoxBidiEnabled:true});
-    const agent=Object.create(Agent.prototype); agent.screenshotRedaction=true;
+    const agent=new Agent({getActive:()=>null}); agent.screenshotRedaction=true;
     const capture=await agent.captureFullPageScreenshotForUser(${tabId});
     if(!capture.ok) throw new Error(capture.error);
     const image=await createImageBitmap(await (await fetch(capture.dataUrl)).blob());

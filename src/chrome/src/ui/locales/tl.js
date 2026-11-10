@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Suriin ang mga aksyon bago isagawa",
+  "st.display.action_guards.desc": "Sinusuri ang tatanggap at mahahalagang aksyon bago isagawa. Kapag naka-off, ang modelo ang magpapasya kung magpapadala, susubok muli, magtatanggal, o maglalathala. May bisa pa rin ang mga pahintulot ng site. Magsisimula sa susunod na gawain.",
   'st.providers.title': 'Pangalan ng provider',
   ...getGenerativeMediaCopy('tl'),
   ...bidiCopy,

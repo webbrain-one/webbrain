@@ -84,8 +84,9 @@ import {
   shouldInvalidateFormInventoryAfterAction,
   workflowRequiredRowsAreProcessed,
 } from './adapter-workflow-evidence.js';
+import { resolveWhatsappRecipient, whatsappPhoneNeedsCountryCode, whatsappRecipientPeer } from './whatsapp-recipient.js';
 import { messageTargetMatchesObservedIdentities, messageRecipientUploadSourceKey, normalizeMessageTarget, normalizeRecipientIdentity } from './message-recipient-guard.js';
-import { advanceChatSession, chatRunEndedNotice, createOwnedNativeChatReadRepair, createChatSession, decideChatSend, markChatSendPending, normalizeChatSession, normalizeChatSnapshot, normalizeNativeOpaqueBaseline, serializeChatSession, WAIVABLE_CHAT_SEND_REASONS } from './chat-workflow.js';
+import { advanceChatSession, chatRunEndedNotice, createOwnedNativeChatReadRepair, createChatSession, decideChatSend, markChatSendPending, normalizeChatSession, normalizeChatSnapshot, normalizeNativeOpaqueBaseline, serializeChatSession, verifiedEmptyWhatsappBaseline, WAIVABLE_CHAT_SEND_REASONS } from './chat-workflow.js';
 import {
   fetchUrl,
   executeHttpSkillTool,
@@ -185,7 +186,7 @@ import { GENERATIVE_MEDIA_SETUP_NOTE, imageGenAvailability, isImageGenConfigured
 import { extractFirstJsonObject } from './json-extract.js';
 import { repairAssistantDisplayText, repairClarifyText, sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { clarifyQuestionIsHard, clarifyTimedAnswer, clarifyTimeoutChoice, normalizeClarifyConsequence, normalizeClarifyTimeoutPolicy } from './clarify-timeout.js';
-import { guardAdvisory, guardEntry, guardOutcome, withGuardAdvisories } from './guard-policy.js';
+import { guardAdvisory, guardEntry, guardOutcome, isHardGuardClass, withGuardAdvisories } from './guard-policy.js';
 import { UNVERIFIED_STEP_CONTENT_LIMIT, UNVERIFIED_STEP_PROMPT_KIND, clipUnverifiedStepContent, normalizeUnverifiedStepConfirmation } from './unverified-step.js';
 import { leanSkipsGuard, normalizeLeanModeSetting, resolveLeanMode } from './lean-mode.js';
 import { RESPONSE_CUT_OFF_NOTICE, cutOffPartialFromError, emptyOutputFailureMessage, modelOutputDiagnostics, outputLimitedAnswer, outputLimitNotice, outputWasCutOff } from './model-output-diagnostics.js';
@@ -1103,6 +1104,7 @@ export class Agent extends LoopDetector {
     this.clarifyTimeoutPolicy = 'finish';
     // Settings → Advanced → "Strict checks" (off by default): quality
     // guards advise instead of refusing. See guard-policy.js.
+    this.enforceActionGuards = true;
     this.strictGuards = false;
     this._guardRunStates = new Map();
     // Settings → Advanced → "Lean mode": 'auto' (default) | 'on' | 'off'. A run
@@ -1737,6 +1739,7 @@ export class Agent extends LoopDetector {
   // submission-evidence check does. A site's own message job has its own
   // receipt (_leanWorkflowMessageReceiptBlock).
   async _leanChatReceiptBlock(tabId) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const workflowSend = this._leanWorkflowMessageSend(tabId);
     if (workflowSend) return this._leanWorkflowMessageReceiptBlock(tabId, workflowSend);
     if (!this.completionInvariants.get(tabId)?.lastAction?.chatDeliveryBinding
@@ -3685,6 +3688,7 @@ export class Agent extends LoopDetector {
   }
 
   async _conditionalGithubCommitTransition(tabId, name, args = {}, detectedSubmit = null, advisories = null) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
     if (!guard?.enabled || !guard.scheduledResume || guard.siteWorkflow
         || guard.requiresStateChange !== false || guard.requiresSubmission !== false) return null;
@@ -6043,6 +6047,7 @@ export class Agent extends LoopDetector {
   // refusal when the receipt cannot be saved, otherwise null. A send the
   // conversation cannot confirm is left to the evidence checks, as for done.
   async _plainFinalChatReceiptBlock(tabId) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     if (!this._isActionMode(this._effectiveRunMode(tabId))) return null;
     if (!this.completionInvariants.get(tabId)?.lastAction?.chatDeliveryBinding
         && !this.chatSessions.get(tabId)?.completionReceipt) return null;
@@ -6985,6 +6990,7 @@ export class Agent extends LoopDetector {
   }
 
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
     if (!guard?.steeringPriorSubmission) return null;
     if (guard.resourceMutationAuthorization?.userOverride) {
@@ -7746,6 +7752,7 @@ export class Agent extends LoopDetector {
   }
 
   async _resourceMutationPreSubmitBlock(tabId, name, args, detected, provider = this._activeProvider(tabId)) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
     const deletion = detected?.mutationKind === 'delete';
     const publication = detected?.publicationControl === true;
@@ -8786,6 +8793,7 @@ export class Agent extends LoopDetector {
       }) } : {}),
       screenshot_redaction: this.screenshotRedaction === true,
       strict_secret_mode: this.strictSecretMode === true,
+      enforce_action_guards: this._actionGuardsEnabled(tabId),
       lean_mode_setting: normalizeLeanModeSetting(this.leanMode),
       vision_mode_setting: normalizeVisionModeSetting(this.visionMode, 'off'),
       // Whether this tab's run resolved to vision mode.
@@ -14107,6 +14115,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * when there is meaningful unsaved state, or null when it's safe to proceed.
    */
   async _probeUnsavedChanges(tabId, toolName = 'navigate') {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     try {
       const probeResults = await chrome.scripting.executeScript({
         target: { tabId },
@@ -14369,6 +14378,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _probeIframeUnsavedChanges(tabId, frameId, knownPendingEdit = false) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     let details = null;
     try {
       const probeResults = await chrome.scripting.executeScript({
@@ -15185,6 +15195,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       error: 'Verification requires manual completion in this mode/tier. Ask the user to complete it; report blocked work with done({outcome:"partial"}). Do not dismiss, close, or resubmit it.',
     };
     if (toolName === 'apply_captcha_solution' && this._hasUnappliedNativeCaptchaSolution(tabId)) return null;
+    if (toolName === 'solve_captcha' && !this._actionGuardsEnabled(tabId) && gate.publicGate?.solveAttempted) return null;
     if (toolName === 'solve_captcha' && Array.isArray(toolArgs.providerTasks)
         && !gate.publicGate?.solveAttempted && !gate.publicGate?.solveFailed
         && gate.status !== 'verification_pending') return null;
@@ -18153,7 +18164,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           durable = checkpoint === true || checkpoint?.ok === true;
         } catch {}
         this._throwIfAborted(this._runAbortSignal(tabId));
-        if (!durable) {
+        if (!durable && this._actionGuardsEnabled(tabId)) {
           const value = 'Stopped before sending the page action because its recovery checkpoint could not be saved. Retry after extension storage is available.';
           this._appendSyntheticToolResults(tabId, toolCalls, toolIndex, messages, onUpdate, step, () => ({
             success: false, dispatched: false, noDispatch: true, outcomeUnknown: false,
@@ -18230,7 +18241,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               this._throwIfAborted(abortSignal);
               // A possible post whose record could not be saved is not sent:
               // after a restart WebBrain would not know it was attempted.
-              if (callState.potentialAttempt?.notSaved === true) return { attemptRecordNotSaved: true };
+              if (callState.potentialAttempt?.notSaved === true && this._actionGuardsEnabled(tabId)) return { attemptRecordNotSaved: true };
               if (this._hasPendingSteering(tabId) || await this._refreshPageFeedbackForCall(tabId, tc, onUpdate)) {
                 this._resaveTaskAttemptCheckpoint(tabId);
                 return { steered: true };
@@ -22113,7 +22124,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       dispatched: uncertain, ...(uncertain ? { outcomeUnknown: true, retryable: false }
         : { noDispatch: true, outcomeUnknown: false, retryable: false }),
       ...(timing?.preparationVeto ? { preparationVeto: { ...timing.preparationVeto } } : {}), error });
-    if (attempted.has(actionKey) || attempted.has(pendingKey) || this._taskClickLockKeys(tabId)?.has(pendingKey)) return failure('This observed button action was already attempted or its input outcome remains unresolved. Do not repeat it; a verified effect and a new current observation are required for another action.');
+    if (this._actionGuardsEnabled(tabId) && (attempted.has(actionKey) || attempted.has(pendingKey) || this._taskClickLockKeys(tabId)?.has(pendingKey))) return failure('This observed button action was already attempted or its input outcome remains unresolved. Do not repeat it; a verified effect and a new current observation are required for another action.');
     // Store only short certificate/target keys; never retain model snapshots.
     if (attempted.size > 4094) return failure('The trusted input bookkeeping limit for this run was reached. No input was sent.');
     let pressed = false, pressAttempted = false, released = false, clickUserAt;
@@ -22193,7 +22204,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!finishInput) return failure('The current owned native input operation could not be captured. Re-observe before acting.');
       // Reserve before the consequential protocol call: a lost acknowledgement
       // is not permission to replay either a trusted or a synthetic click.
-      if (attempted.has(actionKey) || attempted.has(pendingKey) || this._taskClickLockKeys(tabId)?.has(pendingKey)) return failure('A trusted input attempt for this action is already pending. Do not repeat it.');
+      if (this._actionGuardsEnabled(tabId) && (attempted.has(actionKey) || attempted.has(pendingKey) || this._taskClickLockKeys(tabId)?.has(pendingKey))) return failure('A trusted input attempt for this action is already pending. Do not repeat it.');
       attempted.add(actionKey); attempted.add(pendingKey);
       clickUserAt = run.lastUserAt;
       preparationStage = 'press';
@@ -23766,13 +23777,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
   }
 
-  /**
-   * Normalize clarify auto-timeout from settings.
-   * Returns 0 (instant auto-select), 1–1200 (wait N seconds), or -1 (Off /
-   * wait forever). Invalid values fall back to the product default of 60s.
-   * Stored slider values above 1200 mean Off.
-   */
-  // Settings → Advanced → "Strict checks": every quality guard blocks again.
+  _actionGuardsEnabled(tabId) {
+    return (this._leanRuns?.get(tabId)?.enforceActionGuards ?? this.enforceActionGuards) !== false;
+  }
+
   _guardStrict() {
     return this.strictGuards === true;
   }
@@ -23780,10 +23788,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   /**
    * Lean mode skips guard `id` in the run on `tabId`: a quality guard that no
    * hard check depends on (lean-mode.js), in an Act run that resolved to lean
-   * mode. Strict checks do not apply then. A guard that cannot name its run
-   * (no tab) is never skipped.
+   * mode. Turning off action guards also skips the hard classes. The
+   * per-run snapshot takes precedence over the current preference.
    */
   _guardSkipped(id, tabId = null) {
+    if (!this._actionGuardsEnabled(tabId)) {
+      const category = guardEntry(id)?.class;
+      if (category === 'quality' || isHardGuardClass(category)) return true;
+    }
     if (!this._leanRunActive(tabId) || !leanSkipsGuard(id)) return false;
     // A vision run sees what an action did only in the screen update after
     // its batch: done(success) in the same response as the action reports a
@@ -23932,6 +23944,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _beginLeanRun(tabId, mode = null) {
     let state;
     try { state = this._resolveLeanRun(tabId, null, mode); } catch { state = { active: false, setting: normalizeLeanModeSetting(this.leanMode), reason: 'unresolved' }; }
+    // Both preferences belong to this run. A settings change while a card
+    // or a browser action is pending applies to the next run.
+    state.enforceActionGuards = this.enforceActionGuards !== false;
     (this._leanRuns ??= new Map()).set(tabId, state);
     return state;
   }
@@ -23953,6 +23968,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return normalizeClarifyTimeoutPolicy(value);
   }
 
+  /**
+   * Normalize clarify auto-timeout from settings.
+   * Returns 0 (instant auto-select), 1–1200 (wait N seconds), or -1 (Off /
+   * wait forever). Invalid values fall back to the product default of 60s.
+   * Stored slider values above 1200 mean Off.
+   */
   _normalizeClarifyTimeoutSec(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return 60;
@@ -26228,6 +26249,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // the input that caller would compile from now: the same sources, context,
   // task and prior state. Anything else compiles as before.
   async _ensureSocialPublicationContract(tabId, provider = this._activeProvider(tabId), { background = false, wait = true, binding = null } = {}) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
     if (!guard?.enabled) return null;
     // The app-owned guard is new for every user revision. A trusted Continue
@@ -26673,6 +26695,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _socialPublicationPreSubmitBlock(tabId, name, args, detected, provider) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
     const networkMutation = isNetworkMutation(name, args);
     const rawKeys = args?.key ?? args?.keys ?? '';
@@ -32480,7 +32503,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const source = observation.nativeChatMessageBaseline, authority = this._nativeChatTaskAuthority(tabId, { create: true });
     const state = this.completionInvariants.get(tabId);
     if (!source?.complete || !authority || !state?.runToken || source.threadKey !== decision.threadKey
+        || (!source.messageIds?.length && (!verifiedEmptyWhatsappBaseline(source)
+          || !verifiedEmptyWhatsappBaseline(guardedBaseline)))
         || (guardedBaseline && (source.documentEpoch !== guardedBaseline.documentEpoch
+          || source.emptyTranscriptId !== guardedBaseline.emptyTranscriptId
           || source.messageIds.length !== guardedBaseline.messageIds?.length
           || !source.messageIds.every((id, index) => id === guardedBaseline.messageIds[index])))) return false;
     const baseline = normalizeNativeOpaqueBaseline({ ...source, ...authority, body: decision.text,
@@ -32516,7 +32542,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _messageRecipientContentProbe(tabId, params) {
     const nativeOwner = this._nativeChatOwnerScope(tabId);
-    params = { ...params, _nativeChatOwner: nativeOwner, _nativeChatPendingRestore: this._nativeChatPendingRestore(tabId) };
+    params = { ...params, _nativeChatOwner: nativeOwner, _nativeChatPendingRestore: this._nativeChatPendingRestore(tabId),
+      _nativeWhatsappPhonePeer: this._whatsappPhonePeer(this._planExecutionGuards.get(tabId)?.messaging) };
     try {
       const result = params?.tool === 'upload_file' ? await chrome.tabs.sendMessage(tabId, {
         target: 'content', action: 'probe_message_recipient_guard', params,
@@ -32555,6 +32582,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     try { policy = getMessageRecipientGuardPolicy(pageUrl); } catch {}
     return {
       _nativeChatOwner: this._nativeChatOwnerScope(tabId),
+      _nativeWhatsappPhonePeer: this._whatsappPhonePeer(this._planExecutionGuards.get(tabId)?.messaging),
+      observeVisibleComposer: !this._actionGuardsEnabled(tabId),
       _nativeChatDraftBinding: this._nativeChatPreparedDraft(tabId)?.binding || null,
       _nativeChatPendingRestore: this._nativeChatPendingRestore(tabId),
       ...(policy?.adapterName ? { adapterName: policy.adapterName } : {}),
@@ -32853,6 +32882,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   async _observeChatWorkflow(tabId, args = {}, onUpdate = null) {
     const ownedReadAuthority = this._captureOwnedNativeChatReadAuthority(tabId);
     let observation = await this._readChatObservation(tabId);
+    if (!this._actionGuardsEnabled(tabId)) {
+      if (observation?.success !== true) return observation;
+      const result = this._chatObservationResult(observation, advanceChatSession(createChatSession(), observation));
+      result.chatWorkflow.deliveryGuidance = 'Action guards are off. A Send click or Enter is not a delivery receipt. Check the conversation before reporting delivery.';
+      return result;
+    }
     if (ownedReadAuthority && !ownedReadAuthority.isCurrent(ownedReadAuthority)) return {
       success: false, noDispatch: true, reason: 'native_chat_owner_changed',
       error: 'The conversation read belongs to an earlier task or document. Observe again; do not resend.',
@@ -32975,10 +33010,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         || !advanced.pendingDeliveryVerified || advanced.session.pendingOutbound || advanced.session.userInput?.required
         || !['taskKey','taskSha256','resumeTaskId','providerSha256'].every(key => baseline[key] === authority[key])
         || !this._nativeWhatsappDeliveryProof(observation, { ...baseline, complete: true })) return;
-    const resolved = this._resolveNativeWhatsappNamedMessagingTarget(guard.messaging, {
-      success: true, conclusive: true, strongRecipientCandidates: [{ identity: observation.conversationId, role: 'to',
-        aliases: [observation.conversationId, observation.conversationIdentity] }],
-    });
+    const resolved = resolveWhatsappRecipient(guard.messaging, { success: true, conclusive: true,
+      whatsappPeer: observation.conversationId }, [{ identity: observation.conversationId, role: 'to',
+      aliases: [observation.conversationId, observation.conversationIdentity] }], observation.url, this._sha256TextSync)?.pin;
     if (!resolved || resolved.recipients[0].identity !== baseline.threadKey.slice(4)) return;
     guard.messaging = resolved;
     const receipt = { schema: 'webbrain-chat-delivery-receipt/1', taskKey: baseline.taskKey,
@@ -32997,7 +33031,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         || !/^[a-f\d-]{36}$/.test(binding.documentEpoch || '') || proof.documentEpoch !== binding.documentEpoch
         || proof.timeOrigin !== binding.timeOrigin || proof.url !== binding.url || observation.url !== binding.url
         || this._workflowMessageBody(proof.body) !== binding.body
-        || !Array.isArray(binding.messageIds) || !binding.messageIds.length || binding.messageIds.length > 200
+        || !Array.isArray(binding.messageIds) || binding.messageIds.length > 200
+        || (!binding.messageIds.length && !verifiedEmptyWhatsappBaseline(binding))
+        || proof.emptyTranscriptId !== binding.emptyTranscriptId
         || !Array.isArray(proof.baselineMessageIds) || proof.baselineMessageIds.length !== binding.messageIds.length
         || new Set(proof.baselineMessageIds).size !== binding.messageIds.length
         || !binding.messageIds.every((id, index) => proof.baselineMessageIds[index] === id)
@@ -33050,6 +33086,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _prepareGenericChatDispatch(tabId, name, args, context, abortSignal = null, advisories = null) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     if (!context?.messageRecipientGuardRequired || name === 'upload_file'
         || !['click', 'click_ax', 'press_keys', 'set_field'].includes(name)
         || (!context.messageRecipientNativeChatBaseline && !this.chatSessions.has(tabId))) return null;
@@ -33176,6 +33213,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (originalSendOwner && originalSendOwner !== this._nativeChatOwnerScope(tabId)) return {
       success:false,noDispatch:true,dispatched:false,reason:'native_chat_owner_changed',
       error:'The task changed while observing the conversation. Observe again before sending.' };
+    if (!this._actionGuardsEnabled(tabId)) {
+      const ref = before.composer?.ref;
+      if (!ref || (args.composer_ref && args.composer_ref !== ref)) {
+        return { success: false, noDispatch: true, error: 'The message editor is missing or has moved. Read the current editor before sending.' };
+      }
+      if (typeof args.text !== 'string' || !args.text.trim() || args.text.length > 4000) {
+        return { success: false, noDispatch: true, error: 'Provide a message of 1 to 4,000 characters.' };
+      }
+      // Dispatch through the normal field tool, including its host and
+      // cancellation checks. A successful Enter alone cannot attest delivery.
+      const result = await this.executeTool(tabId, 'set_field', { ref_id: ref, text: args.text, clear: true, submit: true },
+        onUpdate, { ...executionContext, _contentActionDispatchState: { started: false } });
+      if (result?.success === true && (result.submissionDispatched === false || (result.submissionDispatched !== true && result.submitted === false))) {
+        return { ...result, success: false, deliveryVerified: false, reason: 'chat_submit_not_dispatched',
+          error: 'The message was not submitted. Check the current draft before sending.' };
+      }
+      return { ...result, deliveryVerified: false };
+    }
     const prior = this.chatSessions.get(tabId) || createChatSession();
     const observed = advanceChatSession(prior, before);
     const workflow = () => this._chatWorkflowView(observed);
@@ -33531,6 +33586,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _recipientBoundUploadContext(tabId, args, executionContext = {}, onUpdate = null) {
+    if (!this._actionGuardsEnabled(tabId)) return { protected: false };
     let pageUrl = '';
     try { pageUrl = await this._currentUrl(tabId); } catch {}
     const protectedPage = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(pageUrl), executionContext);
@@ -33722,19 +33778,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return matches ? { target_kind: 'named', recipients: [{ identity, role: 'to' }] } : null;
   }
 
-  _resolveNativeWhatsappNamedMessagingTarget(target, probe) {
-    const named = normalizeMessageTarget(target);
-    if (named?.target_kind !== 'named' || named.recipients.length !== 1
-        || named.recipients[0].role !== 'to' || probe?.success !== true || probe?.conclusive !== true) return null;
-    const candidates = this._messageRecipientCandidates(probe);
-    if (candidates.length !== 1 || candidates[0].role !== 'to') return null;
-    const candidate = candidates[0], identity = normalizeRecipientIdentity(candidate.identity);
-    if (!/^whatsapp:phone:[a-f0-9]{32}$/.test(identity)) return null;
-    const expected = normalizeRecipientIdentity(named.recipients[0].identity);
-    const matches = expected.startsWith('whatsapp:') ? expected === identity
-      : [identity, ...(Array.isArray(candidate.aliases) ? candidate.aliases : [])]
-        .some(alias => normalizeRecipientIdentity(alias) === expected);
-    return matches ? { target_kind: 'named', recipients: [{ identity, role: 'to' }] } : null;
+  _whatsappPhonePeer(target) {
+    return whatsappRecipientPeer(target, this._sha256TextSync);
   }
 
   // The open conversation pinned to the recipients its page verifiably shows.
@@ -33778,6 +33823,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _pinActiveConversationMessagingTarget(tabId, messaging, pageUrl = '') {
+    if (!this._actionGuardsEnabled(tabId)) return { ok: true, target: normalizeMessageTarget(messaging) };
     const target = normalizeMessageTarget(messaging);
     if (!target) return { ok: true, target };
 
@@ -33790,6 +33836,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       nativeTelegramPage = getActiveAdapter(resolvedUrl)?.name === 'telegram';
       nativeWhatsappPage = new URL(resolvedUrl).hostname === 'web.whatsapp.com';
     } catch {}
+    if (nativeWhatsappPage && target.target_kind === 'named' && target.recipients.some(item => whatsappPhoneNeedsCountryCode(item.identity))) {
+      return { ok: false, target: null, error: 'Please provide the WhatsApp number starting with + or 00 and the country code.' };
+    }
     if (!policy?.verifyActiveRecipient) return { ok: true, target };
     if (target.target_kind === 'named' && policy.adapterName !== 'twitter' && !nativeTelegramPage) return { ok: true, target };
 
@@ -33837,6 +33886,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _messageRecipientGuardBlock(tabId, toolName, args = {}, pageUrl = '', executionContext = null) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const name = String(toolName || '');
     const ordinaryGuardedTools = new Set(['click', 'click_ax', 'set_field', 'press_keys', 'upload_file']);
     // drag_at (vision mode) presses and releases where the model points; no
@@ -33846,12 +33896,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'press_keys' && String(args?.key || '') !== 'Enter') return null;
     if (name === 'set_field' && args?.submit !== true) return null;
 
-    let policy = null;
-    let resolvedPageUrl = pageUrl || '';
-    try {
-      resolvedPageUrl = resolvedPageUrl || await this._currentUrl(tabId);
-      policy = getMessageRecipientGuardPolicy(resolvedPageUrl);
-    } catch {}
+    let resolvedPageUrl = pageUrl;
+    try { resolvedPageUrl ||= await this._currentUrl(tabId); } catch {}
+    // An iframe may answer an unscoped message with its own URL. Only the
+    // top document can supply the missing origin for a planned message.
+    if (!resolvedPageUrl && normalizeMessageTarget(this._planExecutionGuards.get(tabId)?.messaging)) {
+      try {
+        const info = await chrome.tabs.sendMessage(tabId, { target: 'content', action: 'get_page_info', params: {} }, { frameId: 0 });
+        resolvedPageUrl = info?.url;
+      } catch {}
+      if (!resolvedPageUrl) return { success: false, noDispatch: true, dispatched: false, messageRecipientGuard: true,
+        reasonCode: 'recipient_origin_unavailable', error: 'The active page could not be identified. Re-read the tab before sending.' };
+    }
+    const policy = getMessageRecipientGuardPolicy(resolvedPageUrl);
     if (!policy?.verifyActiveRecipient) return null;
     // A script, frame click or drag stays checked on a public composer too:
     // nothing binds what it does on the page.
@@ -33990,7 +34047,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // The authorized thread is the one that was open when the run started. If
     // the tab moved to another one, its composer is not the user's target.
     const inAuthorizedConversation = !deferredConversationScope
-      || this._workflowJobScopeIdentity(pageUrl) === deferredConversationScope;
+      || this._workflowJobScopeIdentity(resolvedPageUrl) === deferredConversationScope;
     if (policy.deferActiveConversationUntilComposer === true
         && (target?.target_kind === 'active_conversation' || target?.target_kind === 'named')
         && inAuthorizedConversation
@@ -34024,18 +34081,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (guard) guard.messaging = target;
     }
 
-    const nativeWhatsappTarget = this._resolveNativeWhatsappNamedMessagingTarget(target, probe);
-    if (nativeWhatsappTarget) {
-      target = nativeWhatsappTarget;
-      if (guard) guard.messaging = target;
-    } else if (target?.target_kind === 'active_conversation' && inAuthorizedConversation
-        && probe?.success === true && probe?.conclusive === true && probe?.messageSend === true
-        && /^dom:whatsapp:phone:[a-f0-9]{32}$/.test(probe.nativeChatMessageBaseline?.threadKey || '')) {
-      const nativeRecipients = this._messageRecipientCandidates(probe);
-      if (nativeRecipients.length === 1 && /^whatsapp:phone:[a-f0-9]{32}$/.test(nativeRecipients[0].identity || '')) {
-        const pin = this._activeConversationPin(target, [{ identity: nativeRecipients[0].identity, role: 'to' }], policy);
+    const observedRecipients = this._messageRecipientCandidates(probe);
+    const openChat = target?.target_kind === 'active_conversation';
+    const whatsappMatch = !openChat || (inAuthorizedConversation && probe?.messageSend === true)
+      ? resolveWhatsappRecipient(target, probe, observedRecipients, resolvedPageUrl, this._sha256TextSync) : null;
+    if (whatsappMatch?.localNumber) return { success: false, blocked: true, noDispatch: true, dispatched: false,
+      messageRecipientGuard: true, retryable: false, reasonCode: 'whatsapp_country_code_required',
+      error: 'Ask the user for the full WhatsApp number starting with + or 00 and the country code before sending.' };
+    if (whatsappMatch?.pin) {
+      if (openChat) {
+        const pin = this._activeConversationPin(target, whatsappMatch.pin.recipients, policy);
         target = pin.target;
         this._applyActiveConversationPin(guard, pin);
+      } else {
+        target = whatsappMatch.pin;
+        if (guard) guard.messaging = target;
       }
     }
 
@@ -34044,16 +34104,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ? this._resolveTwitterNamedMessagingTarget(target, probe) : null;
     if (resolvedTwitterTarget) target = resolvedTwitterTarget;
     const messageBodyBaselineCount = probe?.messageBodyBaselineCount;
-    const targetMatchesObserved = messageTargetMatchesObservedIdentities(
-      target,
-      this._messageRecipientCandidates(probe),
-    );
+    const targetMatchesObserved = whatsappMatch?.matches ?? messageTargetMatchesObservedIdentities(target, observedRecipients);
     // The user's OWN grant authorizes the send even when the planner's
     // original target differs. A confirmed recipient (WebBrain's confirmation
     // card, or a clarify answer that picks the observed name) is approved for
     // the rest of the task, and "send all remaining" approves the task. Both
     // come only from the user, never from model text.
-    const observedIdentities = this._messageRecipientCandidates(probe)
+    const observedIdentities = observedRecipients
       .map(item => normalizeRecipientIdentity(item?.identity || item))
       .filter(Boolean);
     const approvedRecipients = Array.isArray(guard?.approvedRecipients) ? guard.approvedRecipients : [];
@@ -34249,7 +34306,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const whatsappContactCheck = inconclusive && !contactCheckSpent
       && probe?.reasonCode === 'native_whatsapp_contact_binding_required'
       ? this._nativeWhatsappContactCheckGuidance(probe?.nativeWhatsappRepairTarget,
-        { namedRecipient: this._messageTargetNamesRecipient(guard, target) })
+        { namedRecipient: this._messageTargetNamesRecipient(guard, target), phone: whatsappMatch?.phone })
       : '';
     // Human-readable view of who the page actually addresses, so a mismatch
     // block can name the exact observed recipient.
@@ -34307,7 +34364,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // WhatsApp chat whose contact the run has not confirmed yet. The page names
   // the confirming control (the contact name in the chat header, then the
   // Contact info panel's Close button) as an app-issued ref when it can.
-  _nativeWhatsappContactCheckGuidance(repairTarget, { namedRecipient = false } = {}) {
+  _nativeWhatsappContactCheckGuidance(repairTarget, { namedRecipient = false, phone = '' } = {}) {
     const ref = typeof repairTarget?.ref_id === 'string' && /^ref_[A-Za-z0-9_:-]{1,100}$/.test(repairTarget.ref_id)
       ? repairTarget.ref_id : '';
     if (ref && repairTarget.phase === 'close_contact') {
@@ -34317,9 +34374,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ? `click_ax({ref_id:"${ref}"}), the contact name in the chat header`
       : 'click_ax only the contact name in the chat header (read the header with get_accessibility_tree first)';
     return 'Message action blocked, nothing was sent: on WhatsApp, WebBrain confirms who the open chat is with before any message action in it, and this chat is not confirmed yet. '
-      + (namedRecipient
-        ? 'If this is not the chat of the person the message is for, open their chat from the chat list first; the check applies to the chat that is open. '
-        : '')
+      + (phone ? 'If the requested chat is not open, navigate to https://web.whatsapp.com/send?phone=' + phone.slice(1)
+        + ' and wait for the conversation. If WhatsApp reports an invalid number, stop and report it. '
+        : namedRecipient ? 'If this is not the chat of the person the message is for, open their chat from the chat list first; the check applies to the chat that is open. ' : '')
       + `To confirm it, ${confirm}, then close the Contact info panel it opens with that panel's own Close button, and retry this action. The avatar, call, search and menu buttons do not confirm a contact.`;
   }
 
@@ -38248,6 +38305,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const visionState = mode === 'act' ? this._visionRunState(tabId, mode) : null;
     let prompt = !this._isActionMode(mode) ? SYSTEM_PROMPT_ASK
       : (visionState?.active ? this._getVisionActPrompt(visionState, provider) : this._getActPrompt(provider));
+    if (this._isActionMode(mode) && !this._actionGuardsEnabled(tabId)) {
+      prompt += '\n\nWebBrain action guards are off for this run. Check the destination, requested body and result yourself. Use the visible Send control or Enter in the intended composer. Report delivery only if you observe it. Site permissions and Stop still apply.';
+    }
     if (this._isActionMode(mode) && this._leanPromptActive(tabId, mode, provider)) prompt += `\n\n${SYSTEM_PROMPT_LEAN_NOTE}`;
     if (tier !== 'compact' && !visionState?.active && getToolsForMode(mode, { tier, browserBatchEnabled: this.browserBatchEnabled })
         .some(tool => tool.function.name === 'browser_batch')) prompt += `\n\n${SYSTEM_PROMPT_BATCHING}`;
@@ -46824,6 +46884,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         'src/content/file-upload-policy.js',
         'src/content/rich-text-toolbar-heuristic.js',
         'src/content/accessibility-tree.js',
+        'src/content/whatsapp-phone.js',
         'src/content/chat-observation.js',
         'src/content/content.js',
         'src/content/agent-visual-indicator.js',
@@ -47655,7 +47716,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           prompt: await this._workflowFeedbackFallbackPrompt(tabId, workflowFallbackPrompt(workflow, 0, reason), onUpdate),
         };
       }
-      const protectedMessagingStep = savedWorkflowProtectedMessagingStepIndex(workflow, startUrl);
+      const protectedMessagingStep = this._actionGuardsEnabled(tabId) ? savedWorkflowProtectedMessagingStepIndex(workflow, startUrl) : -1;
       if (protectedMessagingStep >= 0) {
         trace.recordNote(traceRunId, 0, 'workflow_replay_recipient_authorization_missing', {
           workflowId: workflow.id,
@@ -47677,7 +47738,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         try {
           policy = getMessageRecipientGuardPolicy(stepUrl);
         } catch {}
-        if (savedWorkflowStepRequiresRecipientAuthorization(step, policy)) {
+        if (this._actionGuardsEnabled(tabId) && savedWorkflowStepRequiresRecipientAuthorization(step, policy)) {
           return finishStopped(
             'protected messaging replay requires fresh structured recipient authorization; start a normal Act task and name the recipient',
             index,
@@ -47970,6 +48031,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // cleared at every run boundary, including trusted Continue and recovery
   // Retry, which reuse the task token; a new task (new token) drops these.
   _taskClickLockKeys(tabId) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     const token = this._taskTokens?.get(tabId);
     const entry = this._taskClickLocks?.get(tabId);
     if (!entry) return null;
@@ -48465,7 +48527,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     throwIfEarlyCdpAborted();
     if (richTextToolbarBlock) return richTextToolbarBlock;
     const dispatchBinding = dispatchContext.dispatchBinding || null;
-    const messageRecipientGuardRequired = dispatchContext.messageRecipientGuardRequired === true;
+    const messageRecipientGuardRequired = this._actionGuardsEnabled(tabId) && dispatchContext.messageRecipientGuardRequired === true;
     const messageRecipientDispatchBinding = dispatchContext.messageRecipientDispatchBinding || null;
     if (coordinatePoint && dispatchBinding?.token) {
       coordinateDiagnostic = this._coordinateReconciliationDiagnostic(
@@ -48691,7 +48753,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const chatStatePersisted = await this._persistNow(tabId);
         blocked = creation.check();
         if (blocked) return blocked;
-        if (chatStatePersisted !== true && chatStatePersisted?.ok !== true) {
+        if (chatStatePersisted !== true && chatStatePersisted?.ok !== true && this._actionGuardsEnabled(tabId)) {
           return {
             success: false,
             dispatched: false,
@@ -50148,7 +50210,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const doneStartedAt = Date.now();
       const tableBlock = await this._resolveExactTableDone(tabId, args, onUpdate);
       if (tableBlock) return tableBlock;
-      if (this._leanRunActive(tabId)) return await this._leanDoneResult(tabId, args);
+      if (!this._actionGuardsEnabled(tabId) || this._leanRunActive(tabId)) return await this._leanDoneResult(tabId, args);
       // A form's ledger check at done uses which fields the request named.
       await this._readWorkflowRequestedFieldMatches(tabId);
       const outcome = normalizeDoneOutcome(args?.outcome);
@@ -51012,7 +51074,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const observed = await this._readAwsWafChallenge(tabId);
           if (observed?.active) {
             const gate = await this._observeAwsWafGate(tabId, observed);
-            if (gate?.status !== 'solve_required') return noDispatchFailure('The current challenge already has an attempt or lacks applicable AWS inputs. Read the page for its current CAPTCHA gate.');
+            if (this._actionGuardsEnabled(tabId) && gate?.status !== 'solve_required') return noDispatchFailure('The current challenge already has an attempt or lacks applicable AWS inputs. Read the page for its current CAPTCHA gate.');
             const capability = describeAwsWafObservation(providers, observed);
             if (!capability?.providerTasks?.length) return noDispatchFailure(capability?.note || 'No applicable AWS task.');
             args = { providerTasks: capability.providerTasks, inject: false };
@@ -51044,11 +51106,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ? awsWafTaskRoute(prepared[0]) : null;
           const awsAttempts = awsRoute && previous?.family === 'aws_waf' && !previous.challengeCleared && previous.pageUrl === pageUrl
             ? [...(previous.awsAttempts || [])] : [];
-          if (awsRoute) prepared = prepared.filter(entry => !awsAttempts.includes(`${awsRoute}:${entry.provider.id}`));
+          if (awsRoute && this._actionGuardsEnabled(tabId)) prepared = prepared.filter(entry => !awsAttempts.includes(`${awsRoute}:${entry.provider.id}`));
           if (!prepared.length) return noDispatchFailure('All compatible providers have already been attempted for this AWS challenge.');
           const dispatchedTimeOrigins = new Set(previous?.dispatchedTimeOrigins || previous?.documents
             ?.filter(d => d.frameId === 0).map(d => d.timeOrigin) || []);
-          if (dispatchedTimeOrigins.has(rootDocument.timeOrigin) && !previous?.challengeCleared) {
+          if (this._actionGuardsEnabled(tabId) && dispatchedTimeOrigins.has(rootDocument.timeOrigin) && !previous?.challengeCleared) {
             return noDispatchFailure('A native solve was already dispatched for this page document. Use its result or ask for manual completion; do not spend again.');
           }
           dispatchedTimeOrigins.add(rootDocument.timeOrigin);
@@ -51062,7 +51124,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             status: 'manual_required', publicGate: { ...previousGate?.publicGate,
               status: 'manual_required', solveAttempted: true } });
           const lockPersistence = await this._persistNow(tabId);
-          if (!lockPersistence.ok) {
+          if (!lockPersistence.ok && this._actionGuardsEnabled(tabId)) {
             if (previous) this._nativeCaptchaSolutions.set(tabId, previous);
             else this._nativeCaptchaSolutions.delete(tabId);
             if (previousGate) this._captchaGateStates.set(tabId, previousGate);
@@ -51073,7 +51135,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const result = await solveNativeCaptchaTasks(prepared, { onAttempt: awsRoute ? async provider => {
             if (record.awsAttempts.includes(`${awsRoute}:${provider}`)) return;
             record.awsAttempts.push(`${awsRoute}:${provider}`);
-            if (!(await this._persistNow(tabId)).ok) throw new Error('Could not persist the AWS provider attempt. No further provider was contacted.');
+            if (!(await this._persistNow(tabId)).ok && this._actionGuardsEnabled(tabId)) throw new Error('Could not persist the AWS provider attempt. No further provider was contacted.');
           } : undefined });
           record.solution = result.solution;
           record.provider = result.provider;
@@ -51290,12 +51352,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // read arms a gate. Reserve and persist that paid attempt here,
           // after argument validation but before contacting any provider.
           const previousGate = this._captchaGateStates.get(tabId);
-          if (previousGate?.publicGate?.solveAttempted || previousGate?.publicGate?.solveFailed) {
+          if (this._actionGuardsEnabled(tabId) && (previousGate?.publicGate?.solveAttempted || previousGate?.publicGate?.solveFailed)) {
             return noDispatchFailure('An automatic CAPTCHA solve was already dispatched for this challenge. Verify the page or ask for manual completion; do not spend again.');
           }
           const previousAnswer = this._nativeCaptchaSolutions?.get(tabId);
           const currentRoot = detection?.rootDocument;
-          if (currentRoot && !previousAnswer?.challengeCleared && previousAnswer?.dispatchedTimeOrigins?.has(currentRoot.timeOrigin)) {
+          if (this._actionGuardsEnabled(tabId) && currentRoot && !previousAnswer?.challengeCleared && previousAnswer?.dispatchedTimeOrigins?.has(currentRoot.timeOrigin)) {
             return noDispatchFailure('A CAPTCHA solve was already dispatched for this page document. Use its result or ask for manual completion; do not spend again.');
           }
           if (!wantInject || providers.some(provider => requiresCaptchaUserAgent(provider.id, type))) {
@@ -51304,7 +51366,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             const root = documents.find(document => document.frameId === 0 && document.url === pageUrl);
             if (!root) return noDispatchFailure('Could not bind this page document before the token-only CAPTCHA request.');
             const dispatchedTimeOrigins = new Set(previousAnswer?.dispatchedTimeOrigins || []);
-            if (dispatchedTimeOrigins.has(root.timeOrigin) && !previousAnswer?.challengeCleared) return noDispatchFailure('A CAPTCHA solve was already dispatched for this page document. Do not spend again.');
+            if (this._actionGuardsEnabled(tabId) && dispatchedTimeOrigins.has(root.timeOrigin) && !previousAnswer?.challengeCleared) return noDispatchFailure('A CAPTCHA solve was already dispatched for this page document. Do not spend again.');
             dispatchedTimeOrigins.add(root.timeOrigin);
             automaticAnswer = { pageUrl, createdAt: Date.now(), applied: false, automatic: true,
               documents, dispatchedTimeOrigins };
@@ -51329,7 +51391,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // A worker interruption must retain a manual gate, even if the
           // provider accepted the request before its result was recorded.
           const saved = await this._persistNow(tabId);
-          if (!saved?.ok) {
+          if (!saved?.ok && this._actionGuardsEnabled(tabId)) {
             if (previousGate) this._captchaGateStates.set(tabId, previousGate);
             else this._captchaGateStates.delete(tabId);
             if (automaticAnswer) {
@@ -52458,6 +52520,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           let response = await chrome.tabs.sendMessage(tabId, {
             target: 'content',
             action: 'type',
+            enforceActionGuards: this._actionGuardsEnabled(tabId),
             params: {
               selector,
               text,
@@ -53190,7 +53253,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // document.querySelector and el.click(), which fails on Web Components,
     // closed shadow roots, and many React/Vue handlers.
     if (name === 'click' && dispatchBinding?.token) {
-      const duplicateSubmit = await guardRecentSubmitClick(
+      const duplicateSubmit = this._actionGuardsEnabled(tabId) && await guardRecentSubmitClick(
         this._recentSubmitClicks,
         tabId,
         args,
@@ -53211,7 +53274,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'click' && !dispatchBinding?.token) {
       try {
         throwIfEarlyCdpAborted();
-        const duplicateSubmit = await guardRecentSubmitClick(
+        const duplicateSubmit = this._actionGuardsEnabled(tabId) && await guardRecentSubmitClick(
           this._recentSubmitClicks,
           tabId,
           args,
@@ -54545,7 +54608,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // clears the field, ask the page whether the replacement only repeats
         // a shortened preview of that field's own value. No answer (no
         // content script) leaves typing as it was.
-        if (args.clear && typeof args.text === 'string') {
+        if (this._actionGuardsEnabled(tabId) && args.clear && typeof args.text === 'string') {
           const previewTarget = focusedBinding || (args.selector ? dispatchBinding : null);
           const previewCheck = await Promise.resolve().then(() => chrome.tabs.sendMessage(tabId, {
             target: 'content',
@@ -55531,6 +55594,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return chrome.tabs.sendMessage(tabId, {
         target: 'content',
         action,
+        enforceActionGuards: this._actionGuardsEnabled(tabId),
         params: this._withPageBlockerReadings(name, contentArgs),
         ...(actionDeadlineAt > 0 ? { actionDeadlineAt } : {}),
       }, messageOptions);
@@ -55570,6 +55634,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         'src/content/rich-text-toolbar-heuristic.js',
                   'src/content/accessibility-tree.js',
                   'src/content/teacher-capture.js',
+                  'src/content/whatsapp-phone.js',
                   'src/content/chat-observation.js',
                   'src/content/content.js',
                   'src/content/agent-visual-indicator.js',
@@ -55824,6 +55889,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // known to be a password field and is typed as before. An autofilled field
   // is untouched: the guard stops typing, not the click that submits it.
   async _unprovidedCredentialBlock(tabId, name, args = {}, executionContext = null) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     if (executionContext?.credentialProvenanceCheck !== true
         || !['set_field', 'type_ax', 'type_text', 'iframe_type'].includes(name)) return null;
     const value = typeof args?.text === 'string' ? args.text.trim() : '';
@@ -55878,6 +55944,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // else the guard's own probe, in `frameId` (each frame when null, for a
   // write that goes to every frame).
   _retargetedCredentialBlock(tabId, name, args, executionContext, { fieldMeta = null, frameId = null } = {}) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     return this._unprovidedCredentialBlock(tabId, name, args || {}, { ...executionContext,
       typingTargetFieldMeta: fieldMeta || null, typingTargetFrameId: Number.isInteger(frameId) ? frameId : null });
   }
@@ -56182,6 +56249,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // submissions (a scheduled run included), and the model is told to ask
   // the user for the value. Grouped searches keep their approval.
   _placeholderSubmitBlock(tabId, toolName, submitInfo) {
+    if (!this._actionGuardsEnabled(tabId)) return null;
     if (submitInfo?.isSubmit !== true) return null;
     if (classifySubmitRisk(submitInfo, submitInfo.url).risk === SubmitRisk.LOW_RISK_SEARCH
       && ['click', 'click_ax', 'press_keys'].includes(toolName)) return null;
@@ -57693,7 +57761,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const fallbackKey = `${target.documentToken || 'document'}|${args?.ref_id || ''}`;
     const attempted = this._clickAxCdpFallbacks.get(tabId) || new Set();
-    if (attempted.has(fallbackKey) || this._taskClickLockKeys(tabId)?.has(fallbackKey)) {
+    if (this._actionGuardsEnabled(tabId) && (attempted.has(fallbackKey) || this._taskClickLockKeys(tabId)?.has(fallbackKey))) {
       if (timing) timing.duplicateFallbackBlocked = true;
       return withSnapshot({
         ...response,

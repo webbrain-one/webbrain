@@ -837,7 +837,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: local synthetic clicks attribute checkbox changes and navigation`, async () => {
     const source = read(build, 'content/content.js');
     const clickStart = source.indexOf('function clickElement(params, actionDeadlineExpired = () => false)');
-    const typeStart = source.indexOf('function typeText(params, actionDeadlineExpired = () => false)', clickStart);
+    const typeStart = source.indexOf('function typeText(', clickStart);
     const clickAxStart = source.indexOf("'click_ax':");
     const checkedStart = source.indexOf("'set_checked':", clickAxStart);
     const typeAxStart = source.indexOf("'type_ax':", checkedStart);
@@ -883,7 +883,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: click-driven programmatic focus checks the monitor fence before focusin`, () => {
     const source = read(build, 'content/content.js');
     const clickStart = source.indexOf('function clickElement(params, actionDeadlineExpired = () => false)');
-    const typeStart = source.indexOf('function typeText(params, actionDeadlineExpired = () => false)', clickStart);
+    const typeStart = source.indexOf('function typeText(', clickStart);
     assert.ok(clickStart >= 0 && typeStart > clickStart, `${build}: click/type content action boundaries should be present`);
     const clickBody = source.slice(clickStart, typeStart);
     for (const [target, expected] of [['inp', 2], ['target', 1], ['sel', 1], ['el', 1], ['nearbySel', 1]]) {
@@ -2466,18 +2466,50 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.equal(await breathing(), true);
       assert.deepEqual(await position(), landed);
 
+      // A live preference change must stop an existing infinite blink and
+      // restore it when motion is enabled again, without another page action.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.waitForFunction(() => cursorParts().body.getAnimations().length === 0);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.waitForFunction(() => cursorParts().body.getAnimations()
+        .some(animation => animation.effect.getComputedTiming().iterations === Infinity));
+
       // A failed click: the cursor gets there but does not press.
-      const failed = await approach({ x: 200, y: 300, w: 40, h: 20 });
+      const secondTarget = { x: 200, y: 300, w: 40, h: 20 };
+      const failed = await approach(secondTarget);
       assert.equal(await breathing(), false, 'an approach ends the blink');
       await page.waitForTimeout(failed.arriveInMs + 60);
       await verdict(false);
       await page.waitForTimeout(60);
       assert.deepEqual(await pressing(), { ripples: [], press: false });
+      const secondLanding = await position();
 
       // Nothing to wait for: an unknown ref, reduced motion.
       assert.equal((await page.evaluate(() => cursorMessage({ type: 'WB_SHOW_AGENT_TARGET', phase: 'approach', ref_id: 'ref_404' }))).arriveInMs, 0);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       assert.equal((await approach(target)).arriveInMs, 0);
+      assert.deepEqual(await position(), landed, 'the cursor is already at the target when approach returns');
+      await verdict(true);
+      assert.deepEqual(await pressing(), { ripples: [], press: false });
+
+      // Enabling reduced motion partway through a glide lands the cursor
+      // and drops the press that was waiting for it to arrive.
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      const glideBack = await approach(secondTarget);
+      assert.ok(glideBack.arriveInMs > 0);
+      await verdict(true);
+      await page.evaluate(() => {
+        window.cursorLandedOnMotionChange = new Promise(resolve => {
+          matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', () => requestAnimationFrame(() => {
+            const { x, y } = cursorParts();
+            resolve({ x, y });
+          }), { once: true });
+        });
+      });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      assert.deepEqual(await page.evaluate(() => cursorLandedOnMotionChange), secondLanding);
+      await page.waitForTimeout(glideBack.arriveInMs);
+      assert.deepEqual(await pressing(), { ripples: [], press: false });
       assert.equal((await page.evaluate(() => feedback)).filter(event => event.source !== 'user').length, 0);
     } finally { await browser.close(); }
   });

@@ -177,11 +177,11 @@ for (const build of BUILDS) {
       'setter.call(el, newVal)', '_insertContentEditableText(el, text, clear',
       ...(build === 'chrome' ? ["'set_field_contenteditable_trusted'"] : ['msg.params?._bidiPrepare']));
     const typeAx = between("'type_ax': async () => {", "'set_field': async () => {");
-    before(typeAx, 'const truncatedPreview = clear ?', 'window.__wbPageMonitor?.beforeLocalDispatch();',
+    before(typeAx, 'const truncatedPreview = clear && msg.enforceActionGuards !== false ?', 'window.__wbPageMonitor?.beforeLocalDispatch();',
       'setter.call(el, newVal)', '_insertContentEditableText(el, text, !!clear',
       ...(build === 'chrome' ? ["'type_ax_contenteditable_trusted'"] : ['msg.params?._bidiPrepare']));
     const typeText = between('async function _typeTextInner(', '\n  function findText(');
-    before(typeText, "const truncatedPreview = params.clear ?", "_withTypingPreparation('focus', el, () => el.focus());",
+    before(typeText, "const truncatedPreview = params.clear && enforceActionGuards ?", "_withTypingPreparation('focus', el, () => el.focus());",
       'withLocalPageDispatch(', '_insertContentEditableText(el, typedText',
       ...(build === 'firefox' ? ['params._bidiPrepare && !(el instanceof HTMLSelectElement)'] : []));
   });
@@ -202,9 +202,9 @@ test('chrome: trusted type_text asks the page before select-all clears the field
 });
 
 // ── Live pages with both builds' real content scripts ─────────────────────
-const call = (page, action, params = {}) => page.evaluate(message => new Promise(resolve => {
+const call = (page, action, params = {}, enforceActionGuards = true) => page.evaluate(message => new Promise(resolve => {
   for (const handler of window.fixtureHandlers) handler(message, {}, resolve);
-}), { target: 'content', action, params });
+}), { target: 'content', action, params, enforceActionGuards });
 
 async function fixture(build) {
   const browser = await chromium.launch({ headless: true });
@@ -292,6 +292,10 @@ for (const build of BUILDS) {
       const after = await f.values();
       assert.equal(after.title, LONG.slice(0, 150) + ' (v2)');
       assert.equal(after.notes, LONG + ' Approved.');
+      const args = { ref_id: f.ref('notes'), text: notesPreview, enforceActionGuards: false };
+      assertRefused(await call(f.page, 'set_field', args), after.notes.length, 'a model tool argument cannot disable the guard');
+      assert.equal((await call(f.page, 'set_field', args, false)).success, true);
+      assert.equal((await f.values()).notes, notesPreview);
     } finally { await f.browser.close(); }
   });
 }

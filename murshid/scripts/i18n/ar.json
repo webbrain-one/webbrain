@@ -333,8 +333,8 @@
       "ar": "نزّل برنامج التثبيت"
     },
     "get.win.status": {
-      "en": "0.1.0 · x64 · 150 MB",
-      "ar": "0.1.0 · x64 · ‏150 ميغابايت"
+      "en": "0.1.2 · x64 · 160 MB",
+      "ar": "0.1.2 · x64 · ‏160 ميغابايت"
     },
     "get.win.fine": {
       "en": "Not code-signed yet, so Windows SmartScreen may stop it: choose <b>More info</b>, then <b>Run anyway</b>.",
@@ -345,8 +345,8 @@
       "ar": "الإصدار 12 Monterey وما بعده، Apple Silicon وIntel."
     },
     "get.mac.status": {
-      "en": "0.1.0 · Apple Silicon and Intel · 294 MB",
-      "ar": "0.1.0 · Apple Silicon وIntel · ‏294 ميغابايت"
+      "en": "0.1.3 · Apple Silicon and Intel · 297 MB",
+      "ar": "0.1.3 · Apple Silicon وIntel · ‏297 ميغابايت"
     },
     "get.mac.fine": {
       "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
@@ -357,12 +357,12 @@
       "ar": "x64. أما Arm64 فيعمل من المصدر."
     },
     "get.linux.status": {
-      "en": "0.1.0 · x64 · 171 MB · 135 MB",
-      "ar": "0.1.0 · x64 · ‏171 ميغابايت · 135 ميغابايت"
+      "en": "0.1.2 · x64 · 182 MB · 144 MB",
+      "ar": "0.1.2 · x64 · ‏182 ميغابايت · 144 ميغابايت"
     },
     "get.linux.fine": {
-      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>",
-      "ar": "AppImage: اجعله قابلًا للتنفيذ ثم شغّله. على Debian أو Ubuntu: <code>sudo apt install ./Murshid-0.1.0-linux-amd64.deb</code>"
+      "en": "AppImage: make it executable and run it. On Debian or Ubuntu: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>",
+      "ar": "AppImage: اجعله قابلًا للتنفيذ ثم شغّله. على Debian أو Ubuntu: <code>sudo apt install ./Murshid-0.1.2-linux-amd64.deb</code>"
     },
     "get.source": {
       "en": "Source on GitHub",

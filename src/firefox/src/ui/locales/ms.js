@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Gunakan semakan tindakan",
+  "st.display.action_guards.desc": "Menyemak penerima dan tindakan penting sebelum dilaksanakan. Jika dimatikan, model menentukan sama ada untuk menghantar, mencuba semula, memadam atau menerbitkan. Kebenaran laman masih berkuat kuasa. Berkuat kuasa pada tugas seterusnya.",
   'st.providers.title': 'Nama penyedia',
   ...getGenerativeMediaCopy('ms'),
   ...bidiCopy,

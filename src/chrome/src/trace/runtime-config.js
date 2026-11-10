@@ -26,6 +26,7 @@ const BOOLEAN_FIELDS = Object.freeze([
   'lossless_trace',
   'selection_scope_anchor_present',
   'lean_mode',
+  'enforce_action_guards',
   'vision_mode',
 ]);
 

@@ -6,6 +6,21 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Added
+- Murshid 0.1.3 checks for application updates at startup and daily, with an Updates page, menu entry and toolbar notification. Signed macOS builds can download a verified update and restart to install it; Windows and Linux open their platform's published installer. Automatic checks can be disabled in Settings. All ten interface languages are supported. Older Murshid versions require one manual installation to gain update support.
+
+## [47.1.1] - 2026-11-10
+
+### Added
+- Advanced settings now include **Enforce action guards**, enabled by default. Turning it off lets the model decide whether to send, retry, delete or publish without the corresponding recipient and action checks. This setting is separate from Lean mode, takes effect on the next run, and is included in settings transfers and traces. Site permissions, explicit submit confirmation, Stop and run budgets still apply. Chrome and Firefox.
+
+### Changed
+- Murshid 0.1.2 for macOS bundles WebBrain 47.1.1 and WebBrain Companion 0.1.2, with Apple Silicon and Intel support in one universal installer.
+
+### Fixed
+- WhatsApp recipient checks now accept full international phone numbers starting with `+` or `00`, ask for a country code when only local digits are supplied, and bind sends to the verified contact. A verified new or empty conversation can receive its first message without requiring an existing message as a baseline. Chrome and Firefox.
+- The agent cursor responds immediately when reduced-motion preferences change, stopping a running glide, click effect or resting animation and restoring the appropriate animation when motion is enabled again. Chrome and Firefox.
+
 ## [47.1.0] - 2026-11-10
 
 ### Added

@@ -12,6 +12,10 @@ if (typeof location !== 'undefined' && location.protocol === 'murshid:' && windo
   try { i18n = ipcRenderer.sendSync('murshid-i18n') || i18n; } catch {}
   contextBridge.exposeInMainWorld('murshid', {
     i18n,
+    updateStatus: () => ipcRenderer.invoke('murshid-page', 'updateStatus'),
+    checkUpdates: () => ipcRenderer.invoke('murshid-page', 'checkUpdates'),
+    downloadUpdate: () => ipcRenderer.invoke('murshid-page', 'downloadUpdate'),
+    installUpdate: () => ipcRenderer.invoke('murshid-page', 'installUpdate'),
     info: () => ipcRenderer.invoke('murshid-page', 'info'),
     settings: () => ipcRenderer.invoke('murshid-page', 'settings'),
     setSetting: (key, value) => ipcRenderer.invoke('murshid-page', 'setSetting', key, value),

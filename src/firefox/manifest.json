@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebBrain",
-  "version": "47.1.0",
+  "version": "47.1.1",
   "description": "Open-source AI browser agent — chat with pages, automate tasks, multi-provider LLM support.",
   "permissions": [
     "activeTab",
@@ -88,6 +88,7 @@
         "src/content/rich-text-toolbar-heuristic.js",
         "src/content/accessibility-tree.js",
         "src/content/teacher-capture.js",
+        "src/content/whatsapp-phone.js",
         "src/content/chat-observation.js",
         "src/content/content.js",
         "src/content/agent-visual-indicator.js",

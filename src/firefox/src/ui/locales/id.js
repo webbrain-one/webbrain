@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Terapkan pemeriksaan tindakan",
+  "st.display.action_guards.desc": "Memeriksa penerima dan tindakan penting sebelum dijalankan. Jika dinonaktifkan, model memutuskan kapan harus mengirim, mencoba lagi, menghapus, atau menerbitkan. Izin situs tetap berlaku. Berlaku mulai tugas berikutnya.",
   'st.providers.title': 'Nama penyedia',
   ...getGenerativeMediaCopy('id'),
   ...bidiCopy,

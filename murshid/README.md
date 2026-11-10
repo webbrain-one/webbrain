@@ -214,6 +214,35 @@ new tab page have their own translations and their own language setting.
   ی/ک and half spaces. The website follows the same ten languages; see
   `scripts/i18n/README.md`.
 
+## Application updates
+
+Murshid 0.1.3 and newer check `https://murshid.one/updates/stable.json` at
+startup and once a day. Automatic checks can be disabled in Settings. The
+Updates page is available from the application menu, the ⋮ menu, About,
+or `murshid://updates/`. A toolbar button appears when an update is available.
+Checks do not download or install anything.
+
+On packaged macOS builds, **Download update** uses Electron's native
+Squirrel.Mac updater. It verifies the signed application and the update ZIP's
+published SHA-256 and size. Once ready, **Restart and install** installs the
+update. Windows, Linux and development builds open their platform's verified
+release URL in the default browser so the installer can be downloaded and run.
+Versions older than 0.1.3 require one manual installation to gain this feature.
+
+For a macOS release, build both the DMG and ZIP:
+
+```sh
+npx electron-builder --mac dmg zip --universal --publish never
+```
+
+Stage the installer assets and their `SHA256SUMS.txt` under `web/download/`,
+then run `npm run updates:feed`. This validates each selected asset and writes
+`web/updates/stable.json`, including the native macOS ZIP and each platform's
+own latest published version. Upload the feed and assets together with the
+localized website. The feed must never advertise files that have not been
+uploaded. `npm run test:updates` tests the real Updates page and IPC with an
+isolated profile and a simulated future release.
+
 ## Package it
 
 ```sh

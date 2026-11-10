@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="{{lang}}" dir="{{dir}}">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' murshid: data:; style-src 'self'; script-src 'self'">
+<title>{{t:page.updates.title}}</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body data-page="updates">
+<main class="wrap">
+  <div class="mark"><img src="murshid://assets/icons/murshid.svg" alt=""><span lang="en" dir="ltr">Murshid</span></div>
+  <h1>{{t:page.updates.title}}</h1>
+  <p class="lede" id="update-status" role="status" aria-live="polite">{{t:page.updates.checking}}</p>
+  <div class="panel">
+    <div class="row"><span class="k">{{t:page.updates.installed}}</span><span class="v" id="installed-version" dir="ltr">…</span></div>
+  </div>
+  <p class="lede" id="update-hint"></p>
+  <div class="actions">
+    <button class="button" id="check-update">{{t:page.updates.check}}</button>
+    <button class="button primary" id="download-update" hidden>{{t:page.updates.download}}</button>
+    <button class="button primary" id="install-update" hidden>{{t:page.updates.install}}</button>
+    <a class="button" href="https://murshid.one/">murshid.one</a>
+  </div>
+</main>
+<script src="pages.js"></script>
+</body>
+</html>

@@ -6,6 +6,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "কাজের আগে যাচাই করুন",
+  "st.display.action_guards.desc": "কাজের আগে প্রাপক ও গুরুত্বপূর্ণ পদক্ষেপ যাচাই করে। বন্ধ করলে পাঠানো, আবার চেষ্টা করা, মুছে ফেলা বা প্রকাশ করার সিদ্ধান্ত মডেল নেয়। সাইটের অনুমতি কার্যকর থাকে। পরবর্তী কাজ থেকে প্রযোজ্য।",
   'st.providers.title': 'প্রদানকারীর নাম',
   ...getGenerativeMediaCopy('bn'),
   ...bidiCopy,

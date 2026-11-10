@@ -20,6 +20,7 @@ function installAppMenu(ctx) {
       label: 'Murshid',
       submenu: [
         item('mac.about', undefined, c.about),
+        item('page.updates.check', undefined, c.updates),
         { type: 'separator' },
         item('mac.settings', 'Cmd+,', c.settings),
         { type: 'separator' },
@@ -164,6 +165,9 @@ function popupMainMenu(ctx, w, { x, y }) {
     { type: 'separator' },
     { label: t('menu.settings'), click: () => c.settings(w) },
     { label: t('menu.about'), click: () => c.about(w) },
+    { label: ctx.updates?.snapshot().status === 'available'
+      ? t('menu.updateAvailable', { version: ctx.updates.snapshot().latestVersion }) : t('page.updates.check'),
+      click: () => c.updates(w) },
     { type: 'separator' },
     { label: t('menu.exit'), accelerator: isMac ? 'Cmd+Q' : `${mod}+Shift+Q`, click: () => ctx.quit() },
   ]);

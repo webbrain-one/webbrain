@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "הפעלת בדיקות לפני פעולה",
+  "st.display.action_guards.desc": "בדיקת הנמען ופעולות משמעותיות לפני הביצוע. כשהאפשרות כבויה, המודל מחליט אם לשלוח, לנסות שוב, למחוק או לפרסם. הרשאות האתר עדיין חלות. השינוי ייכנס לתוקף בהרצה הבאה.",
   'st.providers.title': 'שם הספק',
   ...getGenerativeMediaCopy('he'),
   ...bidiCopy,

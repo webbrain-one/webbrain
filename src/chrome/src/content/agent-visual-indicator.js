@@ -83,10 +83,31 @@
   let savedTargetOutlineVisible = false;
 
   const decorations = () => (window.__wbPageMonitorDecorations ??= new WeakSet());
-  const reduceMotionQuery = typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)')
-    : { matches: false };
-  const prefersReducedMotion = () => reduceMotionQuery.matches === true;
+  const readMotionQuery = () => window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let motionQuery = readMotionQuery();
+  let reducedMotion = motionQuery?.matches === true;
+  motionQuery?.addEventListener?.('change', motionChanged);
+
+  function motionChanged({ matches }) {
+    if (matches === reducedMotion) return;
+    reducedMotion = matches;
+    effect?.refreshMotion?.();
+    cursor?.refreshMotion(matches);
+  }
+
+  function cursorPrefersReducedMotion() {
+    const current = readMotionQuery();
+    // Firefox can defer a retained query's change until the next frame.
+    // Observe the query that supplied this action's preference so a quick
+    // switch back also interrupts the glide. Canvas frames use the cached value.
+    if (current && current.matches !== reducedMotion) {
+      motionQuery?.removeEventListener?.('change', motionChanged);
+      motionQuery = current;
+      motionQuery.addEventListener?.('change', motionChanged);
+      motionChanged(current);
+    }
+    return reducedMotion;
+  }
 
   function injectStyles() {
     if (document.getElementById('webbrain-agent-styles')) return;
@@ -128,9 +149,8 @@
         }
       }
 
-      /* The canvas effects and the cursor check this in script; the glow
-         and the target ring are CSS, so they hold still here. */
       @media (prefers-reduced-motion: reduce) {
+        #webbrain-agent-target-cursor { transition: none !important; }
         #webbrain-agent-glow-border { animation: none !important; }
         #webbrain-agent-target-outline {
           animation: none !important;
@@ -290,7 +310,7 @@
       this.hideTimer = 0; this.fitRaf = 0;
       this.onResize = () => this.requestFit();
     }
-    get still() { return prefersReducedMotion(); }
+    get still() { return reducedMotion; }
     mount(root) {
       if (this.mounted) return;
       for (const layer of this.layers) layer.mount(root);
@@ -1368,8 +1388,6 @@
     styleLoaded = true;
   }
 
-  reduceMotionQuery.addEventListener?.('change', () => effect?.refreshMotion?.());
-
   /* ------------------------------------------------------------------------
    * Agent cursor
    * One size (75% of the original 48×56 arrow). Ahead of an action it glides
@@ -1508,7 +1526,7 @@
     // Glide to a target ahead of the agent's input. Returns ms until it lands.
     approach(x, y) {
       clearTimeout(this.restTimer);
-      const still = prefersReducedMotion();
+      const still = cursorPrefersReducedMotion();
       const fresh = this.mode === 'hidden';
       const ms = this.moveTo(x, y, fresh || still);
       this.mode = 'approach';
@@ -1523,7 +1541,7 @@
     // verdict ends the approach. Otherwise it is a glide of its own.
     aim(x, y, click) {
       const fresh = this.mode === 'hidden';
-      this.moveTo(x, y, fresh || prefersReducedMotion());
+      this.moveTo(x, y, fresh || cursorPrefersReducedMotion());
       this.reveal();
       if (this.mode === 'approach') {
         if (click) this.click();
@@ -1539,7 +1557,7 @@
     click() {
       if (this.pressed || this.mode === 'hidden') return;
       this.pressed = true;
-      if (prefersReducedMotion()) return;
+      if (cursorPrefersReducedMotion()) return;
       clearTimeout(this.pressTimer);
       const wait = this.remaining();
       if (wait > 0) this.pressTimer = setTimeout(() => this.playPress(), wait);
@@ -1560,14 +1578,16 @@
       if (this.mode === 'hidden') return;
       if (Math.abs(x - this.x) < 0.5 && Math.abs(y - this.y) < 0.5) return;
       const left = this.remaining();
-      if (left > 0) this.moveTo(x, y, false, Math.max(120, left));
+      if (left > 0 && !cursorPrefersReducedMotion()) this.moveTo(x, y, false, Math.max(120, left));
       else this.moveTo(x, y, true);
     }
     rest() {
       if (this.mode !== 'active' && this.mode !== 'approach') return;
       this.mode = 'resting';
-      if (prefersReducedMotion() || typeof this.body.animate !== 'function') return;
-      this.breath?.cancel();
+      if (!cursorPrefersReducedMotion()) this.startBlink();
+    }
+    startBlink() {
+      if (this.breath || typeof this.body.animate !== 'function') return;
       this.breath = this.body.animate([
         { opacity: 1, easing: 'ease-in-out' },
         { opacity: 0.2, easing: 'ease-in-out' },
@@ -1586,13 +1606,30 @@
       try { current = parseFloat(getComputedStyle(this.body).opacity) || 1; } catch {}
       this.breath.cancel();
       this.breath = null;
-      if (current < 0.98 && typeof this.body.animate === 'function') {
+      if (current < 0.98 && !cursorPrefersReducedMotion() && typeof this.body.animate === 'function') {
         this.body.animate([{ opacity: current }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
       }
     }
+    refreshMotion(reduced) {
+      if (!reduced) {
+        if (this.mode === 'resting') this.startBlink();
+        return;
+      }
+      clearTimeout(this.pressTimer);
+      this.pressTimer = null;
+      this.pendingPressAt = 0;
+      // The landing transform is already on the element underneath the glide.
+      this.glide?.animation.cancel();
+      this.glide = null;
+      for (const node of [this.body, this.ripple]) {
+        for (const animation of node?.getAnimations?.() || []) animation.cancel();
+      }
+      this.breath = null;
+      this.pressAnimation = null;
+    }
     playPress() {
       this.pressTimer = null;
-      if (!this.body || this.mode === 'hidden' || typeof this.body.animate !== 'function') return;
+      if (!this.body || this.mode === 'hidden' || cursorPrefersReducedMotion() || typeof this.body.animate !== 'function') return;
       // Hidden for a screenshot: play it when the cursor is back.
       if (this.suspended) { this.pendingPressAt = performance.now(); return; }
       this.pressAnimation?.cancel();

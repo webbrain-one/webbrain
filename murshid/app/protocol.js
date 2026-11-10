@@ -14,6 +14,7 @@ const PAGES = {
   newtab: 'newtab.html',
   settings: 'settings.html',
   about: 'about.html',
+  updates: 'updates.html',
   error: 'error.html',
 };
 

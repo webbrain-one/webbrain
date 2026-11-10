@@ -602,9 +602,13 @@ async function loadResearchEscalation() {
 }
 const researchEscalationReady = loadResearchEscalation().catch(() => {});
 
+let actionGuardsSettingsRevision = 0;
 async function loadStrictSecretMode() {
-  const stored = await browser.storage.local.get(['strictSecretMode', 'strictGuards', 'leanMode']).catch(() => ({}));
+  const revision = ++actionGuardsSettingsRevision;
+  const stored = await browser.storage.local.get(['strictSecretMode', 'enforceActionGuards', 'strictGuards', 'leanMode']).catch(() => null);
   agent.strictSecretMode = stored?.strictSecretMode === true;
+  // A settings change can arrive while the worker is loading storage.
+  if (stored && revision === actionGuardsSettingsRevision) agent.enforceActionGuards = stored.enforceActionGuards !== false;
   agent.strictGuards = stored?.strictGuards === true;
   agent.leanMode = normalizeLeanModeSetting(stored?.leanMode);
 }
@@ -1307,6 +1311,10 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && changes.browserBatchEnabled) {
     browserBatchSettingsRevision++;
     agent.setBrowserBatchEnabled(changes.browserBatchEnabled.newValue !== false);
+  }
+  if (areaName === 'local' && changes.enforceActionGuards) {
+    actionGuardsSettingsRevision++;
+    agent.enforceActionGuards = changes.enforceActionGuards.newValue !== false;
   }
   if (changes.strictGuards) {
     agent.strictGuards = changes.strictGuards.newValue === true;

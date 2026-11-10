@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "启用操作检查",
+  "st.display.action_guards.desc": "执行前检查收件人和其他重要操作。关闭后，由模型决定是否发送、重试、删除或发布。网站权限仍然有效。下次运行时生效。",
   'st.providers.title': '服务商名称',
   ...getGenerativeMediaCopy('zh'),
   ...bidiCopy,

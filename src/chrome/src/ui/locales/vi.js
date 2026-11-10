@@ -6,6 +6,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Áp dụng kiểm tra hành động",
+  "st.display.action_guards.desc": "Kiểm tra người nhận và các hành động quan trọng trước khi thực hiện. Khi tắt, mô hình quyết định việc gửi, thử lại, xóa hoặc đăng. Quyền của trang web vẫn được áp dụng. Có hiệu lực từ lần chạy tiếp theo.",
   'st.providers.title': 'Tên nhà cung cấp',
   ...getGenerativeMediaCopy('vi'),
   ...bidiCopy,

@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Aktionsprüfungen anwenden",
+  "st.display.action_guards.desc": "Prüft Empfänger und folgenreiche Aktionen vor der Ausführung. Ist dies aus, entscheidet das Modell über Senden, Wiederholen, Löschen oder Veröffentlichen. Websiteberechtigungen gelten weiterhin. Wirksam ab dem nächsten Lauf.",
   'st.providers.title': 'Anbietername',
   ...getGenerativeMediaCopy('de'),
   ...bidiCopy,

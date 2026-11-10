@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Проверять действия перед выполнением",
+  "st.display.action_guards.desc": "Проверяет получателя и важные действия до их выполнения. При отключении модель сама решает, отправить ли сообщение, повторить действие, удалить или опубликовать данные. Разрешения сайта действуют по-прежнему. Изменение вступит в силу при следующем запуске.",
   'st.providers.title': 'Название провайдера',
   ...getGenerativeMediaCopy('ru'),
   ...bidiCopy,

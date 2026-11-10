@@ -474,6 +474,7 @@
     && composer?.matches?.('[data-testid="conversation-compose-box-input"][contenteditable="true"][role="textbox"]');
 
   let whatsappOwner = '';
+  let whatsappRequestedPeer = '';
   const whatsappDocumentEpoch = window.location?.hostname === 'web.whatsapp.com' ? globalThis.crypto?.randomUUID?.() || '' : '';
   let whatsappBindings = new WeakMap();
   let whatsappFloors = new WeakMap();
@@ -505,6 +506,11 @@
     const nodes = query(root, selector).filter(whatsappRendered);
     return nodes.length === 1 ? nodes[0] : null;
   };
+  // Contact info supplies an international number. A contact's editable
+  // display name, even one that looks like a number, cannot supply this value.
+  const whatsappPhone = (value, allowBare = false) => globalThis.__wbWhatsappPhone?.canonical(value, allowBare) || '';
+  const sameWhatsappTitle = (left, right) => left === right
+    || (!!whatsappPhone(left, true) && whatsappPhone(left, true) === whatsappPhone(right, true));
   const whatsappPins = composer => {
     if (!whatsappNativeComposer(composer) || !whatsappRendered(composer)) return null;
     const root = composer.closest('#main[data-testid="conversation-panel-wrapper"]');
@@ -514,11 +520,16 @@
       || uniqueWhatsappNode(header, '[data-testid="conversation-info-header-chat-title"]');
     const name = compact(title?.innerText || title?.textContent, 240);
     const transcript = uniqueWhatsappNode(root, '[data-testid="conversation-panel-messages"]');
-    const selected = uniqueWhatsappNode(document, '[data-testid="chat-list"] [aria-selected="true"]');
+    const selections = query(document, '[data-testid="chat-list"] [aria-selected="true"]').filter(whatsappRendered);
+    if (selections.length > 1) return null;
+    const selected = selections[0] || null;
     const selectedRow = selected?.closest('[role="row"]');
     const rowTitle = uniqueWhatsappNode(selectedRow, '[data-testid="cell-frame-title"]');
-    if (!root || !header || !carrier || !title || !name || !transcript || !selectedRow || !rowTitle
-        || compact(rowTitle.innerText || rowTitle.textContent, 240) !== name
+    // A new number may have no chat-list entry until the first send. Only
+    // an explicit phone target can start this check without a selected row.
+    if (!root || !header || !carrier || !title || !name || !transcript
+        || (selected ? !rowTitle || !sameWhatsappTitle(compact(rowTitle.innerText || rowTitle.textContent, 240), name)
+          : !whatsappRequestedPeer || !contains(carrier, title))
         || query(header, '[data-testid="you-label"]').some(whatsappRendered)) return null;
     // The production native editor uses a generic placeholder. Recipient
     // authority comes from these exact native nodes and the guarded new
@@ -526,13 +537,12 @@
     return { root, header, carrier, title, name, composer, transcript, selected, selectedRow, rowTitle,
       url: location.href, timeOrigin: performance.timeOrigin, generation: Number(window.__webbrain_generation) || 0 };
   };
+  const sameWhatsappPanel = (current, pins) => !!current && !!pins
+    && ['root','header','carrier','title','composer','transcript','name','url','timeOrigin','generation']
+      .every(key => current[key] === pins[key]);
   const sameWhatsappPins = pins => {
-    if (!pins || pins.url !== location.href || pins.timeOrigin !== performance.timeOrigin
-        || pins.generation !== (Number(window.__webbrain_generation) || 0)) return false;
-    const current = whatsappPins(pins.composer);
-    return !!current && current.name === pins.name
-      && ['root','header','carrier','title','composer','transcript','selected','selectedRow','rowTitle']
-        .every(key => current[key] === pins[key]);
+    const current = pins && whatsappPins(pins.composer);
+    return sameWhatsappPanel(current, pins) && ['selected','selectedRow','rowTitle'].every(key => current[key] === pins[key]);
   };
   const invalidateWhatsappBindings = (preserveRepair = false, preserveFloor = false) => {
     whatsappBindings = new WeakMap();
@@ -540,6 +550,28 @@
     whatsappActive = null;
     if (!preserveFloor) { whatsappFloors = new WeakMap(); whatsappParkedFloor = null; }
     if (!preserveRepair && whatsappRepairAnchor) whatsappRepairAnchor.invalidated = true;
+  };
+  const whatsappMessageRows = '[role="row"] [data-id][data-testid^="conv-msg-"]';
+  const whatsappHistoryContent = '[data-testid^="conv-msg-"],[data-testid="msg-container"],[data-pre-plain-text]';
+  const whatsappHistoryLoading = '[aria-busy="true"],[role="progressbar"],[data-testid="loading-spinner"]';
+  const whatsappEmptyTranscript = pins => !pins.transcript.closest(whatsappHistoryLoading)
+    && !pins.transcript.querySelector(whatsappHistoryContent + ',' + whatsappHistoryLoading)
+    && pins.transcript.scrollHeight <= pins.transcript.clientHeight + 4;
+
+  // An empty chat has no prior message to use as its live tail. Keep the
+  // first outgoing node produced by the submit event or seen locally pending.
+  // A delivered historical row mounted later cannot furnish this witness.
+  const witnessWhatsappFirstRow = (floor, duringSubmit = false) => {
+    if (!floor?.emptyTranscriptId || !floor.submitStarted || floor.firstRow) return;
+    const rows = query(floor.pins.transcript, whatsappMessageRows);
+    if (rows.length !== 1) return;
+    const row = rows[0];
+    const entry = readWhatsappMessage(row);
+    if (!entry?.tailOut || entry.tailIn || normalizeText(entry.text) !== floor.body) return;
+    if (duringSubmit || row.querySelector('[data-testid="msg-meta"] :is([data-icon="msg-time"],[data-testid="msg-time"])')) {
+      floor.firstRow = row;
+      floor.firstId = entry.id;
+    }
   };
   const whatsappAuthority = owner => {
     try {
@@ -555,13 +587,17 @@
   const whatsappFloorMatchesRestore = (floor, restore) => !!floor && !!restore
     && restore.schema === 'webbrain-native-opaque-baseline/1' && restore.threadKey === `dom:${floor.peer}`
     && restore.documentEpoch === whatsappDocumentEpoch && restore.timeOrigin === floor.pins.timeOrigin
-    && restore.url === floor.pins.url && restore.tailId === `${floor.peer}:${attribute(floor.tail, 'data-id')}`
+    && restore.url === floor.pins.url && restore.tailId === (floor.tail ? floor.peer + ':' + attribute(floor.tail, 'data-id') : '')
+    && restore.emptyTranscriptId === floor.emptyTranscriptId
     && sameWhatsappAuthority(floor.authority, restore) && sameWhatsappAuthority(whatsappAuthority(whatsappOwner), restore)
     && normalizeText(restore.body) === floor.body
     && Array.isArray(restore.messageIds) && restore.messageIds.length === floor.rows.length
     && restore.messageIds.every((id, index) => id === `${floor.peer}:${attribute(floor.rows[index], 'data-id')}`);
-  window.__wb_update_native_chat_owner = (owner, restore = null) => {
+  window.__wb_update_native_chat_owner = (owner, restore = null, requestedPeer) => {
     const next = typeof owner === 'string' && owner.length <= 1000 ? owner : '';
+    if (next !== whatsappOwner || requestedPeer !== undefined) {
+      whatsappRequestedPeer = next && /^whatsapp:phone:[a-f0-9]{32}$/.test(requestedPeer) ? requestedPeer : '';
+    }
     whatsappRestore = restore && typeof restore === 'object' ? restore : null;
     if (next !== whatsappOwner) {
       invalidateWhatsappBindings(false, true); whatsappRepairAnchor = null; whatsappOwner = next;
@@ -591,40 +627,40 @@
     && !!node.matches?.('.emoji,[data-type="emoji"],[data-plain-text]')
     && WHATSAPP_EMOJI_TEXT.test(attribute(node, 'data-plain-text') || attribute(node, 'alt'));
   const whatsappPlainName = node => !!node && Array.from(node.children).every(whatsappEmojiImage);
-  const whatsappPhoneFields = drawer => query(drawer, '[data-testid="selectable-text"]')
+  const whatsappPhoneSelector = '[data-testid="selectable-text"],[data-testid="phone-number"]';
+  const whatsappSubtitleSelector = '[data-testid="contact-info-subtitle selectable-text"]';
+  const whatsappPhoneFields = drawer => query(drawer, whatsappPhoneSelector)
     .filter(node => !drawer.isConnected || whatsappRendered(node))
-    .map(node => {
-      const text = compact(node.innerText || node.textContent, 80);
-      const phone = /^\+[\d ()-]{7,40}$/.test(text) ? text.replace(/[ ()-]/g, '') : '';
-      return { node, phone: /^\+[1-9]\d{7,14}$/.test(phone) ? phone : '' };
-    }).filter(field => field.phone);
+    .map(node => ({ node, phone: whatsappPhone(node.innerText || node.textContent, node.dataset.testid === 'phone-number') }))
+    .filter(field => field.phone);
   const sameWhatsappDrawerIdentity = record => {
     const drawer = record?.drawer;
-    if (!drawer || !record.drawerHeader || !record.subtitle || !record.phoneFields?.length) return false;
+    if (!drawer || !record.drawerHeader || !record.phoneFields?.length) return false;
     const scoped = selector => query(drawer, selector).filter(node => !drawer.isConnected || whatsappRendered(node));
     const headers = scoped('[data-testid="contact-info-header"]');
-    const subtitles = scoped('[data-testid="contact-info-subtitle selectable-text"]');
+    const subtitles = scoped(whatsappSubtitleSelector);
     const fields = whatsappPhoneFields(drawer);
     return headers.length === 1 && headers[0] === record.drawerHeader
-      && subtitles.length === 1 && subtitles[0] === record.subtitle && whatsappPlainName(record.subtitle)
-      && compact(record.subtitle.innerText || record.subtitle.textContent, 240) === record.pins.name
+      && subtitles.length === (record.subtitle ? 1 : 0) && subtitles[0] === record.subtitle
+      && (!record.subtitle || (whatsappPlainName(record.subtitle)
+        && compact(record.subtitle.innerText || record.subtitle.textContent, 240) === record.subtitleText))
       && fields.length === record.phoneFields.length
       && fields.every((field, index) => field.node === record.phoneFields[index].node
         && field.phone === record.phoneFields[index].phone && field.phone === record.phone);
   };
   const whatsappDrawerIdentityChanged = (record, change) => {
-    const identity = [record.subtitle, ...record.phoneFields.map(field => field.node)];
+    const identity = [record.subtitle, ...record.phoneFields.map(field => field.node)].filter(Boolean);
     if (identity.some(node => contains(node, change.target))) return true;
     if (change.type !== 'childList') return false;
     if (Array.from(change.removedNodes || [])
       .some(removed => [record.drawerHeader, ...identity].some(node => contains(removed, node)))) return true;
     // An added conflicting field may disappear before the observer callback.
     // Its mutation history cannot preserve the prior unique identity proof.
-    const identitySelector = '[data-testid="contact-info-header"],[data-testid="contact-info-subtitle selectable-text"],[data-testid="selectable-text"]';
+    const identitySelector = '[data-testid="contact-info-header"],' + whatsappSubtitleSelector + ',' + whatsappPhoneSelector;
     return Array.from(change.addedNodes || []).some(added => {
       const fields = [added, ...query(added, identitySelector)].filter(node => node?.matches?.(identitySelector));
-      return fields.some(node => attribute(node, 'data-testid') !== 'selectable-text'
-        || /^\+[\d ()-]{7,40}$/.test(compact(node.innerText || node.textContent, 80)));
+      return fields.some(node => !node.matches(whatsappPhoneSelector)
+        || !!whatsappPhone(node.innerText || node.textContent, node.dataset.testid === 'phone-number'));
     });
   };
   // The contact drawer's close control, in any language (WhatsApp names it in
@@ -667,15 +703,21 @@
     if (!record.drawer && drawers.length === 1 && !record.priorDrawers.has(drawers[0])) {
       const drawer = drawers[0];
       const header = uniqueWhatsappNode(drawer, '[data-testid="contact-info-header"]');
-      const subtitle = uniqueWhatsappNode(drawer, '[data-testid="contact-info-subtitle selectable-text"]');
-      if (!header || !subtitle || !whatsappPlainName(subtitle)
-          || compact(subtitle.innerText || subtitle.textContent, 240) !== record.pins.name) return;
+      const subtitles = query(drawer, whatsappSubtitleSelector).filter(whatsappRendered);
+      const [subtitle] = subtitles;
+      if (!header || subtitles.length > 1 || (subtitle && !whatsappPlainName(subtitle))) return;
       const phoneFields = whatsappPhoneFields(drawer);
       const phones = new Set(phoneFields.map(field => field.phone));
       if (phones.size !== 1 || phoneFields.length > 20) return;
+      const subtitleText = compact(subtitle?.innerText || subtitle?.textContent, 240);
+      // An unsaved number's profile can show a different push name, or
+      // just a phone field. Bind it by its header and independent drawer number.
+      const numberInHeader = whatsappRequestedPeer && phones.has(whatsappPhone(record.pins.name, true));
+      if (!numberInHeader && !sameWhatsappTitle(subtitleText, record.pins.name)) return;
       record.drawer = drawer;
       record.drawerHeader = header;
       record.subtitle = subtitle;
+      record.subtitleText = subtitleText;
       record.phoneFields = phoneFields;
       record.phone = [...phones][0];
       // Canonical phone stays private. The public peer id uses 128 bits of its
@@ -699,8 +741,52 @@
   };
   const whatsappMutations = records => {
     const record = whatsappPending || whatsappActive;
+    const floor = whatsappParkedFloor;
+    // WhatsApp may select a newly created chat-list row on its first send.
+    // Accept that first matching row while the verified panel stays mounted.
+    const pins = record?.pins || floor?.pins;
+    const pinNodes = pins ? [pins.root, pins.header, pins.carrier, pins.title, pins.composer, pins.transcript,
+      pins.selected, pins.selectedRow, pins.rowTitle].filter(Boolean) : [];
+    const pinSelector = '[data-testid="conversation-header"],[data-testid="conversation-info-header"],[data-testid^="conversation-info-header-chat-title"],[data-testid="conversation-panel-messages"],[data-testid="conversation-compose-box-input"],[aria-selected="true"],[data-testid="you-label"]';
+    const addsSelection = change => {
+      if (change.type === 'attributes') return change.attributeName === 'aria-selected' && change.target.closest?.('[data-testid="chat-list"]');
+      if (change.type !== 'childList' || contains(pins?.transcript, change.target)) return false;
+      return Array.from(change.addedNodes).some(node => (node.matches?.('[aria-selected="true"]') || node.querySelector?.('[aria-selected="true"]'))
+        && (node.closest?.('[data-testid="chat-list"]') || node.querySelector?.('[data-testid="chat-list"]')));
+    };
+    let addedSelection = null;
+    if (record?.sendFloor === floor && floor?.priorChatRows && floor.submitStarted && !floor.pins.selected
+        && records.some(addsSelection)) {
+      const pins = floor.pins, current = whatsappPins(pins.composer);
+      if (current?.selected && !floor.priorChatRows.has(current.selectedRow) && sameWhatsappPanel(current, pins)) {
+        addedSelection = current.selected;
+        Object.assign(pins, { selected: current.selected, selectedRow: current.selectedRow, rowTitle: current.rowTitle });
+      }
+    }
+    let checkEmpty = false, checkPins = false, transcriptChanged = false;
     for (const change of records) {
-      const pins = record?.pins || whatsappParkedFloor?.pins;
+      const inTranscript = !!pins && contains(pins.transcript, change.target);
+      transcriptChanged ||= inTranscript;
+      // Message renders cannot introduce another selected chat or replace
+      // the panel. Structural mutations elsewhere are checked once per batch.
+      if (pins && !checkPins && !inTranscript && !contains(pins.composer, change.target) && !contains(record?.drawer, change.target)) {
+        if (change.type === 'attributes') {
+          checkPins = pinNodes.some(node => contains(change.target, node)) || change.target.matches?.(pinSelector);
+        } else if (change.type === 'childList') {
+          checkPins = Array.from(change.removedNodes).some(node => pinNodes.some(pin => contains(node, pin)))
+            || Array.from(change.addedNodes).some(node => node.matches?.(pinSelector) || node.querySelector?.(pinSelector));
+        }
+      }
+      if (record?.emptyTranscriptId && inTranscript) {
+        checkEmpty = true;
+        const content = whatsappHistoryContent + ',' + whatsappHistoryLoading;
+        const encounteredHistory = Array.from(change.addedNodes).some(node => node.matches?.(content) || node.querySelector?.(content));
+        if (encounteredHistory || (change.attributeName === 'aria-busy' && change.oldValue === 'true')) delete record.emptyTranscriptId;
+      }
+      if (floor?.firstRow && change.type === 'childList'
+          && Array.from(change.removedNodes).some(node => contains(node, floor.firstRow))) {
+        floor.firstRowLost = true;
+      }
       if (record?.drawer && change.type === 'childList'
           && Array.from(change.addedNodes || []).some(added =>
             [added, ...query(added, '[data-testid="chat-info-drawer"]')]
@@ -718,22 +804,53 @@
       // Selection can change and return before a read. Its mutation history,
       // rather than only its final name/state, revokes the old peer proof.
       if (change.type === 'attributes' && change.attributeName === 'aria-selected'
-          && change.target.closest?.('[data-testid="chat-list"]')) { invalidateWhatsappBindings(); return; }
+          && change.target.closest?.('[data-testid="chat-list"]')
+          && !(change.target === addedSelection && change.oldValue !== 'true')) { invalidateWhatsappBindings(); return; }
       if (pins && (change.type === 'characterData' || change.type === 'childList')
           && [pins.title, pins.rowTitle].some(node => contains(node, change.target))) {
         invalidateWhatsappBindings(); return;
       }
-      if (pins && !sameWhatsappPins(pins)) { invalidateWhatsappBindings(); return; }
     }
+    if (checkPins && !sameWhatsappPins(pins)) { invalidateWhatsappBindings(); return; }
+    if (checkEmpty && record.emptyTranscriptId && !whatsappEmptyTranscript(pins)) delete record.emptyTranscriptId;
+    if (transcriptChanged) witnessWhatsappFirstRow(floor, !!floor?.submitEvent?.eventPhase);
     captureWhatsappDrawer();
   };
   const whatsappObserver = window.location?.hostname === 'web.whatsapp.com' && typeof MutationObserver === 'function'
     ? new MutationObserver(whatsappMutations) : null;
   whatsappObserver?.observe(document, {
-    subtree: true, childList: true, characterData: true, attributes: true,
-    attributeFilter: ['aria-selected','aria-label','data-testid','hidden','inert','aria-hidden'],
+    subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true,
+    attributeFilter: ['aria-selected','aria-label','aria-busy','data-testid','hidden','inert','aria-hidden'],
   });
   if (whatsappObserver) for (const event of ['pagehide','popstate','hashchange']) window.addEventListener(event, () => invalidateWhatsappBindings());
+  if (whatsappObserver) for (const type of ['click','keydown']) {
+    window.addEventListener(type, event => {
+      const floor = whatsappParkedFloor;
+      if (!floor?.submitTarget || floor.owner !== whatsappOwner || floor !== whatsappActive?.sendFloor
+          || !contains(floor.submitTarget, event.target)) return;
+      const keyboardSubmit = floor.submitTarget === floor.pins.composer;
+      if (keyboardSubmit ? type !== 'keydown' || event.key !== 'Enter' || event.shiftKey || event.isComposing : type !== 'click') return;
+      floor.submitTarget = null;
+      if (!sameWhatsappPins(floor.pins) || !whatsappEmptyTranscript(floor.pins)) return;
+      floor.submitStarted = true;
+      floor.submitEvent = event;
+      // The app may stop the event at its handler after inserting the row.
+      // Read that synchronous insertion; a later task needs a pending row.
+      queueMicrotask(() => {
+        if (floor.submitEvent === event && event.eventPhase === Event.NONE) {
+          witnessWhatsappFirstRow(floor, true);
+          floor.submitEvent = null;
+        }
+      });
+      setTimeout(() => { if (floor.submitEvent === event) floor.submitEvent = null; }, 0);
+    }, true);
+    window.addEventListener(type, event => {
+      const floor = whatsappParkedFloor;
+      if (floor?.submitEvent !== event) return;
+      witnessWhatsappFirstRow(floor, true);
+      floor.submitEvent = null;
+    });
+  }
   const nativeApi = typeof chrome !== 'undefined' ? chrome : typeof browser !== 'undefined' ? browser : null;
   if (whatsappObserver) nativeApi?.runtime?.onMessage?.addListener(message => {
     if (message?.target === 'content' && message.action === 'page_monitor_state' && message.active === false) {
@@ -770,6 +887,7 @@
     if (!pins || !contains(pins.carrier, target)) return false;
     invalidateWhatsappBindings(true, true);
     whatsappPending = { pins, owner: whatsappOwner, priorDrawers: new Set(query(document, '[data-testid="chat-info-drawer"]')) };
+    if (whatsappRequestedPeer && whatsappEmptyTranscript(pins)) whatsappPending.emptyTranscriptId = crypto.randomUUID();
     // The run's one check now belongs to this chat.
     if (whatsappAnchorFollowsSelection) whatsappRepairAnchor = { pins, invalidated: false };
     whatsappCheckArmed = true; whatsappAnchorFollowsSelection = false;
@@ -811,10 +929,11 @@
     const drawers = whatsappDrawers();
     if (!drawers.length) return contains(pins.carrier, target);
     if (drawers.length !== 1) return false;
-    const subtitle = uniqueWhatsappNode(drawers[0], '[data-testid="contact-info-subtitle selectable-text"]');
+    const subtitle = uniqueWhatsappNode(drawers[0], whatsappSubtitleSelector);
     const close = whatsappDrawerClose(drawers[0]);
-    return whatsappPlainName(subtitle) && compact(subtitle.textContent, 240) === pins.name
-      && !!close && contains(close, target);
+    const verifiedDrawer = whatsappPending?.drawer === drawers[0] && !!whatsappPending.id && sameWhatsappDrawerIdentity(whatsappPending);
+    return !!close && contains(close, target) && (verifiedDrawer
+      || (whatsappPlainName(subtitle) && sameWhatsappTitle(compact(subtitle.textContent, 240), pins.name)));
   };
   window.__wb_native_whatsapp_repair_snapshot = target => window.__wb_native_whatsapp_repair_action(target)
     ? { pins: window.__wb_get_native_whatsapp_repair(), owner: whatsappOwner } : null;
@@ -844,6 +963,8 @@
     const record = whatsappBindings.get(composer);
     if (!record || record.owner !== whatsappOwner || !whatsappOwner || !sameWhatsappPins(record.pins) || whatsappDrawers().length) return null;
     return { ...record.pins, service: 'whatsapp', id: record.id, owner: record.owner, documentEpoch: whatsappDocumentEpoch, sendFloor: record.sendFloor,
+      emptyTranscriptId: record.emptyTranscriptId && record.id === whatsappRequestedPeer && whatsappEmptyTranscript(record.pins)
+        ? record.emptyTranscriptId : undefined,
       atLatest: Math.abs(record.pins.transcript.scrollHeight - record.pins.transcript.clientHeight - record.pins.transcript.scrollTop) <= 4 };
   };
   window.__wb_native_chat_read_repair = composer => {
@@ -879,16 +1000,21 @@
     return !!current && current.phase === snapshot.phase && current.target === snapshot.target
       && (snapshot.phase !== 'close_contact' || current.record === snapshot.record);
   };
-  window.__wb_prepare_native_chat_send = (composer, body) => {
+  window.__wb_prepare_native_chat_send = (composer, body, baseline, submitTarget = composer) => {
     const context = whatsappContactThread(composer);
     const record = whatsappBindings.get(composer);
     const authority = whatsappAuthority(whatsappOwner);
     if (!context || !record || !context.atLatest || !authority || !whatsappDocumentEpoch) return false;
-    const rows = query(context.transcript, '[role="row"] [data-id][data-testid^="conv-msg-"]')
+    const rows = query(context.transcript, whatsappMessageRows)
       .filter(node => visible(node) && attribute(node, 'data-testid') === `conv-msg-${attribute(node, 'data-id')}`);
-    if (!rows.length || rows.length > MAX_ITEMS) return false;
+    if ((!rows.length && !context.emptyTranscriptId) || rows.length > MAX_ITEMS
+        || baseline?.emptyTranscriptId !== context.emptyTranscriptId) return false;
     record.sendFloor = { ids: new Set(rows.map(node => attribute(node, 'data-id'))), rows,
+      ...(context.emptyTranscriptId ? { emptyTranscriptId: context.emptyTranscriptId, submitTarget } : {}),
       tail: rows[rows.length - 1], body: normalizeText(body), peer: context.id, authority, pins: record.pins, owner: whatsappOwner };
+    if (context.emptyTranscriptId && !context.selected) {
+      record.sendFloor.priorChatRows = new WeakSet(query(document, '[data-testid="chat-list"] [role="row"]'));
+    }
     whatsappFloors.set(composer, record.sendFloor); whatsappParkedFloor = record.sendFloor;
     return true;
   };
@@ -1275,7 +1401,7 @@
     // Opaque native IDs have no numeric ordering; normal page tools still read
     // history, while chat observation follows the current/latest viewport.
     if (!channel.atLatest) return [];
-    const rows = query(channel.transcript, '[role="row"] [data-id][data-testid^="conv-msg-"]');
+    const rows = query(channel.transcript, whatsappMessageRows);
     const messages = [];
     for (const row of rows.slice(-MAX_ITEMS)) {
       if (!visible(row)) continue;
@@ -1300,34 +1426,57 @@
     return messages;
   };
 
+  // The observer and the dispatch guard must describe the same mounted history.
+  const whatsappMessageBaseline = (context, forSend = false) => {
+    const rows = query(context.transcript, whatsappMessageRows);
+    const ids = rows.map(node => attribute(node, 'data-id'));
+    const messageIds = ids.map(id => context.id + ':' + id);
+    const emptyTranscriptId = !rows.length && context.emptyTranscriptId;
+    const pending = forSend && rows.some(row => row.querySelector('[data-icon="tail-out"]')
+      && !whatsappStatusDelivered(row.querySelector('[data-testid="msg-meta"]')));
+    return {
+      schema: 'webbrain-native-opaque-baseline/1', threadKey: 'dom:' + context.id,
+      complete: context.atLatest && !pending && (rows.length > 0 || !!emptyTranscriptId) && rows.length <= MAX_ITEMS
+        && new Set(ids).size === rows.length && ids.every((id, index) => /^[A-Za-z0-9_-]{1,32}$/.test(id)
+          && attribute(rows[index], 'data-testid') === 'conv-msg-' + id),
+      documentEpoch: whatsappDocumentEpoch, timeOrigin: context.timeOrigin, url: context.url,
+      messageIds, tailId: messageIds.at(-1) || '', ...(emptyTranscriptId ? { emptyTranscriptId } : {}),
+    };
+  };
+  window.__wb_get_native_whatsapp_message_baseline = context => whatsappMessageBaseline(context, true);
+
+  const readWhatsappMessage = row => {
+    if (!visible(row)) return null;
+    const id = attribute(row, 'data-id');
+    const container = uniqueWhatsappNode(row, '[data-testid="msg-container"]');
+    if (!/^[A-Za-z0-9_-]{1,32}$/.test(id) || attribute(row, 'data-testid') !== `conv-msg-${id}` || !container) return null;
+    const meta = query(container, '[data-testid="msg-meta"]')[0];
+    const delivered = whatsappStatusDelivered(meta);
+    const tailOut = query(container, '[data-icon="tail-out"]').some(visible);
+    const tailIn = query(container, '[data-icon="tail-in"]').some(visible);
+    const prePlain = query(container, '[data-pre-plain-text]');
+    const sender = prePlain.length === 1
+      ? compact(/^\[[^\]\r\n]{1,100}\]\s*(.{1,240}):\s*$/.exec(prePlain[0].getAttribute('data-pre-plain-text') || '')?.[1], 240) : '';
+    const textNodes = query(container, '[data-testid="selectable-text"]')
+      .filter(node => visible(node) && !contains(meta, node)
+        && !node.parentElement?.closest('[data-testid="selectable-text"]'));
+    const text = textNodes.length === 1 ? telegramText(textNodes[0], { whatsapp: true }) : '';
+    return { row, id, sender, text, delivered, tailIn, tailOut };
+  };
+
   const collectWhatsappContactMessages = channel => {
     channel.deliveryProof = null;
     if (!channel.atLatest) return [];
-    const rows = query(channel.transcript, '[role="row"] [data-id][data-testid^="conv-msg-"]');
-    const entries = rows.slice(-MAX_ITEMS).map(row => {
-      if (!visible(row)) return null;
-      const id = attribute(row, 'data-id');
-      const container = uniqueWhatsappNode(row, '[data-testid="msg-container"]');
-      if (!/^[A-Za-z0-9_-]{1,32}$/.test(id) || attribute(row, 'data-testid') !== `conv-msg-${id}` || !container) return null;
-      const meta = query(container, '[data-testid="msg-meta"]')[0];
-      const delivered = whatsappStatusDelivered(meta);
-      const tailOut = query(container, '[data-icon="tail-out"]').some(visible);
-      const tailIn = query(container, '[data-icon="tail-in"]').some(visible);
-      const prePlain = query(container, '[data-pre-plain-text]');
-      const sender = prePlain.length === 1
-        ? compact(/^\[[^\]\r\n]{1,100}\]\s*(.{1,240}):\s*$/.exec(prePlain[0].getAttribute('data-pre-plain-text') || '')?.[1], 240) : '';
-      const textNodes = query(container, '[data-testid="selectable-text"]')
-        .filter(node => visible(node) && !contains(meta, node)
-          && !node.parentElement?.closest('[data-testid="selectable-text"]'));
-      const text = textNodes.length === 1 ? telegramText(textNodes[0], { whatsapp: true }) : '';
-      return { row, id, sender, text, delivered, tailIn, tailOut };
-    });
+    const rows = query(channel.transcript, whatsappMessageRows);
+    const entries = rows.slice(-MAX_ITEMS).map(readWhatsappMessage);
     const ownNames = new Set(entries.filter(entry => entry && entry.sender && (entry.tailOut || entry.delivered)).map(entry => entry.sender));
     const floor = channel.sendFloor;
     const baselineRows = floor ? rows.filter(row => floor.ids.has(attribute(row, 'data-id'))) : [];
     const floorIndex = floor?.tail?.isConnected && sameWhatsappPins(floor.pins)
       && baselineRows.length === floor.rows.length && baselineRows.every((row, index) => row === floor.rows[index])
       && channel.transcript.contains(floor.tail) ? rows.indexOf(floor.tail) : -1;
+    const firstRow = floor?.emptyTranscriptId && !floor.firstRowLost && sameWhatsappPins(floor.pins)
+      && rows[0] === floor.firstRow && attribute(floor.firstRow, 'data-id') === floor.firstId ? floor.firstRow : null;
     const messages = [];
     let incomingGroup = false;
     for (const entry of entries) {
@@ -1339,7 +1488,7 @@
         if (!delivered) continue;
         // Only a genuinely appended row after the still-mounted live tail
         // can reconcile a send. An opaque old row remount is not a receipt.
-        if (!floor || floorIndex < 0) continue;
+        if (!floor || (floorIndex < 0 && row !== firstRow)) continue;
         if (!floor.ids.has(id) && (text !== floor.body || rows.indexOf(row) <= floorIndex)) continue;
         direction = 'outgoing';
       } else if (!tailOut && !delivered && sender === channel.name) {
@@ -1351,12 +1500,13 @@
       messages.push({ id: `${channel.id}:${id}${direction === 'incoming' ? `:r${telegramTextRevision(text)}` : ''}`,
         direction, text, authoredText: text });
     }
-    const deliveredIds = floor && floorIndex >= 0 ? messages.filter(message => message.direction === 'outgoing'
+    const deliveredIds = floor && (floorIndex >= 0 || firstRow) ? messages.filter(message => message.direction === 'outgoing'
       && message.authoredText === floor.body && !floor.ids.has(message.id.slice(channel.id.length + 1)))
       .map(message => message.id) : [];
     if (deliveredIds.length === 1) channel.deliveryProof = {
       schema: 'webbrain-native-mounted-delivery/1', threadKey: `dom:${channel.id}`, body: floor.body,
       baselineMessageIds: [...floor.ids].map(id => `${channel.id}:${id}`), messageId: deliveredIds[0],
+      ...(floor.emptyTranscriptId ? { emptyTranscriptId: floor.emptyTranscriptId } : {}),
       documentEpoch: whatsappDocumentEpoch, timeOrigin: channel.timeOrigin, url: channel.url,
     };
     return messages;
@@ -1543,9 +1693,17 @@
   window.__wb_observe_chat_dom = (params = {}) => {
     try {
       const probe = params.probe && typeof params.probe === 'object' ? params.probe : {};
-      const { node: composer, ref: composerRef } = resolveComposer(probe, params);
+      let { node: composer, ref: composerRef } = resolveComposer(probe, params);
+      if (params.observeVisibleComposer === true) {
+        const editors = query(document, '[data-testid="conversation-compose-box-input"][contenteditable="true"],.input-message-input[contenteditable="true"],#editable-message-text[contenteditable="true"]').filter(visible);
+        if (editors.length === 1) {
+          composer = editors[0];
+          composerRef = window.__wb_ax_ref?.(composer) || '';
+        }
+      }
       const nativeThread = nativeChatThread(composer);
-      const root = activeRoot(composer, nativeThread);
+      const root = activeRoot(composer, nativeThread) || (params.observeVisibleComposer === true && (composer?.closest('#main[data-testid="conversation-panel-wrapper"],#MiddleColumn,.chat,[data-chat-root],[data-conversation-root]')
+        || composer?.closest('footer')?.closest('main,#main')));
       if (!composer || !root) {
         const telegramPreparation = composer && window.__wb_get_native_telegram_alias_preparation(composer);
         if (telegramPreparation) {
@@ -1611,7 +1769,7 @@
       const threadKey = compact(
         conversationId
           ? `dom:${conversationId}`
-          : (conversationIdentity ? `identity:${conversationIdentity}` : ''),
+          : (conversationIdentity ? `identity:${conversationIdentity}` : (params.observeVisibleComposer === true && composerRef ? 'visible:' + composerRef : '')),
         240,
       );
       if (!threadKey) {
@@ -1626,9 +1784,6 @@
         ? ('value' in composer ? composer.value : (composer.innerText || composer.textContent || ''))
         : '';
       const messages = collectMessages(root, composer, nativeThread);
-      const nativeRows = nativeThread?.service === 'whatsapp'
-        ? query(nativeThread.transcript, '[role="row"] [data-id][data-testid^="conv-msg-"]') : [];
-      const nativeMessageIds = nativeRows.map(node => `${nativeThread.id}:${attribute(node, 'data-id')}`);
       const nativeChatReadRepair = ['whatsapp','telegram'].includes(nativeThread?.service)
         ? window.__wb_native_chat_read_repair(composer) : null;
       return {
@@ -1647,14 +1802,7 @@
           ? { nativeChatMessageBaseline: telegramMountedMessageBaseline(nativeThread) } : {}),
         ...(nativeThread?.service === 'whatsapp' && nativeThread.deliveryProof
           ? { nativeChatDeliveryProof: nativeThread.deliveryProof } : {}),
-        ...(nativeThread?.service === 'whatsapp' ? { nativeChatMessageBaseline: {
-          schema: 'webbrain-native-opaque-baseline/1', complete: nativeThread.atLatest && !!nativeRows.length
-            && nativeRows.length <= MAX_ITEMS && new Set(nativeMessageIds).size === nativeMessageIds.length
-            && nativeRows.every(node => /^[A-Za-z0-9_-]{1,32}$/.test(attribute(node, 'data-id'))
-              && attribute(node, 'data-testid') === `conv-msg-${attribute(node, 'data-id')}`),
-          threadKey, documentEpoch: whatsappDocumentEpoch, timeOrigin: nativeThread.timeOrigin, url,
-          messageIds: nativeMessageIds, tailId: nativeMessageIds.at(-1) || '',
-        } } : {}),
+        ...(nativeThread?.service === 'whatsapp' ? { nativeChatMessageBaseline: whatsappMessageBaseline(nativeThread) } : {}),
         composer: {
           available: !!composer && (nativeThread?.service === 'telegram' ? nativeThread.atLatest === true : (!!nativeThread || probe.composerAvailable !== false)),
           ...(composerRef ? { ref: composerRef } : {}),

@@ -121,7 +121,7 @@ body{font:16px sans-serif}#main{width:900px}header{height:60px}[data-testid="con
           if (qaMode === 'expired') { const clock = Date.now.bind(Date); Date.now = () => clock() + 2000; }
         });
       });
-      for (const file of ['page-monitor-shadow.js', 'rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'chat-observation.js', 'page-monitor.js', 'content.js']) {
+      for (const file of ['page-monitor-shadow.js', 'rich-text-toolbar-heuristic.js', 'accessibility-tree.js', 'whatsapp-phone.js', 'chat-observation.js', 'page-monitor.js', 'content.js']) {
         await page.addInitScript({ content: await readFile(new URL(`../src/${build}/src/content/${file}`, import.meta.url), 'utf8') });
       }
       const body = 'Owned native beforeinput: ıİşŞğĞüÜöÖçÇ 🧠 exact draft';

@@ -8,6 +8,8 @@ import { getApocalypseModeCopy } from './apocalypse-copy.mjs';
 import { getEmergencyBoxCopy } from './emergency-copy.mjs';
 
 export default {
+  "st.display.action_guards.label": "Eylem denetimlerini uygula",
+  "st.display.action_guards.desc": "İşlemden önce alıcıyı ve önemli eylemleri denetler. Kapatırsanız gönderme, yeniden deneme, silme ve yayımlama kararını model verir. Site izinleri geçerlidir. Sonraki görevde uygulanır.",
   'st.providers.title': 'Sağlayıcı adı',
   ...getGenerativeMediaCopy('tr'),
   ...bidiCopy,
