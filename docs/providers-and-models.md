@@ -349,7 +349,8 @@ ComfyUI workflow sets its own length and shape, so these options are refused
 there. A longer video is passed as `scenes`: WebBrain makes one clip per
 scene at a length the model offers (a scene longer than its longest clip is
 refused, so the agent splits it into scenes with their own prompts), generates
-up to three clips at a time with one retry each (none when the provider refuses
+up to three clips at a time with one retry each, after a five-second wait or the
+provider's `Retry-After` (none when the provider refuses
 the request, such as for lack of credit, or returns a clip that is not an MP4),
 downloads hosted clips (up to 160 MB each) without the API key, and joins them into one MP4
 without re-encoding (`src/*/src/agent/video-join.js`, which parses
@@ -373,6 +374,18 @@ the original estimate (`estimatedSeconds`),
 accepted plan (`plannedSeconds`), and `durationStatus`: `short`, `enough`,
 or `unverified`. A measured shortfall keeps the generated asset and reports
 incomplete delivery; hosted clips without a measured length stay unverified.
+A measured video may be a quarter second shorter than its target, and a tenth
+of a second more for each further clip it is made of (0.95 s for eight clips),
+since each clip ends on its own frame.
+A fal.ai request that is being made is not given up for a passing failure: a
+status or result read that fails with a network error, 5xx, 408 or 429 is tried
+again (five status reads, three result reads, waiting longer each time), and so
+is the download of a finished clip (three tries). When a clip fails for good,
+the clips still being made are cancelled and the finished ones are kept in
+memory for 30 minutes; the error says how many (`clipsKept`). A retry with the
+same `prompt`, shape and scenes generates only the scenes that are missing or
+changed and reports `reusedClips`. A restarted worker keeps none, and a video
+that succeeded is generated anew when asked for again.
 Each requested video keeps its own duration obligation across retries, Continue,
 and worker restart. For multiple videos, use a distinct `video_id` per deliverable
 and reuse it on retries; a verified intro cannot satisfy a failed outro. Without

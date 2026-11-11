@@ -2,6 +2,7 @@ import { runFalGeneration, FAL_AUTH_PROBE_URL } from './fal-media.js';
 import { MAX_JOINED_VIDEO_BYTES, storeGeneratedMedia, storeGeneratedMediaBlob } from '../generated-media-store.js';
 import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt } from './media-config.js';
 import { VideoJoinError, joinMp4Clips, mp4DurationSeconds } from './video-join.js';
+import { videoDurationTolerance } from './video-duration-contract.js';
 
 const GENERATION_TIMEOUT_MS = 600000;
 const MAX_INLINE_BYTES = 20 * 1024 * 1024;
@@ -10,6 +11,14 @@ const MAX_INLINE_BYTES = 20 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = 120;
 export const MAX_VIDEO_CLIPS = 24;
 const VIDEO_CLIP_CONCURRENCY = 3;
+// How long a failed clip waits before its one retry, unless the provider says
+// (Retry-After), and the longest such wait.
+const VIDEO_CLIP_RETRY_MS = 5000;
+const MAX_RETRY_WAIT_MS = 60000;
+// Downloads of a finished clip that may fail in a row for a passing reason.
+const CLIP_DOWNLOAD_ATTEMPTS = 3;
+// How long the finished clips of a video that failed part-way wait for a retry.
+const KEPT_CLIP_MS = 30 * 60 * 1000;
 const FALLBACK_VIDEO_CLIP_SECONDS = 8;
 const VIDEO_ARGUMENTS = ['duration', 'aspect_ratio', 'resolution', 'scenes', 'estimated_duration'];
 const INLINE_MEDIA = /^data:(image\/(?:png|jpeg|webp|gif)|audio\/(?:mpeg|wav|ogg)|video\/mp4);base64,[A-Za-z0-9+/=\s]+$/;
@@ -77,17 +86,28 @@ async function jsonResponse(response, label) {
     let message = '';
     try { message = (await response.text()).slice(0, 300); } catch { /* no body */ }
     const detail = [response.status === 402 ? 'the account is out of credit; add credit and try again' : '', message].filter(Boolean).join(': ');
-    throw Object.assign(new Error(`${label} failed (HTTP ${response.status})${detail ? ': ' + detail : '.'}`), { status: response.status });
+    throw Object.assign(new Error(`${label} failed (HTTP ${response.status})${detail ? ': ' + detail : '.'}`),
+      { status: response.status, retryAfterMs: retryAfterMs(response) });
   }
   const body = await response.json();
   if (body?.error || body?.error_type) throw new Error(`${label}: ${body.error?.message || body.error_type || body.error}`);
   return body;
 }
 
-function pollDelay(response, fallback) {
+// How long a response asks to wait before the next request (Retry-After in
+// seconds), at most a minute; undefined when it does not say.
+function retryAfterMs(response) {
   const seconds = Number(response.headers?.get?.('Retry-After'));
-  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, 60000) : fallback;
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, MAX_RETRY_WAIT_MS) : undefined;
 }
+
+function pollDelay(response, fallback) {
+  return retryAfterMs(response) ?? fallback;
+}
+
+// A failure that asking again would repeat: a request the provider refused (a
+// 4xx other than a timeout or rate limit, such as no credit left).
+const refusedStatus = status => status >= 400 && status < 500 && ![408, 429].includes(status);
 
 async function cancelRequest(url, init, fetchImpl) {
   if (!url) return;
@@ -519,8 +539,10 @@ async function videoBytes(response, label) {
 
 // A finished clip as MP4 bytes to join: inline media is decoded, a hosted file
 // downloaded within the deadline. No key is sent with the download, so
-// redirects are allowed.
-async function downloadClip(url, { fetchImpl, signal, timeoutMs, label, localBaseUrl }) {
+// redirects are allowed. The clip is made and paid for, so a download that
+// fails for a passing reason (the network, a gateway error) is tried again,
+// waiting longer each time, before the caller would generate the clip again.
+async function downloadClip(url, { fetchImpl, signal, timeoutMs, label, localBaseUrl, retryMs = 1000 }) {
   let bytes = dataUrlBytes(url)?.bytes;
   if (!bytes) {
     // Only the configured workflow's /view endpoint may use loopback HTTP.
@@ -530,9 +552,16 @@ async function downloadClip(url, { fetchImpl, signal, timeoutMs, label, localBas
     if (!localView && !safeMediaUrl(url)) throw lasting(`${label} returned an unsupported media URL.`);
     const operation = operationSignal(signal, timeoutMs);
     try {
-      const res = await fetchImpl(url, { signal: operation.signal, credentials: 'omit', ...(localView ? { redirect: 'error' } : {}) });
-      if (!res.ok) throw Object.assign(new Error(`${label} clip download failed (HTTP ${res.status}).`), { status: res.status });
-      bytes = new Uint8Array(await res.arrayBuffer());
+      for (let attempt = 1; !bytes; attempt++) {
+        try {
+          const res = await fetchImpl(url, { signal: operation.signal, credentials: 'omit', ...(localView ? { redirect: 'error' } : {}) });
+          if (!res.ok) throw Object.assign(new Error(`${label} clip download failed (HTTP ${res.status}).`), { status: res.status });
+          bytes = new Uint8Array(await res.arrayBuffer());
+        } catch (error) {
+          if (operation.signal.aborted || attempt >= CLIP_DOWNLOAD_ATTEMPTS || refusedStatus(error?.status)) throw error;
+          await delay(Math.min(retryMs * 2 ** (attempt - 1), 15000), operation.signal);
+        }
+      }
     } catch (error) { throw operation.signal.aborted ? operation.signal.reason : error; }
     finally { operation.dispose(); }
   }
@@ -566,14 +595,45 @@ async function mapWithConcurrency(items, limit, signal, task) {
   } finally { signal?.removeEventListener('abort', onAbort); }
 }
 
+// The finished clips of videos that failed part-way, oldest first, kept in
+// memory for a retry: each is paid for, and a retry asks the model for the
+// same clip again. A clip is named by what was asked of the model and handed
+// out once, so a video that succeeded is generated anew when asked for again.
+const keptClips = [];
+
+const clipKey = (provider, model, clip, shape) => JSON.stringify([provider, model, clip.prompt, clip.duration ?? null, shape]);
+
+function takeKeptClip(key) {
+  const index = keptClips.findIndex(kept => kept.key === key && Date.now() - kept.at <= KEPT_CLIP_MS);
+  return index < 0 ? null : keptClips.splice(index, 1)[0].bytes;
+}
+
+// Keeps clips ({ key, bytes }) for a retry. Together the kept clips weigh at
+// most what one video may; the oldest go first.
+function keepClips(clips) {
+  const now = Date.now();
+  const fresh = keptClips.filter(kept => now - kept.at <= KEPT_CLIP_MS);
+  fresh.push(...clips.map(clip => ({ ...clip, at: now })));
+  let total = fresh.reduce((sum, kept) => sum + kept.bytes.length, 0);
+  while (fresh.length && total > MAX_JOINED_VIDEO_BYTES) total -= fresh.shift().bytes.length;
+  keptClips.splice(0, keptClips.length, ...fresh);
+}
+
+/** Forgets the clips kept for a retry. */
+export function forgetKeptVideoClips() {
+  keptClips.length = 0;
+}
+
 /**
  * Makes a video with a provider's video model, the same way for every
  * provider: one clip (`single` returns { url }), or the clips of its scenes
  * (`clip` returns each one's MP4 bytes, to be joined), three at a time with
  * one retry each. `entry` is what the model accepts. A video longer than
- * WebBrain makes is generated only if the user agrees on its card.
+ * WebBrain makes is generated only if the user agrees on its card. When a
+ * clip fails, the finished ones are kept, and a retry that asks for the same
+ * clips (`provider`, model, prompt, length and shape) uses them.
  */
-async function runVideo({ model, entry, text, video, signal, onProgress, confirmVideoLength, single, clip }) {
+async function runVideo({ provider, model, entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
   const plan = planVideo(text, video, entry);
   const fallback = plan.fallbackClipSeconds ? { fallbackClipSeconds: plan.fallbackClipSeconds } : {};
   if (!plan.scenes) return {
@@ -594,32 +654,54 @@ async function runVideo({ model, entry, text, video, signal, onProgress, confirm
     if (answer !== 'once') return { declined: true, answer: answer || 'cancelled', model, ...lengthDetails };
     approvedDurationSeconds = plan.total;
   }
-  onProgress?.(`Generating ${plan.clips.length} video clips…`);
-  let ready = 0;
-  const clips = await mapWithConcurrency(plan.clips, VIDEO_CLIP_CONCURRENCY, signal, async (item, index, groupSignal) => {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        const bytes = await clip(item, plan.shape, groupSignal);
-        ready += 1;
-        onProgress?.(`Video clips: ${ready} of ${plan.clips.length} ready`);
-        return bytes;
-      } catch (error) {
-        // One retry per clip; a second failure, Stop or another clip's failure
-        // ends the video. A request the provider refused (a 4xx other than a
-        // timeout or rate limit, such as no credit left) would fail again, as
-        // would a clip in another format.
-        const refused = error?.retry === false || (error?.status >= 400 && error.status < 500 && ![408, 429].includes(error.status));
-        if (groupSignal.aborted || attempt >= 2 || refused) {
-          throw groupSignal.aborted ? (groupSignal.reason ?? error) : new Error(`Clip ${index + 1} of ${plan.clips.length} failed: ${error.message}`);
+  const keys = plan.clips.map(item => clipKey(provider, model, item, plan.shape));
+  // Each clip's bytes, in scene order: those kept from a failed attempt, then
+  // those this run makes.
+  const clips = keys.map(takeKeptClip);
+  const missing = plan.clips.map((item, index) => ({ item, index })).filter(({ index }) => !clips[index]);
+  const reused = plan.clips.length - missing.length;
+  onProgress?.(reused
+    ? `Generating ${missing.length} of ${plan.clips.length} video clips; ${reused} kept from the last attempt…`
+    : `Generating ${plan.clips.length} video clips…`);
+  let ready = reused;
+  try {
+    await mapWithConcurrency(missing, VIDEO_CLIP_CONCURRENCY, signal, async ({ item, index }, _position, groupSignal) => {
+      for (let attempt = 1; ; attempt++) {
+        try {
+          clips[index] = await clip(item, plan.shape, groupSignal);
+          ready += 1;
+          onProgress?.(`Video clips: ${ready} of ${plan.clips.length} ready`);
+          return;
+        } catch (error) {
+          // One retry per clip; a second failure, Stop or another clip's failure
+          // ends the video. A request the provider refused would fail again, as
+          // would a clip in another format.
+          const refused = error?.retry === false || refusedStatus(error?.status);
+          if (groupSignal.aborted || attempt >= 2 || refused) {
+            throw groupSignal.aborted ? (groupSignal.reason ?? error) : new Error(`Clip ${index + 1} of ${plan.clips.length} failed: ${error.message}`);
+          }
+          // Asking again at once meets the same overload or rate limit.
+          try { await delay(Math.min(error?.retryAfterMs ?? retryDelayMs, MAX_RETRY_WAIT_MS), groupSignal); }
+          catch { throw groupSignal.reason ?? error; }
         }
       }
-    }
-  });
+    });
+  } catch (error) {
+    // The finished clips are paid for: a retry uses them instead of asking
+    // the model again.
+    const finished = clips.flatMap((bytes, index) => (bytes ? [{ key: keys[index], bytes }] : []));
+    keepClips(finished);
+    // Stop is reported as it is. Any other failure also says what a retry keeps.
+    if (!finished.length || signal?.aborted) throw error;
+    throw Object.assign(new Error(`${error?.message ?? error} ${finished.length} of ${plan.clips.length} clips are finished and kept for ${KEPT_CLIP_MS / 60000} minutes: a retry generates only the scenes that are missing or changed. Keep prompt, aspect_ratio, resolution and each finished scene's prompt and duration exactly as they were.`),
+      { clipsKept: finished.length, cause: error });
+  }
   return { clips, model, ...lengthDetails, ...fallback,
+    ...(reused ? { reusedClips: reused } : {}),
     ...(approvedDurationSeconds !== undefined ? { approvedDurationSeconds } : {}) };
 }
 
-async function runOpenRouter({ text, media, config, video, fetchImpl, signal, timeoutMs, pollMs, onProgress, confirmVideoLength }) {
+async function runOpenRouter({ text, media, config, video, fetchImpl, signal, timeoutMs, pollMs, onProgress, confirmVideoLength, retryDelayMs }) {
   const headers = { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' };
   // One bounded operation: its own deadline, aborted by Stop as well.
   const bounded = async (parent, task) => {
@@ -643,7 +725,7 @@ async function runOpenRouter({ text, media, config, video, fetchImpl, signal, ti
   }
   const job = (request, jobSignal, clip, shape) => openRouterVideoJob({ base, headers, request, signal: jobSignal, pollMs, body: videoRequestBody(model, clip, shape) });
   return runVideo({
-    model, entry: target.entry, text, video, signal, onProgress, confirmVideoLength,
+    provider: 'openrouter', model, entry: target.entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs,
     single: (clip, shape) => bounded(signal, async (request, jobSignal) => ({ url: await mediaResponse(await job(request, jobSignal, clip, shape), 'OpenRouter video download') })),
     clip: (clip, shape, groupSignal) => bounded(groupSignal, async (request, jobSignal) => videoBytes(await job(request, jobSignal, clip, shape), 'OpenRouter video download')),
   });
@@ -756,7 +838,7 @@ async function comfyRouterJob({ model, apiKey, body, fetchImpl, signal, timeoutM
  * either, the image model is used (with OpenRouter, a saved image model that
  * is a video model makes a video).
  */
-export async function runMediaGeneration({ prompt, config, media = null, video = null, fetchImpl = fetch, signal, timeoutMs = GENERATION_TIMEOUT_MS, pollIntervalMs, onProgress, confirmVideoLength }) {
+export async function runMediaGeneration({ prompt, config, media = null, video = null, fetchImpl = fetch, signal, timeoutMs = GENERATION_TIMEOUT_MS, pollIntervalMs, retryDelayMs, onProgress, confirmVideoLength }) {
   const provider = validateMediaConfig(config);
   const text = String(prompt || '').trim();
   if (!text) throw new Error('prompt is required.');
@@ -770,11 +852,11 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
   const kind = media || (video ? 'video' : null);
   const pollMs = pollIntervalMs ?? (provider === 'openrouter' ? 30000 : 2000);
   if (provider === 'openrouter') {
-    return runOpenRouter({ text, media: kind, config, video, fetchImpl, signal, timeoutMs, pollMs, onProgress, confirmVideoLength });
+    return runOpenRouter({ text, media: kind, config, video, fetchImpl, signal, timeoutMs, pollMs, onProgress, confirmVideoLength, retryDelayMs });
   }
   const slot = mediaSlot(config, kind || 'image');
   const { model } = slot;
-  const videoRun = { model, text, video, signal, onProgress, confirmVideoLength };
+  const videoRun = { provider, model, text, video, signal, onProgress, confirmVideoLength, retryDelayMs };
   if (provider === 'fal') {
     const job = (prompt, input, jobSignal) => runFalGeneration({ prompt, config: { ...config, model }, input, fetchImpl, signal: jobSignal, timeoutMs, pollMs });
     if (kind !== 'video') return job(text, {}, signal);
@@ -784,7 +866,7 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
       ...videoRun, entry,
       single: async (clip, shape) => ({ url: (await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, signal)).url }),
       clip: async (clip, shape, groupSignal) => downloadClip((await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, groupSignal)).url,
-        { fetchImpl, signal: groupSignal, timeoutMs, label: 'fal.ai' }),
+        { fetchImpl, signal: groupSignal, timeoutMs, label: 'fal.ai', retryMs: pollMs }),
     });
   }
   if (provider === 'comfyrouter') {
@@ -797,7 +879,7 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
       ...videoRun, entry,
       single: async (clip, shape) => ({ url: await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, signal) }),
       clip: async (clip, shape, groupSignal) => downloadClip(await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, groupSignal),
-        { fetchImpl, signal: groupSignal, timeoutMs, label: 'Comfy Router' }),
+        { fetchImpl, signal: groupSignal, timeoutMs, label: 'Comfy Router', retryMs: pollMs }),
     });
   }
   const operation = operationSignal(signal, timeoutMs);
@@ -857,9 +939,9 @@ function videoDeliveryDetails(result, asset, targetSeconds) {
   const approvedDurationSeconds = roundSeconds(result.approvedDurationSeconds);
   const requiredSeconds = approvedDurationSeconds || estimatedSeconds;
   const actual = asset.durationSeconds;
-  // Allow a quarter second for container/frame boundary rounding.
+  // Allow for container/frame boundary rounding, in every clip of the video.
   const durationStatus = Number.isFinite(actual)
-    ? (actual + 0.25 < requiredSeconds ? 'short' : 'enough') : 'unverified';
+    ? (actual + videoDurationTolerance(asset.clipCount) < requiredSeconds ? 'short' : 'enough') : 'unverified';
   return {
     estimatedSeconds,
     ...(plannedSeconds ? { plannedSeconds } : {}),
@@ -927,14 +1009,15 @@ export async function generateImage(args, options = {}) {
     const targetSeconds = roundSeconds(options.videoDurationTarget);
     const result = await runMediaGeneration({
       prompt: args?.prompt, media: args?.media ?? null, video: videoArguments(args), config, fetchImpl, signal: options.signal,
-      pollIntervalMs: options.pollIntervalMs, onProgress: options.onProgress, confirmVideoLength: options.confirmVideoLength,
+      pollIntervalMs: options.pollIntervalMs, retryDelayMs: options.retryDelayMs, onProgress: options.onProgress, confirmVideoLength: options.confirmVideoLength,
     });
     if (result.declined) {
       return { success: false, declined: true, provider, model: result.model, error: declinedVideoMessage(result) };
     }
     if (Array.isArray(result.clips)) {
       const asset = await storeVideoClips(result.clips, options.onProgress);
-      return { success: true, model: result.model, provider, ...asset, ...videoDeliveryDetails(result, asset, targetSeconds) };
+      return { success: true, model: result.model, provider, ...asset, ...(result.reusedClips ? { reusedClips: result.reusedClips } : {}),
+        ...videoDeliveryDetails(result, asset, targetSeconds) };
     }
     if (result.url.startsWith('data:')) {
       const asset = await storeGeneratedMedia(result.url);
@@ -950,7 +1033,7 @@ export async function generateImage(args, options = {}) {
       try {
         options.signal?.throwIfAborted?.();
         const bytes = await downloadClip(hosted.url, { fetchImpl, signal: options.signal,
-          timeoutMs: 15000, label: 'Generated video duration verification',
+          timeoutMs: 15000, label: 'Generated video duration verification', retryMs: options.pollIntervalMs ?? 1000,
           ...(provider === 'comfyui' ? { localBaseUrl: comfyBaseUrl(config.baseUrl) } : {}) });
         hosted.durationSeconds = roundSeconds(mp4DurationSeconds(bytes));
         hosted.mimeType = 'video/mp4';
@@ -965,7 +1048,7 @@ export async function generateImage(args, options = {}) {
       delivery.notice = 'The generated asset was kept, but its duration could not be verified. Do not report plannedSeconds as the actual video length or claim the duration requirement is complete.';
     }
     return { success: true, ...hosted, provider, ...delivery };
-  } catch (error) { return { success: false, error: error.message }; }
+  } catch (error) { return { success: false, error: error.message, ...(error?.clipsKept ? { clipsKept: error.clipsKept } : {}) }; }
 }
 
 // Free read-only probes. Model metadata confirms availability; no generation
