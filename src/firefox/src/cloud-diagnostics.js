@@ -7,12 +7,16 @@ export const diagnosticMessages = Object.freeze({
   not_found: 'The requested page or element was not found.',
   invalid_arguments: 'The tool received invalid or missing arguments.',
   permission_required: 'The action needs permission or user input.',
+  memory_target_unidentified: 'Memory could not identify the action and article or record. Read the target page before retrying.',
+  coordinate_out_of_bounds: 'The click coordinates are outside the referenced screenshot. Use a fresh screenshot and coordinates within its bounds.',
   repeated_read_failure: 'Repeated reads of the same resource failed. The run stopped.',
   loop_stopped: 'The run stopped after repeated actions made no progress.',
   tool_failed: 'The browser operation failed.',
 });
 export function diagnosticFailure(value) {
   const text = String(value || '').slice(0, 4000);
+  if (/Memory could not identify this action and entity/i.test(text)) return 'memory_target_unidentified';
+  if (/outside .+which is \d+x\d+ pixels|outside (?:the )?(?:screenshot|viewport)|out_of_bounds/i.test(text)) return 'coordinate_out_of_bounds';
   if (/failed three times.*(?:resource|read)|same read-only resource/i.test(text)) return 'repeated_read_failure';
   if (/loop[_ ]stopped|loop detected/i.test(text)) return 'loop_stopped';
   if (/timed?\s*out|timeout|ERR_TIMED_OUT/i.test(text)) return 'timeout';

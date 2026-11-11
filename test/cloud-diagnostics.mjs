@@ -57,3 +57,12 @@ for (const browser of ['chrome', 'firefox']) {
     }
   });
 }
+for (const browser of ['chrome', 'firefox']) {
+ const {toolDiagnostic}=await import(`../src/${browser}/src/cloud-diagnostics.js`);
+ test(`${browser}: memory identity and screenshot bounds errors remain specific without raw payloads`,()=>{
+  for(const [error,failureKind] of [
+   ['Memory could not identify this action and entity. Read the relevant page first.','memory_target_unidentified'],
+   ['(955, 825) is outside f56, which is 1406x746 pixels.','coordinate_out_of_bounds']
+  ]) assert.deepEqual(toolDiagnostic({success:false,error}),{version:1,outcome:'failed',failureKind});
+ });
+}
