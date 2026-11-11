@@ -20,6 +20,7 @@
   <a href="README.zh-CN.md">中文</a> ·
   <a href="README.fr.md">Français</a> ·
   <a href="README.ja.md">日本語</a> ·
+  <a href="README.tr.md">Türkçe</a> ·
   <a href="docs/fr/">Documentation</a> ·
   <a href="https://webbrain.one">Site web</a> ·
   <a href="LICENSE">GPL-3.0-or-later</a>

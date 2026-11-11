@@ -20,6 +20,7 @@
   <a href="README.zh-CN.md">中文</a> ·
   <a href="README.fr.md">Français</a> ·
   <a href="README.ja.md">日本語</a> ·
+  <a href="README.tr.md">Türkçe</a> ·
   <a href="docs/">दस्तावेज़</a> ·
   <a href="https://webbrain.one">वेबसाइट</a> ·
   <a href="https://discord.gg/cgC325ssfw">Discord</a> ·

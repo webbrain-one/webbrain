@@ -20,6 +20,7 @@ Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir
 <a href="README.zh-CN.md">Çince</a> ·
 <a href="README.fr.md">Fransızca</a> ·
 <a href="README.ja.md">Japonca</a> ·
+<a href="README.tr.md">Türkçe</a> ·
 <a href="docs/">Belgeler</a> ·
 <a href="https://webbrain.one">Web Sitesi</a> ·
 <a href="https://discord.gg/cgC325ssfw">Discord</a> ·
@@ -28,7 +29,7 @@ Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir
 
 ![WebBrain bir sayfayı okuyor, bir formu dolduruyor ve bir dosya getiriyor](assets/webbrain-demo.gif)
 
-WebBrain, bir yapay zekayı... ...sekmelerinizin yanındaki bir panelde yer alan bir aracı (agent).
+WebBrain, sekmelerinizin yanındaki panelde bir yapay zekâ ajanı sunan tarayıcı uzantısıdır.
 Üzerinde bulunduğunuz sayfa hakkında ona sorular sorun ya da bir görev verip
 sayfa içinde tıklama, yazma ve gezinme işlemlerini gerçekleştirmesine izin verin.
 Araç, seçtiğiniz model üzerinde çalışır: yerel bir `llama.cpp` veya `Ollama` sunucusu,
@@ -78,7 +79,9 @@ Yan paneli açmak için WebBrain simgesine tıklayın ve ardından şuna benzer 
 | ------- | ---------------------------------------------------------------------- |
 | **Ask** | Salt okunur. Sayfayı okur, soruları yanıtlar, URL'leri getirir. |
 | **Act** | Tıklar, yazar, gezinir, yükler, indirir, formları doldurur. |
-| **Act** | Sayfa kaynağı, stiller, konsol, ağ ve geri alınabilir sayfa düzenlemeleri ekler. |
+| **Dev** | Sayfa kaynağı, stiller, konsol, ağ ve geri alınabilir sayfa düzenlemeleri ekler. |
+
+WebBrain her mesaj için modu seçer: mesajınız tarayıcıda bir işlem istemedikçe Ask modunda kalır. Modu kendiniz seçmek için mesajınıza `/ask`, `/act` veya `/dev` ile başlayın.
 
 ## Bir model seçin
 
@@ -132,7 +135,7 @@ Bedrock, Mistral, DeepSeek, xAI Grok, MiniMax, Kimi, Qwen, z.ai GLM, Groq,
 Together, Cloudflare, Nvidia NIM, Hugging Face, Fireworks, OpenRouter ve daha fazlası.
 Ayarlar; test edilmiş LFM2.5 2.6B ön ayarını kullanan, uç nokta (endpoint) gerektirmeyen
 yerel WebGPU seçeneği ve deneysel özel Hugging Face ONNX deposu seçeneği dahil olmak üzere
-Chromium'da **114 yerleşik sağlayıcı kartı** (Firefox'ta 113) ile gelir;
+Chromium'da **121 yerleşik sağlayıcı kartı** (Firefox'ta 120) ile gelir;
 [tam kataloğa](docs/providers-and-models.md#extended-provider-catalog) bakınız.
 
 Yerel veya kendi sağladığınız (BYO) bir sağlayıcı için, sağlayıcı bazlı
@@ -150,6 +153,7 @@ tanılama kaydına dahil edilir. İkinci bir paylaşım anahtarına gerek yoktur
 
 - **Her türlü sayfayı okur** — Kırılgan seçiciler (selectors) yerine erişilebilirlik ağacı (accessibility tree) aracılığıyla metin, bağlantı, form, tablo, PDF ve etkileşimli öğeleri okur.
 - **İşlem yapar** — Tıklama, yazma, kaydırma, gezinme, yükleme, indirme ve form doğrulama gibi işlemleri gerçekleştirir; kritik eylemlerden önce site bazlı izin istemleri sunar.
+- **Görsel mod** ("Tesla" modu) — Görsel destekli bir modelle Act çalıştırmaları sayfayı ekran görüntüleriyle görür ve koordinatlarla tıklar, yazar ve kaydırır. Her işlemden sonra yalnızca ekranın değişen bölümü gönderilir; retina ekranlar ve tarayıcı yakınlaştırması desteklenir ([ayrıntılar](docs/vision-mode.md)).
 - **Eylemden önce planlama** — Herhangi bir araç çalıştırılmadan önce, yapılandırılmış bir plan oluşturulabilir, onay için görüntülenebilir ve onaylanan plan çalışma alanına (scratchpad) sabitlenebilir.
 - **Çok adımlı ajan** — 195 adıma kadar yapılandırılabilen (varsayılan 130) otonom araç kullanım döngüsü; sınıra ulaşıldığında "Devam Et" butonu sunar.
 - **Kaydedilmiş iş akışları** — Başarılı bir çalıştırma işlemini; yeniden çalıştırabileceğiniz, dışa aktarabileceğiniz ve paylaşabileceğiniz, yeniden kullanılabilir ve parametrelerden bağımsız bir iş akışına dönüştürün.
@@ -180,7 +184,7 @@ Tam komut imzalarını ve bayrakları (flags) görmek için panele `/help` yazı
 | `/ask` · `/act` · `/dev` · `/plan`                                                     | Gönderimden önce modu değiştirir                                            |
 | `/schedule [prompt]`                                                                   | Zamanlanmış bir görev oluşturur                                             |
 | `/watch [--keep] [--secs <30-120>] [--long \| --short] <condition and action> [/beep]` | Mevcut sayfayı izler ve bir koşul sağlandığında işlem yapar                   |
-| `/workflow` · `/workflow --save <name>`                                                | Kaydedilmiş iş akışlarını yönetir veya son başarılı olanı derlerbaşarılı çalıştırma                   |
+| `/workflow` · `/workflow --save <name>`                                                | Kaydedilmiş iş akışlarını yönetir veya son başarılı çalıştırmayı derler                   |
 | `/teach --start <name>` · `/teach --end`                                               | Gösterdiğiniz eylemlerden yeniden kullanılabilir bir iş akışı öğrenin                    |
 | `/memory --add <text>`                                                                 | Bir kullanıcı tercihini kaydedin                                                      |
 | `/screenshot [--full-page]`                                                            | Sekmeyi veya kaydırılabilir sayfanın tamamını yakalayın                                |
@@ -204,9 +208,9 @@ Chrome yan panel kısayolları, WebBrain yan paneli odaklanmış durumdayken ça
 | Kısayol                         | İşlevi                                                                       |
 | ------------------------------- | ---------------------------------------------------------------------------- |
 | `Ctrl+/` veya `Cmd+/`           | Giriş alanına odaklan                                                        |
-| `Ctrl+Shift+A` veya `Cmd+Shift+A` | Ask (Sor) moduna geç                                                         |
-| `Ctrl+Shift+X` veya `Cmd+Shift+X` | Act (Eylem) moduna geç                                                       |
-| `Ctrl+Shift+D` veya `Cmd+Shift+D` | Dev (Geliştirme) moduna geç                                                  |
+| `Ctrl+Shift+A` veya `Cmd+Shift+A` | Mesajı `/ask` ile başlat                                                         |
+| `Ctrl+Shift+X` veya `Cmd+Shift+X` | Mesajı `/act` ile başlat                                                       |
+| `Ctrl+Shift+D` veya `Cmd+Shift+D` | Mesajı `/dev` ile başlat                                                  |
 | `Escape`                        | Yalnızca slash komutu otomatik tamamlama listesini kapatmıyorsa, aktif çalıştırmayı durdur |
 | `Escape` (iki kez)              | WebBrain veya tarayıcı sayfalarındaki aktif kaydı durdur                     |
 
@@ -270,7 +274,9 @@ Yakın zamandaki değişiklikler [CHANGELOG.md](CHANGELOG.md) dosyasında yer al
 
 ## MCP sunucusu
 
-Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan WebBrain'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz. ```bash
+Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan WebBrain'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz.
+
+```bash
 claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server
 ```
 
@@ -283,7 +289,7 @@ npx -y @webbrain/mcp-server
 ```
 
 Sunucu çalışmaya başladıktan sonra **WebBrain → Settings → Bridge** (Ayarlar → Köprü) kısmını açın,
-URL'yi `ws://127.0.0.1:17374/extension` olarak ayarlayın ve özelliği etkinleştirin.
+URL'yi `ws://127.0.0.1:17374/extension` olarak ayarlayın, `npx -y @webbrain/mcp-server pairing-key` komutunun gösterdiği anahtarı **Pairing key** alanına yapıştırın ve köprüyü etkinleştirin. Sunucu, anahtarı göndermeden yeni bir sınama üzerinde HMAC ile anahtara sahip olduğunu kanıtlayan bağlantılara güvenir. LM Studio eklentisi de `~/.webbrain/bridge-key` dosyasını kullanır. Sunucuyu yükseltmeden önce uzantıyı güncelleyin; Pairing key alanı olmayan sürümler eşleşemez.
 Chromium tabanlı tarayıcılarda köprü, uzantının ekran dışı belgesi (off-screen document) üzerinden çalışır.
 Firefox ise bunu arka plan sayfasında barındırır ve yapılandırma yine aynı
 **Settings → Bridge** sekmesi altından yapılır (gerçek bir Firefox kurulumunda
@@ -303,7 +309,7 @@ webbrain_run(task: "Stripe panosunu aç ve geçen haftaki başarısız
 ```
 
 Çağıran tarafın düz metin bir özet yerine öngörülebilir ve yapılandırılmış bir çıktıya
-ihtiyaç duyduğu durumlarda, JSON Şeması (JSON Schema) ile birlikte `webbrain_extract` kullanın.r, görev düzeyinde altı araç sunar: çalıştırma (run), yapılandırılmış veri çıkarma (structured extraction), durum (status), açıklama talebine yanıt (clarification response), iptal (abort) ve bağlantı tanılaması (connection diagnostics).
+ihtiyaç duyduğu durumlarda, JSON Şeması (JSON Schema) ile birlikte `webbrain_extract` kullanın. Sunucu görev düzeyinde altı araç sunar: çalıştırma (run), yapılandırılmış veri çıkarma (structured extraction), durum (status), açıklama talebine yanıt (clarification response), iptal (abort) ve bağlantı tanılaması (connection diagnostics).
 
 `mode='ask'` modu salt okunurdur. `mode='act'` modu ise tıklama ve yazma işlemlerini gerçekleştirebilir; ancak bu işlemler, bir insanın karşılaştığı tarayıcı içi onay istemlerine tabidir. Sunucu, yaklaşık 50 adet düşük seviyeli tarayıcı ilkel komutu (primitive) yerine görev devretme (delegation) yeteneği sunar; WebBrain'in izin denetim mekanizması (permission gate) ajan döngüsü içinde yer aldığından, bir soket üzerinden doğrudan ilkel komut erişimi sağlamak bu denetim mekanizmasının altında kalır ve onu devre dışı bırakırdı. Ayrıntılar [`mcp-server/`](mcp-server/) dizinindedir.
 
@@ -324,7 +330,9 @@ lms clone webbrain/web-tools
 
 `fetch_url` ve `research_url` saf Node HTTP kullanır; tarayıcı gerektirmezler ancak çerez, oturum veya JavaScript desteği de sunmazlar. Bir Chromium tarayıcısında uzantı yüklüyken, `browser_task` işlemi gerçek ve oturum açılmış tarayıcınıza bir görev devri ekler; böylece standart HTTP'nin erişemediği, kimlik doğrulaması gerektiren ve istemci tarafında oluşturulan (client-rendered) sayfalara ulaşılabilir. Uzantı bağlı olmadığında işlem yapılabilir bir mesajla geri bildirim verilir ve HTTP araçları Firefox üzerinde çalışmaya devam eder.
 
-Kaynak: [`lmstudio-plugin/`](lmstudio-plugin/). ## Katkıda Bulunanlar
+Kaynak: [`lmstudio-plugin/`](lmstudio-plugin/).
+
+## Katkıda Bulunanlar
 
 <a href="https://github.com/webbrain-one/webbrain/graphs/contributors">
 <img src="https://contrib.rocks/image?repo=webbrain-one/webbrain" />
