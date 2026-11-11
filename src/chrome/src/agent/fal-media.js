@@ -12,6 +12,11 @@ export const FAL_AUTH_PROBE_URL = 'https://api.fal.ai/v1/workflows?limit=1';
 const FAL_STATUS_POLL_INTERVAL_MS = 2000;
 const FAL_STATUS_TIMEOUT_MS = 120000;
 const FAL_CANCEL_TIMEOUT_MS = 2000;
+// Reads of a queued request that may fail in a row for a passing reason before
+// the request is given up: its status while it runs, and its finished result.
+const FAL_STATUS_READ_ATTEMPTS = 5;
+const FAL_RESULT_READ_ATTEMPTS = 3;
+const FAL_READ_RETRY_MAX_MS = 15000;
 
 /** Normalize a fal.ai model id (for example, "fal-ai/flux/schnell"). */
 export function normalizeFalModelId(model) {
@@ -109,6 +114,35 @@ function createOperationSignal(externalSignal, timeoutMs) {
   };
 }
 
+// How long a response asks to wait before trying again (Retry-After in
+// seconds), in milliseconds; undefined when it does not say.
+function retryAfterMs(response) {
+  const seconds = Number(response.headers?.get?.('Retry-After'));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+}
+
+/**
+ * Reads a queued request's status or result. The request is submitted and paid
+ * for, so a read that fails for a passing reason (the network, a gateway
+ * error, a rate limit) is tried again, waiting longer each time, instead of
+ * giving the request up and generating again. Returns the response, which may
+ * still be a failure: any other status, or the last of `attempts`.
+ */
+async function readFalRequest(url, { headers, fetchImpl, signal, pollMs, attempts }) {
+  for (let attempt = 1; ; attempt++) {
+    let response;
+    try {
+      response = await fetchImpl(url, { headers, signal, redirect: 'error', credentials: 'omit' });
+    } catch (error) {
+      throwIfAborted(signal);
+      if (attempt >= attempts) throw error;
+    }
+    const passing = !response || response.status >= 500 || response.status === 408 || response.status === 429;
+    if (response && (!passing || attempt >= attempts)) return response;
+    await abortableDelay(Math.min(pollMs * 2 ** (attempt - 1), FAL_READ_RETRY_MAX_MS), signal);
+  }
+}
+
 async function cancelFalRequest(cancelUrl, headers, fetchImpl) {
   if (!cancelUrl) return;
   const controller = new AbortController();
@@ -163,7 +197,8 @@ export async function runFalGeneration({
       let body = '';
       try { body = (await submitRes.text()).slice(0, 300); } catch { /* ignore */ }
       const credit = submitRes.status === 402 ? 'the account is out of credit; add credit and try again: ' : '';
-      throw Object.assign(new Error(`fal.ai submit failed (HTTP ${submitRes.status}): ${credit}${body || submitRes.statusText}`), { status: submitRes.status });
+      throw Object.assign(new Error(`fal.ai submit failed (HTTP ${submitRes.status}): ${credit}${body || submitRes.statusText}`),
+        { status: submitRes.status, retryAfterMs: retryAfterMs(submitRes) });
     }
 
     let queued;
@@ -180,10 +215,11 @@ export async function runFalGeneration({
       throw new Error('fal.ai submit response missing trusted status_url/response_url.');
     }
 
+    const read = { headers, fetchImpl, signal: operation.signal, pollMs };
     let status = 'IN_QUEUE';
     while (true) {
       await abortableDelay(pollMs, operation.signal);
-      const statusRes = await fetchImpl(statusUrl, { headers, signal: operation.signal, redirect: 'error', credentials: 'omit' });
+      const statusRes = await readFalRequest(statusUrl, { ...read, attempts: FAL_STATUS_READ_ATTEMPTS });
       // HTTP failures keep their status, so a refusal is not tried again.
       if (!statusRes.ok) throw Object.assign(new Error(`fal.ai status check failed (HTTP ${statusRes.status}).`), { status: statusRes.status });
 
@@ -195,7 +231,10 @@ export async function runFalGeneration({
       }
       status = String(statusPayload?.status || '').toUpperCase();
       if (status === 'COMPLETED') {
-        const resultRes = await fetchImpl(responseUrl, { headers, signal: operation.signal, redirect: 'error', credentials: 'omit' });
+        // A request that failed says so in its status; its result is then the
+        // failure itself and is read once.
+        const failed = statusPayload.error != null || statusPayload.error_type != null;
+        const resultRes = await readFalRequest(responseUrl, { ...read, attempts: failed ? 1 : FAL_RESULT_READ_ATTEMPTS });
         if (!resultRes.ok) {
           // fal.ai reports inputs the model rejects here (HTTP 422), with the reason.
           let detail = '';
