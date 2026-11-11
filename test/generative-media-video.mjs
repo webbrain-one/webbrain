@@ -1022,6 +1022,35 @@ for (const build of ['chrome', 'firefox']) {
     assert.ok(continued.reusedClips >= 1 && resumed.calls.submits.length === 4 - continued.reusedClips, 'the clips finished before Stop are used');
   });
 
+  test(`${build}: kept clips are not used with another saved model input`, async () => {
+    const story = last => ({ prompt: 'Story', scenes: [...scenes(3, 5), { prompt: last, duration: 5 }], estimated_duration: 20 });
+    const settings = loop => ({ provider: 'comfyrouter', apiKey: 'comfy-key', videoModel: rayTwo.id, videoParameters: JSON.stringify({ model: 'ray-2', loop }) });
+    // Comfy Router refuses the last scene when it is submitted, after the others are ready.
+    const run = (api, loop, last) => generate(story(last), { config: settings(loop), pollIntervalMs: 1, fetchImpl: async (url, init = {}) => {
+      if (init.method === 'POST' && JSON.parse(init.body).prompt.endsWith('flagged')) {
+        await new Promise(done => setTimeout(done, 20));
+        return json({ detail: 'The prompt was flagged.', error_type: 'content_policy_violation' }, 422);
+      }
+      return api.fetchImpl(url, init);
+    } });
+    const first = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const failed = await run(first, false, 'Something flagged');
+    assert.match(failed.error, /^Clip 4 of 4 failed: Comfy Router submit failed \(HTTP 422\)/);
+    assert.equal(failed.clipsKept, 3);
+    // The user changes the saved video model input before the retry: every clip is made with it.
+    const changed = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const remade = await run(changed, true, 'Something fine');
+    assert.equal(remade.success, true, remade.error);
+    assert.deepEqual(changed.calls.submits.map(body => body.loop), [true, true, true, true]);
+    assert.equal(remade.reusedClips, undefined);
+    // With the input the kept clips were made with, they are used.
+    const same = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const retried = await run(same, false, 'Something fine');
+    assert.equal(retried.success, true, retried.error);
+    assert.deepEqual(same.calls.submits.map(body => [body.loop, body.prompt]), [[false, 'Story\n\nSomething fine']]);
+    assert.equal(retried.reusedClips, 3);
+  });
+
   test(`${build}: a failed clip waits before its retry, as long as the provider asks`, async () => {
     // One scene whose first submission is rate limited; the time between the two submissions.
     const wait = async (headers, retryDelayMs) => {

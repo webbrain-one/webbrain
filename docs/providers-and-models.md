@@ -383,7 +383,8 @@ again (five status reads, three result reads, waiting longer each time), and so
 is the download of a finished clip (three tries). When a clip fails for good,
 the clips still being made are cancelled and the finished ones are kept in
 memory for 30 minutes; the error says how many (`clipsKept`). A retry with the
-same `prompt`, shape and scenes generates only the scenes that are missing or
+same `prompt`, shape and scenes (and, for Comfy Router, the same saved video
+model input) generates only the scenes that are missing or
 changed and reports `reusedClips`. A restarted worker keeps none, and a video
 that succeeded is generated anew when asked for again.
 Each requested video keeps its own duration obligation across retries, Continue,

@@ -601,7 +601,9 @@ async function mapWithConcurrency(items, limit, signal, task) {
 // out once, so a video that succeeded is generated anew when asked for again.
 const keptClips = [];
 
-const clipKey = (provider, model, clip, shape) => JSON.stringify([provider, model, clip.prompt, clip.duration ?? null, shape]);
+// `inputs` is the saved model input a provider sends with every clip (Comfy
+// Router's): a clip made with other settings is another clip.
+const clipKey = (provider, model, inputs, clip, shape) => JSON.stringify([provider, model, inputs ?? null, clip.prompt, clip.duration ?? null, shape]);
 
 function takeKeptClip(key) {
   const index = keptClips.findIndex(kept => kept.key === key && Date.now() - kept.at <= KEPT_CLIP_MS);
@@ -631,9 +633,10 @@ export function forgetKeptVideoClips() {
  * one retry each. `entry` is what the model accepts. A video longer than
  * WebBrain makes is generated only if the user agrees on its card. When a
  * clip fails, the finished ones are kept, and a retry that asks for the same
- * clips (`provider`, model, prompt, length and shape) uses them.
+ * clips (`provider`, model, saved model input `inputs`, prompt, length and
+ * shape) uses them.
  */
-async function runVideo({ provider, model, entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
+async function runVideo({ provider, model, inputs, entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
   const plan = planVideo(text, video, entry);
   const fallback = plan.fallbackClipSeconds ? { fallbackClipSeconds: plan.fallbackClipSeconds } : {};
   if (!plan.scenes) return {
@@ -654,7 +657,7 @@ async function runVideo({ provider, model, entry, text, video, signal, onProgres
     if (answer !== 'once') return { declined: true, answer: answer || 'cancelled', model, ...lengthDetails };
     approvedDurationSeconds = plan.total;
   }
-  const keys = plan.clips.map(item => clipKey(provider, model, item, plan.shape));
+  const keys = plan.clips.map(item => clipKey(provider, model, inputs, item, plan.shape));
   // Each clip's bytes, in scene order: those kept from a failed attempt, then
   // those this run makes.
   const clips = keys.map(takeKeptClip);
@@ -876,7 +879,7 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
     if (kind !== 'video') return { url: await job(text, {}, signal), model };
     const entry = video ? await comfyRouterVideoEntry(model, config.apiKey, fetchImpl, signal, timeoutMs) : {};
     return runVideo({
-      ...videoRun, entry,
+      ...videoRun, entry, inputs: parameters,
       single: async (clip, shape) => ({ url: await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, signal) }),
       clip: async (clip, shape, groupSignal) => downloadClip(await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, groupSignal),
         { fetchImpl, signal: groupSignal, timeoutMs, label: 'Comfy Router', retryMs: pollMs }),
