@@ -408,6 +408,7 @@ class MurshidWindow {
       webBrain: this.ctx.webBrainInfo(),
       downloads: this.ctx.downloads?.summary() || null,
       updates: this.ctx.updates?.snapshot() || null,
+      adblock: this.ctx.adblockSite?.(this.activeTab) || null,
     });
   }
 

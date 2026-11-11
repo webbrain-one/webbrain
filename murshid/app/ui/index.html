@@ -27,6 +27,8 @@
       <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
       <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
       <symbol id="i-max" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.7v5.3c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.2z"/><path d="M9 12.2l2.1 2.1 3.9-4"/></symbol>
+      <symbol id="i-shield-off" viewBox="0 0 24 24"><path d="M12 3.5l7 2.7v5.3c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.2z"/><path d="M5 4.5l14 15"/></symbol>
     </defs>
   </svg>
 
@@ -56,6 +58,7 @@
         <span id="zoom-chip" hidden></span>
       </form>
 
+      <button id="adblock" class="icon-button" hidden><svg><use href="#i-shield"/></svg></button>
       <button id="webbrain" class="toolbar-pill" title="WebBrain (Alt+Shift+W)" aria-label="Open WebBrain" data-t-title="ui.webBrainTip" data-t-key="Alt+Shift+W" data-t-aria-label="ui.openWebBrain">
         <img id="webbrain-icon" src="../../assets/icons/webbrain-mark.svg" alt="" draggable="false">
         <span>WebBrain</span>

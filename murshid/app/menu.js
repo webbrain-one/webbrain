@@ -117,15 +117,12 @@ function popupMainMenu(ctx, w, { x, y }) {
   const mod = isMac ? 'Cmd' : 'Ctrl';
   const companion = ctx.companion.status();
   // Ad blocking for the site in this tab; unticking allows its ads.
-  const site = ctx.adblock?.enabled ? ctx.adblock.siteOf(tab?.url) : null;
-  const adblockItems = site ? [{
-    label: t('menu.blockAds', { host: site }),
+  const adblock = ctx.adblockSite(tab);
+  const adblockItems = adblock ? [{
+    label: t('menu.blockAds', { host: adblock.site }),
     type: 'checkbox',
-    checked: !ctx.adblock.isAllowed(site),
-    click: () => {
-      ctx.adblock.setAllowed(site, !ctx.adblock.isAllowed(site));
-      if (!tab.wc.isDestroyed()) tab.wc.reload();
-    },
+    checked: !adblock.allowed,
+    click: () => ctx.toggleAdblock(tab),
   }] : [];
   const menu = Menu.buildFromTemplate([
     { label: t('menu.newTab'), accelerator: `${mod}+T`, click: () => c.newTab(w) },
