@@ -1,18 +1,18 @@
 {
   "schema": "murshid-updates/1",
-  "currentRelease": "0.1.3",
+  "currentRelease": "0.1.4",
   "platforms": {
     "darwin-universal": {
-      "version": "0.1.3",
+      "version": "0.1.4",
       "installer": {
-        "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.dmg",
-        "size": 296876417,
-        "sha256": "a2f0518fd673c0517726774c0739d2ee8e5c7ccf465537272dc0aad62cc2d82f"
+        "url": "https://murshid.one/download/Murshid-0.1.4-macos-universal.dmg",
+        "size": 296874831,
+        "sha256": "22553ae66dcdb2891ce629bb337266a0aa4c26b00d0dca4bc1086462059a9da7"
       },
       "update": {
-        "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.zip",
-        "size": 287209782,
-        "sha256": "2ad84fcd2171536b90424ebc56e694819565c0685de6cc548add339e1ce89f94"
+        "url": "https://murshid.one/download/Murshid-0.1.4-macos-universal.zip",
+        "size": 287211790,
+        "sha256": "287766e0731f21dbb3189eb7e7810f9fa6d6c9931159a99d3c772d4e287b8ae7"
       }
     },
     "win32-x64": {
@@ -34,15 +34,15 @@
   },
   "releases": [
     {
-      "version": "0.1.3",
+      "version": "0.1.4",
       "updateTo": {
-        "version": "0.1.3",
-        "name": "0.1.3",
+        "version": "0.1.4",
+        "name": "0.1.4",
         "notes": "Murshid browser update.",
-        "pub_date": "2026-11-11T00:17:12.447Z",
-        "url": "https://murshid.one/download/Murshid-0.1.3-macos-universal.zip",
-        "size": 287209782,
-        "sha256": "2ad84fcd2171536b90424ebc56e694819565c0685de6cc548add339e1ce89f94"
+        "pub_date": "2026-11-11T01:44:39.840074Z",
+        "url": "https://murshid.one/download/Murshid-0.1.4-macos-universal.zip",
+        "size": 287211790,
+        "sha256": "287766e0731f21dbb3189eb7e7810f9fa6d6c9931159a99d3c772d4e287b8ae7"
       }
     }
   ]
