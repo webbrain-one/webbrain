@@ -148,7 +148,7 @@ function page(html, lang, config, strings, problems) {
       attr(tag, 'lang').value = lang;
       if (config.dir === 'rtl') tag.attrs.splice(1, 0, { name: 'dir', value: 'rtl' });
     }
-    if (tag.name === 'meta' && is('property', 'og:image')) attr(tag, 'content').value = up(attr(tag, 'content').value);
+    if (tag.name === 'meta' && is('property', 'og:url')) attr(tag, 'content').value = `${SITE}${lang}/`;
     if (tag.name === 'meta' && is('property', 'og:locale')) attr(tag, 'content').value = config.locale;
     if (tag.name === 'link' && is('rel', 'canonical')) attr(tag, 'href').value = `${SITE}${lang}/`;
     if (tag.name === 'link' && is('rel', 'preload') && config.preload) attr(tag, 'href').value = `../${config.preload}`;
