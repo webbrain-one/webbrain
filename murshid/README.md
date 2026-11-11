@@ -177,7 +177,7 @@ scripts/
   art/sources/     those pictures, with where they came from
   art/icon.mjs     draw the icon SVGs (the fez)
   build-icons.mjs  rasterize the icon (PNG, ICO, template images, favicons)
-  copy-art.mjs     copy the icon into web/
+  copy-art.mjs     copy the icon into web/ and render the PNG social preview
   copy-fonts.mjs   copy the self-hosted fonts into web/fonts
   serve.mjs        static server for web/ and assets/
   build-adblock.mjs  rebuild app/adblock/engine.bin.gz from the filter lists
