@@ -2,8 +2,10 @@
 // CAPTCHA, Bridge, Advanced), providers.html (LLM and the assistive models)
 // and permissions.html. This drives all three pages in both builds with a
 // stubbed extension API: tab layout, deep links from the old tabs, the
-// cross-tab search, the single Record traces switch, the moved controls and
-// the Providers page refresh after a profile sync on Settings.
+// cross-tab search, the single Record traces switch, the moved controls, the
+// combined switches in General (settings-presets.js) with the Advanced
+// controls they stand for, and the Providers page refresh after a profile
+// sync on Settings.
 import { chromium, firefox } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -28,7 +30,14 @@ const SETTINGS_TABS = ['display', 'budgets', 'memory', 'skills', 'captcha', 'clo
 const PROVIDER_TABS = ['llm', 'vision', 'speech', 'generative', 'decision', 'safesocial'];
 const BUDGET_CONTROLS = [
   'input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy',
-  'range-max-steps', 'range-request-timeout', 'select-image-detail', 'select-max-screenshots', 'select-max-image-dimension',
+  'range-max-steps', 'range-request-timeout',
+];
+// General's combined switches, and the Advanced controls for what they write.
+const PRESET_SWITCHES = ['select-preset-supervision', 'select-preset-image', 'select-preset-alerts'];
+const FINE_TUNE_CONTROLS = [
+  'toggle-enforce-action-guards', 'toggle-strict-guards', 'select-lean-mode', 'select-plan-before-act-mode', 'select-plan-review-mode',
+  'range-plan-review-confidence', 'select-vision-quality', 'select-auto-screenshot', 'select-image-detail', 'select-max-screenshots',
+  'select-max-image-dimension', 'toggle-notify-sound', 'toggle-completion-confetti', 'toggle-completion-flash-tab',
 ];
 
 function stub({ build, lang, seed }) {
@@ -158,11 +167,13 @@ try {
       assert.deepEqual(
         await page.locator('[data-panel="budgets"] [id]').evaluateAll((els, ids) => els.map(el => el.id).filter(id => ids.includes(id)), BUDGET_CONTROLS),
         BUDGET_CONTROLS, `${build}: Budgets holds the moved limits in order`);
-      for (const id of ['toggle-tracing', 'toggle-screenshot-redaction', 'toggle-help-improve', 'select-lean-mode', 'toggle-enforce-action-guards', 'toggle-strict-secret']) {
+      for (const id of ['toggle-tracing', 'toggle-screenshot-redaction', 'toggle-help-improve', 'toggle-strict-secret', ...FINE_TUNE_CONTROLS]) {
         assert.equal(await page.locator(`[data-panel="advanced"] #${id}`).count(), 1, `${build}: Advanced has #${id}`);
       }
       assert.equal(await page.locator('[data-panel="captcha"] #captcha-card').count(), 1, `${build}: CAPTCHA has its own tab`);
-      assert.equal(await page.locator('[data-panel="display"] #select-auto-screenshot').count(), 1, `${build}: Auto-screenshot stays in General`);
+      assert.deepEqual(await page.locator('[data-panel="display"] select[id^="select-preset-"]').evaluateAll(els => els.map(el => el.id)),
+        PRESET_SWITCHES, `${build}: General holds the combined switches`);
+      assert.equal(await page.locator('#toggle-screenshot-fallback').count(), 0, `${build}: the dead Screenshot Fallback switch is gone`);
       assert.equal(await page.locator('details.advanced-settings > summary[data-i18n="st.display.advanced"]').count(), 0, `${build}: General has no Advanced drawer`);
       if (build === 'firefox') assert.equal(await page.locator('[data-panel="advanced"] #firefox-bidi-card').count(), 1, 'firefox: BiDi card stays in Advanced');
 
@@ -187,6 +198,66 @@ try {
       assert.equal(await store(page, 'losslessTrace'), false, `${build}: full details off with Record traces`);
       await page.locator('#toggle-screenshot-redaction').locator('..').click();
       assert.equal(await store(page, 'screenshotRedaction'), true, `${build}: redaction toggle saves from Advanced`);
+
+      // The combined switches in General write the settings they stand for
+      // and follow those settings when something else changes them.
+      const preset = group => page.locator(`#select-preset-${group}`).inputValue();
+      await page.locator('[data-tab="display"]').click();
+      assert.deepEqual([await preset('supervision'), await preset('image'), await preset('alerts')], ['balanced', 'balanced', 'all'],
+        `${build}: untouched settings read as the default presets`);
+      assert.equal(await store(page, 'leanMode'), undefined, `${build}: reading a preset writes nothing`);
+      await page.locator('#select-preset-supervision').selectOption('fast');
+      assert.equal(await store(page, 'leanMode'), 'on', `${build}: Fast turns lean mode on`);
+      assert.equal(await store(page, 'planReviewMode'), 'never', `${build}: Fast runs plans without a review stop`);
+      assert.equal(await store(page, 'enforceActionGuards'), true, `${build}: no preset turns action guards off`);
+      assert.equal(await store(page, 'askBeforeConsequentialActions'), undefined, `${build}: no preset touches the permission gate`);
+      assert.equal(await page.locator('#select-lean-mode').inputValue(), 'on', `${build}: the Advanced control follows the preset`);
+      assert.equal(await page.locator('#range-plan-review-confidence').isDisabled(), true, `${build}: the threshold row follows the preset's review mode`);
+      await page.locator('#select-preset-supervision').selectOption('thorough');
+      assert.equal(await store(page, 'planBeforeActMode'), 'strict', `${build}: Thorough plans every turn`);
+      assert.equal(await store(page, 'planBeforeAct'), true, `${build}: the planner's legacy key stays in step`);
+      assert.equal(await store(page, 'strictGuards'), true, `${build}: Thorough turns strict checks on`);
+      assert.equal(await page.locator('#toggle-strict-guards').isChecked(), true);
+      // Fine-tuning one of those settings leaves no preset matching.
+      await page.locator('[data-preset-group="supervision"] .preset-fine-tune').click();
+      assert.equal(await activeTab(page), 'advanced', `${build}: Fine-tune opens Advanced`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'adv-group-supervision', `${build}: Fine-tune lands on the group`);
+      await page.locator('#select-lean-mode').selectOption('auto');
+      assert.equal(await preset('supervision'), 'custom', `${build}: a fine-tuned group reads as Custom`);
+      await page.locator('[data-tab="display"]').click();
+      assert.ok(await visible(page, '#preset-supervision-note'), `${build}: Custom explains itself`);
+      await page.reload();
+      await page.waitForFunction(() => document.getElementById('select-preset-supervision')?.value === 'custom')
+        .catch(() => assert.fail(`${build}: Custom survives a reload`));
+      await page.locator('#select-preset-supervision').selectOption('balanced');
+      assert.equal(await store(page, 'leanMode'), 'auto');
+      assert.equal(await store(page, 'strictGuards'), false);
+      assert.equal(await visible(page, '#preset-supervision-note'), false, `${build}: picking a preset clears the Custom note`);
+      // Guards turned off elsewhere are called out, and a preset turns them back on.
+      await page.evaluate(() => chrome.storage.local.set({ enforceActionGuards: false }));
+      assert.equal(await preset('supervision'), 'custom');
+      assert.equal(await page.locator('#preset-supervision-note').getAttribute('data-tone'), 'warning', `${build}: guards off is flagged on the switch`);
+      assert.equal(await page.locator('#toggle-enforce-action-guards').isChecked(), false, `${build}: a storage change reaches the Advanced control`);
+      await page.locator('#select-preset-supervision').selectOption('balanced');
+      assert.equal(await store(page, 'enforceActionGuards'), true, `${build}: a preset turns guards back on`);
+      await page.locator('#select-preset-image').selectOption('sharp');
+      assert.deepEqual([await store(page, 'visionQuality'), await store(page, 'imageDetail'), await store(page, 'maxImageDimension'), await store(page, 'autoScreenshot')],
+        ['sharp', 'high', 2048, 'state_change'], `${build}: Sharp raises every image setting`);
+      assert.equal(await page.locator('#select-max-image-dimension').inputValue(), '2048');
+      await page.locator('#select-preset-image').selectOption('balanced');
+      assert.equal(await store(page, 'maxImageDimension'), 1568);
+      await page.locator('#select-preset-alerts').selectOption('quiet');
+      assert.deepEqual([await store(page, 'notifySound'), await store(page, 'completionConfetti'), await store(page, 'completionFlashTab')],
+        [false, false, true], `${build}: Quiet only flashes the tab`);
+      assert.equal(await page.locator('#toggle-notify-sound').isChecked(), false);
+      await page.locator('#select-preset-alerts').selectOption('all');
+      // A row that only matters while its parent switch is on is greyed out with it.
+      await page.locator('[data-tab="advanced"]').click();
+      assert.equal(await page.locator('#toggle-scheduled-confirm').isDisabled(), false);
+      await page.locator('#toggle-scheduled-tasks').locator('..').click();
+      assert.equal(await page.locator('#toggle-scheduled-confirm').isDisabled(), true, `${build}: scheduled confirmation needs scheduled tasks`);
+      await page.locator('#toggle-scheduled-tasks').locator('..').click();
+      assert.equal(await page.locator('#toggle-scheduled-confirm').isDisabled(), false);
 
       // The search covers General, Budgets, CAPTCHA and Advanced at once.
       await page.locator('[data-tab="display"]').click();
@@ -231,6 +302,31 @@ try {
       await page.waitForFunction(() => document.querySelector('[data-tab="budgets"]').textContent === 'Budgets');
       assert.deepEqual(errors, [], `${build}: settings.html interaction errors`);
       await page.close();
+
+      // An upgrade changes nothing: settings from before the switches existed
+      // are read as they are and never rewritten.
+      const { page: upgraded, errors: upgradeErrors } = await open(browser, build, 'settings.html', {
+        seed: { leanMode: 'off', planBeforeAct: false, notifySound: false, completionConfetti: false },
+      });
+      await upgraded.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
+      assert.equal(await upgraded.locator('#select-preset-supervision').inputValue(), 'custom', `${build}: settings no preset matches read as Custom`);
+      assert.equal(await upgraded.locator('#select-preset-alerts').inputValue(), 'quiet', `${build}: settings that add up to a preset show it`);
+      assert.equal(await upgraded.locator('#select-preset-image').inputValue(), 'balanced');
+      assert.equal(await upgraded.locator('#select-plan-before-act-mode').inputValue(), 'off', `${build}: the planner's legacy key still reads as Off`);
+      for (const key of ['planBeforeActMode', 'planReviewMode', 'strictGuards', 'enforceActionGuards', 'completionFlashTab', 'visionQuality', 'imageDetail']) {
+        assert.equal(await store(upgraded, key), undefined, `${build}: opening Settings does not write ${key}`);
+      }
+      // Memory: auto-learn needs user memory, and learning from forms needs both.
+      await upgraded.locator('[data-tab="memory"]').click();
+      assert.equal(await upgraded.locator('#toggle-user-memory-auto').isDisabled(), false, `${build}: auto-learn is available while user memory is on`);
+      assert.equal(await upgraded.locator('#toggle-user-memory-form').isDisabled(), true, `${build}: learning from forms needs auto-learn`);
+      await upgraded.locator('#toggle-user-memory-auto').locator('..').click();
+      assert.equal(await upgraded.locator('#toggle-user-memory-form').isDisabled(), false);
+      await upgraded.locator('#toggle-user-memory-enabled').locator('..').click();
+      assert.equal(await upgraded.locator('#toggle-user-memory-auto').isDisabled(), true, `${build}: auto-learn needs user memory`);
+      assert.equal(await upgraded.locator('#input-user-memory-max-chars').isDisabled(), true, `${build}: the prompt size needs user memory`);
+      assert.deepEqual(upgradeErrors, [], `${build}: upgraded settings errors`);
+      await upgraded.close();
 
       // Skills: the enabled and available lists come first; the add form
       // opens from Add skill or Edit and closes after a save or Cancel.

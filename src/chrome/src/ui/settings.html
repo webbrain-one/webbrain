@@ -116,46 +116,46 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="setting-row">
+      <div class="setting-row preset-row" data-preset-group="supervision">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.plan_before_act.label"></div>
-          <div class="setting-desc" data-i18n="st.display.plan_before_act.desc"></div>
+          <div class="setting-label" id="preset-supervision-label" data-i18n="st.presets.supervision.label"></div>
+          <div class="setting-desc" id="preset-supervision-desc" data-i18n="st.presets.supervision.desc"></div>
+          <div class="setting-desc preset-note" id="preset-supervision-note" role="status" hidden></div>
+          <button type="button" class="preset-fine-tune" data-preset-jump="adv-group-supervision" data-i18n="st.presets.fine_tune"></button>
         </div>
-        <select id="select-plan-before-act-mode">
-          <option value="try" data-i18n="st.display.plan_before_act.try"></option>
-          <option value="off" data-i18n="st.display.plan_before_act.off"></option>
-          <option value="strict" data-i18n="st.display.plan_before_act.strict"></option>
+        <select id="select-preset-supervision" aria-labelledby="preset-supervision-label" aria-describedby="preset-supervision-desc">
+          <option value="thorough" data-i18n="st.presets.supervision.thorough"></option>
+          <option value="balanced" selected data-i18n="st.presets.supervision.balanced"></option>
+          <option value="fast" data-i18n="st.presets.supervision.fast"></option>
+          <option value="custom" data-i18n="st.presets.custom" hidden disabled></option>
         </select>
       </div>
-      <div class="setting-row">
+      <div class="setting-row preset-row" data-preset-group="image">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.plan_review.label"></div>
-          <div class="setting-desc" data-i18n="st.display.plan_review.desc"></div>
+          <div class="setting-label" id="preset-image-label" data-i18n="st.presets.image.label"></div>
+          <div class="setting-desc" id="preset-image-desc" data-i18n="st.presets.image.desc"></div>
+          <div class="setting-desc preset-note" id="preset-image-note" role="status" hidden></div>
+          <button type="button" class="preset-fine-tune" data-preset-jump="adv-group-vision" data-i18n="st.presets.fine_tune"></button>
         </div>
-        <select id="select-plan-review-mode">
-          <option value="confidence" data-i18n="st.display.plan_review.confidence"></option>
-          <option value="always" data-i18n="st.display.plan_review.always"></option>
-          <option value="never" data-i18n="st.display.plan_review.never"></option>
+        <select id="select-preset-image" aria-labelledby="preset-image-label" aria-describedby="preset-image-desc">
+          <option value="economy" data-i18n="st.display.vision_quality.economy"></option>
+          <option value="balanced" selected data-i18n="st.display.vision_quality.balanced"></option>
+          <option value="sharp" data-i18n="st.display.vision_quality.sharp"></option>
+          <option value="custom" data-i18n="st.presets.custom" hidden disabled></option>
         </select>
       </div>
-      <div class="setting-row" id="row-plan-review-confidence">
+      <div class="setting-row preset-row" data-preset-group="alerts">
         <div class="setting-info">
-          <div class="setting-label"><span data-i18n="st.display.plan_review_threshold.label"></span> <span id="plan-review-confidence-value" style="color:var(--accent);font-weight:700;margin-left:4px;">75%</span></div>
-          <div class="setting-desc" data-i18n="st.display.plan_review_threshold.desc"></div>
+          <div class="setting-label" id="preset-alerts-label" data-i18n="st.presets.alerts.label"></div>
+          <div class="setting-desc" id="preset-alerts-desc" data-i18n="st.presets.alerts.desc"></div>
+          <div class="setting-desc preset-note" id="preset-alerts-note" role="status" hidden></div>
+          <button type="button" class="preset-fine-tune" data-preset-jump="adv-group-alerts" data-i18n="st.presets.fine_tune"></button>
         </div>
-        <input type="range" id="range-plan-review-confidence" min="50" max="99" value="75" step="1"
-               style="width:120px;accent-color:var(--accent);cursor:pointer;">
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.auto_screenshot.label"></div>
-          <div class="setting-desc" data-i18n="st.display.auto_screenshot.desc"></div>
-        </div>
-        <select id="select-auto-screenshot" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer;">
-          <option value="off" data-i18n="st.display.auto_screenshot.off"></option>
-          <option value="navigation" data-i18n="st.display.auto_screenshot.navigation"></option>
-          <option value="state_change" data-i18n="st.display.auto_screenshot.state_change"></option>
-          <option value="every_step" data-i18n="st.display.auto_screenshot.every_step"></option>
+        <select id="select-preset-alerts" aria-labelledby="preset-alerts-label" aria-describedby="preset-alerts-desc">
+          <option value="all" selected data-i18n="st.presets.alerts.all"></option>
+          <option value="quiet" data-i18n="st.presets.alerts.quiet"></option>
+          <option value="off" data-i18n="st.presets.alerts.off"></option>
+          <option value="custom" data-i18n="st.presets.custom" hidden disabled></option>
         </select>
       </div>
       <div class="setting-row">
@@ -247,50 +247,6 @@
         <input type="range" id="range-request-timeout" min="10" max="600" value="120" step="5"
                style="width:120px;accent-color:var(--accent);cursor:pointer;">
       </div>
-      <div class="settings-group" id="image-budget-setting">
-        <h3 data-i18n="st.imageBudget.heading" style="margin:24px 0 12px;font-size:14px;font-weight:600;"></h3>
-        <div class="provider-card" id="image-budget-card">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.5;" data-i18n="st.imageBudget.desc"></div>
-
-          <div class="field" style="margin-bottom:16px;">
-            <label data-i18n="st.imageBudget.detail.label"></label>
-            <select id="select-image-detail">
-              <option value="high" data-i18n="st.imageBudget.detail.high"></option>
-              <option value="low" data-i18n="st.imageBudget.detail.low"></option>
-              <option value="auto" selected data-i18n="st.imageBudget.detail.auto"></option>
-            </select>
-            <div class="setting-desc" data-i18n="st.imageBudget.detail.desc" style="margin-top:4px;"></div>
-          </div>
-
-          <div class="field" style="margin-bottom:16px;">
-            <label data-i18n="st.imageBudget.maxPerTurn.label"></label>
-            <select id="select-max-screenshots">
-              <option value="0" data-i18n="st.imageBudget.maxPerTurn.unlimited"></option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
-            <div class="setting-desc" data-i18n="st.imageBudget.maxPerTurn.desc" style="margin-top:4px;"></div>
-          </div>
-
-          <div class="field" style="margin-bottom:16px;">
-            <label data-i18n="st.imageBudget.maxDimension.label"></label>
-            <select id="select-max-image-dimension">
-              <option value="512">512px</option>
-              <option value="768">768px</option>
-              <option value="1024">1024px</option>
-              <option value="1536">1536px</option>
-              <option value="1568" selected>1568px</option>
-              <option value="2048">2048px</option>
-            </select>
-            <div class="setting-desc" data-i18n="st.imageBudget.maxDimension.desc" style="margin-top:4px;"></div>
-          </div>
-
-          <div class="info-box" data-i18n-html="st.imageBudget.warning"></div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -366,7 +322,7 @@
         </label>
       </div>
 
-      <div class="setting-row" style="margin-bottom:12px;">
+      <div class="setting-row" data-depends-on="toggle-user-memory-enabled" style="margin-bottom:12px;">
         <div class="setting-info">
           <div class="setting-label" data-i18n="st.memory.auto.label"></div>
           <div class="setting-desc" data-i18n="st.memory.auto.desc"></div>
@@ -377,7 +333,7 @@
         </label>
       </div>
 
-      <div class="setting-row" style="margin-bottom:12px;">
+      <div class="setting-row" data-depends-on="toggle-user-memory-enabled toggle-user-memory-auto" style="margin-bottom:12px;">
         <div class="setting-info">
           <div class="setting-label" data-i18n="st.memory.form.label"></div>
           <div class="setting-desc" data-i18n="st.memory.form.desc"></div>
@@ -388,7 +344,7 @@
         </label>
       </div>
 
-      <div class="field">
+      <div class="field" data-depends-on="toggle-user-memory-enabled">
         <label data-i18n="st.memory.max_chars.label"></label>
         <input type="number" id="input-user-memory-max-chars" min="0" max="10000" step="100">
       </div>
@@ -788,129 +744,7 @@
   <section class="tab-panel" data-panel="advanced" role="tabpanel" data-search>
     <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="advanced" data-i18n="st.tab.advanced"></button></h2>
     <div id="advanced-settings" data-search-scope>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.help_improve.label"></div>
-          <div class="setting-desc" data-i18n-html="st.display.help_improve.desc_html"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-help-improve" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.tracing.label"></div>
-          <div class="setting-desc" data-i18n-html="st.display.tracing.desc_html"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-tracing">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.feedback_diagnostics.label"></div>
-          <div class="setting-desc" data-i18n="st.display.feedback_diagnostics.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-feedback-diagnostics" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.verbose.label"></div>
-          <div class="setting-desc" data-i18n="st.display.verbose.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-verbose">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.scheduled_tasks.label"></div>
-          <div class="setting-desc" data-i18n="st.display.scheduled_tasks.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-scheduled-tasks" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.scheduled_confirm.label"></div>
-          <div class="setting-desc" data-i18n="st.display.scheduled_confirm.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-scheduled-confirm" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.notify_sound.label">Notification sounds</div>
-          <div class="setting-desc" data-i18n="st.display.notify_sound.desc">Play a distinct sound for plans awaiting review and a short chime for completion or clarification. No sound when you cancel a run.</div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-notify-sound" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.completion_confetti.label"></div>
-          <div class="setting-desc" data-i18n="st.display.completion_confetti.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-completion-confetti" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.completion_flash_tab.label">Flash tabs for alerts</div>
-          <div class="setting-desc" data-i18n="st.display.completion_flash_tab.desc">Blink a background tab’s title and icon when a plan is ready for review or a task finishes. Plans use a ⚠️ icon.</div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-completion-flash-tab" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" id="auto-group-tabs-label" data-i18n="st.display.auto_group_tabs.label"></div>
-          <div class="setting-desc" id="auto-group-tabs-desc" data-i18n="st.display.auto_group_tabs.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-auto-group-tabs" aria-labelledby="auto-group-tabs-label" aria-describedby="auto-group-tabs-desc" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.screenshot.label"></div>
-          <div class="setting-desc" data-i18n="st.display.screenshot.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-screenshot-fallback">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="settings-group" id="screenshot-redaction-setting">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label" id="screenshot-redaction-label" data-i18n="st.redaction.toggle.label"></div>
-            <div class="setting-desc" id="screenshot-redaction-desc" data-i18n="st.redaction.toggle.desc"></div>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="toggle-screenshot-redaction" aria-labelledby="screenshot-redaction-label" aria-describedby="screenshot-redaction-desc">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="info-box" data-i18n-html="st.redaction.warning"></div>
-      </div>
+      <h3 class="settings-group-heading" id="adv-group-supervision" tabindex="-1" data-i18n="st.presets.supervision.label"></h3>
       <div class="setting-row">
         <div class="setting-info">
           <div class="setting-label" id="action-guards-label" data-i18n="st.display.action_guards.label"></div>
@@ -944,6 +778,37 @@
       </div>
       <div class="setting-row">
         <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.plan_before_act.label"></div>
+          <div class="setting-desc" data-i18n="st.display.plan_before_act.desc"></div>
+        </div>
+        <select id="select-plan-before-act-mode">
+          <option value="try" data-i18n="st.display.plan_before_act.try"></option>
+          <option value="off" data-i18n="st.display.plan_before_act.off"></option>
+          <option value="strict" data-i18n="st.display.plan_before_act.strict"></option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.plan_review.label"></div>
+          <div class="setting-desc" data-i18n="st.display.plan_review.desc"></div>
+        </div>
+        <select id="select-plan-review-mode">
+          <option value="confidence" data-i18n="st.display.plan_review.confidence"></option>
+          <option value="always" data-i18n="st.display.plan_review.always"></option>
+          <option value="never" data-i18n="st.display.plan_review.never"></option>
+        </select>
+      </div>
+      <div class="setting-row" id="row-plan-review-confidence">
+        <div class="setting-info">
+          <div class="setting-label"><span data-i18n="st.display.plan_review_threshold.label"></span> <span id="plan-review-confidence-value" style="color:var(--accent);font-weight:700;margin-left:4px;">75%</span></div>
+          <div class="setting-desc" data-i18n="st.display.plan_review_threshold.desc"></div>
+        </div>
+        <input type="range" id="range-plan-review-confidence" min="50" max="99" value="75" step="1"
+               style="width:120px;accent-color:var(--accent);cursor:pointer;">
+      </div>
+      <h3 class="settings-group-heading" id="adv-group-vision" tabindex="-1" data-i18n="st.advanced.group.vision"></h3>
+      <div class="setting-row">
+        <div class="setting-info">
           <!-- Vision mode, aka "Tesla" mode. The mark is Simple Icons' Tesla path data (CC0); the
                trademark is Tesla's, used only for the analogy (icons/providers/SOURCES.md). -->
           <div class="setting-label setting-label-with-icon">
@@ -970,6 +835,168 @@
       </div>
       <div class="setting-row">
         <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.auto_screenshot.label"></div>
+          <div class="setting-desc" data-i18n="st.display.auto_screenshot.desc"></div>
+        </div>
+        <select id="select-auto-screenshot" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer;">
+          <option value="off" data-i18n="st.display.auto_screenshot.off"></option>
+          <option value="navigation" data-i18n="st.display.auto_screenshot.navigation"></option>
+          <option value="state_change" data-i18n="st.display.auto_screenshot.state_change"></option>
+          <option value="every_step" data-i18n="st.display.auto_screenshot.every_step"></option>
+        </select>
+      </div>
+      <div class="settings-group" id="image-budget-setting">
+        <h3 data-i18n="st.imageBudget.heading" style="margin:24px 0 12px;font-size:14px;font-weight:600;"></h3>
+        <div class="provider-card" id="image-budget-card">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.5;" data-i18n="st.imageBudget.desc"></div>
+
+          <div class="field" style="margin-bottom:16px;">
+            <label data-i18n="st.imageBudget.detail.label"></label>
+            <select id="select-image-detail">
+              <option value="high" data-i18n="st.imageBudget.detail.high"></option>
+              <option value="low" data-i18n="st.imageBudget.detail.low"></option>
+              <option value="auto" selected data-i18n="st.imageBudget.detail.auto"></option>
+            </select>
+            <div class="setting-desc" data-i18n="st.imageBudget.detail.desc" style="margin-top:4px;"></div>
+          </div>
+
+          <div class="field" style="margin-bottom:16px;">
+            <label data-i18n="st.imageBudget.maxPerTurn.label"></label>
+            <select id="select-max-screenshots">
+              <option value="0" data-i18n="st.imageBudget.maxPerTurn.unlimited"></option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            <div class="setting-desc" data-i18n="st.imageBudget.maxPerTurn.desc" style="margin-top:4px;"></div>
+          </div>
+
+          <div class="field" style="margin-bottom:16px;">
+            <label data-i18n="st.imageBudget.maxDimension.label"></label>
+            <select id="select-max-image-dimension">
+              <option value="512">512px</option>
+              <option value="768">768px</option>
+              <option value="1024">1024px</option>
+              <option value="1536">1536px</option>
+              <option value="1568" selected>1568px</option>
+              <option value="2048">2048px</option>
+            </select>
+            <div class="setting-desc" data-i18n="st.imageBudget.maxDimension.desc" style="margin-top:4px;"></div>
+          </div>
+
+          <div class="info-box" data-i18n-html="st.imageBudget.warning"></div>
+        </div>
+      </div>
+      <h3 class="settings-group-heading" id="adv-group-alerts" tabindex="-1" data-i18n="st.presets.alerts.label"></h3>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.notify_sound.label">Notification sounds</div>
+          <div class="setting-desc" data-i18n="st.display.notify_sound.desc">Play a distinct sound for plans awaiting review and a short chime for completion or clarification. No sound when you cancel a run.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-notify-sound" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.completion_confetti.label"></div>
+          <div class="setting-desc" data-i18n="st.display.completion_confetti.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-completion-confetti" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.completion_flash_tab.label">Flash tabs for alerts</div>
+          <div class="setting-desc" data-i18n="st.display.completion_flash_tab.desc">Blink a background tab’s title and icon when a plan is ready for review or a task finishes. Plans use a ⚠️ icon.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-completion-flash-tab" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <h3 class="settings-group-heading" id="adv-group-privacy" tabindex="-1" data-i18n="st.advanced.group.privacy"></h3>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.help_improve.label"></div>
+          <div class="setting-desc" data-i18n-html="st.display.help_improve.desc_html"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-help-improve" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.tracing.label"></div>
+          <div class="setting-desc" data-i18n-html="st.display.tracing.desc_html"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-tracing">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.feedback_diagnostics.label"></div>
+          <div class="setting-desc" data-i18n="st.display.feedback_diagnostics.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-feedback-diagnostics" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-group" id="screenshot-redaction-setting">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label" id="screenshot-redaction-label" data-i18n="st.redaction.toggle.label"></div>
+            <div class="setting-desc" id="screenshot-redaction-desc" data-i18n="st.redaction.toggle.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-screenshot-redaction" aria-labelledby="screenshot-redaction-label" aria-describedby="screenshot-redaction-desc">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="info-box" data-i18n-html="st.redaction.warning"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
+          <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-strict-secret">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <h3 class="settings-group-heading" id="adv-group-automation" tabindex="-1" data-i18n="st.advanced.group.automation"></h3>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.scheduled_tasks.label"></div>
+          <div class="setting-desc" data-i18n="st.display.scheduled_tasks.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-scheduled-tasks" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row" data-depends-on="toggle-scheduled-tasks">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.scheduled_confirm.label"></div>
+          <div class="setting-desc" data-i18n="st.display.scheduled_confirm.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-scheduled-confirm" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
           <div class="setting-label" data-i18n="st.display.cookie_banners.label"></div>
           <div class="setting-desc" data-i18n="st.display.cookie_banners.desc"></div>
         </div>
@@ -989,16 +1016,7 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.voice_input.label"></div>
-          <div class="setting-desc" data-i18n="st.display.voice_input.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-voice-input" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
+      <h3 class="settings-group-heading" id="adv-group-network" tabindex="-1" data-i18n="st.advanced.group.network"></h3>
       <div class="setting-row">
         <div class="setting-info">
           <div class="setting-label" id="always-allow-api-mutations-label" data-i18n="st.display.always_allow_api_mutations.label"></div>
@@ -1021,6 +1039,16 @@
       </div>
       <div class="setting-row">
         <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
+          <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-allow-local-network">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
           <div class="setting-label" data-i18n="st.display.openai_ask_streaming.label"></div>
           <div class="setting-desc" data-i18n="st.display.openai_ask_streaming.desc"></div>
         </div>
@@ -1029,23 +1057,34 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <h3 class="settings-group-heading" id="adv-group-interface" tabindex="-1" data-i18n="st.advanced.group.interface"></h3>
       <div class="setting-row">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
-          <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
+          <div class="setting-label" data-i18n="st.display.verbose.label"></div>
+          <div class="setting-desc" data-i18n="st.display.verbose.desc"></div>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="toggle-strict-secret">
+          <input type="checkbox" id="toggle-verbose">
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="setting-row">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
-          <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
+          <div class="setting-label" data-i18n="st.display.voice_input.label"></div>
+          <div class="setting-desc" data-i18n="st.display.voice_input.desc"></div>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="toggle-allow-local-network">
+          <input type="checkbox" id="toggle-voice-input" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" id="auto-group-tabs-label" data-i18n="st.display.auto_group_tabs.label"></div>
+          <div class="setting-desc" id="auto-group-tabs-desc" data-i18n="st.display.auto_group_tabs.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-auto-group-tabs" aria-labelledby="auto-group-tabs-label" aria-describedby="auto-group-tabs-desc" checked>
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -1058,6 +1097,7 @@
   <script type="module" src="apocalypse-comm.js"></script>
   <script type="module" src="download-tracker.js"></script>
   <script src="settings.js" type="module"></script>
+  <script src="settings-presets-ui.js" type="module"></script>
   <script src="settings-cloud-bridge.js" type="module"></script>
 </body>
 </html>

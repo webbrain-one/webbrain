@@ -38,6 +38,9 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   clarifyTimeoutSemanticsV2: true,
   clarifyTimeoutPolicy: 'finish',
   autoScreenshot: 'navigation',
+  imageDetail: 'auto',
+  maxScreenshotsPerTurn: 0,
+  maxImageDimension: 1568,
   useSiteAdapters: true,
   researchEscalationEnabled: false,
   researchEscalationEngine: 'chatgpt',
@@ -192,6 +195,8 @@ const NUMBER_KEYS = new Set([
   'requestTimeoutMs',
   'clarifyTimeoutSec',
   'planReviewConfidenceThreshold',
+  'maxScreenshotsPerTurn',
+  'maxImageDimension',
   'costAllowanceSessionUsd',
   'costAllowanceTotalUsd',
   USER_MEMORY_MAX_PROMPT_CHARS_KEY,
@@ -209,6 +214,7 @@ const STRING_KEYS = new Set([
   'wbLocale',
   'themeMode',
   'autoScreenshot',
+  'imageDetail',
   'researchEscalationEngine',
   'planBeforeActMode',
   'planReviewMode',
@@ -266,6 +272,7 @@ function validSettingValue(key, value) {
   // 'on' is Auto's name from before the option was renamed (currentSettingValue).
   if (key === 'visionMode') return ['auto', 'on', 'off'].includes(value);
   if (key === 'visionQuality') return ['economy', 'balanced', 'sharp'].includes(value);
+  if (key === 'imageDetail') return ['high', 'low', 'auto'].includes(value);
   if (key === 'agentIndicatorStyle') return ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'].includes(value);
   if (key === 'decisionBaseUrl') {
     if (typeof value !== 'string') return false;
