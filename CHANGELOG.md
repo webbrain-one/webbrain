@@ -8,7 +8,7 @@ This changelog was generated from the repository Git history and release tags. V
 
 ### Added
 - Murshid 0.1.3 checks for application updates at startup and daily, with an Updates page, menu entry and toolbar notification. Signed macOS builds can download a verified update and restart to install it; Windows and Linux open their platform's published installer. Automatic checks can be disabled in Settings. All ten interface languages are supported. Older Murshid versions require one manual installation to gain update support.
-- Murshid 0.1.4 for Windows and Linux adds a shield next to the address bar: it shows whether ads and trackers are blocked on the site in the tab, and one click allows them there (for sites that refuse to work with a blocker) or blocks them again.
+- Murshid 0.1.4 for macOS, Windows and Linux adds a shield next to the address bar: it shows whether ads and trackers are blocked on the site in the tab, and one click allows them there (for sites that refuse to work with a blocker) or blocks them again. The universal macOS build bundles WebBrain 47.1.1 and WebBrain Companion 0.1.2 for Apple Silicon and Intel.
 
 ## [47.1.1] - 2026-11-10
 

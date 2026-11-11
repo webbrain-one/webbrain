@@ -344,8 +344,8 @@
       "ru": "12 Monterey и новее, Apple Silicon и Intel."
     },
     "get.mac.status": {
-      "en": "0.1.3 · Apple Silicon and Intel · 297 MB",
-      "ru": "0.1.3 · Apple Silicon и Intel · 297 MB"
+      "en": "0.1.4 · Apple Silicon and Intel · 297 MB",
+      "ru": "0.1.4 · Apple Silicon и Intel · 297 MB"
     },
     "get.mac.fine": {
       "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",

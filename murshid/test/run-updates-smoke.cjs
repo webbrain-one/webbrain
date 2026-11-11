@@ -6,12 +6,15 @@ const assert = require('node:assert/strict');
 const { _electron } = require('playwright');
 
 (async () => {
+  const parts = require('../package.json').version.split('.').map(Number);
+  parts[2] += 1;
+  const nextVersion = parts.join('.');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'murshid-updates-test-'));
   fs.writeFileSync(path.join(profile, 'murshid-settings.json'), JSON.stringify({ startCompanion: false }));
   let application;
   try {
     application = await _electron.launch({ executablePath: require('electron'), args: [path.resolve(__dirname, '..')], env: { ...process.env, MURSHID_PROFILE: profile } });
-    await application.evaluate(async ({ app }) => {
+    await application.evaluate(async ({ app }, version) => {
       const require = process.mainModule.require.bind(process.mainModule);
       const ctx = require(require('node:path').join(app.getAppPath(), 'app/main.js')).ctx;
       for (let i = 0; i < 200 && !ctx.windows.length; i++) await new Promise(r => setTimeout(r, 100));
@@ -21,7 +24,6 @@ const { _electron } = require('playwright');
       native.checkForUpdates = () => ctx.testUpdateCalls.push(['download']);
       native.quitAndInstall = () => ctx.testUpdateCalls.push(['install']);
       ctx.testNativeUpdater = native;
-      const version = '0.1.4';
       const asset = suffix => ({ url: `https://murshid.one/download/Murshid-${version}-${suffix}`, size: 123, sha256: 'a'.repeat(64) });
       const update = asset('macos-universal.zip');
       const feed = { schema: 'murshid-updates/1', currentRelease: version,
@@ -34,7 +36,7 @@ const { _electron } = require('playwright');
       ctx.updates.on('change', () => ctx.refreshAllWindows());
       ctx.updateTestTab = ctx.windows[0].addTab({ url: 'murshid://updates/' });
       await ctx.updateTestTab.wc.loadURL('murshid://updates/');
-    });
+    }, nextVersion);
     const evaluate = expression => application.evaluate(({ app }, expression) => {
       const require = process.mainModule.require.bind(process.mainModule);
       const ctx = require(require('node:path').join(app.getAppPath(), 'app/main.js')).ctx;
@@ -46,13 +48,13 @@ const { _electron } = require('playwright');
     };
     await wait("document.getElementById('download-update').hidden === false");
     assert.equal(await evaluate("getComputedStyle(document.getElementById('install-update')).display"), 'none');
-    assert.match(await evaluate("document.getElementById('update-status').textContent"), /0\.1\.4/);
+    assert.ok((await evaluate("document.getElementById('update-status').textContent")).includes(nextVersion));
     await evaluate("document.getElementById('download-update').click()");
     await wait("document.getElementById('check-update').disabled && document.getElementById('download-update').hidden");
-    await application.evaluate(({ app }) => {
+    await application.evaluate(({ app }, version) => {
       const require = process.mainModule.require.bind(process.mainModule);
-      require(require('node:path').join(app.getAppPath(), 'app/main.js')).ctx.testNativeUpdater.emit('update-downloaded', {}, '', '0.1.4');
-    });
+      require(require('node:path').join(app.getAppPath(), 'app/main.js')).ctx.testNativeUpdater.emit('update-downloaded', {}, '', version);
+    }, nextVersion);
     await wait("document.getElementById('install-update').hidden === false");
     assert.equal(await evaluate("getComputedStyle(document.getElementById('download-update')).display"), 'none');
     const screenshot = await application.evaluate(async ({ app }) => {

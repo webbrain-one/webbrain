@@ -345,8 +345,8 @@
       "ar": "الإصدار 12 Monterey وما بعده، Apple Silicon وIntel."
     },
     "get.mac.status": {
-      "en": "0.1.3 · Apple Silicon and Intel · 297 MB",
-      "ar": "0.1.3 · Apple Silicon وIntel · ‏297 ميغابايت"
+      "en": "0.1.4 · Apple Silicon and Intel · 297 MB",
+      "ar": "0.1.4 · Apple Silicon وIntel · ‏297 ميغابايت"
     },
     "get.mac.fine": {
       "en": "Not notarized by Apple: right-click the app and choose <b>Open</b>, or use <b>System Settings &gt; Privacy &amp; Security &gt; Open Anyway</b>.",
