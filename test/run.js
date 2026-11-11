@@ -27086,8 +27086,8 @@ test('strict cloud runs register credential-labeled form values and fail closed 
   assert.doesNotMatch(navigationJson, new RegExp(`${navigationPathToken}|${navigationQueryToken}`));
   assert.deepEqual(
     navigationRun.updates.find(update => update.type === 'tool_call')?.data?.args,
-    { sensitiveArgsRedacted: true },
-    'strict navigate arguments were not reduced to the generic redacted envelope',
+    { url_origin: 'https://files.example', sensitiveArgsRedacted: true },
+    'strict navigate arguments must retain only origin evidence',
   );
   assert.match(
     navigationRun.updates.find(update => update.type === 'clarify')?.data?.question || '',
@@ -27125,7 +27125,7 @@ test('strict cloud runs register credential-labeled form values and fail closed 
   );
   assert.deepEqual(
     ordinaryUrlRun.updates.find(update => update.type === 'tool_call')?.data?.args,
-    { sensitiveArgsRedacted: true },
+    { url_origin: 'https://files.example', sensitiveArgsRedacted: true },
     'strict ordinary navigation published path or query evidence',
   );
   assert.equal(ordinaryUrlRun.finalUrl, 'https://files.example');
