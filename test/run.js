@@ -49376,14 +49376,15 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
     assert.match(css, /body\.settings-searching \.tab-panel:not\(\[data-search\]\) \{ display: none; \}/, `${label}: a search hides the tabs it does not cover`);
     assert.match(css, /body\.settings-searching \.tab-btn\.active \{ background: transparent; color: var\(--text2\); \}/, `${label}: no tab looks current while a search shows several tabs`);
 
-    // General keeps everyday preferences; the side panel picks the language and zoom.
-    for (const id of ['select-theme', 'input-download-directory', 'select-plan-before-act-mode', 'select-auto-screenshot']) {
+    // General keeps everyday preferences and the combined switches; the side
+    // panel picks the language and zoom.
+    for (const id of ['select-theme', 'input-download-directory', 'select-preset-supervision', 'select-preset-image', 'select-preset-alerts']) {
       assert.ok(general.includes(`id="${id}"`), `${label}: ${id} should stay in General`);
     }
     assert.doesNotMatch(html, /id="select-language"|id="settings-ui-scale-|st\.display\.(?:language|ui_scale)\./, `${label}: language and zoom are chosen in the side panel`);
 
-    // Budgets holds the spend, time, step and image limits, in this order.
-    const budgetIds = ['input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy', 'range-max-steps', 'range-request-timeout', 'select-image-detail', 'select-max-screenshots', 'select-max-image-dimension'];
+    // Budgets holds the spend, time and step limits, in this order.
+    const budgetIds = ['input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy', 'range-max-steps', 'range-request-timeout'];
     const budgetIndexes = budgetIds.map((id) => budgets.indexOf(`id="${id}"`));
     budgetIndexes.forEach((index, position) => assert.notEqual(index, -1, `${label}: ${budgetIds[position]} should live in Budgets`));
     assert.ok(budgetIndexes.every((index, position) => position === 0 || budgetIndexes[position - 1] < index), `${label}: Budgets keeps the requested order`);
@@ -49399,15 +49400,37 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       'toggle-scheduled-confirm',
       'toggle-notify-sound',
       'toggle-completion-confetti',
-      'toggle-screenshot-fallback',
       'toggle-screenshot-redaction',
       'toggle-site-adapters',
       'toggle-api-mutation-observer',
       'toggle-strict-secret',
       'toggle-allow-local-network',
       'toggle-help-improve',
+      // What the combined switches in General stand for is fine-tuned here.
+      'toggle-enforce-action-guards',
+      'toggle-strict-guards',
+      'select-lean-mode',
+      'select-plan-before-act-mode',
+      'select-plan-review-mode',
+      'range-plan-review-confidence',
+      'select-vision-quality',
+      'select-auto-screenshot',
+      'select-image-detail',
+      'select-max-screenshots',
+      'select-max-image-dimension',
+      'toggle-completion-flash-tab',
     ]) {
       assert.ok(advanced.includes(`id="${id}"`), `${label}: ${id} should live in Advanced`);
+      assert.equal(html.indexOf(`id="${id}"`), html.lastIndexOf(`id="${id}"`), `${label}: ${id} appears once`);
+    }
+    // Nothing read the Screenshot Fallback setting, so its switch is gone.
+    assert.doesNotMatch(html, /toggle-screenshot-fallback/, `${label}: the dead Screenshot Fallback switch is removed`);
+    // Advanced is sorted under headings that the General switches link to.
+    for (const id of ['supervision', 'vision', 'alerts', 'privacy', 'automation', 'network', 'interface']) {
+      assert.match(advanced, new RegExp(`<h3 class="settings-group-heading" id="adv-group-${id}" tabindex="-1" data-i18n="[a-z_.]+"></h3>`), `${label}: Advanced has the ${id} group heading`);
+    }
+    for (const [group, heading] of [['supervision', 'supervision'], ['image', 'vision'], ['alerts', 'alerts']]) {
+      assert.match(general, new RegExp(`data-preset-jump="adv-group-${heading}"[\\s\\S]*?<select id="select-preset-${group}"`), `${label}: the ${group} switch links to its Advanced group`);
     }
     for (const id of ['profile-card', 'user-memory-card', 'toggle-user-memory-form']) {
       assert.ok(memory.includes(`id="${id}"`), `${label}: ${id} should live in Memory`);

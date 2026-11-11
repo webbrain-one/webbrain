@@ -1549,3 +1549,33 @@ body.settings-searching .tab-btn.active:hover { color: var(--text); }
 @media (max-width: 600px) {
   .header-actions { margin-bottom: 14px; }
 }
+
+/* Settings → General combined switches (settings-presets-ui.js), the headings
+   that sort Advanced into groups, and rows whose parent switch is off. */
+.settings-group-heading {
+  margin: 26px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  scroll-margin-top: 12px;
+}
+.settings-group-heading:first-child { margin-top: 2px; }
+.settings-group-heading:focus { outline: none; }
+.settings-group-heading:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+body.settings-searching .settings-group-heading { display: none; }
+.preset-note { margin-top: 6px; color: var(--text); }
+.preset-note[data-tone="warning"] { color: var(--warning); }
+.preset-fine-tune {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.preset-fine-tune:hover { text-decoration: underline; }
+.setting-dependent-off { opacity: 0.58; }

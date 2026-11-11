@@ -1191,7 +1191,8 @@ function normalizePlanReviewMode(stored = {}) {
 
 function normalizePlanReviewConfidenceThreshold(stored = {}) {
   let threshold = Number(stored.planReviewConfidenceThreshold);
-  if (!Number.isFinite(threshold)) threshold = 0.9;
+  // Unset reads as the product default the Settings slider shows (75%).
+  if (!Number.isFinite(threshold)) threshold = 0.75;
   if (threshold > 1 && threshold <= 100) threshold /= 100;
   // Match the settings slider's [50%, 99%] range so an out-of-band stored
   // value can't disable the review gate while the UI shows an in-range value.
