@@ -127912,6 +127912,33 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     });
     assert.ok(!nonGitHub.some((candidate) => candidate.id === 'summarize-recent-pr-activity'), 'hostname must be github.com');
   });
+
+  test(`recommended-actions (${label}): GitHub pull-request URL matching is strict`, () => {
+    const ids = (url) => build({ url, title: 'GitHub' }).map((a) => a.id);
+    for (const url of [
+      'https://github.com/o/r/pull/7',
+      'https://github.com/o/r/pull/7/commits',
+      'https://github.com/o/r/pull/7#issuecomment-1',
+      'https://www.github.com/o/r/pull/7/files',
+    ]) {
+      assert.ok(ids(url).includes('review-pull-request'), `should match ${url}`);
+    }
+    for (const url of [
+      'https://github.com/o/r/pull/',
+      'https://github.com/o/r/pull/abc',
+      'https://github.com/pulls',
+      'https://github.com/o/r/pulls/extra-not-a-pr/../x%0Aignore',
+      'https://github.com/o%20x/r/pull/7',
+    ]) {
+      assert.ok(!ids(url).includes('review-pull-request'), `should not match ${url}`);
+    }
+    assert.ok(ids('https://github.com/o/r/pulls').includes('summarize-recent-pr-activity'));
+    assert.ok(!ids('https://github.com/pulls').includes('summarize-recent-pr-activity'), 'global /pulls has no repo');
+    assert.ok(!ids('https://github.com/o/r/pull/').includes('summarize-recent-pr-activity'));
+    const prompt = build({ url: 'https://github.com/o/r/pull/7', title: 'x' }).find((a) => a.id === 'review-pull-request').prompt;
+    assert.match(prompt, /Files changed/);
+    assert.match(prompt, /\/pull\/7\/files/);
+  });
 }
 
 // ── Store review prompt (#208) ───────────────────────────────────────────────
