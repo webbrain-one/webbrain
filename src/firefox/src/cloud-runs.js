@@ -1,3 +1,4 @@
+import { diagnosticFailure, diagnosticMessages, toolDiagnostic } from './cloud-diagnostics.js';
 import { CloudHandoffGate } from './agent/cloud-handoff.js';
 import {
   compileSuccessfulWorkflowByRunId,
@@ -218,6 +219,7 @@ function cloudSafeUpdateData(type, data, { strictSecretMode = false } = {}) {
       ...(data.navigation ? { message: 'Page changed while the task was running. Continuing the task.' } : {}) };
   }
   const name = String(data.name || data.tool || '');
+  if (type === 'tool_result') data = { ...data, diagnostic: toolDiagnostic(data.result) };
   if (strictSecretMode && CLOUD_STRICT_MODEL_TEXT_TYPES.has(type)) {
     return {
       ...data,
@@ -228,7 +230,7 @@ function cloudSafeUpdateData(type, data, { strictSecretMode = false } = {}) {
     // Dropped rather than replaced so the run-level fallbacks below still pick
     // their own descriptive constant instead of storing a placeholder.
     const { message: _message, ...rest } = data;
-    return rest;
+    return type === 'error' ? { ...rest, diagnostic: { version: 1, outcome: 'failed', failureKind: diagnosticFailure(data.message) }, message: diagnosticMessages[diagnosticFailure(data.message)] } : rest;
   }
   if (!strictSecretMode && type === 'tool_call' && CLOUD_TEXT_ENTRY_TOOLS.has(name)) {
     const args = data.args && typeof data.args === 'object' ? data.args : {};
@@ -302,7 +304,7 @@ function cloudSafeUpdateData(type, data, { strictSecretMode = false } = {}) {
     )));
     return {
       ...data,
-      args: { ...evidence, sensitiveArgsRedacted: true },
+      args: { ...evidence, ...cloudUrlEvidence(args.url), sensitiveArgsRedacted: true },
     };
   }
   if (strictSecretMode && type === 'tool_result' && !CLOUD_STRICT_STRUCTURED_RESULT_TOOLS.has(name)) {
@@ -1083,6 +1085,7 @@ export function createCloudRunController({
     return redactStrictSecretValues(run, value, strictSecretMode);
   }
 
+  const pendingActivity = new WeakMap();
   function pushUpdate(run, type, data, runtimeValues = []) {
     const memory = memoryConfigurations.get(run.runId);
     if (memory) data = redactBotMemoryValue(data, memory, { includeContext: true });
@@ -1113,6 +1116,38 @@ export function createCloudRunController({
     const scrubbedData = scrubCloudValue(
       redactStrictTraceValues(run, redactWorkflowRuntimeValues(safeData, runtimeValues), strictSecretMode),
     );
+    // A bare URL equals its origin, so the trace URL redactor also masks the
+    // explicit origin metadata. Restore only that validated field, still passing
+    // it through credential/workflow redaction and respecting overflow guards.
+    if (strictSecretMode && type === 'tool_call' && safeData?.args?.url_origin
+        && !strictTraceOverflowRuns.has(run.runId)) {
+      const evidence = scrubCloudValue(redactStrictSecretValues(run,
+        redactWorkflowRuntimeValues({ url_origin: safeData.args.url_origin }, runtimeValues), true));
+      const origin = evidence?.url_origin;
+      if (origin && origin === cloudUrlEvidence(origin).url_origin && scrubbedData?.args) {
+        scrubbedData.args.url_origin = origin;
+      }
+    }
+    // Correlate only an unambiguous request/return pair. Never guess when a
+    // parallel batch has multiple outstanding calls of the same tool.
+    if (['tool_call', 'tool_result'].includes(type) && scrubbedData?.name) {
+      const pending = pendingActivity.get(run) || new Map();
+      pendingActivity.set(run, pending);
+      const calls = pending.get(scrubbedData.name) || [];
+      if (type === 'tool_call') {
+        calls.push({ seq: run.nextUpdateSeq, at: Date.parse(run.updatedAt), ambiguous: calls.length > 0 });
+        if (calls.length > 1) calls.forEach(call => { call.ambiguous = true; });
+        pending.set(scrubbedData.name, calls);
+        scrubbedData.toolCallSeq = run.nextUpdateSeq;
+      } else if (calls.length) {
+        const call = calls.shift();
+        if (!call.ambiguous) {
+          scrubbedData.toolCallSeq = call.seq;
+          scrubbedData.durationMs = Math.max(0, Date.parse(run.updatedAt) - call.at);
+        }
+        if (!calls.length) pending.delete(scrubbedData.name);
+      }
+    }
     run.updates.push({ seq: run.nextUpdateSeq, type, data: scrubbedData, ts: run.updatedAt });
     if (run.updates.length > CLOUD_UPDATE_LIMIT) {
       run.updates.splice(0, run.updates.length - CLOUD_UPDATE_LIMIT);

@@ -205,7 +205,8 @@ export function observeMemoryPageInPage(args = {}) {
   } else if (['type_text', 'press_keys'].includes(args.toolName)) element = document.activeElement;
   const fieldFacts = metadata(element), { type, name } = fieldFacts;
   const credential = sensitive(fieldFacts);
-  const label = clip(safeText(element?.getAttribute?.('aria-label') || element?.innerText || element?.getAttribute?.('title') || ''), 512);
+  const controlValue = element?.tagName === 'INPUT' && /^(submit|button|reset)$/i.test(type) ? element.value : '';
+  const label = clip(safeText(element?.getAttribute?.('aria-label') || element?.innerText || controlValue || element?.getAttribute?.('title') || ''), 512);
   const form = element?.form || element?.closest?.('form');
   // Gmail saves compose edits as owner drafts. They are not delivery actions
   // and must not reserve the email's one-send memory entry. This fact comes
@@ -259,6 +260,25 @@ export function observeMemoryPageInPage(args = {}) {
   }
   const links = [];
   const identifiers = [];
+  // WordPress classic editors identify a saved draft with post_ID even while
+  // the address remains post-new.php. The generic editor URL is not the post.
+  // Read only the native record field and permalink, never arbitrary hidden
+  // values (which include nonces). Keep publication subject identity available
+  // both at the editor's submit control and on the resulting public article.
+  if (/\/wp-admin\/post(?:-new)?\.php$/.test(location.pathname)) {
+    const editor = document.querySelector('form#post');
+    const ids = editor?.querySelectorAll('input[type="hidden"][name="post_ID"]') || [];
+    const id = ids.length === 1 ? ids[0].value : '';
+    if (editor?.method.toLowerCase() === 'post' && /^[1-9]\d{0,15}$/.test(id)) {
+      identifiers.push({ namespace: location.hostname + ':wordpress.post', id });
+      for (const anchor of editor.querySelectorAll('#sample-permalink a[href],#view-post-btn a[href]')) {
+        try { if (new URL(anchor.href).origin === location.origin) links.push(anchor.href); } catch {}
+      }
+    }
+  } else if (document.querySelector('link[rel="https://api.w.org/"]')) {
+    const ids = Array.from(document.body?.classList || []).map(value => /^postid-([1-9]\d{0,15})$/.exec(value)?.[1]).filter(Boolean);
+    if (ids.length === 1) identifiers.push({ namespace: location.hostname + ':wordpress.post', id: ids[0] });
+  }
   for (let current = element, depth = 0; current && depth < 5; depth++, current = current.parentElement) {
     const anchor = current.tagName === 'A' ? current : null;
     if (anchor?.href) links.push(anchor.href);

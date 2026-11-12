@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { after, before } from 'node:test';
+import test, { after, before, beforeEach } from 'node:test';
 import fs from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
@@ -284,7 +284,10 @@ for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   const Scheduler = await import(`../src/${build}/src/agent/scheduler.js`);
   // generate_image as the agent calls it, with the selected OpenRouter model.
-  const generate = (args, options) => media.generateImage(args, { config, ...options });
+  // A failed clip's retry does not wait here.
+  const generate = (args, options) => media.generateImage(args, { config, retryDelayMs: 1, ...options });
+  // Clips kept from one test's failed video are not another test's.
+  beforeEach(() => media.forgetKeptVideoClips());
 
   test(`${build}: clips with one codec setup join into one MP4 without re-encoding`, () => {
     const sources = [fixtures['h264-aac-1'], fixtures['h264-aac-2']];
@@ -891,7 +894,7 @@ for (const build of ['chrome', 'firefox']) {
   test(`${build}: fal.ai and Comfy Router clips are retried once, unless refused or in another format`, async () => {
     const video = { scenes: scenes(3, 10), estimated_duration: 30 };
     const fal = options => falApi({ model: h3Max.id, schema: h3Max.schema, ...options });
-    const runFal = api => media.runMediaGeneration({ prompt: 'Story', video, config: falConfig(h3Max), fetchImpl: api.fetchImpl, pollIntervalMs: 1 });
+    const runFal = api => media.runMediaGeneration({ prompt: 'Story', video, config: falConfig(h3Max), fetchImpl: api.fetchImpl, pollIntervalMs: 1, retryDelayMs: 1 });
     const flaky = fal({ fail: index => index === 1 });
     assert.equal((await runFal(flaky)).clips.length, 3);
     assert.equal(flaky.calls.submits.length, 4, 'three clips and one retry');
@@ -912,6 +915,175 @@ for (const build of ['chrome', 'firefox']) {
       config: { provider: 'comfyrouter', apiKey: 'comfy-key', videoModel: rayTwo.id }, fetchImpl: comfy.fetchImpl, pollIntervalMs: 1 }),
     /^Error: Clip 1 of 2 failed: Comfy Router submit failed \(HTTP 402\): the account is out of credit; add credit and try again: .*Insufficient credits/);
     assert.equal(comfy.calls.submits.filter(body => body.prompt.endsWith('Scene idea 1')).length, 1);
+  });
+
+  test(`${build}: a fal.ai clip that is being made survives passing failures of its reads`, async () => {
+    const video = { scenes: scenes(3, 10), estimated_duration: 30 };
+    const run = fetchImpl => media.runMediaGeneration({ prompt: 'Story', video, config: falConfig(h3Max), fetchImpl, pollIntervalMs: 1, retryDelayMs: 1 });
+    // One failure each: a status read answered 503, a status read that never
+    // arrives, a result read answered 502 and a clip download answered 503.
+    const api = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const failed = new Set();
+    const first = key => !failed.has(key) && !!failed.add(key);
+    const result = await run(async (url, init = {}) => {
+      if (/\/req-0\/status$/.test(url) && first('status')) return json({ detail: 'Bad gateway' }, 503);
+      if (/\/req-1\/status$/.test(url) && first('network')) throw new TypeError('Failed to fetch');
+      if (/\/req-2$/.test(url) && first('result')) return json({ detail: 'Bad gateway' }, 502);
+      if (/clip-1\.mp4$/.test(url) && first('download')) return json({ detail: 'Unavailable' }, 503);
+      return api.fetchImpl(url, init);
+    });
+    assert.equal(failed.size, 4, 'every failure happened');
+    assert.equal(result.clips.length, 3);
+    assert.equal(api.calls.submits.length, 3, 'no clip is generated again');
+    assert.deepEqual(api.calls.cancels, [], 'no running request is given up');
+    // A refusal while polling ends the clip at once, as before.
+    const refused = falApi({ model: h3Max.id, schema: h3Max.schema });
+    let reads = 0;
+    await assert.rejects(run(async (url, init = {}) => {
+      if (/\/req-0\/status$/.test(url)) { reads += 1; return json({ detail: 'Forbidden' }, 403); }
+      return refused.fetchImpl(url, init);
+    }), /^Error: Clip 1 of 3 failed: fal\.ai status check failed \(HTTP 403\)/);
+    assert.equal(reads, 1);
+    assert.equal(refused.calls.submits.filter(body => body.prompt.endsWith('Scene idea 1')).length, 1);
+    // A queue that stays unreachable is given up after five reads, and the clip's one retry follows.
+    const down = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const polls = new Map();
+    await assert.rejects(run(async (url, init = {}) => {
+      const job = /\/(req-\d+)\/status$/.exec(url)?.[1];
+      if (job && down.calls.submits[Number(job.slice(4))].prompt.endsWith('Scene idea 1')) {
+        polls.set(job, (polls.get(job) || 0) + 1);
+        return json({ detail: 'Bad gateway' }, 503);
+      }
+      return down.fetchImpl(url, init);
+    }), /^Error: Clip 1 of 3 failed: fal\.ai status check failed \(HTTP 503\)/);
+    assert.deepEqual([...polls.values()], [5, 5], 'five reads of the request, then five of its retry');
+  });
+
+  test(`${build}: a failed video keeps its finished clips, and the retry generates only the rest`, async () => {
+    // fal.ai reports a scene the model refuses when its result is read.
+    const refusing = api => async (url, init = {}) => {
+      const job = /\/requests\/req-(\d+)$/.exec(url);
+      if (job && init.method === undefined && api.calls.submits[job[1]].prompt.endsWith('flagged')) {
+        await new Promise(done => setTimeout(done, 20));
+        return json({ detail: [{ type: 'content_policy_violation', msg: 'The prompt was flagged.' }] }, 422);
+      }
+      return api.fetchImpl(url, init);
+    };
+    const story = last => ({ prompt: 'Story', scenes: [...scenes(3, 10), { prompt: last, duration: 10 }], estimated_duration: 40 });
+    const run = (api, args, options) => generate(args, { config: falConfig(h3Max), fetchImpl: refusing(api), pollIntervalMs: 1, ...options });
+    const first = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const stored = assets.size;
+    const failed = await run(first, story('Something flagged'));
+    assert.equal(failed.success, false);
+    assert.match(failed.error, /^Clip 4 of 4 failed: fal\.ai result fetch failed \(HTTP 422\): .*content_policy_violation/);
+    assert.match(failed.error, /3 of 4 clips are finished and kept for 30 minutes: a retry generates only the scenes that are missing or changed\./);
+    assert.equal(failed.clipsKept, 3);
+    assert.equal(first.calls.submits.length, 4);
+    assert.equal(assets.size, stored, 'nothing is shown in the chat yet');
+    // The agent rewrites the refused scene and leaves the others as they were.
+    const second = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const progress = [];
+    const retried = await run(second, story('Something fine'), { onProgress: message => progress.push(message) });
+    assert.equal(retried.success, true, retried.error);
+    assert.deepEqual(second.calls.submits.map(body => body.prompt), ['Story\n\nSomething fine'], 'only the changed scene is generated');
+    assert.deepEqual([retried.clipCount, retried.reusedClips, retried.durationSeconds], [4, 3, 4]);
+    assert.equal(join.mp4DurationSeconds(await storedBytes(retried.mediaId)), 4, 'one joined video of all four scenes');
+    assert.deepEqual(progress, ['Generating 1 of 4 video clips; 3 kept from the last attempt…', 'Video clips: 4 of 4 ready', 'Joining 4 clips…']);
+    // A video that succeeded is generated anew when it is asked for again.
+    const again = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const repeated = await run(again, story('Something fine'));
+    assert.equal(repeated.success, true, repeated.error);
+    assert.equal(again.calls.submits.length, 4);
+    assert.equal(repeated.reusedClips, undefined);
+    // Kept clips are those of the same request: another shared look gets its own.
+    const third = falApi({ model: h3Max.id, schema: h3Max.schema });
+    assert.equal((await run(third, story('Something flagged'))).clipsKept, 3);
+    const other = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const restyled = await run(other, { ...story('Something fine'), prompt: 'Another look' });
+    assert.equal(restyled.success, true, restyled.error);
+    assert.equal(other.calls.submits.length, 4);
+    // Stop keeps what it has without changing what the user is told.
+    media.forgetKeptVideoClips();
+    const controller = new AbortController();
+    const stopping = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const stopped = await generate(story('Something fine'), { config: falConfig(h3Max), pollIntervalMs: 1, signal: controller.signal,
+      fetchImpl: async (url, init = {}) => {
+        // The user presses Stop when the fourth clip is submitted, after the first three are ready.
+        if (init.method === 'POST' && JSON.parse(init.body).prompt.endsWith('Something fine')) {
+          controller.abort(new Error('Stopped by user.'));
+          init.signal.throwIfAborted();
+        }
+        return stopping.fetchImpl(url, init);
+      } });
+    assert.deepEqual([stopped.success, stopped.error, stopped.clipsKept], [false, 'Stopped by user.', undefined]);
+    const resumed = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const continued = await run(resumed, story('Something fine'));
+    assert.equal(continued.success, true, continued.error);
+    assert.ok(continued.reusedClips >= 1 && resumed.calls.submits.length === 4 - continued.reusedClips, 'the clips finished before Stop are used');
+  });
+
+  test(`${build}: kept clips are not used with another saved model input`, async () => {
+    const story = last => ({ prompt: 'Story', scenes: [...scenes(3, 5), { prompt: last, duration: 5 }], estimated_duration: 20 });
+    const settings = loop => ({ provider: 'comfyrouter', apiKey: 'comfy-key', videoModel: rayTwo.id, videoParameters: JSON.stringify({ model: 'ray-2', loop }) });
+    // Comfy Router refuses the last scene when it is submitted, after the others are ready.
+    const run = (api, loop, last) => generate(story(last), { config: settings(loop), pollIntervalMs: 1, fetchImpl: async (url, init = {}) => {
+      if (init.method === 'POST' && JSON.parse(init.body).prompt.endsWith('flagged')) {
+        await new Promise(done => setTimeout(done, 20));
+        return json({ detail: 'The prompt was flagged.', error_type: 'content_policy_violation' }, 422);
+      }
+      return api.fetchImpl(url, init);
+    } });
+    const first = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const failed = await run(first, false, 'Something flagged');
+    assert.match(failed.error, /^Clip 4 of 4 failed: Comfy Router submit failed \(HTTP 422\)/);
+    assert.equal(failed.clipsKept, 3);
+    // The user changes the saved video model input before the retry: every clip is made with it.
+    const changed = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const remade = await run(changed, true, 'Something fine');
+    assert.equal(remade.success, true, remade.error);
+    assert.deepEqual(changed.calls.submits.map(body => body.loop), [true, true, true, true]);
+    assert.equal(remade.reusedClips, undefined);
+    // With the input the kept clips were made with, they are used.
+    const same = comfyRouterApi({ model: rayTwo.id, schema: rayTwo.schema });
+    const retried = await run(same, false, 'Something fine');
+    assert.equal(retried.success, true, retried.error);
+    assert.deepEqual(same.calls.submits.map(body => [body.loop, body.prompt]), [[false, 'Story\n\nSomething fine']]);
+    assert.equal(retried.reusedClips, 3);
+  });
+
+  test(`${build}: a failed clip waits before its retry, as long as the provider asks`, async () => {
+    // One scene whose first submission is rate limited; the time between the two submissions.
+    const wait = async (headers, retryDelayMs) => {
+      const api = falApi({ model: h3Max.id, schema: h3Max.schema });
+      const times = [];
+      const result = await media.runMediaGeneration({ prompt: 'Story', video: { scenes: scenes(1, 10), estimated_duration: 10 },
+        config: falConfig(h3Max), pollIntervalMs: 1, retryDelayMs, fetchImpl: async (url, init = {}) => {
+          if (init.method === 'POST' && times.push(performance.now()) === 1) return json({ detail: 'Rate limited' }, 429, headers);
+          return api.fetchImpl(url, init);
+        } });
+      assert.equal(result.clips.length, 1);
+      return times[1] - times[0];
+    };
+    assert.ok(await wait({}, 40) >= 30, 'the given wait');
+    const asked = await wait({ 'Retry-After': '0.04' }, 60000);
+    assert.ok(asked >= 30 && asked < 5000, `Retry-After over the given wait (waited ${asked} ms)`);
+  });
+
+  test(`${build}: each clip of a joined video may end a frame early`, async () => {
+    // Clips of 0.96 s for scenes of 1 s: a model that ends each clip on a frame boundary.
+    const early = patched('h264-aac-1', (view, file) => view.setUint32(videoOf(file).edts.elst.start + 16, 960));
+    for (const [count, seconds] of [[2, 1.9], [8, 7.7]]) {
+      const api = falApi({ model: h3Max.id, schema: h3Max.schema, clip: () => early });
+      const result = await generate({ prompt: 'Story', scenes: scenes(count, 1), estimated_duration: count },
+        { config: falConfig(h3Max), fetchImpl: api.fetchImpl, pollIntervalMs: 1, videoDurationTarget: count });
+      assert.equal(result.success, true, result.error);
+      assert.deepEqual([result.clipCount, result.durationSeconds, result.durationStatus, result.notice], [count, seconds, 'enough', undefined]);
+    }
+    // Half of what was asked for is still short.
+    const api = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const half = await generate({ prompt: 'Story', scenes: scenes(8, 2), estimated_duration: 16 },
+      { config: falConfig(h3Max), fetchImpl: api.fetchImpl, pollIntervalMs: 1, videoDurationTarget: 16 });
+    assert.deepEqual([half.durationSeconds, half.durationStatus], [8, 'short']);
   });
 
   test(`${build}: a refused fal.ai or Comfy Router clip cancels the clips still being made`, async () => {

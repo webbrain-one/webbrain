@@ -5,7 +5,21 @@ const STATES = new Set(['pending', 'enough', 'short', 'unverified', 'unjoined', 
 const seconds = value => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 86400 ? value : null;
 const videoId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(value) ? value : null;
 const TOLERANCE_SECONDS = 0.25;
+const CLIP_TOLERANCE_SECONDS = 0.1;
+// generate_image makes a video of at most this many clips.
+const MAX_CLIPS = 24;
 const MAX_DELIVERABLES = 24;
+const clips = value => Number.isSafeInteger(value) && value > 1 ? Math.min(value, MAX_CLIPS) : null;
+
+/**
+ * How much shorter than requested a measured video may be and still be long
+ * enough: a quarter second for container and frame rounding, and a tenth more
+ * for every further clip of a video made of clips, since each clip ends on its
+ * own frame. A video of 8 clips may be 0.95 s short; one of 24, 2.55 s.
+ */
+export function videoDurationTolerance(clipCount) {
+  return TOLERANCE_SECONDS + CLIP_TOLERANCE_SECONDS * ((clips(clipCount) || 1) - 1);
+}
 
 function normalizeReceipt(value) {
   const requestedSeconds = seconds(value?.requestedSeconds);
@@ -17,8 +31,10 @@ function normalizeReceipt(value) {
   if (videoId(value.videoId)) contract.videoId = value.videoId;
   if (approved && approved <= requestedSeconds) contract.approvedDurationSeconds = approved;
   if (measured) contract.durationSeconds = measured;
+  // How many clips the measured video was made of, for its tolerance.
+  if (measured && clips(value.clipCount)) contract.clipCount = clips(value.clipCount);
   if (contract.status === 'short' && !measured) contract.status = 'unverified';
-  if (contract.status === 'enough' && (!measured || measured + TOLERANCE_SECONDS < videoDurationRequiredSeconds(contract))) {
+  if (contract.status === 'enough' && (!measured || measured + videoDurationTolerance(contract.clipCount) < videoDurationRequiredSeconds(contract))) {
     contract.status = measured ? 'short' : 'unverified';
   }
   return contract;
@@ -109,13 +125,15 @@ export function recordVideoDurationResult(previous, result, deliverableId) {
     const approved = seconds(result?.approvedDurationSeconds);
     if (approved && approved <= contract.requestedSeconds) contract.approvedDurationSeconds = approved;
     delete contract.durationSeconds;
+    delete contract.clipCount;
     if (result?.success !== true || result.error) return { ...contract, status: 'failed' };
     if (result.joined === false) return { ...contract, status: 'unjoined' };
     const video = result.mediaType === 'video' || /^video\//.test(result.mimeType || '');
     const measured = video && (result.mediaId || result.url) ? seconds(result.durationSeconds) : null;
     if (!measured) return { ...contract, status: 'unverified' };
-    return { ...contract, durationSeconds: measured,
-      status: measured + TOLERANCE_SECONDS >= videoDurationRequiredSeconds(contract) ? 'enough' : 'short' };
+    const clipCount = clips(result.clipCount);
+    return { ...contract, durationSeconds: measured, ...(clipCount ? { clipCount } : {}),
+      status: measured + videoDurationTolerance(clipCount) >= videoDurationRequiredSeconds(contract) ? 'enough' : 'short' };
   });
 }
 

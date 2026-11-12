@@ -92,7 +92,7 @@ const SUBSCRIPTION_GUIDE_PRODUCTS = Object.freeze({
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '47.1.1';
+const EXT_VERSION = '48.0.0';
 
 const providersContainer = document.getElementById('providers');
 const generalSearchInput = document.getElementById('input-general-search');
@@ -107,7 +107,6 @@ const AGENT_INDICATOR_STYLES = ['random', 'circuit', 'aurora', 'scan', 'gears', 
 const selectionShortcutToggle = document.getElementById('toggle-selection-shortcut');
 const autoGroupTabsToggle = document.getElementById('toggle-auto-group-tabs');
 const helpImproveToggle = document.getElementById('toggle-help-improve');
-const screenshotToggle = document.getElementById('toggle-screenshot-fallback');
 const maxStepsRange = document.getElementById('range-max-steps');
 const stepsValueLabel = document.getElementById('steps-value');
 const requestTimeoutRange = document.getElementById('range-request-timeout');
@@ -426,6 +425,9 @@ function filterGeneralSettings() {
     const scope = panel.querySelector('[data-search-scope]') || panel;
     let panelMatches = 0;
     for (const item of Array.from(scope.children)) {
+      // Group headings are signposts, not settings: a search hides them (CSS)
+      // and never counts one as a match.
+      if (item.classList.contains('settings-group-heading')) continue;
       const matches = !query || (!item.hidden && searchTextForGeneralItem(item).includes(query));
       setGeneralSearchHidden(item, !!query && !matches);
       if (matches) panelMatches += 1;
@@ -617,7 +619,7 @@ async function init() {
   browser.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await browser.storage.local.get([...DECISION_SETTINGS_KEYS, 'verboseMode', 'composerDeliveryMode', 'agentIndicatorStyle', 'selectionShortcutEnabled', AUTO_GROUP_TABS_KEY, 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'researchEscalationEnabled', 'researchEscalationEngine', 'voiceInputEnabled', 'alwaysAllowApiMutations', 'apiMutationObserverEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'completionFlashTab', 'tracingEnabled', 'feedbackDiagnosticsEnabled', 'strictSecretMode', 'enforceActionGuards', 'strictGuards', 'leanMode', 'visionMode', 'visionQuality', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'systemOneEnabled', 'systemOneWatchEnabled', 'systemOneCompletionEnabled', 'systemOneFastClassifications', 'systemOneFastBrowser', 'systemOneWatchThreshold', 'systemOneCompletionThreshold', 'typesafeApiKey', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'clarifyTimeoutPolicy', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'meteredProviderCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
+  const stored = await browser.storage.local.get([...DECISION_SETTINGS_KEYS, 'verboseMode', 'composerDeliveryMode', 'agentIndicatorStyle', 'selectionShortcutEnabled', AUTO_GROUP_TABS_KEY, 'helpImproveWebBrain', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'researchEscalationEnabled', 'researchEscalationEngine', 'voiceInputEnabled', 'alwaysAllowApiMutations', 'apiMutationObserverEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'completionFlashTab', 'tracingEnabled', 'feedbackDiagnosticsEnabled', 'strictSecretMode', 'enforceActionGuards', 'strictGuards', 'leanMode', 'visionMode', 'visionQuality', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'systemOneEnabled', 'systemOneWatchEnabled', 'systemOneCompletionEnabled', 'systemOneFastClassifications', 'systemOneFastBrowser', 'systemOneWatchThreshold', 'systemOneCompletionThreshold', 'typesafeApiKey', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'clarifyTimeoutPolicy', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'meteredProviderCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
   if (typeof stored.providerFilter === 'string' && ['all','active','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -632,7 +634,6 @@ async function init() {
   if (selectionShortcutToggle) selectionShortcutToggle.checked = stored.selectionShortcutEnabled !== false;
   if (autoGroupTabsToggle) autoGroupTabsToggle.checked = stored[AUTO_GROUP_TABS_KEY] !== false;
   if (helpImproveToggle) helpImproveToggle.checked = stored.helpImproveWebBrain !== false; // on by default
-  if (screenshotToggle) screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
   if (maxStepsRange && stepsValueLabel) {
     if (isUnlimitedMaxAgentSteps(stored.maxAgentSteps)) {
       maxStepsRange.value = MAX_AGENT_STEPS_UNLIMITED_SENTINEL;
@@ -796,6 +797,8 @@ async function init() {
   }
   // Tooling (UI tests, docs screenshots) waits for this before reading the page.
   document.documentElement.dataset.settingsReady = 'true';
+  // settings-presets-ui.js greys out rows whose parent switch is off.
+  document.dispatchEvent(new Event('wb-settings-loaded'));
 }
 
 // --- Site permissions (capability × origin grants) ---
@@ -1415,10 +1418,6 @@ helpImproveToggle?.addEventListener('change', async () => {
   await browser.storage.local.set({ helpImproveWebBrain: helpImproveToggle.checked }).catch(() => {});
 });
 
-screenshotToggle?.addEventListener('change', async () => {
-  await browser.storage.local.set({ screenshotFallback: screenshotToggle.checked }).catch(() => {});
-});
-
 maxStepsRange?.addEventListener('input', () => {
   stepsValueLabel.textContent = Number(maxStepsRange.value) === MAX_AGENT_STEPS_UNLIMITED_SENTINEL ? '∞' : maxStepsRange.value;
 });
@@ -1533,6 +1532,9 @@ if (planBeforeActModeSelect) {
 }
 
 if (planReviewModeSelect) {
+  // A combined switch in General can change this select without a change
+  // event (settings-presets-ui.js); the threshold row still has to follow.
+  planReviewModeSelect.addEventListener('wb-setting-sync', updatePlanReviewConfidenceUI);
   planReviewModeSelect.addEventListener('change', async () => {
     const mode = PLAN_REVIEW_MODES.has(planReviewModeSelect.value) ? planReviewModeSelect.value : 'confidence';
     updatePlanReviewConfidenceUI();
@@ -2303,6 +2305,7 @@ async function loadUserMemorySettings() {
   if (userMemoryAutoToggle) userMemoryAutoToggle.checked = res.autoCaptureEnabled === true;
   if (userMemoryFormToggle) userMemoryFormToggle.checked = res.formCaptureEnabled === true;
   if (userMemoryMaxCharsInput) userMemoryMaxCharsInput.value = String(res.maxPromptChars ?? USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS);
+  document.dispatchEvent(new Event('wb-settings-loaded'));
   renderUserMemoryRecords(res.records || []);
 }
 

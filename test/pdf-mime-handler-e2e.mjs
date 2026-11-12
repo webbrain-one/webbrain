@@ -108,6 +108,7 @@ async function startPdfServer() {
     pdf,
     requestCount: () => requestCount,
     requests,
+    address: address.address,
     url: `http://127.0.0.1:${address.port}/document.pdf`,
     opaqueUrl: `http://127.0.0.1:${address.port}/opaque-download?id=42`,
   };
@@ -127,6 +128,69 @@ async function setPdfViewerToggle(page, enabled) {
     if (!(toggle instanceof HTMLInputElement)) throw new Error('PDF viewer toggle is unavailable.');
     if (toggle.checked !== expected) toggle.click();
   }, enabled);
+}
+
+// The fixture server listens on loopback, which read_pdf refuses until the user
+// turns on "Allow agent to access local network". Flip that switch the way a
+// user does, on the Settings page, and wait for the stored value to follow.
+async function setLocalNetworkToggle(page, enabled) {
+  await page.evaluate(expected => {
+    const toggle = document.getElementById('toggle-allow-local-network');
+    if (!(toggle instanceof HTMLInputElement)) throw new Error('Local network toggle is unavailable.');
+    if (toggle.checked !== expected) toggle.click();
+  }, enabled);
+  await page.waitForFunction(async expected => {
+    const stored = await chrome.storage.local.get('agentAllowLocalNetwork');
+    return (stored.agentAllowLocalNetwork === true) === expected;
+  }, enabled, { timeout: 10_000 });
+}
+
+// Stands in for the service worker's half of read_pdf, `extractPdfText` in
+// src/agent/pdf-tools.js, which cannot be loaded here: dynamic import() is
+// disallowed on ServiceWorkerGlobalScope. Like that caller it forwards the
+// user's local-network setting to the offscreen host and, because offscreen
+// documents have no webRequest, answers the host's verdict request from the
+// address Chrome reports for the fetch.
+async function extractPdfFromBackground(background, url, expectedAddress) {
+  return background.evaluate(async ({ url, expectedAddress }) => {
+    const stored = await chrome.storage.local.get('agentAllowLocalNetwork');
+    const requestId = crypto.randomUUID();
+    let reportAddress;
+    const connected = new Promise(resolve => { reportAddress = resolve; });
+    const onResponseStarted = details => {
+      if (details.url === url) reportAddress(details.ip || '');
+    };
+    const onVerdictRequest = (message, _sender, sendResponse) => {
+      if (message?.type !== 'offscreen-pdf-fetch-verdict' || message.requestId !== requestId) return false;
+      // fetch() can resolve in the offscreen document before the matching
+      // webRequest event reaches the worker, so allow it a moment to arrive.
+      Promise.race([connected, new Promise(resolve => setTimeout(resolve, 1500, ''))]).then(address => {
+        sendResponse(address === expectedAddress
+          ? { ok: true }
+          : { ok: false, error: `PDF response address was ${address || 'not reported'}, expected ${expectedAddress}.` });
+      });
+      return true;
+    };
+    chrome.webRequest.onResponseStarted.addListener(onResponseStarted, { urls: ['<all_urls>'], tabId: -1 });
+    chrome.runtime.onMessage.addListener(onVerdictRequest);
+    try {
+      return await chrome.runtime.sendMessage({
+        type: 'offscreen-pdf-extract',
+        requestId,
+        url,
+        options: {
+          fromPage: 1,
+          toPage: 1,
+          maxChars: 5000,
+          includeBase64: true,
+          allowLocalNetwork: stored.agentAllowLocalNetwork === true,
+        },
+      });
+    } finally {
+      chrome.runtime.onMessage.removeListener(onVerdictRequest);
+      chrome.webRequest.onResponseStarted.removeListener(onResponseStarted);
+    }
+  }, { url, expectedAddress });
 }
 
 async function inspectPdfRouting(context, url, extensionId, waitMs = 2000) {
@@ -304,12 +368,18 @@ async function main() {
     }));
     assert.equal(ready?.ready, true, ready?.error || 'The offscreen PDF parser did not become ready.');
 
+    // Fresh installs keep local-network access off, so the loopback fixture
+    // must be refused before any request leaves the browser.
+    const blocked = await extractPdfFromBackground(background, fixture.url, fixture.address);
+    assert.equal(blocked?.ok, false, 'A loopback PDF was extracted while local-network access was off.');
+    assert.match(blocked?.error || '', /Blocked loopback IPv4: 127\.0\.0\.1/);
+    assert.equal(fixture.requestCount(), 0, 'A blocked loopback PDF request reached the network.');
+
+    await setLocalNetworkToggle(settings, true);
     const requestsBeforeExtraction = fixture.requestCount();
-    const extraction = await background.evaluate(async url => chrome.runtime.sendMessage({
-      type: 'offscreen-pdf-extract',
-      url,
-      options: { fromPage: 1, toPage: 1, maxChars: 5000, includeBase64: true },
-    }), fixture.url);
+    const extraction = await extractPdfFromBackground(background, fixture.url, fixture.address);
+    // The rest of this file covers default PDF routing; leave no opt-in behind.
+    await setLocalNetworkToggle(settings, false);
     assert.equal(extraction?.ok, true, extraction?.error || 'The offscreen PDF parser failed.');
     assert.equal(fixture.requestCount() - requestsBeforeExtraction, 1, 'Claude-compatible extraction fetched the PDF more than once.');
     assert.equal(extraction.result?.totalPages, 1);
