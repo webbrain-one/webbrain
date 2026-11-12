@@ -581,7 +581,7 @@ async function runVisionDownloadAction(action) {
   if (path === 'chat-model') return runChatVisionAction(action);
   if (path !== 'webbrain-vl') return;
   if ((action === 'start' || action === 'resume') && !visionFallbackExplicitlyEnabled) {
-    globalThis.location.href = runtimeApi.runtime.getURL('src/ui/providers.html#vision');
+    globalThis.location.href = runtimeApi.runtime.getURL('src/ui/settings.html#vision');
     return;
   }
   const actionMap = {

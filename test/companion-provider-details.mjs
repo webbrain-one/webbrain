@@ -201,7 +201,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         };
       }, { build });
 
-      await page.goto(`${origin}/src/${build}/src/ui/providers.html#llm`);
+      await page.goto(`${origin}/src/${build}/src/ui/settings.html#llm`);
 
       const card = page.locator('.provider-card[data-provider-id="webbrain_companion"]');
       await card.waitFor();

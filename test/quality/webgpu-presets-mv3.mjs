@@ -33,7 +33,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(`${origin}/src/ui/providers.html#llm`);
+  await page.goto(`${origin}/src/ui/settings.html#llm`);
   await page.locator('.provider-card[data-provider-id="webgpu"] .provider-header').click();
   const picker = page.locator('.model-select[data-model-for="webgpu"]');
   await picker.waitFor({ state: 'attached' });

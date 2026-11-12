@@ -5040,10 +5040,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.testVisionProvider();
     }
     case 'enable_webgpu_vision': {
-      // Consent is recorded only from the Vision tab of the Providers page.
-      const providersUrl = chrome.runtime.getURL('src/ui/providers.html');
-      if (String(sender?.url || '').split(/[?#]/)[0] !== providersUrl) {
-        return { ok: false, code: 'vision_consent_required', error: 'Local vision can only be enabled from Providers → Vision.' };
+      // Consent is recorded only from the Vision section of Settings.
+      const settingsUrl = chrome.runtime.getURL('src/ui/settings.html');
+      if (String(sender?.url || '').split(/[?#]/)[0] !== settingsUrl) {
+        return { ok: false, code: 'vision_consent_required', error: 'Local vision can only be enabled from Settings → Vision.' };
       }
       return await startExplicitVisionModelDownload();
     }
@@ -5063,9 +5063,9 @@ async function handleMessage(msg, sender) {
       // Choosing WebBrain VL 2 450M can re-enable it under consent already
       // given, so only the two pages that show the choice may change it.
       const senderPage = String(sender?.url || '').split(/[?#]/)[0];
-      const allowedPages = ['src/ui/providers.html', 'src/ui/apocalypse-mode.html'].map(page => chrome.runtime.getURL(page));
+      const allowedPages = ['src/ui/settings.html', 'src/ui/apocalypse-mode.html'].map(page => chrome.runtime.getURL(page));
       if (!allowedPages.includes(senderPage)) {
-        return { ok: false, code: 'vision_choice_page', error: 'The in-browser vision model can only be chosen in Providers → Vision or Apocalypse Mode.' };
+        return { ok: false, code: 'vision_choice_page', error: 'The in-browser vision model can only be chosen in Settings → Vision or Apocalypse Mode.' };
       }
       return await providerManager.setWebgpuVisionChoice(msg.choice);
     }
@@ -5106,12 +5106,12 @@ async function handleMessage(msg, sender) {
     }
 
     // Diagnostic decision readout on the in-browser chat model, for the
-    // hardware eval (scripts/check-webgpu-decisions.mjs). Providers page only,
+    // hardware eval (scripts/check-webgpu-decisions.mjs). Settings page only,
     // where the decision models are configured.
     case 'webgpu_decide_fixture': {
       const api = globalThis.browser || globalThis.chrome;
-      const providersUrl = api.runtime.getURL('src/ui/providers.html');
-      if (sender.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== providersUrl) return { success: false, error: 'Decision fixtures are available only from the extension Providers page.' };
+      const settingsUrl = api.runtime.getURL('src/ui/settings.html');
+      if (sender.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== settingsUrl) return { success: false, error: 'Decision fixtures are available only from the extension Settings page.' };
       try {
         await strictSecretModeReady;
         await visionModeReady;
@@ -5125,15 +5125,15 @@ async function handleMessage(msg, sender) {
     }
 
     case 'd1_control': {
-      // The D1 controls are on the Decision tab of the Providers page.
+      // The D1 controls are in the Decision section of Settings.
       const api = globalThis.browser || globalThis.chrome;
       const page = sender.id === api.runtime.id ? String(sender.url || '').split(/[?#]/)[0] : '';
       // The install guide downloads D1 before its local chat model: it reads
       // D1's status, checks the GPU, and starts or stops that download. Every
-      // other control stays on the Providers page.
+      // other control stays in Settings.
       const fromInstall = page === api.runtime.getURL('src/ui/install.html')
         && ['status', 'probe', 'download', 'stop'].includes(msg.command);
-      if (page !== api.runtime.getURL('src/ui/providers.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Providers page.' };
+      if (page !== api.runtime.getURL('src/ui/settings.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Settings page.' };
       try {
         // The guide's download names the chat model to download after D1.
         const chatModel = fromInstall && msg.command === 'download' && msg.chatModel != null ? String(msg.chatModel) : '';

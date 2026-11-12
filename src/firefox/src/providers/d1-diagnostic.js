@@ -3,8 +3,8 @@ import { validateSystemOneAnswers } from '../agent/systemone-judge.js';
 import { D1_CONSENT_KEY, D1_CONSENT_VERSION } from './d1-config.js';
 
 export async function evaluateD1LocalFixture({ fixture, sender, api, strictSecretMode, agent, client }) {
-  const providersUrl = api.runtime.getURL('src/ui/providers.html');
-  if (sender?.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== providersUrl) throw new Error('Local D1 fixture tests are available only from the extension Providers page.');
+  const settingsUrl = api.runtime.getURL('src/ui/settings.html');
+  if (sender?.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== settingsUrl) throw new Error('Local D1 fixture tests are available only from the extension Settings page.');
   if (strictSecretMode) throw new Error('Decision requests are disabled in Strict Secret Mode.');
   const stored = await api.storage.local.get(DECISION_SETTINGS_KEYS);
   if (stored.decisionProvider !== 'webgpu_d1' || resolveDecisionMode(stored) !== 'on' || stored[D1_CONSENT_KEY] !== D1_CONSENT_VERSION) throw new Error('Select, enable and explicitly consent to the local D1 provider before testing a fixture.');

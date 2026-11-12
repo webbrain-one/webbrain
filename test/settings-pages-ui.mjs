@@ -1,11 +1,12 @@
-// Settings is split across settings.html (General, Budgets, Memory, Skills,
-// CAPTCHA, Bridge, Advanced), providers.html (LLM and the assistive models)
-// and permissions.html. This drives all three pages in both builds with a
-// stubbed extension API: tab layout, deep links from the old tabs, the
-// cross-tab search, the single Record traces switch, the moved controls, the
-// combined switches in General (settings-presets.js) with the Advanced
-// controls they stand for, and the Providers page refresh after a profile
-// sync on Settings.
+// Settings is one page, settings.html, with a sidebar of sections: General,
+// the models (LLM and the assistive models), Permissions & privacy, Budgets,
+// Memory, Skills, the integrations (CAPTCHA, Bridge), Offline and Advanced.
+// providers.html and permissions.html only forward old links into it. This
+// drives the page in both builds with a stubbed extension API: the sections,
+// deep links from the old tabs and pages, the search across every section,
+// the single Record traces switch, the moved controls, the combined switches
+// in General (settings-presets.js) with the Advanced controls they stand for,
+// and the provider refresh after a profile sync in another Settings tab.
 import { chromium, firefox } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -26,8 +27,14 @@ const server = createServer(async (req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
 
-const SETTINGS_TABS = ['display', 'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'advanced'];
-const PROVIDER_TABS = ['llm', 'vision', 'speech', 'generative', 'decision', 'safesocial'];
+const SETTINGS_TABS = [
+  'display', 'llm', 'vision', 'speech', 'generative', 'decision', 'safesocial', 'permissions',
+  'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'offline', 'advanced',
+];
+// The sections that came over from the Providers page, and their main cards.
+const MODEL_CARDS = [['vision', '#vision-card'], ['speech', '#transcription-card'], ['generative', '#image-gen-card'], ['decision', '#system-one-card'], ['safesocial', '#safesocial-card']];
+// Privacy switches that moved from Advanced to Permissions & privacy.
+const PRIVACY_CONTROLS = ['toggle-screenshot-redaction', 'toggle-strict-secret', 'toggle-allow-local-network'];
 const BUDGET_CONTROLS = [
   'input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy',
   'range-max-steps', 'range-request-timeout',
@@ -148,9 +155,11 @@ try {
         for (const label of await page.locator('.tab-btn').allTextContents()) {
           assert.ok(label.trim() && !/^st\./.test(label.trim()), `${build} ${lang}: untranslated tab label ${label}`);
         }
-        assert.equal(await page.locator('#select-language, #settings-ui-scale-value, #toggle-lossless-tracing, [data-tab="providers"], [data-tab="multimodal"], [data-tab="permissions"]').count(), 0,
-          `${build} ${lang}: removed controls and tabs are gone`);
-        assert.ok(await page.locator('#providers-page-link').getAttribute('href') === 'providers.html', `${build} ${lang}: header links to Providers`);
+        assert.equal(await page.locator('#select-language, #settings-ui-scale-value, #toggle-lossless-tracing, #toggle-screenshot-fallback, [data-tab="providers"], [data-tab="multimodal"], #providers-page-link, #settings-page-link').count(), 0,
+          `${build} ${lang}: removed controls, tabs and page links are gone`);
+        assert.ok((await page.locator('.settings-nav .tab-group-label').allTextContents()).every(text => text.trim() && !/^st\./.test(text.trim())),
+          `${build} ${lang}: sidebar group labels are translated`);
+        assert.equal(await page.locator('.tab-btn[aria-current="page"]').getAttribute('data-tab'), 'display', `${build} ${lang}: the current section is marked`);
         assert.deepEqual(await untranslated(page), [], `${build} ${lang}: every settings.html string resolves`);
         assert.deepEqual(errors, [], `${build} ${lang}: settings.html page errors`);
         await page.close();
@@ -167,15 +176,25 @@ try {
       assert.deepEqual(
         await page.locator('[data-panel="budgets"] [id]').evaluateAll((els, ids) => els.map(el => el.id).filter(id => ids.includes(id)), BUDGET_CONTROLS),
         BUDGET_CONTROLS, `${build}: Budgets holds the moved limits in order`);
-      for (const id of ['toggle-tracing', 'toggle-screenshot-redaction', 'toggle-help-improve', 'toggle-strict-secret', ...FINE_TUNE_CONTROLS]) {
+      for (const id of ['toggle-tracing', 'toggle-help-improve', ...FINE_TUNE_CONTROLS]) {
         assert.equal(await page.locator(`[data-panel="advanced"] #${id}`).count(), 1, `${build}: Advanced has #${id}`);
       }
-      assert.equal(await page.locator('[data-panel="captcha"] #captcha-card').count(), 1, `${build}: CAPTCHA has its own tab`);
+      for (const id of ['permissions-card', 'toggle-permission-gate', ...PRIVACY_CONTROLS]) {
+        assert.equal(await page.locator(`[data-panel="permissions"] #${id}`).count(), 1, `${build}: Permissions & privacy has #${id}`);
+      }
+      for (const [tab, card] of MODEL_CARDS) {
+        assert.equal(await page.locator(`[data-panel="${tab}"] ${card}`).count(), 1, `${build}: the ${tab} section holds ${card}`);
+      }
+      assert.equal(await page.locator('[data-panel="llm"] #providers').count(), 1, `${build}: the LLM section holds the provider list`);
+      assert.equal(await page.locator('[data-panel="vision"] #webgpu-vision-choice').count(), build === 'chrome' ? 1 : 0, `${build}: in-browser vision only in Chrome`);
+      assert.equal(await page.locator('[data-panel="advanced"] #image-budget-card').count(), 1, `${build}: the image budget is in Advanced`);
+      assert.equal(await page.locator('[data-panel="offline"] #apocalypse-mode-link').getAttribute('href'), 'apocalypse-mode.html', `${build}: Offline opens Apocalypse Mode`);
+      assert.equal(await page.locator('[data-panel="captcha"] #captcha-card').count(), 1, `${build}: CAPTCHA has its own section`);
       assert.deepEqual(await page.locator('[data-panel="display"] select[id^="select-preset-"]').evaluateAll(els => els.map(el => el.id)),
         PRESET_SWITCHES, `${build}: General holds the combined switches`);
       assert.equal(await page.locator('#toggle-screenshot-fallback').count(), 0, `${build}: the dead Screenshot Fallback switch is gone`);
       assert.equal(await page.locator('details.advanced-settings > summary[data-i18n="st.display.advanced"]').count(), 0, `${build}: General has no Advanced drawer`);
-      if (build === 'firefox') assert.equal(await page.locator('[data-panel="advanced"] #firefox-bidi-card').count(), 1, 'firefox: BiDi card stays in Advanced');
+      if (build === 'firefox') assert.equal(await page.locator('[data-panel="cloudbridge"] #firefox-bidi-card').count(), 1, 'firefox: the BiDi card is with Bridge');
 
       // One switch records traces with full request details, or neither.
       await page.locator('[data-tab="advanced"]').click();
@@ -196,8 +215,10 @@ try {
       await page.locator('#toggle-tracing').locator('..').click();
       assert.equal(await store(page, 'tracingEnabled'), false, `${build}: Record traces off`);
       assert.equal(await store(page, 'losslessTrace'), false, `${build}: full details off with Record traces`);
+      await page.locator('[data-tab="permissions"]').click();
+      assert.equal(await page.locator('.tab-btn[aria-current="page"]').getAttribute('data-tab'), 'permissions', `${build}: picking a section marks it current`);
       await page.locator('#toggle-screenshot-redaction').locator('..').click();
-      assert.equal(await store(page, 'screenshotRedaction'), true, `${build}: redaction toggle saves from Advanced`);
+      assert.equal(await store(page, 'screenshotRedaction'), true, `${build}: redaction toggle saves from Permissions & privacy`);
 
       // The combined switches in General write the settings they stand for
       // and follow those settings when something else changes them.
@@ -259,7 +280,7 @@ try {
       await page.locator('#toggle-scheduled-tasks').locator('..').click();
       assert.equal(await page.locator('#toggle-scheduled-confirm').isDisabled(), false);
 
-      // The search covers General, Budgets, CAPTCHA and Advanced at once.
+      // The search covers every section at once.
       await page.locator('[data-tab="display"]').click();
       await page.locator('#input-general-search').fill('timeout');
       assert.ok(await page.evaluate(() => document.body.classList.contains('settings-searching')), `${build}: search mode`);
@@ -267,7 +288,7 @@ try {
         assert.ok(await visible(page, `#${id}`), `${build}: search shows #${id} from Budgets`);
       }
       assert.equal(await visible(page, '#select-theme'), false, `${build}: search hides non-matching General rows`);
-      assert.equal(await visible(page, '[data-panel="memory"]'), false, `${build}: search leaves Memory out`);
+      assert.equal(await visible(page, '[data-panel="memory"]'), false, `${build}: search hides a section without matches`);
       assert.ok(await visible(page, '[data-panel="budgets"] .search-panel-heading'), `${build}: matches sit under their tab name`);
       // The results span tabs, so no tab is marked as the current one. The
       // tab background fades (a 0.15 s transition), so wait for it to settle.
@@ -281,7 +302,9 @@ try {
       await page.waitForFunction(() => getComputedStyle(document.querySelector('.tab-btn.active')).backgroundColor !== 'rgba(0, 0, 0, 0)')
         .catch(() => assert.fail(`${build}: the picked tab is marked current again`));
       await page.locator('#input-general-search').fill('redact');
-      assert.ok(await visible(page, '#screenshot-redaction-setting'), `${build}: search finds Advanced settings`);
+      assert.ok(await visible(page, '#screenshot-redaction-setting'), `${build}: search finds Permissions & privacy settings`);
+      await page.locator('#input-general-search').fill('transcription');
+      assert.ok(await visible(page, '#transcription-card'), `${build}: search finds the model sections`);
       assert.equal(await visible(page, '[data-panel="budgets"]'), false, `${build}: a tab without matches is hidden`);
       await page.locator('#input-general-search').fill('zzzz-no-such-setting');
       assert.ok(await visible(page, '#general-search-empty'), `${build}: empty search result notice`);
@@ -289,9 +312,7 @@ try {
       assert.equal(await page.locator('#input-general-search').inputValue(), '', `${build}: picking a tab ends the search`);
       assert.equal(await page.evaluate(() => document.body.classList.contains('settings-searching')), false, `${build}: search mode ends`);
       assert.equal(await activeTab(page), 'memory');
-      assert.equal(await visible(page, '#settings-search'), false, `${build}: no search box on Memory`);
-      await page.locator('[data-tab="captcha"]').click();
-      assert.ok(await visible(page, '#settings-search'), `${build}: search box on CAPTCHA`);
+      assert.ok(await visible(page, '#settings-search'), `${build}: the search box stays in every section`);
 
       // The language is picked in the side panel; an open Settings page follows it.
       await page.evaluate(() => chrome.storage.local.set({ wbLocale: 'tr' }));
@@ -333,7 +354,7 @@ try {
       const customSkills = [{ id: 'skill_owned_1', name: 'Owned triage style', sourceType: 'text', content: '# Triage\nLabel issues.', createdAt: 1 }];
       const { page: skills, errors: skillErrors } = await open(browser, build, 'settings.html#skills', { seed: { customSkills } });
       await skills.locator('#skills-list button[data-skill-edit-id="skill_owned_1"]').waitFor();
-      assert.deepEqual(await skills.locator('[data-panel="skills"] > .provider-card').evaluateAll(cards => cards.map(card => card.id)),
+      assert.deepEqual(await skills.locator('[data-panel="skills"] > [data-search-scope] > .provider-card').evaluateAll(cards => cards.map(card => card.id)),
         ['skills-card', 'skills-list-card', 'packaged-skills-card'], `${build}: enabled skills, then available ones`);
       assert.equal(await visible(skills, '#skill-add-form'), false, `${build}: the add form starts closed`);
       await skills.locator('#btn-show-skill-form').click();
@@ -382,35 +403,43 @@ try {
       assert.deepEqual(skillErrors, [], `${build}: skills tab errors`);
       await skills.close();
 
-      // Old Settings deep links land where those tabs live now.
-      for (const [hash, target, tab] of [['providers', 'providers.html#llm', 'llm'], ['multimodal', 'providers.html#vision', 'vision'], ['permissions', 'permissions.html', null]]) {
-        const { page: redirected, errors: redirectErrors } = await open(browser, build, `settings.html#${hash}`);
-        await redirected.waitForURL(url => String(url).endsWith(`/src/${build}/src/ui/${target}`));
-        if (tab) await redirected.waitForFunction(name => document.querySelector('.tab-btn.active')?.dataset.tab === name, tab);
-        else await redirected.locator('#permissions-card').waitFor();
-        assert.deepEqual(redirectErrors, [], `${build}: #${hash} redirect errors`);
-        await redirected.close();
+      // Old Settings deep links name sections of this page now.
+      for (const [hash, tab] of [['providers', 'llm'], ['multimodal', 'vision'], ['vision', 'vision'], ['permissions', 'permissions'], ['apocalypse', 'offline']]) {
+        const { page: linked, errors: linkErrors } = await open(browser, build, `settings.html#${hash}`);
+        await linked.waitForFunction(name => document.querySelector('.tab-btn.active')?.dataset.tab === name, tab)
+          .catch(() => assert.fail(`${build}: settings.html#${hash} opens ${tab}`));
+        assert.ok(linked.url().endsWith(`/src/${build}/src/ui/settings.html#${hash}`), `${build}: settings.html#${hash} stays on Settings`);
+        assert.deepEqual(linkErrors, [], `${build}: #${hash} deep link errors`);
+        await linked.close();
       }
 
-      // --- providers.html ---
-      const { page: providers, errors: providerErrors } = await open(browser, build, 'providers.html');
-      await providers.locator('.provider-card[data-provider-id="llamacpp"]').first().waitFor();
-      assert.deepEqual(await tabsOf(providers), PROVIDER_TABS, `${build}: provider tabs`);
-      assert.equal(await activeTab(providers), 'llm', `${build}: Providers opens on LLM`);
-      for (const [tab, card] of [['vision', '#vision-card'], ['speech', '#transcription-card'], ['generative', '#image-gen-card'], ['decision', '#system-one-card'], ['safesocial', '#safesocial-card']]) {
-        assert.equal(await providers.locator(`[data-panel="${tab}"] ${card}`).count(), 1, `${build}: ${tab} tab holds ${card}`);
+      // The old Providers and Permissions pages forward into Settings, with
+      // their #section.
+      for (const [path, target, tab] of [
+        ['providers.html', 'settings.html#llm', 'llm'],
+        ['providers.html#decision', 'settings.html#decision', 'decision'],
+        ['providers.html#multimodal', 'settings.html#multimodal', 'vision'],
+        ['permissions.html', 'settings.html#permissions', 'permissions'],
+      ]) {
+        const { page: forwarded, errors: forwardErrors } = await open(browser, build, path);
+        await forwarded.waitForURL(url => String(url).endsWith(`/src/${build}/src/ui/${target}`));
+        await forwarded.waitForFunction(name => document.querySelector('.tab-btn.active')?.dataset.tab === name, tab)
+          .catch(() => assert.fail(`${build}: ${path} opens ${tab}`));
+        assert.deepEqual(forwardErrors, [], `${build}: ${path} forwarding errors`);
+        await forwarded.close();
       }
-      assert.equal(await providers.locator('#image-budget-card, #toggle-screenshot-redaction').count(), 0, `${build}: image budget and redaction left Vision`);
-      assert.equal(await providers.locator('[data-panel="vision"] #webgpu-vision-choice').count(), build === 'chrome' ? 1 : 0, `${build}: in-browser vision only in Chrome`);
-      assert.equal(await providers.locator('#settings-page-link').getAttribute('href'), 'settings.html', `${build}: header links back to Settings`);
-      assert.deepEqual(await untranslated(providers), [], `${build}: every providers.html string resolves`);
+
+      // --- the model sections (the Providers page until 48.x) ---
+      const { page: providers, errors: providerErrors } = await open(browser, build, 'settings.html#llm');
+      await providers.locator('.provider-card[data-provider-id="llamacpp"]').first().waitFor();
+      assert.equal(await activeTab(providers), 'llm', `${build}: #llm opens the LLM section`);
       await providers.locator('[data-tab="decision"]').click();
-      assert.ok(await visible(providers, '#decision-mode'), `${build}: decision modes on the Decision tab`);
-      assert.deepEqual(providerErrors, [], `${build}: providers.html page errors`);
+      assert.ok(await visible(providers, '#decision-mode'), `${build}: decision modes in the Decision section`);
+      assert.deepEqual(providerErrors, [], `${build}: model sections page errors`);
       await providers.close();
 
-      // A profile sync on Settings refreshes a Providers page open in another
-      // tab, so a Save there cannot write stale values over what was pulled.
+      // A profile sync in one Settings tab refreshes the model sections of
+      // another, so a Save there cannot write stale values over what was pulled.
       const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
       try {
         await context.addInitScript(stub, { build, lang: 'en', seed: {} });
@@ -418,7 +447,7 @@ try {
         const syncErrors = [];
         const synced = await context.newPage();
         synced.on('pageerror', error => syncErrors.push(error.message));
-        await synced.goto(`${origin}/src/${build}/src/ui/providers.html#vision`);
+        await synced.goto(`${origin}/src/${build}/src/ui/settings.html#vision`);
         await synced.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
         assert.equal(await synced.locator('#vision-model').inputValue(), '', `${build}: no vision model before the sync`);
         // Stands in for what the sync writes to storage.
@@ -431,31 +460,24 @@ try {
         await syncing.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
         await syncing.locator('#btn-profile-sync-now').click();
         await synced.waitForFunction(() => document.getElementById('vision-model').value === 'synced-vision');
-        assert.ok(await loads() > loadsBefore, `${build}: the Providers page reloads its providers after a sync`);
+        assert.ok(await loads() > loadsBefore, `${build}: the other Settings tab reloads its providers after a sync`);
         assert.deepEqual(syncErrors, [], `${build}: profile sync refresh errors`);
       } finally {
         await context.close();
       }
 
-      const { page: aliased, errors: aliasErrors } = await open(browser, build, 'providers.html#multimodal');
-      await aliased.waitForFunction(() => document.querySelector('.tab-btn.active')?.dataset.tab === 'vision');
-      assert.deepEqual(aliasErrors, [], `${build}: providers.html alias errors`);
-      await aliased.close();
-
-      // --- permissions.html ---
+      // --- Permissions & privacy (the Permissions page until 48.x) ---
       const grant = { host: 'example.com', capability: 'click', action: 'allow' };
-      const { page: permissions, errors: permissionErrors } = await open(browser, build, 'permissions.html', { seed: { wb_permissions: [grant] } });
+      const { page: permissions, errors: permissionErrors } = await open(browser, build, 'settings.html#permissions', { seed: { wb_permissions: [grant] } });
       await permissions.locator('#permissions-list button[data-host="example.com"]').waitFor();
       await permissions.locator('#toggle-permission-gate').locator('..').click();
       assert.equal(await store(permissions, 'askBeforeConsequentialActions'), false, `${build}: master switch saves`);
       assert.ok(await visible(permissions, '#permission-gate-warning'), `${build}: master switch warning`);
       await permissions.locator('#permissions-list button[data-host="example.com"]').click();
       await permissions.waitForFunction(() => window.testStore.wb_permissions.length === 0);
-      assert.equal(await permissions.locator('#settings-page-link').getAttribute('href'), 'settings.html', `${build}: permissions links back to Settings`);
-      assert.deepEqual(await untranslated(permissions), [], `${build}: every permissions.html string resolves`);
-      assert.deepEqual(permissionErrors, [], `${build}: permissions.html page errors`);
+      assert.deepEqual(permissionErrors, [], `${build}: Permissions & privacy page errors`);
       await permissions.close();
-      console.log(`PASS ${build}: settings, providers and permissions pages`);
+      console.log(`PASS ${build}: settings page, its sections and the forwarded pages`);
     } finally {
       await browser.close();
     }

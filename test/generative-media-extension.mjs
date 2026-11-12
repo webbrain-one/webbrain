@@ -30,7 +30,7 @@ try {
   });
   const page = await context.newPage();
   const extensionId = new URL(worker.url()).host;
-  await page.goto(`chrome-extension://${extensionId}/src/ui/providers.html#generative`);
+  await page.goto(`chrome-extension://${extensionId}/src/ui/settings.html#generative`);
   await page.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
   await page.locator('#image-gen-provider').selectOption('openrouter');
   await page.locator('#image-gen-api-key').fill('synthetic-or-key');

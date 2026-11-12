@@ -3,7 +3,7 @@ import { t } from './i18n.js';
 
 export function initD1Settings(send) {
   const provider = document.getElementById('decision-provider'), controls = document.getElementById('d1-controls'), line = document.getElementById('d1-status'), consent = document.getElementById('d1-consent');
-  // The decision card is on providers.html; the other settings pages have nothing to wire.
+  // Nothing to wire on a page without the Decision section.
   if (!provider || !controls) return async () => {};
   let timer = null, busy = false;
   const show = async () => {

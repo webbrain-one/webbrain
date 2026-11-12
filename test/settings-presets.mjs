@@ -151,7 +151,7 @@ for (const build of ['chrome', 'firefox']) {
     const parents = [...html.matchAll(/data-depends-on="([^"]+)"/g)].flatMap(match => match[1].split(' '));
     assert.ok(parents.includes('toggle-scheduled-tasks') && parents.includes('toggle-user-memory-enabled'));
     for (const id of parents) assert.match(html, new RegExp(`<input type="checkbox" id="${id}"`), `parent switch #${id}`);
-    assert.match(html, /<script src="settings\.js" type="module"><\/script>\s*<script src="settings-presets-ui\.js" type="module"><\/script>/);
+    assert.match(html, /<script src="settings\.js" type="module"><\/script>[\s\S]*?<script src="settings-presets-ui\.js" type="module"><\/script>/, 'settings-presets-ui.js loads after settings.js');
   });
 
   test(`${build}: every locale has the switches' copy`, async () => {

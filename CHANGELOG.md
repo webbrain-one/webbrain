@@ -15,6 +15,10 @@ This changelog was generated from the repository Git history and release tags. V
 - Settings → Advanced is sorted under headings. The planning controls, Auto-screenshot and the image budget moved there from General and Budgets, next to the other settings the combined switches stand for.
 - A setting that only matters while another is on is greyed out with it: the scheduled-task confirmation, and the user-memory learning and prompt-size options.
 - Config export and import now include the image budget (image detail, screenshots per turn, maximum image dimension).
+- Settings is one wider page with a sidebar. The Providers and Permissions pages are now sections of it: the models (LLM, Vision, Speech, Generative, Decision, SafeSocial) sit under **Models**, and CAPTCHA and Bridge under **Integrations**. The search box tops the sidebar and searches every section. Below 880px the sidebar becomes a scrolling strip.
+- **Permissions & privacy** holds the permission prompts and site permissions together with screenshot redaction, strict secret handling and local network access, which moved there from Advanced. Firefox's trusted automation card moved from Advanced to Bridge.
+- A new **Offline** section shows Apocalypse Mode's archive status and opens Apocalypse Mode, which keeps its own switch and downloads. Its link left the Settings header.
+- Old links keep working: `providers.html` and `permissions.html` forward to the matching Settings section with their `#section`, and `settings.html#providers`, `#multimodal` and `#apocalypse` open the section that holds them now.
 
 ### Fixed
 - A profile that never moved the plan-review slider now uses the 75% threshold Settings shows. The background had been falling back to 90%, so plans scored between 75% and 90% stopped for review when they should have run.
