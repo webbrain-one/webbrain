@@ -11677,8 +11677,8 @@ function renderClarifyCard(data) {
     const confirmation = data.mutationConfirmation || {};
     const host = String(confirmation.host || '').slice(0, 300) || 'this site';
     qEl.textContent = t('sp.delete.question', { host });
-    const reasonKey = { not_requested: 'sp.delete.reason_not_requested', not_named: 'sp.delete.reason_not_named' }[confirmation.reason]
-      || 'sp.delete.reason_unverified';
+    const reasonKey = { not_requested: 'sp.delete.reason_not_requested', not_named: 'sp.delete.reason_not_named',
+      repeat: 'sp.delete.reason_repeat' }[confirmation.reason] || 'sp.delete.reason_unverified';
     const reasonEl = document.createElement('div');
     reasonEl.className = 'clarify-reason';
     reasonEl.textContent = t(reasonKey);
@@ -11811,16 +11811,17 @@ function renderClarifyCard(data) {
     card.dataset.unverifiedStepConfirmation = '1';
     const step = data.unverifiedStepConfirmation || {};
     const stepHost = String(step.host || '').slice(0, 300) || 'this site';
-    const stepAction = ['commit', 'submit', 'publish', 'click', 'type'].includes(step.action) ? step.action : 'submit';
+    const stepAction = ['commit', 'submit', 'publish', 'click', 'type', 'delete', 'send'].includes(step.action) ? step.action : 'submit';
     qEl.textContent = t(`sp.unverified.question.${stepAction}`, { host: stepHost });
     const stepReason = ['editor_unverified', 'draft_unverified', 'draft_unobserved',
-      'submit_unclear', 'target_unresolved', 'repeat_unverified', 'credential_not_provided'].includes(step.reason)
+      'submit_unclear', 'target_unresolved', 'repeat_unverified', 'credential_not_provided',
+      'delete_unbound', 'prior_submission_unreconciled', 'recipient_unreadable'].includes(step.reason)
       ? step.reason : 'step_unverified';
     const reasonEl = document.createElement('div');
     reasonEl.className = 'clarify-reason';
     reasonEl.textContent = t(`sp.unverified.reason.${stepReason}`);
     card.appendChild(reasonEl);
-    const stepLabel = ['editor', 'composer', 'masked', 'hidden'].includes(step.contentLabel) ? step.contentLabel : 'page';
+    const stepLabel = ['editor', 'composer', 'masked', 'hidden', 'request'].includes(step.contentLabel) ? step.contentLabel : 'page';
     const stepText = stepLabel === 'hidden' ? '' : String(step.content || '').slice(0, 1501);
     const labelEl = document.createElement('div');
     labelEl.className = 'clarify-reason';
@@ -11835,9 +11836,13 @@ function renderClarifyCard(data) {
     }
     const optionsEl = document.createElement('div');
     optionsEl.className = 'clarify-options';
+    // A Delete control's card (deletion-guard-refusal) answers with the
+    // deletion card's own buttons.
     const stepButtons = stepAction === 'type'
       ? [['once', t('sp.unverified.type_it')], ['deny', t('sp.unverified.dont_type')]]
-      : [['once', t('sp.unverified.go_ahead')], ['deny', t('sp.unverified.dont')]];
+      : stepAction === 'delete'
+        ? [['once', t('sp.delete.delete')], ['deny', t('sp.delete.dont_delete')]]
+        : [['once', t('sp.unverified.go_ahead')], ['deny', t('sp.unverified.dont')]];
     for (const [value, label] of stepButtons) {
       const b = document.createElement('button');
       b.type = 'button';
