@@ -42,6 +42,7 @@ var (
 
 	hidden      atomic.Bool
 	loggedVis   atomic.Bool
+	quitting    atomic.Bool
 	appDelegate objc.ID
 )
 
@@ -102,6 +103,7 @@ func Run(o Options) {
 	}
 	delegateClass, err := objc.RegisterClass("WBCompanionAppDelegate", objc.GetClass("NSObject"), appProtocols, nil, []objc.MethodDef{
 		{Cmd: sel("applicationShouldHandleReopen:hasVisibleWindows:"), Fn: shouldHandleReopen},
+		{Cmd: sel("applicationShouldTerminate:"), Fn: shouldTerminate},
 	})
 	if err != nil {
 		panic(err)
@@ -157,6 +159,23 @@ func shouldHandleReopen(self objc.ID, _cmd objc.SEL, sender objc.ID, hasVisibleW
 		go onTap()
 	}
 	return false
+}
+
+// shouldTerminate covers the ways AppKit ends the app by itself: Quit in the
+// Dock menu (shown while the panel window is open), logging out, shutting
+// down. OnExit (servers, local model) runs first, then the app goes.
+func shouldTerminate(self objc.ID, _cmd objc.SEL, sender objc.ID) uint64 {
+	const terminateNow, terminateLater = 1, 2
+	if quitting.Swap(true) {
+		return terminateNow // Quit already ran OnExit
+	}
+	go func() {
+		if opts.OnExit != nil {
+			opts.OnExit()
+		}
+		onMain(func() { app.Send(sel("replyToApplicationShouldTerminate:"), true) })
+	}()
+	return terminateLater
 }
 
 // watchVisibility asks AppKit whether the status item's window is on screen.
@@ -294,6 +313,7 @@ func SetTooltip(s string) {
 
 // Quit runs OnExit and terminates the app.
 func Quit() {
+	quitting.Store(true)
 	if opts.OnExit != nil {
 		opts.OnExit()
 	}
