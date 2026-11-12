@@ -25,6 +25,7 @@ import (
 	"github.com/esokullu/webbrain-systray/internal/instance"
 	"github.com/esokullu/webbrain-systray/internal/logx"
 	"github.com/esokullu/webbrain-systray/internal/osutil"
+	"github.com/esokullu/webbrain-systray/internal/panelwin"
 	"github.com/esokullu/webbrain-systray/internal/paths"
 	"github.com/esokullu/webbrain-systray/internal/settings"
 	"github.com/esokullu/webbrain-systray/internal/tray"
@@ -87,6 +88,33 @@ func waitForInstance(timeout time.Duration) (int, settings.Settings, bool) {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+// showRunningPanel asks the companion that already runs to show its panel
+// (its own window, brought to the front if it is open). Companions without
+// that route get a browser app window, as before.
+func showRunningPanel(port int, s settings.Settings) {
+	pid := 0
+	if data, err := os.ReadFile(runtimeFile()); err == nil {
+		var ri runtimeInfo
+		if json.Unmarshal(data, &ri) == nil && ri.Port == port {
+			pid = ri.PID
+		}
+	}
+	panelwin.AllowForeground(pid)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/companion/api/panel", port), nil)
+	if err == nil {
+		req.Header.Set("X-Companion-Key", s.PanelToken)
+		client := &http.Client{Timeout: 5 * time.Second}
+		if resp, err := client.Do(req); err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+	}
+	url := fmt.Sprintf("http://127.0.0.1:%d/companion/#k=%s", port, s.PanelToken)
+	_ = osutil.OpenAppWindow(url, 460, 820)
 }
 
 // acquireLock takes the single-instance lock, retrying for up to wait while
@@ -183,8 +211,7 @@ func main() {
 	if errors.Is(err, instance.ErrHeld) {
 		if port, s, ok := waitForInstance(15 * time.Second); ok {
 			if !*background {
-				url := fmt.Sprintf("http://127.0.0.1:%d/companion/#k=%s", port, s.PanelToken)
-				_ = osutil.OpenAppWindow(url, 460, 820)
+				showRunningPanel(port, s)
 			}
 			return
 		}
@@ -232,12 +259,19 @@ func main() {
 			_ = osutil.Reveal(logx.Path())
 			return
 		}
-		_ = osutil.OpenAppWindow(a.PanelURL(fragment), 460, 820)
+		url := a.PanelURL(fragment)
+		inBrowser := func() { _ = osutil.OpenAppWindow(url, 460, 820) }
+		if *headless {
+			inBrowser()
+			return
+		}
+		panelwin.Show(url, inBrowser)
 	}
 	a.OpenPanel = open
 	var shutdownOnce sync.Once
 	shutdown := func() {
 		shutdownOnce.Do(func() {
+			panelwin.Close()
 			a.Shutdown()
 			_ = os.Remove(runtimeFile())
 			if a.RestartPending() {
@@ -269,6 +303,7 @@ func main() {
 	}
 
 	tray.SetOnTap(func() { open("") })
+	panelwin.QuitApp = tray.Quit
 	a.OnChange = tray.Refresh
 	go func() {
 		<-sig
