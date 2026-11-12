@@ -172,7 +172,7 @@ function normalizePendingClarify(data, now = Date.now()) {
   if (mutationConfirmation.kind === 'delete' && (mutationConfirmation.item || mutationConfirmation.url)) {
     pending.mutationConfirmation = {
       kind: 'delete',
-      reason: ['not_requested', 'not_named', 'unverified'].includes(mutationConfirmation.reason)
+      reason: ['not_requested', 'not_named', 'repeat', 'unverified'].includes(mutationConfirmation.reason)
         ? mutationConfirmation.reason : 'unverified',
       host: String(mutationConfirmation.host || '').slice(0, 300),
       item: String(mutationConfirmation.item || '').slice(0, 280),

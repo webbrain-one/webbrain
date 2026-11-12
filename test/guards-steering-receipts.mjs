@@ -1046,21 +1046,64 @@ for (const build of ['chrome', 'firefox']) {
     } finally { declined.close(); }
   });
 
-  test(`${build}: after a correction, an earlier deletion whose result is unknown still holds a deletion`, async () => {
+  // deletion-guard-refusal: the earlier attempt may already have deleted this
+  // item, and WebBrain cannot tell. The item is identified, so the user
+  // decides on the deletion card instead of a refusal on every click; no
+  // model reads the request to let it through.
+  test(`${build}: after a correction, an earlier deletion whose result is unknown holds a deletion until the user answers the card`, async () => {
     // The earlier attempt was itself this deletion (the receipt Mastodon's
     // confirmation records), and its response was lost.
-    const h = await fixture('delete my test post on mastoturk.org', { pageUrl: timelineHome });
-    try {
+    const repeated = async () => {
+      const h = await fixture('delete my test post on mastoturk.org', { pageUrl: timelineHome });
       h.agent._recordCompletionSubmitAttempt(h.tab, { ...timelineDelete, isSubmit: true }, 'click_ax', { ref_id: 'ref_7' }, timelineHome, timelineHome,
         { success: true, dispatched: true }, 'home-doc', 'home-doc');
-      const guard = await h.steer('now delete it');
+      h.guard = await h.steer('now delete it');
       h.read(timelineHome);
-      assert.equal(guard.steeringPriorSubmission?.mutationKind, 'delete');
-      assert.deepEqual(guard.resourceMutationDispatches || [], [], 'As in a run rebuilt from the conversation');
-      assert.equal((await h.check(timelineDelete))?.actionGuard?.reason, 'prior_effect_unreconciled');
+      return h;
+    };
+    const answer = (h, value, cards = []) => (status, details) => {
+      if (status !== 'clarify') return;
+      cards.push(details);
+      h.agent._settleClarification(h.agent._pendingClarifications.get(h.tab).get(details.clarifyId), { answer: value, source: 'option' });
+    };
+    const h = await repeated();
+    try {
+      assert.equal(h.guard.steeringPriorSubmission?.mutationKind, 'delete');
+      assert.deepEqual(h.guard.resourceMutationDispatches || [], [], 'As in a run rebuilt from the conversation');
+      const block = await h.check(timelineDelete);
+      assert.equal(block?.actionGuard?.reason, 'prior_effect_unreconciled');
       assert.equal(h.decisions('deletion_request').length, 0, 'The repeat is not put to the deletion question');
       assert.notEqual(h.steeringBlock(timelineDelete), null);
+      // The card: the item, with the reason that an earlier attempt may have deleted it.
+      assert.deepEqual(block.mutationConfirmation, { kind: 'delete', reason: 'repeat', host: 'mastoturk.org',
+        item: 'WebBrain test gönderisi', url: timelinePost, dialog: '' });
+      // Without anyone to ask, the refusal says what was not established.
+      const { mutationConfirmation, ...refusal } = block;
+      assert.match(refusal.error, /may already have deleted this item and the user could not be asked/);
+      // "Delete" lets this deletion through, and no model was asked.
+      const cards = [];
+      assert.equal(await h.agent._resolveMutationConfirmation(h.tab, block, answer(h, 'once', cards), () => h.check(timelineDelete)), null);
+      assert.equal(cards.length, 1);
+      assert.equal(cards[0].mutationConfirmation.reason, 'repeat');
+      assert.equal(cards[0].timeoutSec, undefined, 'the deletion card has no countdown');
+      assert.equal(h.steeringBlock(timelineDelete), null, 'The answer lets this one deletion through the correction check');
+      assert.equal(h.decisions('deletion_request').length, 0);
     } finally { h.close(); }
+    // "Don't delete" holds the item for the rest of the task.
+    const declined = await repeated();
+    try {
+      const block = await declined.check(timelineDelete);
+      const result = await declined.agent._resolveMutationConfirmation(declined.tab, block, answer(declined, 'deny'), () => declined.check(timelineDelete));
+      assert.equal(result?.actionGuard?.reason, 'deletion_declined');
+      assert.equal((await declined.check(timelineDelete))?.actionGuard?.reason, 'deletion_declined');
+      assert.notEqual(declined.steeringBlock(timelineDelete), null);
+    } finally { declined.close(); }
+    // An unattended run has nobody to ask: the batch keeps the refusal.
+    const unattended = await repeated();
+    try {
+      const block = await unattended.check(timelineDelete);
+      assert.equal(await unattended.agent._resolveMutationConfirmation(unattended.tab, block, null, () => unattended.check(timelineDelete)), block);
+    } finally { unattended.close(); }
     // A deletion archived at an earlier correction holds it the same way when
     // it deleted this post, or an item that cannot be told apart from it; a
     // deletion of another post does not.

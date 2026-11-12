@@ -566,23 +566,29 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
   /**
    * A vision click that the deletion guard, or the check of a publish or
    * commit after a correction, authorized is bound to the control the submit
-   * probe read at its point (agent _resourceMutationActionKey). A ref click
-   * cannot land anywhere else; a point can, if the page changed since. So
-   * right before input goes out the point is read again, and a different
-   * control there (or one that cannot be read) is refused.
+   * probe read at its point (agent _resourceMutationActionKey). So is one the
+   * user approved on WebBrain's publication or submission card, whose answer
+   * covers the action they saw. A ref click cannot land anywhere else; a
+   * point can, if the page changed since. So right before input goes out the
+   * point is read again, and a different control there (or one that cannot
+   * be read) is refused.
    */
   proto._visionMutationBindingBlock = async function _visionMutationBindingBlock(tabId, args, detected) {
     if (!detected || typeof this._resourceMutationActionKey !== 'function') return null;
     const key = this._resourceMutationActionKey(tabId, 'click', args, detected);
     const authorization = this._planExecutionGuards?.get?.(tabId)?.resourceMutationAuthorization;
-    if (!key || authorization?.key !== key) return null;
+    const override = key ? this._publicationGuardOverrideRequest?.(tabId, 'click', args, detected) : null;
+    const approved = !!override
+      && this._unverifiedStepApproval?.(tabId, override.guardId, override.stepKey, { peek: true })?.source === 'user';
+    if (!key || (authorization?.key !== key && !approved)) return null;
     let fresh = null;
     try {
       fresh = await this._detectLikelySubmitAction(tabId, 'click', args, { mutationReconciliation: true });
     } catch (error) {
       if (isControlFlowError(error)) throw error;
     }
-    if (fresh && this._resourceMutationActionKey(tabId, 'click', args, fresh) === key) return null;
+    if (fresh && this._resourceMutationActionKey(tabId, 'click', args, fresh) === key
+        && (!approved || this._publicationGuardOverrideRequest(tabId, 'click', args, fresh)?.stepKey === override.stepKey)) return null;
     const classification = detected.mutationKind === 'delete' ? 'delete' : detected.publicationControl === true ? 'publish' : 'submit';
     return {
       success: false, dispatched: false, noDispatch: true, visionScreenChanged: true,
