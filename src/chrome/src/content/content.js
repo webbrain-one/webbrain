@@ -7287,7 +7287,11 @@
     const actionTarget = dispatch.actionTarget || null;
     if (!composer?.isConnected || !tool || !actionTarget?.isConnected) return '';
     const identityKey = _messageRecipientIdentityKey(identities);
-    if (!identityKey || identityKey === '[]') return '';
+    // A binding without a recipient exists only for a send the user approved
+    // on WebBrain's card although the page names none (allowUnidentified).
+    // Its dispatch is still held to the composer, the draft and no recipient
+    // appearing in the meantime.
+    if (!identityKey || (identityKey === '[]' && dispatch.allowUnidentified !== true)) return '';
     const entropy = new Uint32Array(3);
     globalThis.crypto.getRandomValues(entropy);
     const token = `wbmr_${Date.now().toString(36)}_${Array.from(entropy, value => value.toString(36)).join('_')}`;
@@ -10254,10 +10258,12 @@
         && messageSend === true
         && (tool === 'upload_file' || !!messageBody)
         && (!twitterConversation || twitterBaselineComplete)
-        && (recipientSets
+        && ((recipientSets
           ? strongRecipients.length > 0
           : strongRecipients.length === 1)
+          || (params.allowUnidentifiedRecipient === true && strongRecipients.length === 0 && tool !== 'upload_file'))
         ? _rememberMessageRecipientDispatchBinding(composer, strongRecipients, {
+            allowUnidentified: params.allowUnidentifiedRecipient === true && strongRecipients.length === 0,
             tool,
             args,
             actionTarget: dispatchTarget,

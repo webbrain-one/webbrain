@@ -12,8 +12,11 @@ export const SUBMIT_CLICK_WINDOW_MS = 45_000;
  * reading already made, and with `read: true` it may ask for one. A caption
  * read as anything but a commit or publication never duplicates anything and
  * needs no tab lookup; an unread caption is recorded, and a rapid second click
- * blocks only once its caption is read as one. An `_allowResubmit` retry is allowed through but
- * re-recorded, so a further rapid duplicate needs its own acknowledgement.
+ * blocks only once its caption is read as one. A repeat the user approved on
+ * WebBrain's card (`approved`) is allowed through but re-recorded, so a
+ * further rapid duplicate needs its own answer. The model has no argument
+ * that lets a repeat through. `peek` reports what a click would get without
+ * recording it, so the agent can ask before the click is sent.
  */
 export async function guardRecentSubmitClick(
   recentSubmitClicks,
@@ -23,6 +26,7 @@ export async function guardRecentSubmitClick(
   now = Date.now,
   detectedTarget = null,
   readCaption = null,
+  { approved = false, peek = false } = {},
 ) {
   if (!args?.text) return null;
   // Only app-observed preflight evidence can exempt a control. A label such
@@ -56,20 +60,22 @@ export async function guardRecentSubmitClick(
   const fresh = entries.filter(entry => timestamp - entry.ts < SUBMIT_CLICK_WINDOW_MS);
   const match = fresh.find(entry => entry.key === key);
 
-  if (match && args._allowResubmit) {
+  const rerecord = () => {
+    if (peek) return;
     match.ts = timestamp;
     match.url = currentUrl;
     match.text = rawText;
     recentSubmitClicks.set(tabId, fresh);
+  };
+
+  if (match && approved) {
+    rerecord();
     return null;
   }
 
   if (match && !commits(known || await reading(true))) {
     // Not a commit, or not readable: a repeat is an ordinary click.
-    match.ts = timestamp;
-    match.url = currentUrl;
-    match.text = rawText;
-    recentSubmitClicks.set(tabId, fresh);
+    rerecord();
     return null;
   }
 
@@ -78,14 +84,17 @@ export async function guardRecentSubmitClick(
       success: false,
       dispatched: false,
       blockedDuplicateSubmit: true,
-      error: `Blocked: you already clicked "${rawText}" on this page ${Math.round((timestamp - match.ts) / 1000)}s ago and the URL has not changed since. Stripe-style UIs often reuse the same label for the modal-OPEN button and the SUBMIT button inside the modal — a second click typically creates a duplicate record. Before clicking "${rawText}" again, verify: (a) that all required fields are actually filled by reading the form/page, (b) that this click is intended as a FIRST submit and not a retry. If the previous click did nothing because a field was empty, fill the field first. If you genuinely need to retry, pass _allowResubmit: true in the args.`,
+      error: `Blocked: you already clicked "${rawText}" on this page ${Math.round((timestamp - match.ts) / 1000)}s ago and the URL has not changed since. Stripe-style UIs often reuse the same label for the modal-OPEN button and the SUBMIT button inside the modal — a second click typically creates a duplicate record. Before clicking "${rawText}" again, verify: (a) that all required fields are actually filled by reading the form/page, (b) that this click is intended as a FIRST submit and not a retry. If the previous click did nothing because a field was empty, fill the field first. A repeat this soon needs the user's answer on WebBrain's card; no argument lets it through.`,
       previousClickUrl: match.url,
+      previousClickAt: match.ts,
       currentUrl,
       secondsSincePrevious: Math.round((timestamp - match.ts) / 1000),
     };
   }
 
-  fresh.push({ key, ts: timestamp, url: currentUrl, text: rawText });
-  recentSubmitClicks.set(tabId, fresh);
+  if (!peek) {
+    fresh.push({ key, ts: timestamp, url: currentUrl, text: rawText });
+    recentSubmitClicks.set(tabId, fresh);
+  }
   return null;
 }

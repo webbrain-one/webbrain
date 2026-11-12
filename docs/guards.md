@@ -117,7 +117,10 @@ The answer covers one tool call and the displayed action. Changed content,
 account, target, document or user instructions require a new answer. Stop
 and Don't cancel it. These cards also work with Strict checks and never
 approve themselves through a timeout or unattended run. A visible, identified
-control is required so WebBrain can bind the answer to the action it sends.
+control is required so WebBrain can bind the answer to the action it sends:
+a ref or selector click, or a vision click (`click_at`), which is bound to the
+control the submit probe read at its point and read again right before the
+click is sent.
 An override authorizes an attempt; the normal dispatch receipt and result
 verification still determine whether it succeeded. Each approved attempt
 remains part of the completion requirements, and verification checks the
@@ -172,8 +175,54 @@ missing relationship evidence count as verified publication.
 | `steer-prior-submission-target-unresolved` | After a correction, a submit-capable control the probe could not identify | Nothing (check the page) |
 | `clickax-task-click-lock` (hard, Chrome) | An earlier trusted click on the same target may have landed and was never verified | Nothing (check the page) |
 | `social-publication-authorization-guard` (hard) | A publication's authorization, contract, preflight or audit refuses an identified draft | Account, reply/quote target, draft and attachments |
-| `steer-post-correction-commit-guard` (hard) | A form submission after a correction cannot pass the resource authorization checks | Destination and public field values |
+| `steer-post-correction-commit-guard` (hard) | A form submission after a correction cannot pass the resource authorization checks, or its resource cannot be resolved | Destination and public field values |
 | `credential-not-provided` (hard, asks when it knows) | Text the model chose for a sign-in password field is not a password the user gave | The text masked (its first character and a dot for each other one; only dots under four characters), or nothing with strict secret handling |
+| `click-duplicate-submit` (hard) | A text click repeats a commit or publish caption clicked on the same URL within 45 seconds | The control's caption |
+| `deletion-guard-refusal` (hard) | A Delete or Remove control sits outside one identifiable record (toolbar, bulk, selection) | Nothing (check the page); the buttons are Delete / Don't delete |
+| `deletion-guard-refusal` (hard, on the deletion card) | After a correction, an identified item that an earlier attempt may already have deleted | The item, as on any deletion card |
+| `steer-prior-submission-unreconciled` (hard) | After a correction, a write WebBrain sends itself: an API mutation or `chrome_web_store_publish` | The request: method and address, and the body unless strict secret handling is on |
+| `recipient-guard-refusal` (hard) | A text send whose recipient the page does not name, with a readable draft | The draft |
+
+### Hard-class asks for dead ends
+
+The last five rows, and the vision click, exist because a refusal there ended
+the run where the user could have settled it by looking at the page. Each of
+these cards is hard: it never times out, never goes ahead on its own, and an
+unattended run or a caller without a card channel is refused at once. One
+answer covers one tool call.
+
+- **Vision clicks.** The publication and submission override card is offered
+  for a vision click as it is for a ref or selector click. A different control
+  at the point when the click is sent is refused
+  (`resource_changed_before_dispatch`), and the next attempt asks again.
+- **A form commit whose resource cannot be resolved** (`resource_unresolved`
+  after a correction) gets the override card. Typing "override that guard!"
+  already covered this case; the card was not offered.
+- **A repeated commit or publish click.** The first click may or may not have
+  taken effect, and WebBrain cannot tell. "Go ahead" lets that one click
+  through and records it again, so a third click asks again. The click
+  handler keeps its own check for callers without a card. No model argument
+  lets a repeat through: the `_allowResubmit` argument the refusal used to
+  name was never accepted by the click schema.
+- **A Delete or Remove control outside one record.** The control is
+  identified, its items are not, so the card names no item and says to check
+  the page. The answer covers one click on that control in that document. The
+  site's own confirmation dialog is asked about separately when its button is
+  not bound to a record either.
+- **An item an earlier attempt may already have deleted.** It is identified,
+  so it goes to the deletion card with its own reason. The answer holds for
+  that item for the rest of the task, like any answer on that card.
+- **A write WebBrain sends itself after a correction.** No page read can show
+  whether an API request repeats the earlier submission, so it used to be
+  refused for the rest of the task. One answer covers one call with exactly
+  those arguments; each further write asks again.
+- **A message whose recipient the page does not name**
+  (`recipient_identity_unavailable`). The user can see who the conversation
+  is with. "Go ahead" covers that one send: the page binds it to the composer
+  and the draft the user saw, and a recipient that becomes readable before
+  dispatch stops it. It is asked only for a text send from the tool batch.
+  `chat_send`, uploads, an unreadable draft, and sends through a script, frame
+  click or drag still refuse.
 
 ### The sign-in password card
 
@@ -234,7 +283,10 @@ text]`, still holds the masked preview of a card it relays.
 Code: `_promptUnverifiedStepConfirmation` and `_resolveUnverifiedStepConfirmation`
 in `agent.js`, `agent/unverified-step.js` (shared by the agent, scheduler
 persistence and restored cards), and the `unverifiedStepConfirmation` branch
-of `renderClarifyCard` in `ui/sidepanel.js`. The sign-in password card:
+of `renderClarifyCard` in `ui/sidepanel.js`. The asks for dead ends:
+`_publicationGuardOverrideRequest`, `_duplicateSubmitClickAsk`,
+`_unboundDeletionAsk`, `_priorSubmissionWriteAsk` and
+`_unreadableRecipientStepKey` in `agent.js`. The sign-in password card:
 `_unprovidedCredentialBlock`, `_approvedCredentialTargetBlock`,
 `_retargetedCredentialBlock` and `_resolveCredentialConfirmation` in
 `agent.js`, called from the tool batch
@@ -250,6 +302,12 @@ and `test/credential-not-provided.mjs`.
 | `money` | `captcha-paid-solve-protection` | A paid solve spends the user's balance. |
 | `credentials` | `chat-user-input-required`, `credential-not-provided`, `otp-mailbox-scope`, `strict-secret-credential-handling` | One-time codes, passwords and payment details are the user's to enter. A guessed sign-in can lock the account or count as an unauthorized attempt. `credential-not-provided` checks an existing account's password field: autocomplete `current-password`, a field naming the current password, and any lone password field (one not marked as a new or repeated password, a key or token, or a field of a form that creates an account; `new-password` does not mark a form's only password field as new when the form signs in, as forms that stop autofill that way do; a second password field of its form counts only beside a field naming the account or a "Log in" button, as a sign-in's PIN does), with or without sign-in evidence (a field naming the account, a "Sign in", "Next", "Verify" or "Confirm" button, a sign-in label), except one that names a network's key such as a Wi-Fi password (not a "Network password"); a field in a web component counts with the form around the component. It checks the text against what the user gave: their messages, attached files, clarify answers, the WebBrain profile, memory notes they wrote (not auto-captured ones), MemCode recall and passwords WebBrain set for an account it created on the same site (`docs/security-model.md`). Text from none of those is typed only after the user's "Type it" on WebBrain's card ("The sign-in password card" above). |
 | `unrequested_publication` | `bot-memory-reservation`, `click-duplicate-submit`, `clickax-task-click-lock`, `consequential-durability-checkpoint`, `github-conditional-commit-unbound`, `recipient-guard-unrequested-send`, `sched-reconciliation-required`, `social-api-publication-route`, `social-publication-audit`, `social-publication-authorization-guard`, `steer-post-correction-commit-guard`, `steer-prior-submission-unreconciled` | A post, commit, submit or send the user did not ask for, or a second copy of one that may already have gone out, is public or hard to undo. |
+
+A guard listed here still refuses in every case that "Hard-class asks for
+dead ends" above does not name: a decided case (a duplicate, a request that
+forbids the action), an action WebBrain cannot identify (a script, a key
+press, an unfinished probe), a storage failure, and any run where nobody can
+answer a card.
 
 After a correction, `steer-post-correction-commit-guard` and
 `steer-prior-submission-unreconciled` hold a post, commit or submit until
