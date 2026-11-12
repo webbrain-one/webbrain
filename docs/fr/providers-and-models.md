@@ -134,7 +134,7 @@ Settings accepte aussi un dépôt Hugging Face personnalisé. Les autres
 préréglages Bonsai 2 sont livrés mais masqués des sélecteurs pour l’instant.
 Le modèle choisi est téléchargé à l’activation d’Apocalypse ; une fois en
 cache, il fonctionne sans qu’Apocalypse soit activé. Sur les GPU limités,
-réduisez la fenêtre de contexte dans la page Providers si nécessaire.
+réduisez la fenêtre de contexte dans la carte WebGPU de Paramètres → Modèles → LLM si nécessaire.
 Firefox n’expose pas cette carte.
 
 Les modèles dans le navigateur répondent seulement aux questions. Dans le

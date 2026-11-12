@@ -94,7 +94,7 @@ try {
             runtime, commands: { getAll: async () => [] }, tabs: { create: async () => ({}) },
           };
         }, { build });
-        await page.goto(`${origin}/src/${build}/src/ui/providers.html#llm`);
+        await page.goto(`${origin}/src/${build}/src/ui/settings.html#llm`);
         const card = id => page.locator(`.provider-card[data-provider-id="${id}"]`);
         const rootCard = card('llamacpp');
         await rootCard.locator('input[data-key="label"]').waitFor();

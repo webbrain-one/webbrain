@@ -271,6 +271,25 @@ scheduled jobs, usage counters, and spend history are intentionally excluded.
 If a run activates another tab, the screenshot finalizer reactivates the
 originating run tab before capturing its after state.
 
+### Settings page (`src/ui/settings.html`)
+
+One page, driven by `settings.js`, with a sidebar (`settings-tabs.js`) that
+shows one section at a time: General; Models (LLM, Vision, Speech, Generative,
+Decision, SafeSocial); Permissions & privacy; Budgets; Memory; Skills;
+Integrations (CAPTCHA, Bridge); Offline; Advanced. `settings.html#<section>`
+opens a section, and the old `#providers`, `#multimodal` and `#apocalypse`
+hashes open LLM, Vision and Offline. `providers.html` and `permissions.html`
+are forwarding stubs (`settings-redirect.js`) that send old links to
+`settings.html#<section>`; the side panel's **More…** opens
+`settings.html#llm` directly. General's combined switches (Agent supervision, Image
+quality, Completion alerts; `settings-presets.js`) store nothing of their own:
+each writes existing settings and reads its position back from them. The
+background accepts the local vision, D1, decision-fixture and SafeSocial
+controls (`enable_webgpu_vision`, `set_webgpu_vision_choice`, `d1_control`,
+`webgpu_decide_fixture`) only from `settings.html`;
+`set_webgpu_vision_choice` also accepts `apocalypse-mode.html`, and
+`d1_control` the install guide's status, probe, download and stop.
+
 ### Background Script (`src/chrome/src/background.js`)
 
 The central message router. On Chrome it's a service worker (MV3); on Firefox it's a persistent background page (MV2). Responsibilities:
@@ -816,7 +835,7 @@ instruction bundle for several related capabilities.
 The packaged Wikipedia skill keeps its existing `search_wikipedia` and
 `get_wikipedia_summary` interface. When a live request fails, the exact
 built-in tool may query archives that the user explicitly installed through
-the ☢ Apocalypse Mode link in the Settings header. `apocalypse-mode.js` owns catalog
+Apocalypse Mode (Settings → Offline). `apocalypse-mode.js` owns catalog
 metadata, resumable piece verification, durable lifecycle state, OPFS or
 user-selected archive bytes, and the local openZIM reader. IndexedDB contains only configuration,
 archive metadata, and restart cursors—not multi-gigabyte archive bodies.
@@ -1684,10 +1703,10 @@ from before modes with `systemOneEnabled` reads as On) to a configuration whose
 one thing Auto needs at run time, whether Ternary Bonsai 2 2B Vision is
 downloaded (Chrome only; Firefox's copy never finds it).
 
-The static decision-models card lives on the Decision tab of the Providers page
-(`ui/providers.html#decision`), outside the dynamic provider list on the LLM tab.
+The static decision-models card lives in Settings → Models → Decision
+(`ui/settings.html#decision`), outside the dynamic provider list in the LLM section.
 It never participates in chat model selection. Old `settings.html#multimodal`
-links open the Vision tab of the Providers page. `systemone-judge.js` owns the pinned HTTP contract,
+links open Settings → Models → Vision. `systemone-judge.js` owns the pinned HTTP contract,
 strict typed responses and a shared deadline for retries. `systemone-evidence.js`
 collects bounded allowlisted observations and invalidates them on page changes.
 Scheduler evaluation returns keep/downgrade/skip plus metadata, revalidates the

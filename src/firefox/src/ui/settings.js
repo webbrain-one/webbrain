@@ -260,8 +260,9 @@ function activeProviderIsCompass() {
   const config = providersData?.[activeProviderId];
   return !!activeProviderId && (providerDefinitionId(activeProviderId) === 'webbrain_cloud' || config?.providerName === 'webbrain-cloud');
 }
-// The Strict Secret Mode switch is on settings.html and the decision card on
-// providers.html, so the card follows the stored setting, not the switch.
+// The Strict Secret Mode switch and the decision card are in different
+// sections, and Settings may be open in another tab, so the card follows the
+// stored setting, not the switch.
 let strictSecretModeOn = false;
 if (globalThis.browser?.storage?.onChanged) {
   browser.storage.onChanged.addListener((changes, area) => {

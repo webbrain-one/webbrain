@@ -434,9 +434,9 @@ Ask) and decisions. Its training data and evaluations are on the model card.
   - Apply the same pattern to any new model that serves long prompts on
     shared GPUs.
 - **Cache-only inference.** Chat never downloads. Only explicit download or
-  preload flows fetch model files: Providers → WebGPU, Apocalypse
-  Mode, and the first-install page (Chrome), which offers Compass VLD v6 2B
-  behind its optional "Download local models" button: one 2.4 GB download
+  preload flows fetch model files: the WebGPU card in Settings → Models →
+  LLM, Apocalypse Mode, and the first-install page (Chrome), which offers
+  Compass VLD v6 2B behind its optional "Download local models" button: one 2.4 GB download
   that chats, reads screenshots and answers decisions. The install page
   checks for hardware WebGPU before fetching anything, never changes the
   active provider or the decision settings, and only points an idle WebGPU
@@ -572,8 +572,8 @@ on a GPU yet. The bundle reports its probe's result on the same test
   (Hugging Face commit `b9895bc`, `decision-validation.json`). On the CPU its
   logits and caches are bit-identical to the previous graph
   (`scripts/models/bonsai/check_decision_hidden.py`). Installs that cached
-  the previous graph keep it until the model is downloaded again on the
-  Providers page;
+  the previous graph keep it until the model is downloaded again in
+  Settings → Models → LLM;
   until then the provider reports that it needs the updated decoder.
 
 ## Updating a published graph

@@ -18,7 +18,8 @@ to eyeball the actual pixelation before merging changes to
 2. Load the unpacked extension (Chrome: `chrome://extensions` → Developer
    mode → Load unpacked → `src/chrome`. Firefox: `about:debugging` → This
    Firefox → Load Temporary Add-on → `src/firefox/manifest.json`).
-3. Settings → **Advanced** → turn **Screenshot redaction** on.
+3. Settings → **Permissions & privacy** → turn **Redact sensitive content from
+   screenshots** on.
 
 ## Test 1 — Redaction on, take a screenshot
 
@@ -53,9 +54,9 @@ limitation.
 
 ## Test 3 — Toggle off (control)
 
-Turn **Screenshot redaction** off, take another screenshot of the same page,
-and confirm nothing is pixelated — the password field, emails, and phone
-numbers are all fully legible. This is the regression check that the
+Turn **Redact sensitive content from screenshots** off, take another
+screenshot of the same page, and confirm nothing is pixelated — the password
+field, emails, and phone numbers are all fully legible. This is the regression check that the
 feature is truly opt-in and doesn't run at all when disabled.
 
 ## Test 4 — Fail-open on a fresh navigation
