@@ -17,7 +17,7 @@ REPO = HERE.parent.parent
 LANGUAGES = json.loads((REPO / "web/build/languages.json").read_text(encoding="utf-8"))
 
 SITE = "https://webbrain.one/companion"  # where the pages are published
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 RELEASES = "https://github.com/webbrain-one/webbrain/releases"
 SOURCE = "https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray"
 DL = f"{RELEASES}/download/systray-v{VERSION}/WebBrain-Companion-{VERSION}-"
