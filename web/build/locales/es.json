@@ -25,6 +25,7 @@
   "nav.for_websites": "Para sitios web",
   "nav.research": "Investigación",
   "nav.developers": "Desarrolladores",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "Un asistente de IA para tu sitio, con una etiqueta script",
   "nav.dev.research_desc": "Nuestros modelos, conjuntos de datos y benchmarks",
   "nav.dev.cloud_desc": "Ejecuta tareas del navegador mediante una API",

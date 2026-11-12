@@ -25,6 +25,7 @@
   "nav.for_websites": "웹사이트용",
   "nav.research": "연구",
   "nav.developers": "개발자",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "script 태그 하나로 사이트에 AI 어시스턴트",
   "nav.dev.research_desc": "저희 모델, 데이터셋, 벤치마크",
   "nav.dev.cloud_desc": "API로 브라우저 작업 실행",

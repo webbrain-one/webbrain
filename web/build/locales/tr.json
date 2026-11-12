@@ -25,6 +25,7 @@
   "nav.for_websites": "Web siteleri için",
   "nav.research": "Araştırma",
   "nav.developers": "Geliştiriciler",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "Tek bir script etiketiyle sitenize AI asistanı",
   "nav.dev.research_desc": "Modellerimiz, veri setlerimiz ve karşılaştırmalarımız",
   "nav.dev.cloud_desc": "Tarayıcı görevlerini bir API ile çalıştırın",

@@ -25,6 +25,7 @@
   "nav.for_websites": "ウェブサイト向け",
   "nav.research": "研究",
   "nav.developers": "開発者向け",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "script タグひとつでサイトに AI アシスタント",
   "nav.dev.research_desc": "私たちのモデル、データセット、ベンチマーク",
   "nav.dev.cloud_desc": "API でブラウザのタスクを実行",
