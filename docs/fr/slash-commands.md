@@ -94,7 +94,7 @@ il s'efface au `/reset`.
 
 Pour conserver la même politique entre les conversations et les redémarrages
 du navigateur, activez **Toujours autoriser les mutations API** sous
-**Paramètres → Général → Avancé**. Ce réglage est désactivé par défaut et reste
+**Paramètres → Avancé**. Ce réglage est désactivé par défaut et reste
 actif jusqu'à sa désactivation. `/reset` efface toujours la dérogation
 `/allow-api` de la conversation, mais ne modifie pas ce réglage persistant.
 

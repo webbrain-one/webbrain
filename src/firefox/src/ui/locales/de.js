@@ -833,7 +833,7 @@ export default {
   'st.display.openai_ask_streaming.desc': 'Zeigt Text für unterstützte Anbieter im Ask-Modus während des Empfangs an. Unterbrochene Streams zeigen einen Hinweis und werden einmal ohne Streaming wiederholt. Werkzeugaufrufe warten auf das Stream-Ende; Act-, Dev-, geplante, Cloud- und Continue-Läufe bleiben ohne Streaming. Standardmäßig aktiviert.',
   'st.display.plan_before_act.label': 'Vor dem Handeln planen',
   'st.display.plan_before_act.desc': "Act und Dev führen vor dem Einsatz von Tools immer eine strukturierte Intent-Prüfung durch. Versuch (Standard) erstellt außerdem vollständige Pläne, kann bei einer kurzen Fortsetzung aber einen kürzlich genehmigten Plan wiederverwenden; Strikt erstellt in jedem Durchlauf einen vollständigen Plan. Versuch probiert es einmal erneut und fährt bei weiterhin ungültigem Intent oder Plan mit einer Warnung im Act-Modus fort; Strikt stoppt vor den Tools. Wählt Auto für eine Nachricht Act oder Dev und ist sicher, dass es eine kurze, direkte Aufgabe ist, überspringt Versuch den vollständigen Plan.",
-  'st.display.plan_before_act.try': 'Planierung versuchen (Standard)',
+  'st.display.plan_before_act.try': 'Planung versuchen (Standard)',
   'st.display.plan_before_act.strict': 'Strikte Planung',
   'st.display.plan_before_act.off': 'Aus',
   'st.display.plan_review.label': 'Planüberprüfung stoppt',

@@ -49,7 +49,7 @@ not exported, and the first such response disables Jev for the rest of that run.
 
 ## Settings and documentation checks
 
-Configure Jev under **Providers → Decision → Jev (TypeSafe)**, after
+Configure Jev under **Settings → Models → Decision → Jev (TypeSafe)**, after
 Vision and Speech to text. The two speed switches are independent of scheduled
 verification and remain off by default.
 

@@ -66,6 +66,7 @@ src/firefox/
 │   ├── background.html             # Background page (MV2 requirement)
 │   ├── background.js               # Message router
 │   ├── run-ui-journal.js           # Detached-run replay + streamed-text snapshots
+│   ├── settings-presets.js         # General's combined switches → existing settings
 │   ├── agent/
 │   │   ├── agent.js                # Core agent loop
 │   │   ├── loop-detector.js        # Browser-free loop detection, directly unit-tested
@@ -96,11 +97,14 @@ src/firefox/
 │   └── ui/
 │       ├── sidepanel.html
 │       ├── sidepanel.js            # Chat UI, verbose mode, deep verbose
-│       ├── settings.html               # Settings: General, Budgets, Memory, Skills, CAPTCHA, Bridge, Advanced
-│       ├── providers.html              # Providers: LLM, Vision, Speech, Generative, Decision, SafeSocial
-│       ├── permissions.html            # Site permissions
-│       ├── settings.css                # Shared by the three settings pages
-│       ├── settings.js                 # One controller for all three settings pages
+│       ├── settings.html               # Settings: one page, a section per sidebar entry (as in Chrome)
+│       ├── providers.html              # Stub: forwards old links to settings.html#<section>
+│       ├── permissions.html            # Stub: forwards old links to settings.html#permissions
+│       ├── settings-redirect.js        # The stubs' forwarding script
+│       ├── settings.css
+│       ├── settings-tabs.js            # Sidebar, deep links and old #hash aliases
+│       ├── settings-presets-ui.js      # General's combined switches
+│       ├── settings.js                 # Settings controller
 │       ├── traces.html
 │       └── traces.js
 ├── skills/                         # Packaged default skills (removable after seeding)

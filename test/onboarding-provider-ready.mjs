@@ -223,7 +223,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         await fixture(async ({ page, enter, snapshot }) => {
           await enter(); await page.waitForFunction(() => document.querySelector('#ob-open-settings').textContent === 'Open Settings');
           await page.locator('#ob-open-settings').click(); await page.locator('#onboarding').waitFor({ state: 'hidden' });
-          assert.deepEqual((await snapshot()).opened, [{ url: 'https://owned-onboarding.invalid/src/ui/providers.html#llm' }]);
+          assert.deepEqual((await snapshot()).opened, [{ url: 'https://owned-onboarding.invalid/src/ui/settings.html#llm' }]);
         }, { snapshot: state });
       }
     });

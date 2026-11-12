@@ -49864,7 +49864,7 @@ test('sidepanel composer permission switch drives the Settings gate in both buil
     assert.match(block, /else addPersistentSlashMessage\(systemHtml\(t\('sp\.permissions\.disabled_html'\)\)\)/, `${label}: turning prompts off should post the command's persistent notice`);
     assert.doesNotMatch(block, /resolvePendingPermissionPrompt/, `${label}: the composer switch must never approve a pending permission card`);
     assert.match(block, /permissionGateWriteQueue = write\.catch\(\(\) => renderPermissionGateControl\(\)\)/, `${label}: a failed write should restore the stored state`);
-    assert.match(block, /runtime\.getURL\('src\/ui\/permissions\.html'\)/, `${label}: the popover should open the site permission page`);
+    assert.match(block, /runtime\.getURL\('src\/ui\/settings\.html#permissions'\)/, `${label}: the popover should open Settings → Permissions & privacy`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_KEY\]\) \{\s*permissionGateStoredOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: changes made in Settings or by the command should update the switch`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_SESSION_OFF_KEY\]\) \{\s*permissionGateSessionOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: a session skip should update the switch`);
     assert.match(panel, /function syncAskBeforeConsequential\(\) \{[^}]*renderPermissionGateControl\(\);/, `${label}: the gate sync should render the switch`);
@@ -51609,8 +51609,8 @@ test('provider picker exposes both managed Compass tiers, configured providers, 
     assert.match(panel, /get_providers', \{ includeSidepanelOnly: true \}/, `${label}: sidepanel should request its hidden managed provider`);
     assert.match(panel, /MORE_PROVIDERS_OPTION_VALUE = '__more_providers__'/, `${label}: More sentinel missing`);
     assert.match(panel, /providerSelect\.value = selectedProviderId;[\s\S]*?await openProvidersSettingsPage\(\);[\s\S]*?return;/, `${label}: More should restore the selection and stop before activation`);
-    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/providers\.html#llm'\);/, `${label}: More should open the LLM tab of the Providers page`);
-    assert.doesNotMatch(panel, /settings\.html#(?:providers|permissions|multimodal)/, `${label}: the side panel should not link to the old Settings tabs`);
+    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/settings\.html#llm'\);/, `${label}: More should open the LLM section of Settings`);
+    assert.doesNotMatch(panel, /settings\.html#(?:providers|multimodal)\b|src\/ui\/(?:providers|permissions)\.html/, `${label}: the side panel links to the current Settings sections, not old tab names or the forwarding pages`);
     assert.match(panel, /if \(changes\.providers \|\| changes\.activeProvider\) \{[\s\S]*?loadProviders\(\)/, `${label}: picker should refresh when provider storage changes`);
 
     assert.match(settings, /const isConfigured = id !== 'webbrain_cloud' && config\.configured === true/, `${label}: Settings should derive Active from configured state`);

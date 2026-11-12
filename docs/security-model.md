@@ -68,12 +68,12 @@ This is a feature (it makes the agent useful with zero setup) but also the most 
 ### Experimental Local D1 Decisions
 
 D1 is an optional finite-decision provider, not a chat generator or browser
-executor. Explicit consent controls download/load: the checkbox on the
-Providers page, or the Chrome install guide's optional **Download local
+executor. Explicit consent controls download/load: the checkbox in
+Settings → Models → Decision, or the Chrome install guide's optional **Download local
 models** button, whose note names D1, its size and its source. The control
-handler accepts only the extension's own Providers page and, for status, the
+handler accepts only the extension's own Settings page (`settings.html`) and, for status, the
 GPU check, download and stop only, its own install guide page; load, unload,
-removal and consent stay on the Providers page. The guide's download may name
+removal and consent stay in Settings. The guide's download may name
 the chat model to download after D1, and only a shipped, selectable WebGPU
 preset is queued. The guide writes no decision settings. Auto uses D1 only after that consent, while the download is complete
 and its Load request stands, and never in place of a saved choice; with Compass
@@ -90,8 +90,8 @@ Page text/pixels stay untrusted and existing redaction/wrapping remains in place
 Disabling outsourcing or Strict Secret Mode discards the Worker and its GPU
 sessions; cached weights remain until explicitly removed. A caller that stops
 waiting cancels only its own request; the Worker's deadline discards a stalled
-inference session. Neither invents an answer. While the user's Load on the
-Providers page stands, a reload after a restart reads only the verified cache and never
+inference session. Neither invents an answer. While the user's Load in
+Settings → Models → Decision stands, a reload after a restart reads only the verified cache and never
 downloads. CPU/WASM control/shape
 fallback is disclosed, not represented as pure GPU. A positive experimental D1
 judgment alone cannot establish completion: independent LLM or existing checks
@@ -365,7 +365,7 @@ approves, without guessing.
 
 ### Strict Secret Mode
 
-When enabled (Settings → "Strict secret handling"), the agent:
+When enabled (Settings → Permissions & privacy → "Strict secret handling"), the agent:
 
 - **Is instructed never to quote credentials** in summaries, assistant text, or tool-call arguments — even when the user explicitly asks
 - The `done` tool description is swapped for `DONE_TOOL_STRICT`, which adds a hard prohibition
@@ -569,7 +569,7 @@ publishing or sending something the user did not ask for. Verification,
 readback, evidence and completion checks leave a note for the model instead,
 and a completion accepted over them tells the user what was not verified.
 Permission gates, host and frame boundaries, CAPTCHA and access walls, and
-loop budgets are not guards and keep their behavior. Settings → General →
+loop budgets are not guards and keep their behavior. Settings → Advanced →
 **Strict checks** makes every verification check block again.
 `docs/guards.md` lists what still refuses and the rule for adding a guard.
 

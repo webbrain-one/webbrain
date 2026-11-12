@@ -6,6 +6,13 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Changed
+- The side panel's **More…** and **Manage site permissions** open Settings → Models → LLM and Settings → Permissions & privacy directly instead of going through the forwarding pages.
+- The user guide, FAQ, repository docs and their translations describe the one-page Settings layout, with new screenshots.
+
+### Fixed
+- Settings labels that were broken in three languages: German "Planung versuchen", French "Diffuser les réponses en mode Ask" and its description, and Hindi "मैन्युअल" for manual archive updates in Apocalypse Mode.
+
 ## [48.1.0] - 2026-11-12
 
 ### Changed

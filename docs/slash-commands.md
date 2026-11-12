@@ -36,7 +36,7 @@ for its available flags.
 | `/teach --end` | Stop teaching and compile the captured actions into a value-free saved workflow |
 | `/allow-api` | **Per-conversation API mutation override.** See [below](#allow-api). |
 | `/foreground [prompt]` | Run one local task in the foreground for visual compatibility |
-| `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting (the Permissions page, or the warning button next to the microphone in the side panel composer). A permission card's **Dangerously skip permissions** button does the same, or turns prompts off only until the browser closes. |
+| `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting (Settings → Permissions & privacy, or the warning button next to the microphone in the side panel composer). A permission card's **Dangerously skip permissions** button does the same, or turns prompts off only until the browser closes. |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display |
 | `/reset` | Clear the conversation and all per-conversation flags |
@@ -51,7 +51,7 @@ for its available flags.
 
 ## Full-page screenshots on Firefox
 
-Install the [local companion](../firefox-companion/README.md) and enable Firefox trusted automation in Settings before using `/screenshot --full-page`. The capture stays local until you attach it to a message, and Save as exports a PNG. It captures the currently loaded document, including content outside the viewport; it does not scroll to load an infinite feed. Very large pages return an explicit size error. If the privacy scan cannot verify stable sensitive-field geometry, the preview remains saveable but is not attached to the composer. Ordinary `/screenshot` needs no companion.
+Install the [local companion](../firefox-companion/README.md) and enable Firefox trusted automation in Settings → Bridge before using `/screenshot --full-page`. The capture stays local until you attach it to a message, and Save as exports a PNG. It captures the currently loaded document, including content outside the viewport; it does not scroll to load an infinite feed. Very large pages return an explicit size error. If the privacy scan cannot verify stable sensitive-field geometry, the preview remains saveable but is not attached to the composer. Ordinary `/screenshot` needs no companion.
 
 ## `/watch`
 

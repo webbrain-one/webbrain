@@ -76,7 +76,7 @@ synchronisées séparément avec WebBrain.
 
 ### Enregistreur de traces
 
-Lorsqu'il est activé (Paramètres → Affichage → « Enregistrer les traces »),
+Lorsqu'il est activé (Paramètres → Avancé → « Enregistrer les traces »),
 chaque exécution de l'agent est écrite dans une base de données IndexedDB
 (`webbrain_traces`) :
 
