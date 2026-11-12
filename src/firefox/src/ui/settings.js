@@ -6,12 +6,12 @@ import { D1_CONSENT_KEY, D1_CONSENT_VERSION, D1_MODEL_ID } from '../providers/d1
 import { d1LocalAssistReady } from '../agent/decision-availability.js';
 import { initD1Settings } from './d1-settings.js';
 /**
- * WebBrain Settings pages — settings.html (preferences, budgets, memory,
- * skills, CAPTCHA, Bridge, advanced), providers.html (the chat provider and
- * the assistive models) and permissions.html (site permissions).
+ * WebBrain Settings — settings.html: preferences, the chat provider and the
+ * assistive models, permissions and privacy, budgets, memory, skills, CAPTCHA,
+ * Bridge, Offline (Apocalypse Mode) and advanced settings, one section each.
+ * providers.html and permissions.html only forward old links here.
  *
- * One controller serves all three pages: each section below wires itself up
- * only when its markup is on the current page.
+ * Each section below wires itself up only when its markup is on the page.
  */
 
 import { t, translationsForKey } from './i18n.js';
@@ -411,9 +411,9 @@ function setGeneralSearchHidden(item, hidden) {
   item.classList.toggle('general-search-hidden', hidden);
 }
 
-// The search box covers the tabs marked data-search (General, Budgets,
-// CAPTCHA and Advanced). With a query, those tabs show together and keep only
-// their matching rows; settings-tabs.js clears the query when a tab is picked.
+// The search box covers every section (each is marked data-search). With a
+// query, the sections show together and keep only their matching rows;
+// settings-tabs.js clears the query when a section is picked.
 const searchPanels = Array.from(document.querySelectorAll('.tab-panel[data-search]'));
 
 function filterGeneralSettings() {

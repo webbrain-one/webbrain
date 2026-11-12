@@ -19,7 +19,7 @@ try {
     await route.fulfill({path:resolve(modelDir,(name==='model.onnx'?'webbrain-safesocial-model.onnx':'webbrain-safesocial-model.json')),headers:{'Access-Control-Allow-Origin':'*'}});
   });
   const page=await context.newPage();
-  await page.goto(`chrome-extension://${id}/src/ui/providers.html#safesocial`);
+  await page.goto(`chrome-extension://${id}/src/ui/settings.html#safesocial`);
   await page.waitForFunction(()=>document.querySelector('#safesocial-status')?.textContent.length>0);
   assert.equal(await page.evaluate(()=>chrome.storage.local.get('safeSocialSettings').then(x=>x.safeSocialSettings?.enabled===true)),false);
   const noWork=await page.evaluate(()=>chrome.runtime.sendMessage({target:'safesocial',command:'prepare'}));

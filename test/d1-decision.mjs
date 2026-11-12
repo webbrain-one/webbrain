@@ -103,10 +103,10 @@ for (const build of ['chrome', 'firefox']) {
       if (oldSelf) Object.defineProperty(globalThis, 'self', oldSelf); else delete globalThis.self;
     }
   });
-  test(`${build}: fixture diagnostics require the Providers page, stored selected consent and normal typed evaluation`, async () => {
+  test(`${build}: fixture diagnostics require the Settings page, stored selected consent and normal typed evaluation`, async () => {
     const settings = { decisionProvider: 'webgpu_d1', systemOneEnabled: true, [pin.D1_CONSENT_KEY]: pin.D1_CONSENT_VERSION };
     const api = { runtime: { id: 'extension-id', getURL: path => 'chrome-extension://extension-id/' + path }, storage: { local: { get: async () => settings } } };
-    const sender = { id: api.runtime.id, url: api.runtime.getURL('src/ui/providers.html') + '#decision' };
+    const sender = { id: api.runtime.id, url: api.runtime.getURL('src/ui/settings.html') + '#decision' };
     const fixture = { state: 'Exact original state', images: ['data:image/png;base64,YQ=='], questions: { q: { type: 'noul', instructions: 'Is blue visible?' } } };
     const client = {};
     const response = { model: pin.D1_MODEL_ID, provider: 'webgpu_d1', answers: { q: { type: 'noul', noul: .75 } }, usage: { input_tokens: 12, output_tokens: 0 } };
@@ -115,7 +115,7 @@ for (const build of ['chrome', 'firefox']) {
     const args = { fixture, sender, api, strictSecretMode: false, agent, client };
     assert.equal(await diagnostic.evaluateD1LocalFixture(args), response);
     assert.equal(calls, 1);
-    for (const badSender of [{ ...sender, id: 'other-id' }, { ...sender, url: 'https://example.com/' }, { ...sender, url: api.runtime.getURL('src/ui/popup.html') }, { ...sender, url: api.runtime.getURL('src/ui/settings.html') }]) await assert.rejects(diagnostic.evaluateD1LocalFixture({ ...args, sender: badSender }), /only from the extension Providers page/);
+    for (const badSender of [{ ...sender, id: 'other-id' }, { ...sender, url: 'https://example.com/' }, { ...sender, url: api.runtime.getURL('src/ui/popup.html') }, { ...sender, url: api.runtime.getURL('src/ui/providers.html') }]) await assert.rejects(diagnostic.evaluateD1LocalFixture({ ...args, sender: badSender }), /only from the extension Settings page/);
     await assert.rejects(diagnostic.evaluateD1LocalFixture({ ...args, strictSecretMode: true }), /Strict Secret/);
     for (const stored of [{ ...settings, decisionProvider: 'compass' }, { ...settings, systemOneEnabled: false }, { ...settings, [pin.D1_CONSENT_KEY]: 0 }]) await assert.rejects(diagnostic.evaluateD1LocalFixture({ ...args, api: { ...api, storage: { local: { get: async () => stored } } } }), /Select, enable/);
     assert.equal(calls, 1);
@@ -284,7 +284,7 @@ for (const build of ['chrome', 'firefox']) {
     // Remove and consent stay in Settings, and consent still gates a download.
     assert.match(branch, /page === api\.runtime\.getURL\('src\/ui\/install\.html'\)\s*&& \['status', 'probe', 'download', 'stop'\]\.includes\(msg\.command\)/);
     assert.match(branch, /const page = sender\.id === api\.runtime\.id \? String\(sender\.url \|\| ''\)\.split\(\/\[\?#\]\/\)\[0\] : '';/);
-    assert.match(branch, /if \(page !== api\.runtime\.getURL\('src\/ui\/providers\.html'\) && !fromInstall\) return \{ success: false/);
+    assert.match(branch, /if \(page !== api\.runtime\.getURL\('src\/ui\/settings\.html'\) && !fromInstall\) return \{ success: false/);
     assert.match(branch, /if \(msg\.consent !== true \|\| msg\.consentVersion !== D1_CONSENT_VERSION\) throw/);
     if (build === 'chrome') {
       // The guide's download queues its chat model behind D1 in the

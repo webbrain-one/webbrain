@@ -35738,12 +35738,15 @@ test('every WebBrain page signs its header with the extension logo', () => {
       assert.match(html, new RegExp(`<h1><img class="brand-mark" src="\\.\\./\\.\\./icons/icon128\\.png"[^>]*><span data-i18n="${key.replace('.', '\\.')}"></span></h1>`),
         `${browser}: ${page} does not show the WebBrain logo beside a separately translated title`);
     }
-    // Settings, Providers and Permissions share settings.css and one header.
-    for (const [page, key] of [['settings.html', 'st.title'], ['providers.html', 'st.providers_page.title'], ['permissions.html', 'st.permissions_page.title']]) {
-      const html = fs.readFileSync(path.join(uiDir, page), 'utf8');
-      assert.match(html, new RegExp(`<h1><img class="brand-mark" src="\\.\\./\\.\\./icons/icon128\\.png"[^>]*><a id="settings-title-link"[^>]*data-i18n="${key.replaceAll('.', '\\.')}"></a></h1>`),
-        `${browser}: ${page} does not show the WebBrain logo beside its title link`);
-      assert.match(html, /<link rel="stylesheet" href="settings\.css">/, `${browser}: ${page} does not load the shared settings styles`);
+    // Settings holds the Providers and Permissions sections too; those two
+    // pages only forward old links into it, so they have no header to sign.
+    const settingsHtml = fs.readFileSync(path.join(uiDir, 'settings.html'), 'utf8');
+    assert.match(settingsHtml, /<h1><img class="brand-mark" src="\.\.\/\.\.\/icons\/icon128\.png"[^>]*><a id="settings-title-link"[^>]*data-i18n="st\.title"><\/a><\/h1>/,
+      `${browser}: settings.html does not show the WebBrain logo beside its title link`);
+    assert.match(settingsHtml, /<link rel="stylesheet" href="settings\.css">/, `${browser}: settings.html does not load the settings styles`);
+    for (const page of ['providers.html', 'permissions.html']) {
+      assert.match(fs.readFileSync(path.join(uiDir, page), 'utf8'), /<script src="settings-redirect\.js" data-default-section="[a-z]+"><\/script>/,
+        `${browser}: ${page} does not forward to Settings`);
     }
     for (const file of ['settings.css', 'history.html', 'traces.html']) {
       const source = fs.readFileSync(path.join(uiDir, file), 'utf8');
@@ -35761,8 +35764,8 @@ test('Apocalypse download tracker follows every offline transfer from its pages 
     'emergency-box.html',
     'emergency-pdf.html',
     'emergency-communication.html',
+    // Holds the model sections that start in-browser model downloads.
     'settings.html',
-    'providers.html',
   ];
   for (const browser of ['chrome', 'firefox']) {
     const uiDir = path.join(ROOT, `src/${browser}/src/ui`);
@@ -38752,19 +38755,16 @@ test('Apocalypse Mode keeps summary stats in its header and optional Wikipedia i
       `${prefix}: the Wikipedia library cannot persist basic auto-start suppression`);
     assert.match(libraryScript, /const removesArchive = action === 'stop' \|\| action === 'delete';[\s\S]*?isBasicWikipediaArchive\(record\)[\s\S]*?await suppressBasicWikipediaAutoStart\(\)[\s\S]*?command\(removesArchive \? 'delete' : action/,
       `${prefix}: deleting the basic Wikipedia archive can silently auto-download it again`);
-    const headerStart = settingsHtml.indexOf('<div class="header-row">');
-    const apocalypseLink = settingsHtml.indexOf('id="apocalypse-mode-link"', headerStart);
-    const supportLink = settingsHtml.indexOf('href="https://webbrain.one/docs"', headerStart);
-    const tabsStart = settingsHtml.indexOf('<nav class="tabs"', headerStart);
-    assert.ok(headerStart >= 0 && apocalypseLink > headerStart && supportLink > apocalypseLink && tabsStart > supportLink,
-      `${prefix}: Apocalypse Mode must appear beside and before Support in the top header`);
-    // A line icon like Providers and Support, without a highlight of its own.
-    const apocalypseHeaderLink = settingsHtml.slice(apocalypseLink, supportLink);
-    assert.match(apocalypseHeaderLink, /<svg class="apocalypse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
-      `${prefix}: Apocalypse Mode header link is missing its radiation line icon`);
-    assert.doesNotMatch(apocalypseHeaderLink, /☢/, `${prefix}: Apocalypse Mode header link still uses the colored emoji icon`);
-    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.css'), 'utf8'), /\.apocalypse-(?:icon|link)\b[^{]*\{[^}]*var\(--warning\)/,
-      `${prefix}: the Apocalypse Mode header link is highlighted unlike Providers and Support`);
+    // Settings shows Apocalypse Mode as its own Offline section: the archive
+    // status and a link that opens the kit, which keeps the switch and the
+    // downloads it starts.
+    const offlineSection = settingsPanelHtml(settingsHtml, 'offline');
+    assert.match(offlineSection, /<a id="apocalypse-mode-link" class="btn-secondary apocalypse-mode-open" href="apocalypse-mode\.html" target="_blank"[^>]*data-i18n="st\.offline\.open"><\/a>/,
+      `${prefix}: the Offline section does not open Apocalypse Mode`);
+    assert.match(settingsHtml, /<button class="tab-btn" type="button" data-tab="offline" data-i18n="st\.tab\.offline"><\/button>/,
+      `${prefix}: the Settings sidebar does not list the Offline section`);
+    assert.doesNotMatch(settingsHtml.slice(settingsHtml.indexOf('<div class="header-row">'), settingsHtml.indexOf('<div class="settings-layout">')), /apocalypse/,
+      `${prefix}: Apocalypse Mode is still linked from the Settings header`);
     assert.match(pageHtml, /<header><span class="apocalypse-icon" aria-hidden="true">☢<\/span>/,
       `${prefix}: Apocalypse Mode page header lost its radioactive icon`);
     assert.match(pageHtml, /class="header-copy"[\s\S]*?data-i18n="ap\.title"[\s\S]*?data-i18n="ap\.subtitle"/,
@@ -38779,7 +38779,7 @@ test('Apocalypse Mode keeps summary stats in its header and optional Wikipedia i
       `${prefix}: storage usage is still presented as an ambiguous used/quota fraction`);
     assert.match(pageHtml, /\.apocalypse-icon \{[^}]*font-size:48px/,
       `${prefix}: Apocalypse Mode page icon is too small for the page header`);
-    assert.match(settingsHtml, /id="apocalypse-mode-status"[^>]*class="visually-hidden"/, `${prefix}: header gateway status is not accessible`);
+    assert.match(offlineSection, /id="apocalypse-mode-status" role="status" aria-live="polite"/, `${prefix}: the Offline section's archive status is not announced`);
     assert.doesNotMatch(settingsPanelHtml(settingsHtml, 'advanced'), /apocalypse-mode/, `${prefix}: Apocalypse Mode is still listed under Advanced`);
     assert.match(fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8'), /apocalypseModeLink\.dataset\.enabled/, `${prefix}: header gateway does not reflect the enabled state`);
     assert.match(pageScript, /elements\['installed-count'\]\.textContent[\s\S]*?elements\['archive-bytes'\]\.textContent[\s\S]*?elements\['storage-usage'\]\.textContent/,
@@ -49178,10 +49178,10 @@ function settingsPanelHtml(html, name) {
   return html.slice(start, next === -1 ? html.indexOf('<script', start) : next);
 }
 
-// The tab bar of settings.html or providers.html as settings-tabs.js sees it:
-// its data attributes, its tabs, and which panels the settings search covers.
+// The sidebar of settings.html as settings-tabs.js sees it: its data
+// attributes, its sections, and which panels the settings search covers.
 function settingsTabsFixture(html) {
-  const nav = html.match(/<nav class="tabs"([^>]*)>/)?.[1] || '';
+  const nav = html.match(/<nav class="tabs[^"]*"([^>]*)>/)?.[1] || '';
   const attr = (name) => {
     const match = nav.match(new RegExp(`\\s${name}=(?:'([^']*)'|"([^"]*)")`));
     return match ? (match[1] ?? match[2]) : undefined;
@@ -49213,6 +49213,9 @@ function runSettingsTabsScript(script, html, { saved = null, hash = '', searchVa
   const buttons = fixture.tabs.map((name) => ({
     dataset: { tab: name },
     classList: makeClassList(),
+    attributes: {},
+    setAttribute(attribute, value) { this.attributes[attribute] = String(value); },
+    removeAttribute(attribute) { delete this.attributes[attribute]; },
     addEventListener(type, handler) {
       if (type === 'click') this.clickHandler = handler;
     },
@@ -49272,6 +49275,7 @@ function runSettingsTabsScript(script, html, { saved = null, hash = '', searchVa
   vm.runInNewContext(script, context, { timeout: 1000 });
   const state = () => ({
     activeButton: buttons.find((button) => button.classList.active)?.dataset.tab,
+    currentButtons: buttons.filter((button) => button.attributes['aria-current'] === 'page').map((button) => button.dataset.tab),
     activePanel: panels.find((panel) => panel.classList.active)?.dataset.panel,
     storageKey: context.localStorage.key,
     stored: context.localStorage.value,
@@ -49294,7 +49298,6 @@ test('settings tabs validate saved and hash tab names without selector interpola
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const script = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings-tabs.js'), 'utf8');
     const settingsHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
-    const providersHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/providers.html'), 'utf8');
 
     const malformed = runSettingsTabsScript(script, settingsHtml, { saved: 'display"] .boom', hash: '#bad"]' });
     assert.equal(malformed.activeButton, 'display', `${label}: malformed tab values should fall back to General`);
@@ -49302,59 +49305,82 @@ test('settings tabs validate saved and hash tab names without selector interpola
     assert.deepEqual(malformed.selectorCalls, ['nav.tabs', '.tab-btn', '.tab-panel', '[data-search-tab]'], `${label}: dynamic tab values must not be interpolated into selectors`);
     assert.equal(malformed.storageKey, 'webbrainSettingsTab', `${label}: Settings remembers its own last tab`);
 
-    for (const tab of ['budgets', 'captcha', 'advanced']) {
+    for (const tab of ['budgets', 'captcha', 'advanced', 'memory', 'llm', 'decision', 'permissions', 'offline']) {
       const opened = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: `#${tab}` });
-      assert.equal(opened.activeButton, tab, `${label}: #${tab} should override the saved tab`);
+      assert.equal(opened.activeButton, tab, `${label}: #${tab} should override the saved section`);
       assert.equal(opened.activePanel, tab, `${label}: #${tab} should activate its panel`);
-      assert.equal(opened.stored, tab, `${label}: the #${tab} tab should persist`);
+      assert.deepEqual(opened.currentButtons, [tab], `${label}: #${tab} is the one section marked current`);
+      assert.equal(opened.stored, tab, `${label}: the #${tab} section should persist`);
       assert.equal(opened.searchHidden, false, `${label}: the search box covers ${tab}`);
     }
-
-    const memory = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: '#memory' });
-    assert.equal(memory.activeButton, 'memory', `${label}: memory hash should activate Memory tab`);
-    assert.equal(memory.activePanel, 'memory', `${label}: memory hash should activate Memory panel`);
-    assert.equal(memory.stored, 'memory', `${label}: activated Memory tab should persist`);
-    assert.equal(memory.searchHidden, true, `${label}: the search box is hidden on Memory`);
 
     const removed = runSettingsTabsScript(script, settingsHtml, { saved: 'profile', hash: '#profile' });
     assert.equal(removed.activeButton, 'display', `${label}: a removed Profile tab should fall back to General`);
     assert.equal(removed.activePanel, 'display', `${label}: a removed Profile panel should not activate`);
 
-    for (const [hash, target] of [['providers', 'providers.html#llm'], ['multimodal', 'providers.html#vision'], ['vision', 'providers.html#vision'], ['permissions', 'permissions.html']]) {
-      const moved = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: `#${hash}` });
-      assert.deepEqual(moved.replaced, [`chrome-extension://webbrain/src/ui/${target}`], `${label}: settings.html#${hash} should open ${target}`);
-      assert.equal(moved.activeButton, undefined, `${label}: a moved tab should not activate a Settings tab`);
+    // Names from the Settings tabs and pages before the sidebar open the
+    // section that holds them now, on this page.
+    for (const [hash, tab] of [['providers', 'llm'], ['multimodal', 'vision'], ['vision', 'vision'], ['permissions', 'permissions'], ['apocalypse', 'offline']]) {
+      const linked = runSettingsTabsScript(script, settingsHtml, { saved: 'speech', hash: `#${hash}` });
+      assert.equal(linked.activeButton, tab, `${label}: settings.html#${hash} should open ${tab}`);
+      assert.deepEqual(linked.replaced, [], `${label}: settings.html#${hash} stays on Settings`);
     }
+    assert.equal(runSettingsTabsScript(script, settingsHtml, { saved: 'speech' }).activeButton, 'speech', `${label}: Settings restores its last section`);
 
     const searching = runSettingsTabsScript(script, settingsHtml, { saved: 'display', searchValue: 'timeout' });
     const picked = searching.click('skills');
-    assert.equal(picked.searchValue, '', `${label}: picking a tab ends the search`);
+    assert.equal(picked.searchValue, '', `${label}: picking a section ends the search`);
     assert.deepEqual(picked.searchEvents, ['input'], `${label}: ending the search refilters the rows`);
-    assert.equal(picked.activeButton, 'skills', `${label}: the picked tab opens`);
-
-    const providers = runSettingsTabsScript(script, providersHtml);
-    assert.equal(providers.activeButton, 'llm', `${label}: Providers opens on LLM`);
-    assert.equal(providers.storageKey, 'webbrainProvidersTab', `${label}: Providers remembers its own last tab`);
-    for (const [hash, tab] of [['multimodal', 'vision'], ['providers', 'llm'], ['decision', 'decision'], ['safesocial', 'safesocial']]) {
-      const linked = runSettingsTabsScript(script, providersHtml, { saved: 'speech', hash: `#${hash}` });
-      assert.equal(linked.activeButton, tab, `${label}: providers.html#${hash} should open ${tab}`);
-      assert.deepEqual(linked.replaced, [], `${label}: providers.html#${hash} stays on Providers`);
-    }
-    assert.equal(runSettingsTabsScript(script, providersHtml, { saved: 'speech' }).activeButton, 'speech', `${label}: Providers restores its last tab`);
-    assert.equal(runSettingsTabsScript(script, providersHtml, { saved: 'advanced' }).activeButton, 'llm', `${label}: a Settings tab name does not open on Providers`);
+    assert.equal(picked.activeButton, 'skills', `${label}: the picked section opens`);
+    assert.deepEqual(picked.currentButtons, ['skills'], `${label}: the picked section is marked current`);
   }
 });
 
-test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keeping profile and memory controls in Memory', () => {
+test('the Providers and Permissions pages forward old links into Settings with their section', () => {
+  for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
+    const script = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings-redirect.js'), 'utf8');
+    assert.equal(script, fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings-redirect.js'), 'utf8'), `${label}: settings-redirect.js is shared verbatim`);
+    const forward = (page, hash) => {
+      const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui', page), 'utf8');
+      const section = html.match(/<script src="settings-redirect\.js" data-default-section="([a-z]+)"><\/script>/)?.[1];
+      assert.ok(section, `${label}: ${page} loads settings-redirect.js with a default section`);
+      assert.doesNotMatch(html, /<script(?![^>]*src=)/, `${label}: ${page} has no inline script`);
+      const replaced = [];
+      const href = `chrome-extension://webbrain/src/ui/${page}${hash}`;
+      vm.runInNewContext(script, {
+        document: { currentScript: { dataset: { defaultSection: section } } },
+        location: { hash, href, replace(url) { replaced.push(url); } },
+        URL,
+      }, { timeout: 1000 });
+      return replaced;
+    };
+    assert.deepEqual(forward('providers.html', ''), ['chrome-extension://webbrain/src/ui/settings.html#llm'], `${label}: providers.html opens the LLM section`);
+    assert.deepEqual(forward('providers.html', '#vision'), ['chrome-extension://webbrain/src/ui/settings.html#vision'], `${label}: providers.html#vision keeps its section`);
+    assert.deepEqual(forward('providers.html', '#multimodal'), ['chrome-extension://webbrain/src/ui/settings.html#multimodal'], `${label}: an old alias is left for Settings to resolve`);
+    assert.deepEqual(forward('permissions.html', ''), ['chrome-extension://webbrain/src/ui/settings.html#permissions'], `${label}: permissions.html opens Permissions & privacy`);
+  }
+});
+
+test('settings organizes its sections in a sidebar while keeping profile and memory controls in Memory', () => {
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
     const css = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.css'), 'utf8');
     const { tabs, panels } = settingsTabsFixture(html);
-    assert.deepEqual(tabs, ['display', 'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'advanced'], `${label}: Settings tabs`);
-    assert.deepEqual(panels.map((panel) => panel.name), tabs, `${label}: one panel per tab, in tab order`);
-    assert.deepEqual(panels.filter((panel) => panel.search).map((panel) => panel.name), ['display', 'budgets', 'captcha', 'advanced'], `${label}: the search covers General, Budgets, CAPTCHA and Advanced`);
-    assert.doesNotMatch(html, /data-(?:tab|panel)="(?:profile|providers|multimodal|permissions)"/, `${label}: Profile, Providers, Assistive Models and Permissions are not Settings tabs`);
-    assert.doesNotMatch(html, /<details class="advanced-settings">/, `${label}: Advanced is a tab, not a drawer inside General`);
+    assert.deepEqual(tabs, [
+      'display', 'llm', 'vision', 'speech', 'generative', 'decision', 'safesocial', 'permissions',
+      'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'offline', 'advanced',
+    ], `${label}: Settings sections`);
+    assert.deepEqual(panels.map((panel) => panel.name), tabs, `${label}: one panel per section, in sidebar order`);
+    assert.ok(panels.every((panel) => panel.search), `${label}: the search covers every section`);
+    assert.doesNotMatch(html, /data-(?:tab|panel)="(?:profile|providers|multimodal)"/, `${label}: Profile, Providers and Assistive Models are not Settings sections`);
+    assert.doesNotMatch(html, /<details class="advanced-settings">/, `${label}: Advanced is a section, not a drawer inside General`);
+    // Sub-sections sit under their group label in the sidebar.
+    const nav = html.slice(html.indexOf('<nav class="tabs settings-nav"'), html.indexOf('</nav>'));
+    assert.match(nav, /data-i18n="st\.nav\.models"><\/div>\s*(?:<button class="tab-btn tab-sub"[^>]*><\/button>\s*){6}<button class="tab-btn" type="button" data-tab="permissions"/,
+      `${label}: the six model sections sit under Models`);
+    assert.match(nav, /data-i18n="st\.nav\.integrations"><\/div>\s*<button class="tab-btn tab-sub" type="button" data-tab="captcha"[^>]*><\/button>\s*<button class="tab-btn tab-sub" type="button" data-tab="cloudbridge"/,
+      `${label}: CAPTCHA and Bridge sit under Integrations`);
+    assert.doesNotMatch(nav, /role="tab(?:list)?"/, `${label}: the sidebar is navigation, not a tab list`);
 
     const general = settingsPanelHtml(html, 'display');
     const budgets = settingsPanelHtml(html, 'budgets');
@@ -49366,7 +49392,7 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
     }
 
     const searchStart = html.indexOf('id="input-general-search"');
-    assert.ok(searchStart > html.indexOf('<nav class="tabs"') && searchStart < html.indexOf('<section class="tab-panel'), `${label}: the search box sits between the tabs and the panels`);
+    assert.ok(searchStart > html.indexOf('<aside class="settings-sidebar">') && searchStart < html.indexOf('<nav class="tabs settings-nav"'), `${label}: the search box tops the sidebar`);
     assert.match(html, /id="general-search-empty" hidden/, `${label}: search should include an empty-result state`);
     assert.match(css, /\.settings-search::before \{[\s\S]*?-webkit-mask: url\("data:image\/svg\+xml,[\s\S]*?\}/, `${label}: settings search fields should show a magnifier icon`);
     assert.match(css, /\.settings-search input \{[\s\S]*?padding: 10px 12px 10px 36px;/, `${label}: search text should clear the magnifier icon`);
@@ -49400,11 +49426,8 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       'toggle-scheduled-confirm',
       'toggle-notify-sound',
       'toggle-completion-confetti',
-      'toggle-screenshot-redaction',
       'toggle-site-adapters',
       'toggle-api-mutation-observer',
-      'toggle-strict-secret',
-      'toggle-allow-local-network',
       'toggle-help-improve',
       // What the combined switches in General stand for is fine-tuned here.
       'toggle-enforce-action-guards',
@@ -49421,6 +49444,13 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       'toggle-completion-flash-tab',
     ]) {
       assert.ok(advanced.includes(`id="${id}"`), `${label}: ${id} should live in Advanced`);
+      assert.equal(html.indexOf(`id="${id}"`), html.lastIndexOf(`id="${id}"`), `${label}: ${id} appears once`);
+    }
+    // Permissions & privacy holds the permission prompts, the site grants and
+    // the switches that decide what leaves the browser.
+    const permissionsSection = settingsPanelHtml(html, 'permissions');
+    for (const id of ['permissions-card', 'toggle-permission-gate', 'permissions-list', 'toggle-screenshot-redaction', 'toggle-strict-secret', 'toggle-allow-local-network']) {
+      assert.ok(permissionsSection.includes(`id="${id}"`), `${label}: ${id} should live in Permissions & privacy`);
       assert.equal(html.indexOf(`id="${id}"`), html.lastIndexOf(`id="${id}"`), `${label}: ${id} appears once`);
     }
     // Nothing read the Screenshot Fallback setting, so its switch is gone.
@@ -49448,7 +49478,10 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       assert.match(tracingDescription, /href=\\?["']traces\.html/, `${label}/${filename}: Record traces should link to the Traces page`);
     }
 
-    assert.match(html, /<a id="providers-page-link" class="support-link" href="providers\.html">/, `${label}: the header links to Providers`);
+    // Providers and Permissions are sections now, so the header keeps only Support.
+    const header = html.slice(html.indexOf('<div class="header-row">'), html.indexOf('<div class="settings-layout">'));
+    assert.doesNotMatch(header, /providers-page-link|apocalypse-mode-link/, `${label}: the header no longer links to other settings pages`);
+    assert.match(header, /<a class="support-link" href="https:\/\/webbrain\.one\/docs"/, `${label}: the header keeps Support`);
   }
 });
 
@@ -71168,17 +71201,17 @@ test('choosing an in-browser vision model never downloads and only reuses consen
   }
 });
 
-test('the in-browser vision choice stays Chrome-local and only Providers or Apocalypse Mode can change it', () => {
+test('the in-browser vision choice stays Chrome-local and only Settings or Apocalypse Mode can change it', () => {
   const background = fs.readFileSync(path.join(ROOT, 'src/chrome/src/background.js'), 'utf8');
-  assert.match(background, /case 'set_webgpu_vision_choice':[\s\S]*?src\/ui\/providers\.html[\s\S]*?src\/ui\/apocalypse-mode\.html[\s\S]*?setWebgpuVisionChoice\(msg\.choice\)/);
+  assert.match(background, /case 'set_webgpu_vision_choice':[\s\S]*?src\/ui\/settings\.html[\s\S]*?src\/ui\/apocalypse-mode\.html[\s\S]*?setWebgpuVisionChoice\(msg\.choice\)/);
   const choiceCase = background.slice(background.indexOf("case 'set_webgpu_vision_choice':"), background.indexOf('setWebgpuVisionChoice(msg.choice)'));
-  assert.doesNotMatch(choiceCase, /src\/ui\/settings\.html/, 'the vision choice moved off the Settings page');
+  assert.doesNotMatch(choiceCase, /src\/ui\/providers\.html/, 'the Providers page only forwards to Settings now');
   for (const file of ['src/chrome/src/config-transfer.js', 'src/chrome/src/profile-sync.js', 'src/firefox/src/config-transfer.js', 'src/firefox/src/profile-sync.js']) {
     assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), /webgpuVisionChoice|WEBGPU_VISION_CHOICE_KEY/,
       `${file}: the in-browser vision choice must not be exported or synced to Firefox`);
   }
-  const providersHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/providers.html'), 'utf8');
-  assert.ok(settingsPanelHtml(providersHtml, 'vision').includes('id="webgpu-vision-choice"'), 'the in-browser vision choice sits on the Vision tab');
+  const providersHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.html'), 'utf8');
+  assert.ok(settingsPanelHtml(providersHtml, 'vision').includes('id="webgpu-vision-choice"'), 'the in-browser vision choice sits in the Vision section');
   const choice = providersHtml.slice(providersHtml.indexOf('id="webgpu-vision-choice"'), providersHtml.indexOf('</select>', providersHtml.indexOf('id="webgpu-vision-choice"')));
   assert.deepEqual([...choice.matchAll(/<option value="([^"]+)"/g)].map(match => match[1]), ['auto', 'compass-vld', 'bonsai', 'webbrain-vl', 'off']);
   const apocalypseHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/apocalypse-mode.html'), 'utf8');
@@ -71676,8 +71709,8 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
     'automatic screenshots must emit one readiness notice and continue without enrichment');
   assert.match(chromeAgent, /full_page_screenshot[\s\S]*?_recordVisionRouteTrace[\s\S]*?method: 'save_only'[\s\S]*?visionStatus[\s\S]*?_localVisionUnavailableResult/,
     'full-page screenshots must preserve save-only behavior while exposing unavailable vision');
-  assert.match(background, /case 'enable_webgpu_vision':[\s\S]*?providers\.html[\s\S]*?startExplicitVisionModelDownload/,
-    'only the dedicated Providers page may record first-time local-vision consent');
+  assert.match(background, /case 'enable_webgpu_vision':[\s\S]*?src\/ui\/settings\.html[\s\S]*?startExplicitVisionModelDownload/,
+    'only the Settings page, where the Vision section is, may record first-time local-vision consent');
   for (const [label, source] of [['chrome', chromeAgent], ['firefox', firefoxAgent]]) {
     assert.match(source, /VISION_SUB_CALL_TIMEOUT_MS = 90_000/,
       `${label}: dedicated vision timeout is missing`);
@@ -71845,8 +71878,8 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
       `aggregate model readiness is missing its ${state} state`);
   }
   assert.match(apocalypseScript, /get_webgpu_download_status/);
-  assert.match(apocalypseScript, /visionFallbackExplicitlyEnabled[\s\S]*?providers\.html#vision/,
-    'Apocalypse Mode must route first-time local-vision enablement to the Vision tab of the Providers page');
+  assert.match(apocalypseScript, /visionFallbackExplicitlyEnabled[\s\S]*?settings\.html#vision/,
+    'Apocalypse Mode must route first-time local-vision enablement to the Vision section of Settings');
   assert.match(apocalypseScript, /webgpu-text-download-state/);
   assert.match(settingsScript, /btn-webgpu-download/,
     'the Settings WebGPU card must offer its own download control so the chat error first path works');
@@ -71945,7 +71978,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.doesNotMatch(apocalypseDocs, /enabling Apocalypse Mode also enables[\s\S]{0,80}vision/i);
   assert.match(englishLocale, /Download it in Providers > WebGPU or Apocalypse Mode, then use the nuclear control in standalone chat[\s\S]*It does not replace your selected provider/);
 
-  const providersPage = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/providers.html'), 'utf8');
+  const providersPage = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.html'), 'utf8');
   const visionTab = providersPage.indexOf('data-panel="vision"');
   const visionCard = providersPage.indexOf('id="vision-card"', visionTab);
   const localToggle = providersPage.indexOf('id="btn-use-webgpu-vision"', visionCard);
@@ -135944,9 +135977,9 @@ test('generate_image tool exists in both builds, full tier only, and settings UI
     assert.ok(!tools.COMPACT_TOOL_NAMES.has('generate_image') && !tools.MID_TOOL_NAMES.has('generate_image'),
       `${build}: generate_image should stay a full-tier tool`);
 
-    const generativeTab = settingsPanelHtml(fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/providers.html`), 'utf8'), 'generative');
+    const generativeTab = settingsPanelHtml(fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/settings.html`), 'utf8'), 'generative');
     for (const id of ['image-gen-api-key', 'image-gen-model', 'btn-save-image-gen', 'btn-test-image-gen', 'btn-clear-image-gen', 'test-image-gen']) {
-      assert.ok(generativeTab.includes(`id="${id}"`), `${build}: the Generative tab of providers.html should contain #${id}`);
+      assert.ok(generativeTab.includes(`id="${id}"`), `${build}: the Generative section of settings.html should contain #${id}`);
     }
 
     const settingsJs = fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/settings.js`), 'utf8');
