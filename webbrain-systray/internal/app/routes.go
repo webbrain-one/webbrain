@@ -510,11 +510,12 @@ func (a *App) routes(e *gin.Engine) {
 
 	api.PATCH("/settings", func(c *gin.Context) {
 		var req struct {
-			Autostart *bool   `json:"autostart"`
-			Port      *int    `json:"port"`
-			Language  *string `json:"language"`
-			Welcomed  *bool   `json:"welcomed"`
-			Network   *bool   `json:"network"`
+			Autostart    *bool   `json:"autostart"`
+			Port         *int    `json:"port"`
+			Language     *string `json:"language"`
+			Welcomed     *bool   `json:"welcomed"`
+			ShowAllUsage *bool   `json:"show_all_usage"`
+			Network      *bool   `json:"network"`
 			// AutoUpdate installs new versions by themselves when idle.
 			AutoUpdate *bool `json:"auto_update"`
 		}
@@ -543,6 +544,13 @@ func (a *App) routes(e *gin.Engine) {
 				fail(c, http.StatusInternalServerError, err)
 				return
 			}
+		}
+		if req.ShowAllUsage != nil {
+			if _, err := a.Store.Update(func(s *settings.Settings) { s.ShowAllUsage = *req.ShowAllUsage }); err != nil {
+				fail(c, http.StatusInternalServerError, err)
+				return
+			}
+			a.changed()
 		}
 		if req.Welcomed != nil {
 			if _, err := a.Store.Update(func(s *settings.Settings) { s.Welcomed = *req.Welcomed }); err != nil {

@@ -139,6 +139,25 @@ func planLine(acc accounts.Account, showWho bool) string {
 	return line
 }
 
+// usageLine keeps the provider's window and scope label together.
+func usageLine(row quota.Row) string {
+	label := row.Label
+	if label == "" {
+		label = row.Scope
+	}
+	line := "    " + label
+	if row.Remaining != nil {
+		line += "  " + bar(*row.Remaining) + "  " + percent(*row.Remaining)
+	}
+	if u := Until(row.ResetAt); u != "" {
+		line += " · " + u
+	}
+	if row.Detail != "" {
+		line += " · " + row.Detail
+	}
+	return line
+}
+
 // Menu renders the tray menu: status, the address, one line per subscription,
 // then the panel and Quit. Everything else lives in the panel.
 func (a *App) Menu(act MenuActions) []tray.Item {
@@ -158,6 +177,12 @@ func (a *App) Menu(act MenuActions) []tray.Item {
 	for _, acc := range s.Accounts {
 		view := "account:" + acc.Name
 		items = append(items, tray.Item{Title: planLine(acc, shared[acc.ProviderName]), Secondary: acc.Disabled, OnClick: func() { act.OpenPanel(view) }})
+		if s.ShowAllUsage && !acc.Disabled && acc.Quota.Status == "ok" {
+			for _, row := range acc.Quota.Rows {
+				line := usageLine(row)
+				items = append(items, tray.Item{Title: line, OnClick: func() { act.OpenPanel(view) }})
+			}
+		}
 	}
 	if len(s.Accounts) == 0 {
 		items = append(items, tray.Item{Title: i18n.T("add"), OnClick: func() { act.OpenPanel("add") }})

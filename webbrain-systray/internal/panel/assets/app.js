@@ -122,6 +122,7 @@
       testing: "Deciding…",
       testResult: "Answer {choice} with {p}% confidence in {ms} ms.",
       settings: "Settings",
+      showAllUsage: "Show all model usage on the main panel",
       startLogin: "Start at login",
       language: "Language",
       networkToggle: "Allow other devices on this network",
@@ -291,6 +292,7 @@
       testing: "Karar veriliyor…",
       testResult: "Yanıt {choice}, %{p} güvenle, {ms} ms.",
       settings: "Ayarlar",
+      showAllUsage: "Ana panelde tüm model kullanımlarını göster",
       startLogin: "Oturum açılınca başlat",
       language: "Dil",
       networkToggle: "Bu ağdaki diğer cihazlara izin ver",
@@ -605,7 +607,8 @@
     // Two logins with the same name show whose each one is, as the tray does.
     const shared = all.filter((x) => x.provider_name === a.provider_name).length > 1;
     const who = whoOf(a);
-    const r = s.row;
+    const allUsage = state.show_all_usage && !a.disabled && q.status === "ok" && (q.rows || []).length;
+    const r = allUsage ? null : s.row;
     const low = r && r.remaining < 20;
     const label = [a.provider_name, q.plan, who, r ? pctText(r.remaining) : "", s.text].filter(Boolean).join(", ");
     return `<li class="${a.disabled ? "off" : ""}">
@@ -615,6 +618,7 @@
           ${shared ? `<span class="sub">${esc(who)}</span>` : ""}<span class="sub ${s.tone || ""}">${esc(s.text)}</span></span>
         ${r ? cells(Math.max(0, Math.min(100, r.remaining)), firstPaint) + `<span class="pct">${pctText(Math.max(0, Math.min(100, r.remaining)))}</span>` : ""}
       </button>
+      ${allUsage ? `<div class="meters inline-meters">${q.rows.map(meter).join("")}</div>` : ""}
     </li>`;
   }
 
@@ -954,6 +958,7 @@
     return sheetHead(t("settings"))
       + `<div class="opts">
         <label class="toggle"><input type="checkbox" data-change="autostart" ${s.autostart ? "checked" : ""} ${s.translocated ? "disabled" : ""}>${t("startLogin")}</label>
+        <label class="toggle"><input type="checkbox" data-change="show-all-usage" ${s.show_all_usage ? "checked" : ""}>${t("showAllUsage")}</label>
         <label class="setting"><span>${t("language")}</span><select data-change="language"><option value="en" ${lang === "en" ? "selected" : ""}>English</option><option value="tr" ${lang === "tr" ? "selected" : ""}>Türkçe</option></select></label>
       </div>
       <h4>${t("otherDevices")}</h4>
@@ -1209,6 +1214,7 @@
       case "autostart": run(api("PATCH", "/settings", { autostart: v })); break;
       case "network": run(api("PATCH", "/settings", { network: v })); break;
       case "auto-update": run(api("PATCH", "/settings", { auto_update: v })); break;
+      case "show-all-usage": run(api("PATCH", "/settings", { show_all_usage: v })); break;
       case "language": lang = v; state.language = v; run(api("PATCH", "/settings", { language: v })); el.blur(); reRender(); break;
       case "local-vision": run(api("PATCH", "/local", { vision: v })); el.blur(); break;
       case "local-context": state.local_context_setting = parseInt(v, 10); run(api("PATCH", "/local", { context: parseInt(v, 10) })); el.blur(); break;
