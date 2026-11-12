@@ -1280,10 +1280,14 @@
 
   // The companion's own panel window stays open: a tray item that asks for
   // a view changes the fragment of this page instead of opening another one.
+  // A view asked for before the first state arrives opens once it does.
+  let pendingView = startView;
   window.addEventListener("hashchange", () => {
     const view = new URLSearchParams(location.hash.slice(1)).get("view") || "";
     history.replaceState(null, "", location.pathname);
-    if (state && view) openView(view);
+    if (!view) return;
+    if (state) openView(view);
+    else pendingView = view;
   });
 
   // Like an app window: the browser's context menu only where there is text
@@ -1298,7 +1302,7 @@
   if (!key) { fallback(t("tokenMissing")); return; }
   api("GET", "/state").then((s) => {
     applyState(s);
-    openView(startView);
+    openView(pendingView);
     listen();
   }).catch((e) => fallback(`${esc(e.message)}. ${t("tokenMissing")}`));
   setInterval(() => { if (state) render(); }, 30000); // keep countdowns fresh
