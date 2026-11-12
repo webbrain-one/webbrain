@@ -52,6 +52,57 @@ func TestDecisionControlsRejectFailedSettingsSave(t *testing.T) {
 	}
 }
 
+// A second launch asks the running companion for its panel; nothing but a
+// keyed request from this computer may open it.
+func TestPanelRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("WBC_HOME", t.TempDir())
+	store, err := settings.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New("test", store)
+	opened := make(chan string, 4)
+	a.OpenPanel = func(view string) { opened <- view }
+	e := gin.New()
+	a.routes(e)
+	call := func(key, site string) int {
+		r := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8327/companion/api/panel", nil)
+		r.RemoteAddr = "127.0.0.1:50000"
+		if key != "" {
+			r.Header.Set("X-Companion-Key", key)
+		}
+		if site != "" {
+			r.Header.Set("Sec-Fetch-Site", site)
+		}
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		return w.Code
+	}
+	key := store.Get().PanelToken
+	if code := call("", ""); code != http.StatusUnauthorized {
+		t.Fatalf("no key: status %d, want 401", code)
+	}
+	if code := call(key, "cross-site"); code != http.StatusForbidden {
+		t.Fatalf("cross-site: status %d, want 403", code)
+	}
+	if code := call(key, ""); code != http.StatusOK {
+		t.Fatalf("keyed request: status %d, want 200", code)
+	}
+	if view := <-opened; view != "" {
+		t.Fatalf("opened view %q, want the plain panel", view)
+	}
+	a.Headless = true
+	if code := call(key, ""); code != http.StatusConflict {
+		t.Fatalf("headless: status %d, want 409", code)
+	}
+	select {
+	case v := <-opened:
+		t.Fatalf("headless companion opened the panel (%q)", v)
+	default:
+	}
+}
+
 func TestLocalClientAllowed(t *testing.T) {
 	cases := []struct {
 		origin, site string

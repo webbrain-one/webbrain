@@ -40,6 +40,16 @@ your subscriptions and the two local models; click a row for its details
 (every usage window, model options), or **Settings** for start at login,
 language, network access, the port, the log file and *Quit*.
 
+The panel is the companion's own window: Microsoft Edge WebView2 (built into
+Windows 10 and 11) on Windows, WebKit on macOS. It opens next to the
+notification area (Windows) or under the menu bar at the right (macOS), sized
+to fit the screen, with the companion's icon in the taskbar or Dock and a
+light or dark title bar that follows the system. Opening it again brings the
+same window to the front. On macOS the companion shows in the Dock and in
+Command-Tab only while the panel is open. On Linux, and when the system web
+view is missing, the panel opens as a Chrome, Edge or Brave app window, or in
+the default browser.
+
 | System | Package | First start |
 |---|---|---|
 | Windows 10/11 (x64, Arm64) | `WebBrain-Companion-*-windows-setup.exe` | One installer for both architectures. It installs for the current user (no administrator prompt) into `%LOCALAPPDATA%\Programs\WebBrain Companion`, adds a Start menu entry and an uninstaller in *Settings, Apps*. Until it is code-signed, SmartScreen says *Windows protected your PC*: *More info*, *Run anyway*. |

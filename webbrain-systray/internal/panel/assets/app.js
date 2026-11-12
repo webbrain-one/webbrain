@@ -1266,18 +1266,43 @@
   const fallback = (msg) => {
     $app.innerHTML = `<header class="top"><img src="static/logo-64.png" alt="" width="34" height="34"><h1>WebBrain Companion</h1></header><p class="empty">${msg}</p>`;
   };
-  if (!key) { fallback(t("tokenMissing")); return; }
-  api("GET", "/state").then((s) => {
-    applyState(s);
-    if (startView === "add") openSheet({ view: "pick" }, "btn-add");
-    else if (startView === "settings") openSheet({ view: "settings" }, "btn-settings");
-    else if (startView === "local") openSheet({ view: "local" }, "row-local");
-    else if (startView === "decision") openSheet({ view: "decision" }, "row-d1");
-    else if (startView.startsWith("account:")) {
-      const name = startView.slice(8);
+  function openView(view) {
+    if (view === "add") openSheet({ view: "pick" }, "btn-add");
+    else if (view === "settings") openSheet({ view: "settings" }, "btn-settings");
+    else if (view === "local") openSheet({ view: "local" }, "row-local");
+    else if (view === "decision") openSheet({ view: "decision" }, "row-d1");
+    else if (view.startsWith("account:")) {
+      const name = view.slice(8);
       const i = (state.accounts || []).findIndex((a) => a.name === name);
       if (i >= 0) openSheet({ view: "account", name }, "acc-" + i);
     }
+  }
+
+  // The companion's own panel window stays open: a tray item that asks for
+  // a view changes the fragment of this page instead of opening another one.
+  // A view asked for before the first state arrives opens once it does.
+  let pendingView = startView;
+  window.addEventListener("hashchange", () => {
+    const view = new URLSearchParams(location.hash.slice(1)).get("view") || "";
+    history.replaceState(null, "", location.pathname);
+    if (!view) return;
+    if (state) openView(view);
+    else pendingView = view;
+  });
+
+  // Like an app window: the browser's context menu only where there is text
+  // to edit or copy.
+  document.addEventListener("contextmenu", (ev) => {
+    if (ev.target instanceof Element && ev.target.closest("input, textarea, [contenteditable]")) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    ev.preventDefault();
+  });
+
+  if (!key) { fallback(t("tokenMissing")); return; }
+  api("GET", "/state").then((s) => {
+    applyState(s);
+    openView(pendingView);
     listen();
   }).catch((e) => fallback(`${esc(e.message)}. ${t("tokenMissing")}`));
   setInterval(() => { if (state) render(); }, 30000); // keep countdowns fresh

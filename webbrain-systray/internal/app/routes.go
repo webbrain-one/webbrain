@@ -612,6 +612,16 @@ func (a *App) routes(e *gin.Engine) {
 		a.queueRestart("rotate key", a.RotateKey)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
+	// Opening the app again while it runs: the new process asks for the
+	// panel here, so it shows up in this companion's window.
+	api.POST("/panel", func(c *gin.Context) {
+		if a.OpenPanel == nil || a.Headless {
+			fail(c, http.StatusConflict, errors.New("this companion shows no panel window"))
+			return
+		}
+		go a.OpenPanel("")
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
 	api.POST("/open", func(c *gin.Context) {
 		var req struct {
 			Target string `json:"target"`

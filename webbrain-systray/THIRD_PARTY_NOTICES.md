@@ -9,6 +9,7 @@ following components, each under its own license.
 |---|---|---|
 | [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) v8.0.35 (Copyright Luis Pater, Router-For.ME) | MIT | Embedded proxy: subscription logins, OpenAI/Anthropic/Gemini compatible endpoints, management API |
 | [fyne.io/systray](https://github.com/fyne-io/systray) | Apache-2.0 | Tray icon on Windows and Linux |
+| [go-webview2](https://github.com/wailsapp/go-webview2) (`webviewloader`; Copyright John Chadwick, portions Serge Zaitsev) | MIT | Starts Microsoft Edge WebView2 for the panel window on Windows |
 | [purego](https://github.com/ebitengine/purego) | Apache-2.0 | Cocoa status item on macOS and ONNX Runtime loading without cgo |
 | [regexp2](https://github.com/dlclark/regexp2) | MIT | Tokenizer pre-split pattern |
 | [golang.org/x/image](https://pkg.go.dev/golang.org/x/image), [golang.org/x/sys](https://pkg.go.dev/golang.org/x/sys) | BSD-3-Clause | WebP decoding, OS calls |
