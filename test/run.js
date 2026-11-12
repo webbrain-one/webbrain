@@ -86515,7 +86515,9 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
     assert.equal(duplicate.previousClickUrl, 'https://example.test/products');
     assert.equal(duplicate.currentUrl, 'https://example.test/products');
     assert.equal(duplicate.secondsSincePrevious, 10);
-    assert.match(duplicate.error, /pass _allowResubmit: true/i);
+    assert.match(duplicate.error, /needs the user's answer on WebBrain's card/);
+    assert.doesNotMatch(duplicate.error, /pass _allowResubmit/i);
+    assert.equal(duplicate.previousClickAt, 100_000);
 
     currentUrl = 'https://example.test/products/new';
     assert.equal(
@@ -86553,19 +86555,20 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
       await guardModule.guardRecentSubmitClick(
         recentClicks,
         tabId,
-        { text: 'Save changes', _allowResubmit: true },
+        { text: 'Save changes' },
         getCurrentUrl,
         () => now,
         null,
         captionReading,
+        { approved: true },
       ),
       null,
-      'explicit resubmit acknowledgement should bypass the guard',
+      'a repeat the user approved on the card should pass the guard',
     );
     assert.equal(
       recentClicks.get(tabId)[0].ts,
       now,
-      'an acknowledged resubmit should re-record the entry',
+      'an approved repeat should re-record the entry',
     );
 
     now += 30_000;
@@ -86581,7 +86584,7 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
     assert.equal(
       thirdRapidClick.blockedDuplicateSubmit,
       true,
-      'a rapid duplicate after an acknowledged resubmit should be blocked by the re-armed window',
+      'a rapid duplicate after an approved repeat should be blocked by the re-armed window',
     );
     assert.equal(thirdRapidClick.secondsSincePrevious, 30);
 

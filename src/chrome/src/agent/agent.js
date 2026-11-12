@@ -6989,6 +6989,40 @@ export class Agent extends LoopDetector {
     this._doneBlockCount.delete(tabId);
   }
 
+  /**
+   * steer-prior-submission-unreconciled cannot decide for a write WebBrain
+   * sends itself (an API mutation, chrome_web_store_publish): something was
+   * submitted before the latest correction, and no page read can show
+   * whether this request repeats it. Instead of refusing every such write
+   * for the rest of the task, WebBrain asks the user on its hard card, which
+   * never times out and never goes ahead on its own (an unattended run is
+   * refused). The card shows the request: its method and address, and its
+   * body unless strict secret handling is on. One answer covers one call
+   * with exactly these arguments.
+   */
+  _priorSubmissionWriteAsk(tabId, guard, name, args = {}) {
+    const network = isNetworkMutation(name, args);
+    if ((!network && name !== 'chrome_web_store_publish') || !guard?.taskKey
+        || this._guardOutcome('steer-prior-submission-unreconciled', { decided: false, tabId }) !== 'ask') return null;
+    let host = 'chromewebstore.googleapis.com';
+    let text = '';
+    if (network) {
+      let url;
+      try { url = new URL(String(args?.url || '')); } catch { return null; }
+      if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
+      host = url.hostname;
+      const body = typeof args.body === 'string' ? args.body : args.body == null ? '' : JSON.stringify(args.body);
+      text = [`${String(args.method || '').toUpperCase()} ${url.href.slice(0, 600)}`,
+        ...(body && this.strictSecretMode !== true ? [body.slice(0, 800)] : [])].join('\n\n');
+    } else {
+      text = `${name} ${JSON.stringify(args || {})}`.slice(0, 600);
+    }
+    return { guardId: 'steer-prior-submission-unreconciled', hard: true, action: network ? 'submit' : 'publish',
+      reason: 'prior_submission_unreconciled', host: normalizeHost(host), contentLabel: 'request', text,
+      stepKey: this._sha256TextSync(JSON.stringify(['steer-prior-submission-unreconciled', guard.taskKey,
+        Number(guard.steeringPriorSubmission?.actionSequence || 0), name, args || {}])) };
+  }
+
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
     if (!this._actionGuardsEnabled(tabId)) return null;
     const guard = this._planExecutionGuards.get(tabId);
@@ -7032,10 +7066,16 @@ export class Agent extends LoopDetector {
         detectedSubmit?.frameDocumentIdentity || this._lastAxScopes.get(tabId)?.documentToken || '']))
       : '';
     if (stepKey && this._unverifiedStepApproval(tabId, 'steer-prior-submission-target-unresolved', stepKey, { consume: true })) return null;
+    // A write WebBrain sends itself has no page result to reconcile against:
+    // the user decides it on the hard card (_priorSubmissionWriteAsk).
+    const writeAsk = this._priorSubmissionWriteAsk(tabId, guard, name, args);
+    if (writeAsk && this._unverifiedStepApproval(tabId, writeAsk.guardId, writeAsk.stepKey,
+      { contentSha256: this._sha256TextSync(writeAsk.text), consume: true })) return null;
     return {
       ...(stepKey ? { unverifiedStepConfirmation: { guardId: 'steer-prior-submission-target-unresolved', hard: false,
         action: ['click', 'click_ax', 'iframe_click'].includes(name) ? 'click' : 'submit', reason: 'target_unresolved',
-        host: normalizeHost(detectedSubmit?.url || this._lastAxScopes.get(tabId)?.pageUrl || ''), contentLabel: 'page', stepKey } } : {}),
+        host: normalizeHost(detectedSubmit?.url || this._lastAxScopes.get(tabId)?.pageUrl || ''), contentLabel: 'page', stepKey } }
+        : writeAsk ? { unverifiedStepConfirmation: writeAsk } : {}),
       success: false, blocked: true, noDispatch: true, dispatched: false,
       steeringPriorSubmission: true,
       actionGuard: { stage: 'steering', reason: unresolvedTarget ? 'target_unresolved'
@@ -7171,15 +7211,25 @@ export class Agent extends LoopDetector {
     return { token: last.recordScopeToken, document: last.recordDocument || '', dispatchedAt: Number(last.dispatchedAt) };
   }
 
+  // A vision click (vision-runtime.js click_at): a CSS point in a vision run.
+  _isVisionPointClick(tabId, name, args) {
+    return name === 'click' && args?.coordinate_space === 'css' && Number.isFinite(args?.x) && Number.isFinite(args?.y)
+      && this._visionRunState?.(tabId)?.active === true;
+  }
+
   // Explicit approval belongs to one observed action, not to a model's
   // interpretation of the request. Both publication checks use this same
-  // card so a second checker cannot veto the user's answer.
+  // card so a second checker cannot veto the user's answer. A vision click
+  // has only its point: it is bound to the control the submit probe read
+  // there (_resourceMutationActionKey), and its dispatch reads the point
+  // again (_visionMutationBindingBlock), so the card can bind an answer to
+  // it as it does to a ref or selector click.
   _publicationGuardOverrideRequest(tabId, name, args, detected) {
     const guard = this._planExecutionGuards.get(tabId);
     if (!guard?.enabled || guard.requestKind !== 'execute' || guard.taskKey !== this._progressTaskKeyHash(tabId)
         || this._checkAbort(tabId) || this._hasPendingSteering(tabId) || this._hasUnvalidatedSteering(tabId)
         || detected?.isSubmit !== true || detected.mutationKind === 'delete' || !detected.frameDocumentIdentity
-        || (!args?.ref_id && !args?.selector)) return null;
+        || (!args?.ref_id && !args?.selector && !this._isVisionPointClick(tabId, name, args))) return null;
     const actionKey = this._resourceMutationActionKey(tabId, name, args, detected);
     if (!actionKey) return null;
     const publication = detected.publicationControl === true;
@@ -7263,8 +7313,7 @@ export class Agent extends LoopDetector {
     // reads that point again (_visionMutationBindingBlock). Any other
     // coordinate click has a ref or selector alternative and stays unbound.
     const point = Number.isFinite(args?.x) || Number.isFinite(args?.y);
-    const visionPoint = point && name === 'click' && args?.coordinate_space === 'css'
-      && Number.isFinite(args?.x) && Number.isFinite(args?.y) && this._visionRunState?.(tabId)?.active === true;
+    const visionPoint = point && this._isVisionPointClick(tabId, name, args);
     if (!detected || !['click', 'click_ax', 'iframe_click'].includes(name) || (point && !visionPoint)) return '';
     const record = detected.actionRecord;
     // The resource's texts with its timestamps read as their datetime
@@ -7381,6 +7430,24 @@ export class Agent extends LoopDetector {
       dialog: record?.stage === 'confirmation' ? clip(record.confirmationText, 300) : '',
       recordIdentity: record?.identity || '', resourceUrl: resource?.url || '' };
     return (subject.recordIdentity || subject.resourceUrl) && (subject.item || subject.url) ? subject : null;
+  }
+
+  /**
+   * deletion-guard-refusal cannot decide which items a Delete or Remove
+   * control outside one identifiable record deletes (a toolbar, bulk or
+   * selection action): the control is identified, its items are not. Instead
+   * of refusing for the rest of the task, WebBrain asks the user on its hard
+   * card, which never times out and never goes ahead on its own (an
+   * unattended run is refused); the user can see what is selected. The card
+   * shows no item, because none was identified. One answer covers one click
+   * on this control in this document.
+   */
+  _unboundDeletionAsk(tabId, guard, detected, key) {
+    if (!key || !guard?.taskKey || !detected?.frameDocumentIdentity
+        || this._guardOutcome('deletion-guard-refusal', { decided: false, tabId }) !== 'ask') return null;
+    return { guardId: 'deletion-guard-refusal', hard: true, action: 'delete', reason: 'delete_unbound',
+      host: normalizeHost(detected.url || ''), contentLabel: 'page',
+      stepKey: this._sha256TextSync(JSON.stringify(['deletion-guard-refusal', guard.taskKey, key])) };
   }
 
   // The user's latest answer on the deletion card about this item in this task.
@@ -7757,9 +7824,15 @@ export class Agent extends LoopDetector {
     const deletion = detected?.mutationKind === 'delete';
     const publication = detected?.publicationControl === true;
     const genericCommit = !publication && !deletion && detected?.isSubmit === true && !this._nonCommittingSubmission(detected);
+    // chrome_web_store_publish has no page control to bind a click to; the
+    // check of the earlier submission decides it (_steeringPriorSubmissionBlock).
+    if (name === 'chrome_web_store_publish') return null;
     if (!deletion && !(guard?.steeringPriorSubmission && (publication || genericCommit))) return null;
     const blocked = (reason, guidance = '', extra = {}) => {
-      const ask = !deletion && !['task_or_target_changed', 'click_required', 'resource_unresolved',
+      // A commit whose resource could not be resolved (resource_unresolved)
+      // still names its control, so the user can decide it on the card, as
+      // "override that guard!" in chat already lets them.
+      const ask = !deletion && !['task_or_target_changed', 'click_required',
         'resource_changed', 'resource_changed_after_authorization', 'task_changed_during_authorization'].includes(reason)
         ? this._publicationGuardOverrideRequest(tabId, name, args, detected) : null;
       return { success: false, blocked: true, dispatched: false, noDispatch: true,
@@ -7801,7 +7874,18 @@ export class Agent extends LoopDetector {
     const record = deletion && !permalinked ? detected.actionRecord : null;
     if (deletion && !permalinked && !(record?.kind === 'record' && record.complete === true && record.text
         && record.footprint && record.scopeToken)) {
-      return blocked('resource_unresolved', 'This Delete or Remove control is not inside one identifiable record (for example a toolbar, bulk, selection or unlinked menu action). Use the Delete or Remove control inside the specific row the user named; toolbar and bulk deletions cannot be bound to a record.');
+      // The control is identified, its items are not: the user decides on
+      // WebBrain's hard card (_unboundDeletionAsk). "Go ahead" covers this one
+      // click, while the control is still the one that was read.
+      const unboundAsk = this._unboundDeletionAsk(tabId, guard, detected, key);
+      if (unboundAsk && this._unverifiedStepApproval(tabId, unboundAsk.guardId, unboundAsk.stepKey, { consume: true })) {
+        const final = await this._detectLikelySubmitAction(tabId, name, args, { mutationReconciliation: true });
+        if (!current() || this._resourceMutationActionKey(tabId, name, args, final) !== key) return blocked('resource_changed_after_authorization');
+        guard.resourceMutationAuthorization = { key, taskKey: guard.taskKey, authorityKey: authority.key, deletion: true };
+        return null;
+      }
+      return blocked('resource_unresolved', 'This Delete or Remove control is not inside one identifiable record (for example a toolbar, bulk, selection or unlinked menu action). Use the Delete or Remove control inside the specific row the user named; toolbar and bulk deletions cannot be bound to a record.',
+        unboundAsk ? { unverifiedStepConfirmation: unboundAsk } : {});
     }
     if (genericCommit && !formCommit && !permalinked) return blocked('resource_unresolved');
     const prior = guard.steeringPriorSubmission;
@@ -7928,6 +8012,7 @@ export class Agent extends LoopDetector {
         : `Nothing was published. WebBrain has no full record of what this task attempted (for example after WebBrain restarted), so it cannot rule out an earlier attempt on this site, and the latest attempt from before the correction${priorHost ? `, on ${priorHost},` : ''} cannot be checked here. Do not publish it again. Tell the user what was not done; they can ask again to post it.`,
       { retryable: false });
     }
+    let repeatsEarlierDeletion = false;
     if (prior) {
       const matching = this._steeringPriorResourceMatches(tabId, guard, prior, fresh);
       const reconciled = guard.steeringPriorSubmissionReconciliation;
@@ -7982,7 +8067,13 @@ export class Agent extends LoopDetector {
         return true;
       };
       const earlierDeletion = archivedAttempts.some(receipt => receipt.mutationKind === 'delete' && mayRepeatThisDeletion(receipt));
-      if (unreconciled && !(deletion && !earlierDeletion)) {
+      // deletion-guard-refusal cannot decide whether an earlier attempt already
+      // deleted this item. An item WebBrain can show goes to the user on its
+      // deletion card (below) instead of a refusal; their answer holds for
+      // that item, as any answer on that card does.
+      repeatsEarlierDeletion = deletion && unreconciled && earlierDeletion
+        && !!this._deletionConfirmationSubject(detected, record);
+      if (unreconciled && !(deletion && !earlierDeletion) && !repeatsEarlierDeletion) {
         return blocked('prior_effect_unreconciled', publication && !crossPlatform
           ? 'The earlier post from before the latest correction has not been matched yet. Read it on this platform (its permalink or the account\'s recent posts), then retry; do not repeat an uncertain publication.'
           : publication && siteCrossPlatform && prior.mutationKind !== 'delete'
@@ -8042,11 +8133,10 @@ export class Agent extends LoopDetector {
         guard.resourceMutationAuthorization = { key, taskKey: guard.taskKey, authorityKey: authority.key, deletion: true };
         return null;
       }
-      if (guard.resourceMutationAuthorization?.key === key && guard.resourceMutationAuthorization.taskKey === guard.taskKey
-          && guard.resourceMutationAuthorization.authorityKey === authority.key) return null;
       const guidance = {
         deletion_not_requested: 'The latest request does not ask to delete anything and the user could not be asked to confirm this deletion, so nothing was deleted. Do not delete anything the user did not ask to delete.',
         record_not_named_in_request: 'The latest request does not clearly say that this is the item to delete and the user could not be asked to confirm it, so it was not deleted. Report which item was not deleted; do not guess between similar items.',
+        prior_effect_unreconciled: 'An earlier attempt in this task may already have deleted this item and the user could not be asked to confirm deleting it again, so nothing was deleted. Read the page to check the earlier result and report it; do not retry the deletion.',
       };
       const confirmable = (reason, code) => {
         const text = guidance[code] || 'WebBrain could not match this item to the latest request and could not ask the user to confirm it, so it was not deleted. Report which item was not deleted; do not guess between similar items.';
@@ -8055,6 +8145,11 @@ export class Agent extends LoopDetector {
         return blocked(code, text, { mutationConfirmation: { kind: 'delete', reason, host: subject.host, item: subject.item,
           url: subject.url, dialog: subject.dialog } });
       };
+      // An earlier attempt may already have deleted this item (see above): only
+      // the user's answer on the card, checked first, lets it go ahead.
+      if (repeatsEarlierDeletion) return confirmable('repeat', 'prior_effect_unreconciled');
+      if (guard.resourceMutationAuthorization?.key === key && guard.resourceMutationAuthorization.taskKey === guard.taskKey
+          && guard.resourceMutationAuthorization.authorityKey === authority.key) return null;
       const resource = permalinked ? detected.actionResource : null;
       const verdict = await this._semanticDecision(tabId, 'deletion_request', { request: clarifiedRequest, page: {
         item: record?.text || (Array.isArray(resource?.textValues) ? resource.textValues.find(value => typeof value === 'string' && value.trim()) || '' : ''),
@@ -17341,7 +17436,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         || await timedCheck('workflowDispatchMs', () => this._workflowPreSubmitDispatchBlock(
           tabId, fnName, fnArgs, detectedSubmitAction, provider, callState.guardAdvisories,
         ))
-        || this._taskClickLockAsk(tabId, fnName, fnArgs, callState);
+        || this._taskClickLockAsk(tabId, fnName, fnArgs, callState)
+        || await this._duplicateSubmitClickAsk(tabId, fnName, fnArgs, detectedSubmitAction, callState);
       // From here the permission capabilities and the submit probe decide:
       // missingResponseOutcomeUnknown (above) holds when the call needs a
       // permission capability or is a state-changing tool, so navigation,
@@ -18080,8 +18176,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!protectedPageFailure) {
         const runMessageRecipientGuard = () => this._withContentActionDeadline(
           async abortSignal => {
+            // recipientCard: this batch can show WebBrain's card for a send
+            // whose recipient the page does not name (recipient-guard-refusal).
+            // The handlers that run the guard themselves cannot, and do not ask.
             const block = await this._messageRecipientGuardBlock(
-              tabId, fnName, fnArgs, beforeUrl, messageRecipientExecutionContext,
+              tabId, fnName, fnArgs, beforeUrl, messageRecipientExecutionContext, { recipientCard: true },
             );
             this._throwIfAborted(abortSignal);
             return block;
@@ -18099,6 +18198,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             messageRecipientBlock = await this._resolveMessageRecipientConfirmation(tabId, messageRecipientBlock,
               onUpdate, runMessageRecipientGuard);
           }
+          if (messageRecipientBlock?.unverifiedStepConfirmation) {
+            // The page names no recipient: the user sees the draft and decides
+            // on WebBrain's hard card (recipient-guard-refusal). An unattended
+            // run is refused there without waiting.
+            askedRecipient = true;
+            messageRecipientBlock = await this._resolveUnverifiedStepConfirmation(tabId, messageRecipientBlock,
+              onUpdate, runMessageRecipientGuard, callState.guardAdvisories);
+          }
         } catch (error) {
           if (error?.code !== 'content_action_timeout') throw error;
           const loopStop = await recordPagePreparationTimeout(error, 'message-recipient safety preflight');
@@ -18110,7 +18217,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // A correction sent while the card waited cancels the card; it is not
           // Stop. Hand the turn to the corrected task first.
           if (this._hasPendingSteering(tabId) && !this._checkAbort(tabId)) return skipSteeredPermissionWait(toolIndex);
-          if (this._checkAbort(tabId) || messageRecipientBlock?.recipientConfirmationCancelled === true) {
+          if (this._checkAbort(tabId) || messageRecipientBlock?.recipientConfirmationCancelled === true
+              || messageRecipientBlock?.unverifiedStepConfirmationCancelled === true) {
             const value = '[Stopped by user before executing requested tool calls.]';
             this._appendSyntheticToolResults(tabId, toolCalls, toolIndex, messages, onUpdate, step, () => ({
               success: false,
@@ -18299,6 +18407,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 ...messageRecipientExecutionContext,
                 ...(uploadSourceKey != null ? { uploadSourceKey } : {}),
                 taskClickLockRelease: callState.taskClickLockRelease || null,
+                duplicateSubmitApproved: !!callState.duplicateSubmitApproval,
                 iframeTargetUnresolved: pipelineToolbarPreflight.iframeTargetUnresolved === true,
                 richTextToolbarWrongTargetAdvised: pipelineToolbarPreflight.wrongTargetAdvised === true,
                 imageGenConfig,
@@ -33885,7 +33994,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
   }
 
-  async _messageRecipientGuardBlock(tabId, toolName, args = {}, pageUrl = '', executionContext = null) {
+  async _messageRecipientGuardBlock(tabId, toolName, args = {}, pageUrl = '', executionContext = null, { recipientCard = false } = {}) {
     if (!this._actionGuardsEnabled(tabId)) return null;
     const name = String(toolName || '');
     const ordinaryGuardedTools = new Set(['click', 'click_ax', 'set_field', 'press_keys', 'upload_file']);
@@ -33957,11 +34066,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const guard = this._planExecutionGuards.get(tabId);
     let target = normalizeMessageTarget(guard?.messaging);
+    // A send the user approved on WebBrain's card although the page names no
+    // recipient (recipient_identity_unavailable below) asks the page for a
+    // dispatch binding without one. The answer itself is checked below,
+    // against the draft the user saw.
+    const unreadableRecipientStep = recipientCard === true
+      ? this._unreadableRecipientStepKey(tabId, guard, name, args, resolvedPageUrl, executionContext) : '';
+    const unreadableRecipientApproved = !!unreadableRecipientStep
+      && !!this._unverifiedStepApproval(tabId, 'recipient-guard-refusal', unreadableRecipientStep, { peek: true });
     const probe = await this._messageRecipientGuardProbe(tabId, {
       tool: name,
       args,
       adapterName: policy.adapterName,
       bindDispatch: true,
+      ...(unreadableRecipientApproved ? { allowUnidentifiedRecipient: true } : {}),
       supportsRecipientSets: policy.supportsRecipientSets === true,
       ...(name === 'upload_file' ? { uploadSourceKey } : {}),
       ...(target?.target_kind === 'named' ? { expectedRecipients: target.recipients } : {}),
@@ -34133,8 +34251,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
     const conclusiveSend = probe?.success === true && probe?.conclusive === true && probe?.messageSend === true;
     if (conclusiveSend && observedIdentities.length === 0) {
-      return technicalBlock('recipient_identity_unavailable',
+      const refusal = technicalBlock('recipient_identity_unavailable',
         'Message send blocked because WebBrain cannot establish the active recipient identity from this page. Re-read the active conversation header or open the intended chat. If identity remains unavailable, report this technical blocker; additional recipient approval cannot resolve missing page evidence.');
+      // recipient-guard-refusal cannot decide: the page shows a send and a
+      // draft but no recipient WebBrain can read. The user can see who the
+      // conversation is with, so WebBrain shows them the draft on its hard
+      // card instead of refusing. The card never times out and never goes
+      // ahead on its own, and an unattended run or a caller without the card
+      // is refused. "Go ahead" covers this one send of the draft they saw:
+      // it is bound to the composer and that text like any verified send,
+      // and a recipient that becomes readable before dispatch stops it.
+      const draft = name !== 'upload_file' ? this._workflowMessageBody(probe?.messageBody) : '';
+      if (!unreadableRecipientStep || !draft || !Number.isInteger(messageBodyBaselineCount) || messageBodyBaselineCount < 0) return refusal;
+      if (this._unverifiedStepApproval(tabId, 'recipient-guard-refusal', unreadableRecipientStep,
+        { contentSha256: this._sha256TextSync(draft), consume: true })) {
+        const binding = probe?.messageRecipientDispatchBinding;
+        if (!binding?.token) {
+          return technicalBlock('recipient_dispatch_binding_unavailable',
+            'Message send blocked because WebBrain could not bind the approved send to the final action dispatch. Re-read the active conversation and retry once; WebBrain asks the user again.');
+        }
+        if (guard) delete guard.messageRecipientTechnicalBlock;
+        executionContext.messageRecipientGuardRequired = true;
+        executionContext.messageRecipientDispatchBinding = binding;
+        executionContext.messageRecipientBody = draft;
+        executionContext.messageRecipientBodyBaselineCount = messageBodyBaselineCount;
+        if (probe.nativeChatMessageBaseline?.complete === true) {
+          executionContext.messageRecipientNativeChatBaseline = probe.nativeChatMessageBaseline;
+        }
+        if (policy.adapterName === 'twitter' && Array.isArray(probe.existingMessageIds)) {
+          executionContext.messageRecipientExistingMessageIds = [...probe.existingMessageIds];
+          if (probe.twitterEmptyConversationBaseline === true) executionContext.messageRecipientTwitterEmptyConversationBaseline = true;
+        }
+        if (probe.composerSubjectAvailable === true) {
+          executionContext.messageRecipientSubject = this._workflowMetadataValue(probe.composerSubject);
+          executionContext.messageRecipientSubjectAvailable = true;
+        }
+        if (probe.gmailComposeFlow === true) executionContext.messageRecipientGmailComposeFlow = true;
+        return null;
+      }
+      let host = '';
+      try { host = new URL(resolvedPageUrl).hostname; } catch {}
+      return { ...refusal, unverifiedStepConfirmation: { guardId: 'recipient-guard-refusal', hard: true, action: 'send',
+        reason: 'recipient_unreadable', host: host.slice(0, 300), contentLabel: 'composer', text: draft,
+        stepKey: unreadableRecipientStep } };
     }
     if (conclusiveSend && observedIdentities.length > 0 && guard) delete guard.messageRecipientTechnicalBlock;
     // A send that reaches someone other than the authorized recipient, or a
@@ -34347,6 +34506,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
   }
 
+  // The step a "send it although WebBrain cannot read the recipient" answer
+  // is bound to: this task, this send control and this page. Empty where the
+  // question cannot be asked: an upload, a call with nowhere to record the
+  // binding, or a guard that does not ask. Only the tool batch calls it; the
+  // handlers that run the recipient guard themselves have no card.
+  _unreadableRecipientStepKey(tabId, guard, name, args, pageUrl, executionContext) {
+    if (!guard?.taskKey || !pageUrl || !['click', 'click_ax', 'set_field', 'press_keys'].includes(name)
+        || !executionContext || typeof executionContext !== 'object'
+        || this._guardOutcome('recipient-guard-refusal', { decided: false, tabId }) !== 'ask') return '';
+    return this._sha256TextSync(JSON.stringify(['recipient-guard-refusal', guard.taskKey, name,
+      this._formValidationActionKey(name, args) || name, String(pageUrl)]));
+  }
+
   // Whether a request names the person its message is for, so that it may
   // open that person's WhatsApp chat from the chat list before the contact
   // check. A request for the open chat itself ("this one"), with or without
@@ -34527,7 +34699,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const clip = (value, limit) => String(value || '').slice(0, limit);
     const display = {
       kind: 'delete',
-      reason: ['not_requested', 'not_named', 'unverified'].includes(confirmation?.reason) ? confirmation.reason : 'unverified',
+      reason: ['not_requested', 'not_named', 'repeat', 'unverified'].includes(confirmation?.reason) ? confirmation.reason : 'unverified',
       host: clip(confirmation?.host, 300),
       item: clip(confirmation?.item, 280),
       url: clip(confirmation?.url, 600),
@@ -34689,7 +34861,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _unverifiedStepQuestion(step) {
     const host = step?.host || 'this site';
     return { commit: `Commit this on ${host}?`, publish: `Publish this on ${host}?`,
-      click: `Click this control on ${host}?`, type: `Type this into a sign-in password field on ${host}?` }[step?.action]
+      click: `Click this control on ${host}?`, type: `Type this into a sign-in password field on ${host}?`,
+      delete: `Click this delete control on ${host}?`, send: `Send this message on ${host}?` }[step?.action]
       || `Submit this on ${host}?`;
   }
 
@@ -34870,6 +35043,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'clickax-task-click-lock': { subject: 'clicking this control again', what: 'An earlier click on this control may already have taken effect',
         after: 'Inspect the page to see what both clicks did before acting again.',
         declined: 'inspect the page to reconcile the earlier click, or report what was not done' },
+      'click-duplicate-submit': { subject: 'clicking this control again so soon', what: 'This control was already clicked on this page moments ago',
+        after: 'Inspect the page to see what both clicks did before acting again; a second click can create a duplicate.',
+        declined: 'read the page to see what the first click did, or report what was not done' },
+      'deletion-guard-refusal': { subject: 'this Delete or Remove control', what: 'WebBrain could not tell which items this control deletes',
+        after: 'Read the page to see what was deleted before reporting.',
+        declined: 'use the Delete or Remove control inside the specific row the user named, or report that nothing was deleted' },
+      'steer-prior-submission-unreconciled': { subject: 'this request', what: 'A submission was already attempted before the latest correction and its result was not established',
+        after: 'Read its response to see what it did before sending anything else.',
+        declined: 'report what was not sent' },
+      'recipient-guard-refusal': { subject: 'sending this message', what: 'WebBrain could not read who this message goes to',
+        after: 'Read the conversation to confirm the message was delivered before reporting success.',
+        declined: 'return the draft in chat, or report that the message was not sent' },
     }[guardId] || { subject: 'this step', what: 'This step could not be verified', after: 'Check its result before reporting success.',
       declined: 'report what was not done' };
   }
@@ -48139,6 +48324,48 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         host: normalizeHost(scope.pageUrl || ''), contentLabel: 'page', stepKey } };
   }
 
+  /**
+   * click-duplicate-submit (a hard class: a second copy of a commit or a
+   * post) cannot decide: the same caption was clicked on this URL within the
+   * last 45 s, and nothing shows whether that click took effect. Instead of
+   * refusing, WebBrain asks the user on its card, which never times out and
+   * never goes ahead on its own (an unattended run is refused). The user's
+   * 'once' covers this one click: it becomes this call's approval
+   * (`callState`), and the guard in the click handler lets that click through
+   * and re-records it, so a further repeat asks again. The handler's guard
+   * stays the fence for callers that have no card.
+   */
+  async _duplicateSubmitClickAsk(tabId, name, args = {}, detected = null, callState = null) {
+    if (name !== 'click' || !args?.text || !this._actionGuardsEnabled(tabId)
+        || this._guardOutcome('click-duplicate-submit', { decided: false, tabId }) !== 'ask') return null;
+    const block = await guardRecentSubmitClick(
+      this._recentSubmitClicks,
+      tabId,
+      args,
+      async () => {
+        const tab = await chrome.tabs.get(tabId);
+        return tab?.url || '';
+      },
+      Date.now,
+      detected,
+      (text, { read }) => (read ? this._readControlEffect(tabId, text) : this._controlEffectReading(text)),
+      { peek: true },
+    );
+    if (!block) return null;
+    const caption = String(args.text).trim();
+    const stepKey = this._sha256TextSync(JSON.stringify(['click-duplicate-submit', this._taskTokens.get(tabId) || '',
+      caption.toLowerCase(), block.currentUrl, block.previousClickAt]));
+    // The checks can run again before dispatch; this call already holds the answer.
+    if (callState?.duplicateSubmitApproval?.stepKey === stepKey) return null;
+    if (callState && this._unverifiedStepApproval(tabId, 'click-duplicate-submit', stepKey, { consume: true })) {
+      callState.duplicateSubmitApproval = { stepKey };
+      return null;
+    }
+    return { ...block, noDispatch: true, retryable: false,
+      unverifiedStepConfirmation: { guardId: 'click-duplicate-submit', hard: true, action: 'click', reason: 'repeat_unverified',
+        host: normalizeHost(block.currentUrl || ''), contentLabel: 'page', text: caption.slice(0, 200), stepKey } };
+  }
+
   async _readTextMutationEnrichment(operation, signal) {
     if (!signal) return operation();
     this._throwIfAborted(signal);
@@ -53264,6 +53491,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         Date.now,
         dispatchContext.detectedSubmitAction || null,
         (text, { read }) => (read ? this._readControlEffect(tabId, text) : this._controlEffectReading(text)),
+        { approved: dispatchContext.duplicateSubmitApproved === true },
       );
       if (duplicateSubmit) {
         await this._releaseRichTextToolbarProbeTarget(tabId, dispatchBinding);
@@ -53285,6 +53513,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           Date.now,
           dispatchContext.detectedSubmitAction || null,
           (text, { read }) => (read ? this._readControlEffect(tabId, text) : this._controlEffectReading(text)),
+          { approved: dispatchContext.duplicateSubmitApproved === true },
         );
         throwIfEarlyCdpAborted();
         if (duplicateSubmit) return duplicateSubmit;
