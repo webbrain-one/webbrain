@@ -17,6 +17,8 @@ const COUPON_FIELD_RE = /\b(coupon|promo(?:tional)?|voucher|discount)\b/i;
 const COUPON_EMPTY_CART_RE = /\b(?:your\s+)?(?:cart|basket|bag)\s+(?:is\s+)?empty\b|\b(?:no|zero)\s+items?\s+in\s+(?:your\s+)?(?:cart|basket|bag)\b/i;
 const COUPON_PRICE_RE = /[₺$€£¥₹₩]|\b(?:USD|EUR|GBP|TRY|CAD|AUD|JPY|BRL|MXN|INR)\s*\d|\d\s*(?:USD|EUR|GBP|TRY|CAD|AUD|JPY|BRL|MXN|INR)\b/i;
 const RELEASES_PATH_RE = /^\/[^/]+\/[^/]+\/releases(?:\/|$)/i;
+const GITHUB_PR_PATH_RE = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/i;
+const GITHUB_PULLS_PATH_RE = /^\/([^/]+)\/([^/]+)\/pulls(?:\/|$)/i;
 const SEARCH_INPUT_RE = /^(search|q|query|keyword|keywords|s)$/i;
 const EMAIL_HOST_RE = /(^|\.)(mail\.google\.com|gmail\.com|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com|mail\.yahoo\.com|icloud\.com|proton\.me|protonmail\.com|fastmail\.com|hey\.com|mail\.zoho\.com)$/i;
 const DM_HOST_RE = /(^|\.)(instagram\.com|x\.com|twitter\.com|facebook\.com|messenger\.com|threads\.net|reddit\.com|linkedin\.com|discord\.com|slack\.com|web\.whatsapp\.com|messages\.google\.com|web\.telegram\.org)$/i;
@@ -43,6 +45,16 @@ function pathFromUrl(url) {
   } catch {
     return '/';
   }
+}
+
+function githubPullRequestContext(path = '') {
+  const match = GITHUB_PR_PATH_RE.exec(String(path));
+  return match ? { owner: match[1], repo: match[2], number: match[3] } : null;
+}
+
+function githubPullsContext(path = '') {
+  const match = GITHUB_PULLS_PATH_RE.exec(String(path));
+  return match ? { owner: match[1], repo: match[2] } : null;
 }
 
 function addUnique(actions, action) {
@@ -379,6 +391,33 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
       label: 'Create a new release',
       prompt: 'Create a new GitHub release for this repository. Ask me for the tag, title, and release notes if needed.',
       mode: 'act',
+    });
+  }
+
+  const pullRequest = githubPullRequestContext(path);
+  if (host === 'github.com' && pullRequest) {
+    const reference = `${pullRequest.owner}/${pullRequest.repo}#${pullRequest.number}`;
+    addUnique(actions, {
+      id: 'review-pull-request',
+      label: 'Review this pull request',
+      prompt: `Review GitHub pull request ${reference}. Read its description, full diff, conversation, and checks. Report prioritized correctness, security, compatibility, and test-coverage findings with exact file and line references. Do not post the review, comment, approve, close, or modify the pull request unless I explicitly ask.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'summarize-pull-request',
+      label: 'Summarize this pull request',
+      prompt: `Read GitHub pull request ${reference}, including its description, changed files, review comments, and checks. Summarize the intent, implementation, material risks, review status, and remaining blockers. Do not post or modify anything.`,
+      mode: 'ask',
+    });
+  }
+
+  const pulls = githubPullsContext(path);
+  if (host === 'github.com' && pulls) {
+    addUnique(actions, {
+      id: 'summarize-recent-pr-activity',
+      label: 'Summarize recent PR activity',
+      prompt: `Read the visible pull-request list for ${pulls.owner}/${pulls.repo}, including open and recently updated pull requests. Summarize activity by theme, review status, stale items, blockers, and which pull requests need attention. Do not open, comment on, or modify any pull request.`,
+      mode: 'ask',
     });
   }
 

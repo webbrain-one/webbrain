@@ -127867,6 +127867,53 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
   });
 }
 
+// ── Recommended actions: GitHub pull-request context ────────────────────────
+// Generic "Explain this page" is not useful on a review surface. Offer review
+// and summary prompts scoped to the exact repository and pull request instead.
+for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox', buildRecommendedActionsFx]]) {
+  test(`recommended-actions (${label}): GitHub pull requests surface review actions`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pull/3210/files',
+      title: 'feat: improve onboarding by webbrain-one · Pull Request #3210 · webbrain-one/webbrain',
+    };
+    const actions = build(pageInfo);
+    const byId = new Map(actions.map((action) => [action.id, action]));
+
+    const review = byId.get('review-pull-request');
+    assert.ok(review, 'Review this pull request should be offered');
+    assert.equal(review.label, 'Review this pull request');
+    assert.equal(review.mode, 'ask');
+    assert.match(review.prompt, /webbrain-one\/webbrain#3210/);
+    assert.match(review.prompt, /Do not post the review.*or modify the pull request/);
+
+    const summary = byId.get('summarize-pull-request');
+    assert.ok(summary, 'Summarize this pull request should be offered');
+    assert.equal(summary.label, 'Summarize this pull request');
+    assert.equal(summary.mode, 'ask');
+    assert.match(summary.prompt, /webbrain-one\/webbrain#3210/);
+    assert.ok(!actions.some((action) => action.id === 'explain-page'), 'generic page explanation should not displace PR review');
+  });
+
+  test(`recommended-actions (${label}): GitHub pull-request list surfaces recent activity`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pulls?q=is%3Aopen',
+      title: 'Pull requests · webbrain-one/webbrain',
+    };
+    const action = build(pageInfo).find((candidate) => candidate.id === 'summarize-recent-pr-activity');
+    assert.ok(action, 'Summarize recent PR activity should be offered');
+    assert.equal(action.label, 'Summarize recent PR activity');
+    assert.equal(action.mode, 'ask');
+    assert.match(action.prompt, /webbrain-one\/webbrain/);
+    assert.match(action.prompt, /Do not open, comment on, or modify/);
+
+    const nonGitHub = build({
+      url: 'https://example.com/webbrain-one/webbrain/pulls',
+      title: 'Pull requests',
+    });
+    assert.ok(!nonGitHub.some((candidate) => candidate.id === 'summarize-recent-pr-activity'), 'hostname must be github.com');
+  });
+}
+
 // ── Store review prompt (#208) ───────────────────────────────────────────────
 const MS_DAY = 24 * 60 * 60 * 1000;
 
