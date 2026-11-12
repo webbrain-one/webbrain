@@ -77,3 +77,23 @@ func TestPlanLineSharedProvider(t *testing.T) {
 		t.Fatalf("a provider with one login keeps the short line, got %q", got)
 	}
 }
+
+func TestUsageLinePreservesScopedWindows(t *testing.T) {
+	i18n.Set("en")
+	rows := []quota.Row{
+		{Window: "5h", Scope: "Code review", Label: "5h · Code review", Remaining: pct(64)},
+		{Window: "week", Scope: "Code review", Label: "Week · Code review", Remaining: pct(83)},
+	}
+	for _, row := range rows {
+		line := usageLine(row)
+		if !strings.Contains(line, row.Label) || !strings.Contains(line, percent(*row.Remaining)) {
+			t.Errorf("usage line %q does not preserve label and percentage", line)
+		}
+	}
+	if usageLine(rows[0]) == usageLine(rows[1]) {
+		t.Fatal("different windows must have different tray lines")
+	}
+	if got := usageLine(quota.Row{Scope: "Credits", Detail: "$4"}); !strings.Contains(got, "Credits") || !strings.Contains(got, "$4") {
+		t.Fatalf("missing fallback scope or detail: %q", got)
+	}
+}

@@ -122,6 +122,7 @@
       testing: "Deciding…",
       testResult: "Answer {choice} with {p}% confidence in {ms} ms.",
       settings: "Settings",
+      showAllUsage: "Show all model usage on the main panel",
       startLogin: "Start at login",
       language: "Language",
       networkToggle: "Allow other devices on this network",
@@ -291,6 +292,7 @@
       testing: "Karar veriliyor…",
       testResult: "Yanıt {choice}, %{p} güvenle, {ms} ms.",
       settings: "Ayarlar",
+      showAllUsage: "Ana panelde tüm model kullanımlarını göster",
       startLogin: "Oturum açılınca başlat",
       language: "Dil",
       networkToggle: "Bu ağdaki diğer cihazlara izin ver",
@@ -605,7 +607,8 @@
     // Two logins with the same name show whose each one is, as the tray does.
     const shared = all.filter((x) => x.provider_name === a.provider_name).length > 1;
     const who = whoOf(a);
-    const r = s.row;
+    const allUsage = state.show_all_usage && !a.disabled && q.status === "ok" && (q.rows || []).length;
+    const r = allUsage ? null : s.row;
     const low = r && r.remaining < 20;
     const label = [a.provider_name, q.plan, who, r ? pctText(r.remaining) : "", s.text].filter(Boolean).join(", ");
     return `<li class="${a.disabled ? "off" : ""}">
@@ -615,6 +618,7 @@
           ${shared ? `<span class="sub">${esc(who)}</span>` : ""}<span class="sub ${s.tone || ""}">${esc(s.text)}</span></span>
         ${r ? cells(Math.max(0, Math.min(100, r.remaining)), firstPaint) + `<span class="pct">${pctText(Math.max(0, Math.min(100, r.remaining)))}</span>` : ""}
       </button>
+      ${allUsage ? `<div class="meters inline-meters">${q.rows.map(meter).join("")}</div>` : ""}
     </li>`;
   }
 
@@ -954,6 +958,7 @@
     return sheetHead(t("settings"))
       + `<div class="opts">
         <label class="toggle"><input type="checkbox" data-change="autostart" ${s.autostart ? "checked" : ""} ${s.translocated ? "disabled" : ""}>${t("startLogin")}</label>
+        <label class="toggle"><input type="checkbox" data-change="show-all-usage" ${s.show_all_usage ? "checked" : ""}>${t("showAllUsage")}</label>
         <label class="setting"><span>${t("language")}</span><select data-change="language"><option value="en" ${lang === "en" ? "selected" : ""}>English</option><option value="tr" ${lang === "tr" ? "selected" : ""}>Türkçe</option></select></label>
       </div>
       <h4>${t("otherDevices")}</h4>
@@ -1209,6 +1214,7 @@
       case "autostart": run(api("PATCH", "/settings", { autostart: v })); break;
       case "network": run(api("PATCH", "/settings", { network: v })); break;
       case "auto-update": run(api("PATCH", "/settings", { auto_update: v })); break;
+      case "show-all-usage": run(api("PATCH", "/settings", { show_all_usage: v })); break;
       case "language": lang = v; state.language = v; run(api("PATCH", "/settings", { language: v })); el.blur(); reRender(); break;
       case "local-vision": run(api("PATCH", "/local", { vision: v })); el.blur(); break;
       case "local-context": state.local_context_setting = parseInt(v, 10); run(api("PATCH", "/local", { context: parseInt(v, 10) })); el.blur(); break;
@@ -1266,18 +1272,43 @@
   const fallback = (msg) => {
     $app.innerHTML = `<header class="top"><img src="static/logo-64.png" alt="" width="34" height="34"><h1>WebBrain Companion</h1></header><p class="empty">${msg}</p>`;
   };
-  if (!key) { fallback(t("tokenMissing")); return; }
-  api("GET", "/state").then((s) => {
-    applyState(s);
-    if (startView === "add") openSheet({ view: "pick" }, "btn-add");
-    else if (startView === "settings") openSheet({ view: "settings" }, "btn-settings");
-    else if (startView === "local") openSheet({ view: "local" }, "row-local");
-    else if (startView === "decision") openSheet({ view: "decision" }, "row-d1");
-    else if (startView.startsWith("account:")) {
-      const name = startView.slice(8);
+  function openView(view) {
+    if (view === "add") openSheet({ view: "pick" }, "btn-add");
+    else if (view === "settings") openSheet({ view: "settings" }, "btn-settings");
+    else if (view === "local") openSheet({ view: "local" }, "row-local");
+    else if (view === "decision") openSheet({ view: "decision" }, "row-d1");
+    else if (view.startsWith("account:")) {
+      const name = view.slice(8);
       const i = (state.accounts || []).findIndex((a) => a.name === name);
       if (i >= 0) openSheet({ view: "account", name }, "acc-" + i);
     }
+  }
+
+  // The companion's own panel window stays open: a tray item that asks for
+  // a view changes the fragment of this page instead of opening another one.
+  // A view asked for before the first state arrives opens once it does.
+  let pendingView = startView;
+  window.addEventListener("hashchange", () => {
+    const view = new URLSearchParams(location.hash.slice(1)).get("view") || "";
+    history.replaceState(null, "", location.pathname);
+    if (!view) return;
+    if (state) openView(view);
+    else pendingView = view;
+  });
+
+  // Like an app window: the browser's context menu only where there is text
+  // to edit or copy.
+  document.addEventListener("contextmenu", (ev) => {
+    if (ev.target instanceof Element && ev.target.closest("input, textarea, [contenteditable]")) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    ev.preventDefault();
+  });
+
+  if (!key) { fallback(t("tokenMissing")); return; }
+  api("GET", "/state").then((s) => {
+    applyState(s);
+    openView(pendingView);
     listen();
   }).catch((e) => fallback(`${esc(e.message)}. ${t("tokenMissing")}`));
   setInterval(() => { if (state) render(); }, 30000); // keep countdowns fresh

@@ -228,3 +228,36 @@ func TestConcurrentSettingsRestartsKeepProxyConfigCurrent(t *testing.T) {
 		t.Fatalf("proxy config does not match the final port and API key (running=%v port=%d)", a.Proxy.Running(), a.Proxy.Port())
 	}
 }
+
+func TestShowAllUsageSettingPersists(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("WBC_HOME", t.TempDir())
+	store, err := settings.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New("test", store)
+	e := gin.New()
+	a.routes(e)
+	for _, value := range []bool{true, false, true} {
+		r := httptest.NewRequest(http.MethodPatch, "http://127.0.0.1:8327/companion/api/settings", strings.NewReader(fmt.Sprintf(`{"show_all_usage":%t}`, value)))
+		r.RemoteAddr = "127.0.0.1:50000"
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Companion-Key", store.Get().PanelToken)
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("update: %d %s", w.Code, w.Body.String())
+		}
+		if got := a.Snapshot().ShowAllUsage; got != value {
+			t.Fatalf("snapshot = %v, want %v", got, value)
+		}
+		reopened, err := settings.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := reopened.Get().ShowAllUsage; got != value {
+			t.Fatalf("persisted = %v, want %v", got, value)
+		}
+	}
+}

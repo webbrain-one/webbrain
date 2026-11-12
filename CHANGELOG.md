@@ -6,6 +6,17 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [48.1.0] - 2026-11-12
+
+### Changed
+- Settings is one wider page with a sidebar. The Providers and Permissions pages are now sections of it: the models (LLM, Vision, Speech, Generative, Decision, SafeSocial) sit under **Models**, and CAPTCHA and Bridge under **Integrations**. The search box tops the sidebar and searches every section. Below 880px the sidebar becomes a scrolling strip.
+- **Permissions & privacy** holds the permission prompts and site permissions together with screenshot redaction, strict secret handling and local network access, which moved there from Advanced. Firefox's trusted automation card moved from Advanced to Bridge.
+- A new **Offline** section shows Apocalypse Mode's archive status and opens Apocalypse Mode, which keeps its own switch and downloads. Its link left the Settings header.
+- Old links keep working: `providers.html` and `permissions.html` forward to the matching Settings section with their `#section`, and `settings.html#providers`, `#multimodal` and `#apocalypse` open the section that holds them now.
+- Seven guard refusals that used to end an attended run now ask you on WebBrain's own card instead: a publish or submit click in vision mode that a publication check held; a form submission after a correction whose target WebBrain could not resolve; a second click on a commit or publish button within 45 seconds; a toolbar, bulk or selection Delete; deleting an item an earlier attempt may already have deleted; an API write or Chrome Web Store publish after a correction; and sending a message whose recipient WebBrain cannot read. Each card covers one action, never times out and never goes ahead on its own. Unattended scheduled runs still refuse. See `docs/guards.md`.
+
+## [48.0.0] - 2026-11-12
+
 ### Added
 - Murshid 0.1.3 checks for application updates at startup and daily, with an Updates page, menu entry and toolbar notification. Signed macOS builds can download a verified update and restart to install it; Windows and Linux open their platform's published installer. Automatic checks can be disabled in Settings. All ten interface languages are supported. Older Murshid versions require one manual installation to gain update support.
 - Murshid 0.1.4 for macOS, Windows and Linux adds a shield next to the address bar: it shows whether ads and trackers are blocked on the site in the tab, and one click allows them there (for sites that refuse to work with a blocker) or blocks them again. The universal macOS build bundles WebBrain 47.1.1 and WebBrain Companion 0.1.2 for Apple Silicon and Intel.
@@ -15,7 +26,6 @@ This changelog was generated from the repository Git history and release tags. V
 - Settings → Advanced is sorted under headings. The planning controls, Auto-screenshot and the image budget moved there from General and Budgets, next to the other settings the combined switches stand for.
 - A setting that only matters while another is on is greyed out with it: the scheduled-task confirmation, and the user-memory learning and prompt-size options.
 - Config export and import now include the image budget (image detail, screenshots per turn, maximum image dimension).
-- Seven guard refusals that used to end an attended run now ask you on WebBrain's own card instead: a publish or submit click in vision mode that a publication check held; a form submission after a correction whose target WebBrain could not resolve; a second click on a commit or publish button within 45 seconds; a toolbar, bulk or selection Delete; deleting an item an earlier attempt may already have deleted; an API write or Chrome Web Store publish after a correction; and sending a message whose recipient WebBrain cannot read. Each card covers one action, never times out and never goes ahead on its own. Unattended scheduled runs still refuse. See `docs/guards.md`.
 
 ### Fixed
 - A profile that never moved the plan-review slider now uses the 75% threshold Settings shows. The background had been falling back to 90%, so plans scored between 75% and 90% stopped for review when they should have run.

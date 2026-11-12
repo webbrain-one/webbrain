@@ -2,54 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebBrain Permissions</title>
-  <!-- Theme bootstrap — runs before the stylesheet so data-theme is set before any
-       paint. External classic script because Firefox MV2's CSP forbids
-       inline scripts without an explicit unsafe-inline. -->
-  <script src="theme-bootstrap.js"></script>
-  <link rel="stylesheet" href="settings.css">
+  <!-- Permissions is a section of settings.html now; this page forwards
+       old links there, keeping their #section (settings-redirect.js). -->
+  <script src="settings-redirect.js" data-default-section="permissions"></script>
 </head>
 <body>
-  <div class="header-row">
-    <div>
-      <h1><img class="brand-mark" src="../../icons/icon128.png" alt="" aria-hidden="true"><a id="settings-title-link" href="#" data-i18n="st.permissions_page.title"></a></h1>
-      <p class="subtitle" id="subtitle" data-subtitle-key="st.permissions_page.subtitle"></p>
-    </div>
-    <div class="header-actions">
-      <a id="settings-page-link" class="support-link" href="settings.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span data-i18n="sp.btn.settings"></span>
-      </a>
-      <a class="support-link" href="https://webbrain.one/docs" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        Support
-      </a>
-    </div>
-  </div>
-
-  <main id="permissions-page">
-    <div class="provider-card" id="permissions-card">
-      <div class="setting-row" style="margin-bottom:14px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.perms.gate.label"></div>
-          <div class="setting-desc" data-i18n="st.perms.gate.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-permission-gate" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="info-box" id="permission-gate-warning" style="display:none;margin-bottom:16px;" data-i18n="st.perms.gate.warning"></div>
-
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n="st.perms.desc"></div>
-      <div id="permissions-list"></div>
-      <div class="btn-row" id="permissions-actions" style="margin-top:14px;display:none;">
-        <button class="btn-secondary" id="btn-clear-all-permissions" data-i18n="st.perms.clear_all"></button>
-      </div>
-    </div>
-  </main>
-
-  <script src="settings.js" type="module"></script>
+  <p><a href="settings.html#permissions">WebBrain Settings</a></p>
 </body>
 </html>

@@ -33,8 +33,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
-  padding: 24px;
-  max-width: 760px;
+  padding: 24px 28px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 h1 {
@@ -1373,10 +1373,10 @@ button:active { transform: scale(0.97); }
 .captcha-advanced .field { margin-top: 12px; }
 .captcha-advanced input { max-width: 140px; }
 
-/* Settings search spans General, Budgets, Captcha and Advanced. While a query
-   is active those tabs show their matches together, each under its tab name,
-   and no tab is marked as the current one. A tab name opens that tab; picking
-   a tab or clearing the query ends the search. */
+/* Settings search spans every section. While a query is active the sections
+   show their matches together, each under its section name, and no section
+   is marked as the current one. A section name opens that section; picking a
+   section or clearing the query ends the search. */
 .search-panel-heading { display: none; }
 body.settings-searching .tab-panel[data-search] { display: block; }
 body.settings-searching .tab-panel:not([data-search]) { display: none; }
@@ -1438,3 +1438,90 @@ body.settings-searching .settings-group-heading { display: none; }
 }
 .preset-fine-tune:hover { text-decoration: underline; }
 .setting-dependent-off { opacity: 0.58; }
+
+/* One Settings page: a sidebar with the search box and the sections, the
+   selected section beside it. Below 880px they stack and the sections become
+   a scrolling strip again, as the tab bar was. */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.settings-sidebar {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 2px 2px 8px;
+}
+.settings-sidebar .settings-search { margin-bottom: 10px; }
+.settings-main { min-width: 0; max-width: 880px; }
+.tabs.settings-nav {
+  position: static;
+  flex-direction: column;
+  overflow-x: visible;
+  margin: 0;
+  padding: 6px;
+  gap: 1px;
+}
+.settings-nav .tab-btn {
+  flex: 0 0 auto;
+  text-align: start;
+  padding: 8px 12px;
+  white-space: normal;
+}
+.settings-nav .tab-btn.tab-sub { padding-inline-start: 24px; font-weight: 500; }
+.settings-nav .tab-btn.tab-sub.active { font-weight: 600; }
+.settings-nav .tab-group-label {
+  padding: 12px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+/* Each section shows its name; during a search the names turn back into the
+   small headings that open their section. */
+.tab-panel > .search-panel-heading {
+  display: block;
+  margin: 2px 0 16px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tab-panel > .search-panel-heading .search-panel-link { cursor: default; }
+.tab-panel > .search-panel-heading .search-panel-link::after { content: none; }
+.tab-panel > .search-panel-heading .search-panel-link:hover { color: inherit; }
+body.settings-searching .tab-panel > .search-panel-heading {
+  margin: 22px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+body.settings-searching .tab-panel > .search-panel-heading .search-panel-link { cursor: pointer; }
+body.settings-searching .tab-panel > .search-panel-heading .search-panel-link::after { content: ' ›'; }
+[dir="rtl"] body.settings-searching .tab-panel > .search-panel-heading .search-panel-link::after { content: ' ‹'; }
+body.settings-searching .tab-panel > .search-panel-heading .search-panel-link:hover { color: var(--accent); }
+.apocalypse-mode-status { margin-top: 6px; color: var(--accent); }
+.apocalypse-mode-open { flex-shrink: 0; text-decoration: none; white-space: nowrap; }
+@media (max-width: 880px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .settings-sidebar {
+    top: 0;
+    z-index: 10;
+    max-height: none;
+    overflow: visible;
+    padding: 0 0 12px;
+    background: var(--bg);
+  }
+  .tabs.settings-nav { flex-direction: row; overflow-x: auto; padding: 4px; }
+  .settings-nav .tab-group-label { display: none; }
+  .settings-nav .tab-btn,
+  .settings-nav .tab-btn.tab-sub { padding: 9px 10px; font-weight: 600; white-space: nowrap; }
+  .settings-main { max-width: none; }
+}

@@ -17,7 +17,7 @@ REPO = HERE.parent.parent
 LANGUAGES = json.loads((REPO / "web/build/languages.json").read_text(encoding="utf-8"))
 
 SITE = "https://webbrain.one/companion"  # where the pages are published
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 RELEASES = "https://github.com/webbrain-one/webbrain/releases"
 SOURCE = "https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray"
 DL = f"{RELEASES}/download/systray-v{VERSION}/WebBrain-Companion-{VERSION}-"
@@ -516,6 +516,8 @@ def render(lang):
     if lang not in T:
         copy = json.loads((HERE / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
         T[lang], MENU[lang], MACHINES[lang] = copy["text"], copy["menu"], copy["machines"]
+        for key in ("cta_note", "download_p"):
+            T[lang][key] = T[lang][key].replace("{version}", VERSION)
     t = T[lang]
     root = "" if lang == "en" else "../"
     v = {k: esc(x) for k, x in t.items() if isinstance(x, str)}

@@ -19,38 +19,46 @@
       <p class="subtitle" id="subtitle" data-subtitle-key="st.subtitle"></p>
     </div>
     <div class="header-actions">
-      <a id="providers-page-link" class="support-link" href="providers.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4h6"/><path d="M13 4v3"/><path d="M7 7h9l2 2h2v8h-3l-2 2H9l-2-2z"/><path d="M3 11v4"/><path d="M3 13h4"/></svg>
-        <span data-i18n="st.tab.providers"></span>
-      </a>
-      <a id="apocalypse-mode-link" class="support-link apocalypse-link" href="apocalypse-mode.html" target="_blank" rel="noopener" aria-describedby="apocalypse-mode-status">
-        <svg class="apocalypse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><path d="M16.75 20.23A9.5 9.5 0 0 1 7.25 20.23L10 15.46A4 4 0 0 0 14 15.46Z"/><path d="M2.5 12A9.5 9.5 0 0 1 7.25 3.77L10 8.54A4 4 0 0 0 8 12Z"/><path d="M16.75 3.77A9.5 9.5 0 0 1 21.5 12L16 12A4 4 0 0 0 14 8.54Z"/></svg>
-        <span data-i18n="st.display.apocalypse_mode.label"></span>
-      </a>
       <a class="support-link" href="https://webbrain.one/docs" target="_blank" rel="noopener noreferrer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         Support
       </a>
-      <span id="apocalypse-mode-status" class="visually-hidden" aria-live="polite" data-i18n="st.display.apocalypse_mode.status.loading"></span>
     </div>
   </div>
 
-  <nav class="tabs" role="tablist" data-default-tab="display" data-storage-key="webbrainSettingsTab" data-moved-tabs='{"providers":"providers.html#llm","multimodal":"providers.html#vision","vision":"providers.html#vision","permissions":"permissions.html"}'>
-    <button class="tab-btn active" type="button" role="tab" data-tab="display" data-i18n="st.tab.display"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="budgets" data-i18n="st.tab.budgets"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="memory" data-i18n="st.tab.memory"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="skills" data-i18n="st.tab.skills"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="captcha" data-i18n="st.tab.captcha"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="cloudbridge" data-i18n="st.tab.cloudbridge"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="advanced" data-i18n="st.tab.advanced"></button>
-  </nav>
-
-  <div class="settings-search" id="settings-search">
-    <input type="search" id="input-general-search" autocomplete="off" spellcheck="false" data-i18n-placeholder="st.display.search.placeholder">
-  </div>
+  <!-- One Settings page: the sidebar holds the search box and every
+       section; the selected section shows beside it (settings-tabs.js).
+       Providers and Permissions were pages of their own until 48.x; those
+       pages now forward here. Sections stay at this indent to keep the
+       markup diffable. -->
+  <div class="settings-layout">
+  <aside class="settings-sidebar">
+    <div class="settings-search" id="settings-search">
+      <input type="search" id="input-general-search" autocomplete="off" spellcheck="false" data-i18n-placeholder="st.display.search.placeholder">
+    </div>
+    <nav class="tabs settings-nav" data-i18n-aria-label="st.nav.label" data-default-tab="display" data-storage-key="webbrainSettingsTab" data-tab-aliases='{"providers":"llm","multimodal":"vision","apocalypse":"offline"}'>
+      <button class="tab-btn active" type="button" data-tab="display" data-i18n="st.tab.display" aria-current="page"></button>
+      <div class="tab-group-label" data-i18n="st.nav.models"></div>
+      <button class="tab-btn tab-sub" type="button" data-tab="llm" data-i18n="st.tab.llm"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="vision" data-i18n="st.tab.vision"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="speech" data-i18n="st.tab.speech"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="generative" data-i18n="st.tab.generative"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="decision" data-i18n="st.tab.decision"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="safesocial" data-i18n="st.tab.safesocial"></button>
+      <button class="tab-btn" type="button" data-tab="permissions" data-i18n="st.tab.permissions"></button>
+      <button class="tab-btn" type="button" data-tab="budgets" data-i18n="st.tab.budgets"></button>
+      <button class="tab-btn" type="button" data-tab="memory" data-i18n="st.tab.memory"></button>
+      <button class="tab-btn" type="button" data-tab="skills" data-i18n="st.tab.skills"></button>
+      <div class="tab-group-label" data-i18n="st.nav.integrations"></div>
+      <button class="tab-btn tab-sub" type="button" data-tab="captcha" data-i18n="st.tab.captcha"></button>
+      <button class="tab-btn tab-sub" type="button" data-tab="cloudbridge" data-i18n="st.tab.cloudbridge"></button>
+      <button class="tab-btn" type="button" data-tab="offline" data-i18n="st.tab.offline"></button>
+      <button class="tab-btn" type="button" data-tab="advanced" data-i18n="st.tab.advanced"></button>
+    </nav>
+  </aside>
+  <main class="settings-main" id="settings-main">
   <div class="general-search-empty" id="general-search-empty" hidden data-i18n="st.display.search.empty"></div>
-
-  <section class="tab-panel active" data-panel="display" role="tabpanel" data-search>
+  <section class="tab-panel active" data-panel="display" data-search>
     <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="display" data-i18n="st.tab.display"></button></h2>
     <div id="display-settings" data-search-scope>
       <div class="setting-row">
@@ -161,7 +169,382 @@
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="budgets" role="tabpanel" data-search>
+  <section class="tab-panel" data-panel="llm" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="llm" data-i18n="st.tab.llm"></button></h2>
+    <div id="llm-settings" data-search-scope>
+      <div id="providers"></div>
+
+      <div class="info-box" data-i18n-html="st.providers.info.html"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="vision" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="vision" data-i18n="st.tab.vision"></button></h2>
+    <div id="vision-settings" data-search-scope>
+      <h3 class="mm-section-heading">
+        <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span data-i18n="st.vision.heading"></span>
+      </h3>
+      <div class="provider-card" id="vision-card">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.vision.desc"></div>
+        <div class="field">
+          <label class="mm-field-label">
+            <span data-i18n="st.provider.field.api_base_url"></span>
+            <span class="mm-detected-provider" id="vision-detected" hidden>
+              <img class="provider-icon" id="vision-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+              <span id="vision-detected-label"></span>
+            </span>
+          </label>
+          <input type="text" id="vision-base-url" placeholder="https://api.openai.com/v1">
+        </div>
+        <div class="field">
+          <label data-i18n="st.provider.field.api_key"></label>
+          <input type="password" id="vision-api-key" placeholder="sk-...">
+        </div>
+        <div class="field">
+          <label data-i18n="st.provider.field.model"></label>
+          <input type="text" id="vision-model" placeholder="gpt-4o">
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-save-vision" data-i18n="st.vision.save"></button>
+          <button class="btn-secondary" id="btn-test-vision" data-i18n="st.vision.test"></button>
+          <button class="btn-secondary" id="btn-clear-vision" data-i18n="st.vision.clear"></button>
+        </div>
+        <div class="test-result" id="test-vision"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="speech" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="speech" data-i18n="st.tab.speech"></button></h2>
+    <div id="speech-settings" data-search-scope>
+      <h3 class="mm-section-heading">
+        <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <span data-i18n="st.transcription.heading"></span>
+      </h3>
+      <div class="provider-card" id="transcription-card">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.transcription.desc"></div>
+        <div class="field">
+          <label class="mm-field-label">
+            <span data-i18n="st.provider.field.api_base_url"></span>
+            <span class="mm-detected-provider" id="transcription-detected" hidden>
+              <img class="provider-icon" id="transcription-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+              <span id="transcription-detected-label"></span>
+            </span>
+          </label>
+          <input type="text" id="transcription-base-url" placeholder="https://api.openai.com/v1">
+        </div>
+        <div class="field">
+          <label data-i18n="st.provider.field.api_key"></label>
+          <input type="password" id="transcription-api-key" placeholder="sk-...">
+        </div>
+        <div class="field">
+          <label data-i18n="st.provider.field.model"></label>
+          <input type="text" id="transcription-model" placeholder="whisper-1">
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-save-transcription" data-i18n="st.transcription.save"></button>
+          <button class="btn-secondary" id="btn-test-transcription" data-i18n="st.transcription.test"></button>
+          <button class="btn-secondary" id="btn-clear-transcription" data-i18n="st.transcription.clear"></button>
+        </div>
+        <div class="test-result" id="test-transcription"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="generative" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="generative" data-i18n="st.tab.generative"></button></h2>
+    <div id="generative-settings" data-search-scope>
+      <h3 class="mm-section-heading" id="image-gen-heading">
+        <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <span data-i18n="st.imagegen.heading"></span>
+      </h3>
+      <div class="provider-card" id="image-gen-card" aria-labelledby="image-gen-heading">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.imagegen.desc"></div>
+        <div class="field">
+          <label for="image-gen-provider" data-i18n="st.imagegen.provider"></label>
+          <select id="image-gen-provider">
+            <option value="fal">fal.ai</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="comfyrouter">Comfy Router</option>
+            <option value="comfyui" data-i18n="st.imagegen.local_provider">ComfyUI (localhost)</option>
+          </select>
+        </div>
+        <div class="field" id="image-gen-key-field">
+          <label for="image-gen-api-key" data-i18n="st.provider.field.api_key"></label>
+          <input type="password" id="image-gen-api-key" placeholder="FAL_KEY" autocomplete="off">
+        </div>
+        <div class="field" id="image-gen-model-field">
+          <label for="image-gen-model" data-i18n="st.imagegen.image_model"></label>
+          <input type="text" id="image-gen-model" placeholder="fal-ai/flux/schnell">
+        </div>
+        <div class="field" id="image-gen-parameters-field" hidden>
+          <label for="image-gen-parameters" data-i18n="st.imagegen.parameters"></label>
+          <textarea id="image-gen-parameters" rows="4" spellcheck="false" placeholder='{"prompt":"{{prompt}}"}'></textarea>
+        </div>
+        <div class="field" id="image-gen-video-model-field">
+          <label for="image-gen-video-model" data-i18n="st.imagegen.video_model"></label>
+          <input type="text" id="image-gen-video-model" placeholder="xai/grok-imagine-video/v1.5/lite/text-to-video">
+        </div>
+        <div class="field" id="image-gen-video-parameters-field" hidden>
+          <label for="image-gen-video-parameters" data-i18n="st.imagegen.video_parameters"></label>
+          <textarea id="image-gen-video-parameters" rows="4" spellcheck="false" placeholder='{"prompt":"{{prompt}}","duration":8}'></textarea>
+        </div>
+        <div class="field" id="image-gen-url-field" hidden>
+          <label for="image-gen-base-url" data-i18n="st.provider.field.api_base_url"></label>
+          <input type="url" id="image-gen-base-url" placeholder="http://127.0.0.1:8188">
+        </div>
+        <div class="field" id="image-gen-workflow-field" hidden>
+          <label for="image-gen-workflow" data-i18n="st.imagegen.workflow"></label>
+          <textarea id="image-gen-workflow" rows="8" spellcheck="false" placeholder='{"6":{"class_type":"CLIPTextEncode","inputs":{"text":"{{prompt}}"}}}'></textarea>
+        </div>
+        <div class="field" id="image-gen-video-workflow-field" hidden>
+          <label for="image-gen-video-workflow" data-i18n="st.imagegen.video_workflow"></label>
+          <textarea id="image-gen-video-workflow" rows="6" spellcheck="false" placeholder='{"6":{"class_type":"CLIPTextEncode","inputs":{"text":"{{prompt}}"}}}'></textarea>
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px;">
+          <span id="image-gen-provider-hint"></span>
+          <a id="image-gen-docs" href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener noreferrer" data-i18n="st.imagegen.setup"></a>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-save-image-gen" data-i18n="st.transcription.save"></button>
+          <button class="btn-secondary" id="btn-test-image-gen" data-i18n="st.transcription.test"></button>
+          <button class="btn-secondary" id="btn-clear-image-gen" data-i18n="st.transcription.clear"></button>
+        </div>
+        <div class="test-result" id="test-image-gen" role="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="decision" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="decision" data-i18n="st.tab.decision"></button></h2>
+    <div id="decision-settings" data-search-scope>
+      <h3 class="mm-section-heading" id="system-one-heading">
+        <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="m8 12 3 3 5-6"/>
+        </svg>
+        <span data-i18n="st.system_one.title"></span>
+      </h3>
+      <div class="provider-card" id="system-one-card" aria-labelledby="system-one-heading">
+        <p class="decision-intro" data-i18n="st.decision.intro"></p>
+
+        <fieldset class="decision-mode" id="decision-mode" aria-describedby="decision-mode-desc">
+          <legend class="decision-mode-legend" data-i18n="st.decision.mode.label"></legend>
+          <div class="decision-mode-options">
+            <label class="decision-mode-option"><input type="radio" name="decision-mode" value="auto" checked><span data-i18n="st.decision.mode.auto"></span></label>
+            <label class="decision-mode-option"><input type="radio" name="decision-mode" value="on"><span data-i18n="st.decision.mode.on"></span></label>
+            <label class="decision-mode-option"><input type="radio" name="decision-mode" value="off"><span data-i18n="st.decision.mode.off"></span></label>
+          </div>
+        </fieldset>
+        <p class="decision-mode-desc" id="decision-mode-desc">
+          <span data-decision-mode-desc="auto" data-i18n="st.decision.mode.auto_desc_firefox"></span>
+          <span data-decision-mode-desc="on" data-i18n="st.decision.mode.on_desc" hidden></span>
+          <span data-decision-mode-desc="off" data-i18n="st.decision.mode.off_desc" hidden></span>
+        </p>
+        <div class="decision-status" id="decision-auto-status" role="status" aria-live="polite" hidden></div>
+
+        <div class="decision-configured" id="decision-configured" hidden>
+          <div class="field"><label for="decision-provider" data-i18n="st.decision.provider"></label>
+            <select id="decision-provider"><option value="openrouter">OpenRouter</option><option value="typesafe">TypeSafe</option><option value="local" data-i18n="st.decision.local"></option><option value="webgpu_d1" data-i18n="st.d1.provider"></option></select>
+          </div>
+          <div id="d1-controls" hidden>
+            <p class="setting-desc decision-note" data-i18n="st.d1.warning"></p>
+            <label><input type="checkbox" id="d1-consent"> <span data-i18n="st.d1.consent"></span></label>
+            <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
+              <button class="btn-secondary" id="d1-load" data-d1-command="download" data-i18n="st.d1.download"></button>
+              <button class="btn-secondary" data-d1-command="stop" data-i18n="st.d1.stop"></button>
+              <button class="btn-secondary" data-d1-command="reset" data-i18n="st.d1.unload"></button>
+              <button class="btn-secondary" data-d1-command="clear" data-i18n="st.d1.remove"></button>
+            </div>
+            <div class="test-result show" id="d1-status" role="status"></div>
+          </div>
+          <div class="field"><label for="decision-model" data-i18n="st.decision.model"></label>
+            <input id="decision-model" list="decision-models" autocomplete="off"><datalist id="decision-models"></datalist>
+            <button class="btn-secondary" id="btn-decision-models" data-i18n="st.decision.refresh"></button>
+          </div>
+          <div class="field" id="decision-endpoint-field"><label for="decision-endpoint" data-i18n="st.decision.endpoint"></label>
+            <input id="decision-endpoint" type="url" placeholder="http://127.0.0.1:8009">
+          </div>
+          <div class="field">
+            <label for="system-one-api-key" data-i18n="st.system_one.api_key.label"></label>
+            <input type="password" id="system-one-api-key" placeholder="API key" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field"><label for="decision-vision" data-i18n="st.decision.vision"></label>
+            <select id="decision-vision"><option value="auto" data-i18n="st.decision.auto"></option><option value="on" data-i18n="st.decision.on"></option><option value="off" data-i18n="st.decision.off"></option></select>
+          </div>
+          <p class="setting-desc decision-note" data-i18n="st.decision.compass"></p>
+
+          <details class="advanced-settings decision-features" id="decision-features">
+            <summary data-i18n="st.decision.features"></summary>
+            <div class="advanced-settings-body">
+              <p class="setting-desc decision-features-desc" data-i18n="st.decision.features_desc"></p>
+              <div class="setting-row"><div class="setting-info"><div class="setting-label" data-i18n="st.decision.done"></div><div class="setting-desc" data-i18n="st.decision.done_desc"></div></div>
+                <label class="toggle"><input type="checkbox" id="toggle-decision-done" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="field"><label for="decision-done-threshold" data-i18n="st.decision.threshold"></label>
+                <input id="decision-done-threshold" type="number" min="50" max="99" step="1" value="90">
+              </div>
+              <div class="setting-row">
+                <div class="setting-info"><div class="setting-label" data-i18n="st.system_one.watch.label"></div><div class="setting-desc" data-i18n="st.decision.watch_desc"></div></div>
+                <label class="toggle"><input type="checkbox" id="toggle-system-one-watch" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="field">
+                <label for="range-system-one-watch-threshold"><span data-i18n="st.system_one.watch_threshold"></span> <span id="system-one-watch-threshold-value">70%</span></label>
+                <input type="range" id="range-system-one-watch-threshold" min="50" max="95" step="5" value="70">
+              </div>
+              <div class="setting-row">
+                <div class="setting-info"><div class="setting-label" data-i18n="st.system_one.completion.label"></div><div class="setting-desc" data-i18n="st.decision.completion_desc"></div></div>
+                <label class="toggle"><input type="checkbox" id="toggle-system-one-completion" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="field">
+                <label for="range-system-one-completion-threshold"><span data-i18n="st.system_one.completion_threshold"></span> <span id="system-one-completion-threshold-value">70%</span></label>
+                <input type="range" id="range-system-one-completion-threshold" min="50" max="95" step="5" value="70">
+              </div>
+              <div class="setting-row">
+                <div class="setting-info"><div class="setting-label" data-i18n="st.system_one.fast_classifications"></div><div class="setting-desc" data-i18n="st.decision.classifications_desc"></div></div>
+                <label class="toggle"><input type="checkbox" id="toggle-system-one-classifications" checked><span class="toggle-slider"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info"><div class="setting-label" data-i18n="st.system_one.fast_browser"></div><div class="setting-desc" data-i18n="st.decision.browser_desc"></div></div>
+                <label class="toggle"><input type="checkbox" id="toggle-system-one-browser" checked><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-save-system-one" data-i18n="st.providers.save" hidden></button>
+          <button class="btn-secondary" id="btn-test-system-one" data-i18n="st.providers.test"></button>
+          <button class="btn-secondary" id="btn-clear-system-one" data-i18n="st.decision.reset"></button>
+        </div>
+        <div class="test-result" id="test-system-one"></div>
+
+        <div class="info-box" style="margin-top:16px;" data-i18n-html="st.system_one.security_html"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="safesocial" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="safesocial" data-i18n="st.tab.safesocial"></button></h2>
+    <div id="safesocial-settings" data-search-scope>
+      <h3 id="safesocial-heading" class="mm-section-heading" data-i18n="st.safesocial.heading"></h3>
+      <div class="provider-card" id="safesocial-card" aria-labelledby="safesocial-heading">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label" id="safesocial-enable-label" data-i18n="st.safesocial.enable"></div>
+            <div class="setting-desc" data-i18n="st.safesocial.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="safesocial-enabled" aria-labelledby="safesocial-enable-label">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p class="setting-desc" data-i18n="st.safesocial.download"></p>
+        <p class="setting-desc"><a href="https://huggingface.co/webbrain-one/safesocial-trigger-classifier-efficientnet-lite0" target="_blank" rel="noopener noreferrer" data-i18n="st.safesocial.model"></a></p>
+        <div class="field">
+          <label for="safesocial-action" data-i18n="st.safesocial.action"></label>
+          <select id="safesocial-action">
+            <option value="blur" data-i18n="st.safesocial.blur"></option>
+            <option value="hide" data-i18n="st.safesocial.hide"></option>
+            <option value="dim" data-i18n="st.safesocial.dim"></option>
+            <option value="warn" data-i18n="st.safesocial.warn"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="safesocial-threshold" data-i18n="st.safesocial.threshold"></label>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <input id="safesocial-threshold" type="range" min="50" max="99" step="1" value="95" style="flex:1;min-width:0;">
+            <output for="safesocial-threshold">95%</output>
+          </div>
+          <div class="setting-desc" data-i18n="st.safesocial.threshold_desc"></div>
+        </div>
+        <fieldset class="safesocial-labels-fieldset">
+          <legend class="setting-label" data-i18n="st.safesocial.categories"></legend>
+          <div id="safesocial-labels"></div>
+        </fieldset>
+        <p class="setting-desc" data-i18n="st.safesocial.scope"></p>
+        <div id="safesocial-status" class="setting-desc" role="status" aria-live="polite"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button type="button" class="btn-secondary" id="safesocial-retry" hidden data-i18n="st.safesocial.retry"></button>
+          <button type="button" class="btn-secondary" id="safesocial-remove" data-i18n="st.safesocial.remove"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="permissions" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="permissions" data-i18n="st.tab.permissions"></button></h2>
+    <div id="permissions-settings" data-search-scope>
+      <div class="provider-card" id="permissions-card">
+        <div class="setting-row" style="margin-bottom:14px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.perms.gate.label"></div>
+            <div class="setting-desc" data-i18n="st.perms.gate.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-permission-gate" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="info-box" id="permission-gate-warning" style="display:none;margin-bottom:16px;" data-i18n="st.perms.gate.warning"></div>
+
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n="st.perms.desc"></div>
+        <div id="permissions-list"></div>
+        <div class="btn-row" id="permissions-actions" style="margin-top:14px;display:none;">
+          <button class="btn-secondary" id="btn-clear-all-permissions" data-i18n="st.perms.clear_all"></button>
+        </div>
+      </div>
+      <h3 class="settings-group-heading" id="perm-group-privacy" tabindex="-1" data-i18n="st.perms.privacy_heading"></h3>
+      <div class="settings-group" id="screenshot-redaction-setting">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label" id="screenshot-redaction-label" data-i18n="st.redaction.toggle.label"></div>
+            <div class="setting-desc" id="screenshot-redaction-desc" data-i18n="st.redaction.toggle.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-screenshot-redaction" aria-labelledby="screenshot-redaction-label" aria-describedby="screenshot-redaction-desc">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="info-box" data-i18n-html="st.redaction.warning"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
+          <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-strict-secret">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
+          <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-allow-local-network">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="budgets" data-search>
     <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="budgets" data-i18n="st.tab.budgets"></button></h2>
     <div id="budget-settings" data-search-scope>
       <div class="setting-row">
@@ -230,215 +613,221 @@
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="memory" role="tabpanel">
-    <div class="provider-card" id="profile-sync-card">
-      <h3 data-i18n="st.sync.title" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
-      <div class="profile-sync-lede" data-i18n-html="st.sync.lede_html"></div>
-      <div id="profile-sync-status" class="profile-sync-status"></div>
-      <div class="field profile-sync-stage" id="profile-sync-email-field"><label data-i18n="st.sync.email.label"></label><input type="email" id="profile-sync-email" autocomplete="email"></div>
-      <div class="field profile-sync-stage" id="profile-sync-password-field"><label data-i18n="st.sync.password.label"></label><input type="password" id="profile-sync-password" autocomplete="new-password" minlength="12"></div>
-      <div class="field profile-sync-stage" id="profile-sync-confirm-field"><label data-i18n="st.sync.confirm.label"></label><input type="password" id="profile-sync-confirm" autocomplete="new-password" minlength="12"></div>
-      <div class="btn-row profile-sync-actions">
-        <button class="btn-primary" id="btn-profile-sync-auth" data-i18n="st.sync.action.auth"></button>
-        <button class="btn-primary" id="btn-profile-sync-enable" data-i18n="st.sync.action.enable"></button>
-        <button class="btn-primary" id="btn-profile-sync-unlock" data-i18n="st.sync.action.unlock"></button>
-        <button class="btn-secondary" id="btn-profile-sync-now" data-i18n="st.sync.action.now"></button>
-      </div>
-      <details class="profile-sync-advanced" id="profile-sync-advanced">
-        <summary data-i18n="st.display.advanced"></summary>
-        <div class="btn-row">
-          <button class="btn-secondary" id="btn-profile-sync-lock" data-i18n="st.sync.action.lock"></button>
-          <button class="btn-secondary" id="btn-profile-sync-change" data-i18n="st.sync.action.change_password"></button>
-          <button class="btn-secondary" id="btn-profile-sync-disable" data-i18n="st.sync.action.disable"></button>
-          <button class="btn-secondary" id="btn-profile-sync-reset" data-i18n="st.sync.action.reset"></button>
+  <section class="tab-panel" data-panel="memory" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="memory" data-i18n="st.tab.memory"></button></h2>
+    <div id="memory-settings" data-search-scope>
+      <div class="provider-card" id="profile-sync-card">
+        <h3 data-i18n="st.sync.title" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+        <div class="profile-sync-lede" data-i18n-html="st.sync.lede_html"></div>
+        <div id="profile-sync-status" class="profile-sync-status"></div>
+        <div class="field profile-sync-stage" id="profile-sync-email-field"><label data-i18n="st.sync.email.label"></label><input type="email" id="profile-sync-email" autocomplete="email"></div>
+        <div class="field profile-sync-stage" id="profile-sync-password-field"><label data-i18n="st.sync.password.label"></label><input type="password" id="profile-sync-password" autocomplete="new-password" minlength="12"></div>
+        <div class="field profile-sync-stage" id="profile-sync-confirm-field"><label data-i18n="st.sync.confirm.label"></label><input type="password" id="profile-sync-confirm" autocomplete="new-password" minlength="12"></div>
+        <div class="btn-row profile-sync-actions">
+          <button class="btn-primary" id="btn-profile-sync-auth" data-i18n="st.sync.action.auth"></button>
+          <button class="btn-primary" id="btn-profile-sync-enable" data-i18n="st.sync.action.enable"></button>
+          <button class="btn-primary" id="btn-profile-sync-unlock" data-i18n="st.sync.action.unlock"></button>
+          <button class="btn-secondary" id="btn-profile-sync-now" data-i18n="st.sync.action.now"></button>
         </div>
-      </details>
-      <div class="test-result" id="test-profile-sync"></div>
-    </div>
-
-    <div class="provider-card" id="profile-card">
-      <h3 data-i18n="st.memory.profile_heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.profile.desc_html"></div>
-
-      <div class="setting-row" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.profile.enabled.label"></div>
-          <div class="setting-desc" data-i18n="st.profile.enabled.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-profile-enabled">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="field">
-        <label data-i18n="st.profile.text.label"></label>
-        <textarea id="profile-text"
-                  rows="8"
-                  data-i18n-placeholder="st.profile.text.placeholder"
-                  style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;"></textarea>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-save-profile" data-i18n="st.profile.save"></button>
-        <button class="btn-secondary" id="btn-clear-profile" data-i18n="st.profile.clear"></button>
-      </div>
-      <div class="test-result" id="test-profile"></div>
-
-      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.profile.security_html"></div>
-    </div>
-
-    <div class="provider-card" id="user-memory-card">
-      <h3 data-i18n="st.memory.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.memory.desc_html"></div>
-
-      <div class="setting-row" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.memory.enabled.label"></div>
-          <div class="setting-desc" data-i18n="st.memory.enabled.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-user-memory-enabled">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-row" data-depends-on="toggle-user-memory-enabled" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.memory.auto.label"></div>
-          <div class="setting-desc" data-i18n="st.memory.auto.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-user-memory-auto">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-row" data-depends-on="toggle-user-memory-enabled toggle-user-memory-auto" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.memory.form.label"></div>
-          <div class="setting-desc" data-i18n="st.memory.form.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-user-memory-form">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="field" data-depends-on="toggle-user-memory-enabled">
-        <label data-i18n="st.memory.max_chars.label"></label>
-        <input type="number" id="input-user-memory-max-chars" min="0" max="10000" step="100">
-      </div>
-
-      <div class="field">
-        <label data-i18n="st.memory.list.label"></label>
-        <div id="user-memory-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn-secondary" id="btn-refresh-user-memory" data-i18n="st.memory.refresh"></button>
-        <button class="btn-secondary" id="btn-export-user-memory" data-i18n="st.memory.export"></button>
-        <button class="btn-secondary" id="btn-clear-user-memory" data-i18n="st.memory.clear"></button>
-      </div>
-
-      <div class="field">
-        <label data-i18n="st.memory.import.label"></label>
-        <textarea id="user-memory-import-text"
-                  rows="4"
-                  data-i18n-placeholder="st.memory.import.placeholder"
-                  style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.5;outline:none;resize:vertical;"></textarea>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-import-user-memory" data-i18n="st.memory.import.button"></button>
-      </div>
-      <div class="test-result" id="test-user-memory"></div>
-      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.memory.security_html"></div>
-    </div>
-    <div class="provider-card" id="memcode-recall-card">
-      <h3 data-i18n="st.memcode.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n="st.memcode.desc"></div>
-      <div class="setting-row" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.memcode.read.label"></div>
-          <div class="setting-desc" data-i18n="st.memcode.read.desc"></div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="toggle-memcode-recall"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="btn-row">
-        <button class="btn-primary" id="btn-memcode-connect" data-i18n="st.memcode.connect"></button>
-        <button class="btn-secondary" id="btn-memcode-disconnect" data-i18n="st.memcode.disconnect"></button>
-      </div>
-      <div class="test-result" id="test-memcode-recall" role="status" aria-live="polite"></div>
-    </div>
-  </section>
-
-  <section class="tab-panel" data-panel="skills" role="tabpanel">
-    <div class="provider-card" id="skills-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.skills.desc_html"></div>
-      <!-- The form opens from Add skill (and from Edit on an enabled skill);
-           the lists of enabled and available skills come first. -->
-      <div class="btn-row skills-toolbar">
-        <button type="button" class="btn-primary" id="btn-show-skill-form" aria-controls="skill-add-form" data-i18n="st.skills.add_skill"></button>
-      </div>
-      <div class="skill-add-form" id="skill-add-form" hidden>
-        <div class="field">
-          <label for="skill-name" data-i18n="st.skills.name.label"></label>
-          <input type="text" id="skill-name" data-i18n-placeholder="st.skills.name.placeholder">
-        </div>
-        <div class="field">
-          <label for="skill-url" data-i18n="st.skills.url.label"></label>
-          <input type="url" id="skill-url" placeholder="https://example.com/skill.md">
-        </div>
-        <div class="btn-row">
-          <button class="btn-primary" id="btn-add-skill-url" data-i18n="st.skills.add_url"></button>
-        </div>
-        <div class="field" style="margin-top:16px;">
-          <label for="skill-text" data-i18n="st.skills.text.label"></label>
-          <textarea id="skill-text" rows="10" data-i18n-placeholder="st.skills.text.placeholder"></textarea>
-        </div>
-        <div class="btn-row">
-          <button class="btn-primary" id="btn-add-skill-text" data-i18n="st.skills.add_text"></button>
-          <button class="btn-secondary" id="btn-clear-skill-form" data-i18n="st.skills.clear_form"></button>
-          <button type="button" class="btn-secondary" id="btn-cancel-skill-form" data-i18n="st.skills.cancel"></button>
-        </div>
-      </div>
-      <div class="test-result" id="skills-result"></div>
-    </div>
-
-    <div class="provider-card" id="skills-list-card">
-      <div class="setting-label" style="margin-bottom:10px;" data-i18n="st.skills.list.heading"></div>
-      <div id="skills-list"></div>
-    </div>
-
-    <div class="provider-card" id="packaged-skills-card">
-      <div class="setting-label" style="margin-bottom:10px;" data-i18n="st.skills.available.heading"></div>
-      <div id="packaged-skills-list"></div>
-    </div>
-
-    <div class="info-box" data-i18n-html="st.skills.security_html"></div>
-
-    <dialog class="skill-preview-dialog" id="skill-preview-dialog" aria-labelledby="skill-preview-title">
-      <div class="skill-preview-dialog-panel">
-        <div class="skill-preview-dialog-header">
-          <div>
-            <div class="skill-preview-source" id="skill-preview-source"></div>
-            <h3 id="skill-preview-title"></h3>
+        <details class="profile-sync-advanced" id="profile-sync-advanced">
+          <summary data-i18n="st.display.advanced"></summary>
+          <div class="btn-row">
+            <button class="btn-secondary" id="btn-profile-sync-lock" data-i18n="st.sync.action.lock"></button>
+            <button class="btn-secondary" id="btn-profile-sync-change" data-i18n="st.sync.action.change_password"></button>
+            <button class="btn-secondary" id="btn-profile-sync-disable" data-i18n="st.sync.action.disable"></button>
+            <button class="btn-secondary" id="btn-profile-sync-reset" data-i18n="st.sync.action.reset"></button>
           </div>
-          <button type="button" class="skill-preview-dialog-close"
-                  data-i18n-aria-label="sp.schedule_form.cancel">&times;</button>
-        </div>
-        <div class="skill-preview-view-switch">
-          <button type="button" class="skill-preview-view-button" data-skill-preview-view="rendered"
-                  aria-pressed="true" data-i18n="st.skills.preview.rendered"></button>
-          <button type="button" class="skill-preview-view-button" data-skill-preview-view="raw"
-                  aria-pressed="false" data-i18n="st.skills.preview.raw"></button>
-        </div>
-        <div class="skill-preview-body skill-preview-rendered" id="skill-preview-rendered" tabindex="0"></div>
-        <pre class="skill-preview-body skill-preview-raw" id="skill-preview-raw" tabindex="0" hidden></pre>
+        </details>
+        <div class="test-result" id="test-profile-sync"></div>
       </div>
-    </dialog>
+
+      <div class="provider-card" id="profile-card">
+        <h3 data-i18n="st.memory.profile_heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.profile.desc_html"></div>
+
+        <div class="setting-row" style="margin-bottom:12px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.profile.enabled.label"></div>
+            <div class="setting-desc" data-i18n="st.profile.enabled.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-profile-enabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label data-i18n="st.profile.text.label"></label>
+          <textarea id="profile-text"
+                    rows="8"
+                    data-i18n-placeholder="st.profile.text.placeholder"
+                    style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-save-profile" data-i18n="st.profile.save"></button>
+          <button class="btn-secondary" id="btn-clear-profile" data-i18n="st.profile.clear"></button>
+        </div>
+        <div class="test-result" id="test-profile"></div>
+
+        <div class="info-box" style="margin-top:16px;" data-i18n-html="st.profile.security_html"></div>
+      </div>
+
+      <div class="provider-card" id="user-memory-card">
+        <h3 data-i18n="st.memory.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.memory.desc_html"></div>
+
+        <div class="setting-row" style="margin-bottom:12px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.memory.enabled.label"></div>
+            <div class="setting-desc" data-i18n="st.memory.enabled.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-user-memory-enabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row" data-depends-on="toggle-user-memory-enabled" style="margin-bottom:12px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.memory.auto.label"></div>
+            <div class="setting-desc" data-i18n="st.memory.auto.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-user-memory-auto">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row" data-depends-on="toggle-user-memory-enabled toggle-user-memory-auto" style="margin-bottom:12px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.memory.form.label"></div>
+            <div class="setting-desc" data-i18n="st.memory.form.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-user-memory-form">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="field" data-depends-on="toggle-user-memory-enabled">
+          <label data-i18n="st.memory.max_chars.label"></label>
+          <input type="number" id="input-user-memory-max-chars" min="0" max="10000" step="100">
+        </div>
+
+        <div class="field">
+          <label data-i18n="st.memory.list.label"></label>
+          <div id="user-memory-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-secondary" id="btn-refresh-user-memory" data-i18n="st.memory.refresh"></button>
+          <button class="btn-secondary" id="btn-export-user-memory" data-i18n="st.memory.export"></button>
+          <button class="btn-secondary" id="btn-clear-user-memory" data-i18n="st.memory.clear"></button>
+        </div>
+
+        <div class="field">
+          <label data-i18n="st.memory.import.label"></label>
+          <textarea id="user-memory-import-text"
+                    rows="4"
+                    data-i18n-placeholder="st.memory.import.placeholder"
+                    style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.5;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-import-user-memory" data-i18n="st.memory.import.button"></button>
+        </div>
+        <div class="test-result" id="test-user-memory"></div>
+        <div class="info-box" style="margin-top:16px;" data-i18n-html="st.memory.security_html"></div>
+      </div>
+      <div class="provider-card" id="memcode-recall-card">
+        <h3 data-i18n="st.memcode.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n="st.memcode.desc"></div>
+        <div class="setting-row" style="margin-bottom:12px;">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="st.memcode.read.label"></div>
+            <div class="setting-desc" data-i18n="st.memcode.read.desc"></div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-memcode-recall"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btn-memcode-connect" data-i18n="st.memcode.connect"></button>
+          <button class="btn-secondary" id="btn-memcode-disconnect" data-i18n="st.memcode.disconnect"></button>
+        </div>
+        <div class="test-result" id="test-memcode-recall" role="status" aria-live="polite"></div>
+      </div>
+    </div>
   </section>
 
-  <section class="tab-panel" data-panel="captcha" role="tabpanel" data-search>
+  <section class="tab-panel" data-panel="skills" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="skills" data-i18n="st.tab.skills"></button></h2>
+    <div id="skills-settings" data-search-scope>
+      <div class="provider-card" id="skills-card">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.skills.desc_html"></div>
+        <!-- The form opens from Add skill (and from Edit on an enabled skill);
+             the lists of enabled and available skills come first. -->
+        <div class="btn-row skills-toolbar">
+          <button type="button" class="btn-primary" id="btn-show-skill-form" aria-controls="skill-add-form" data-i18n="st.skills.add_skill"></button>
+        </div>
+        <div class="skill-add-form" id="skill-add-form" hidden>
+          <div class="field">
+            <label for="skill-name" data-i18n="st.skills.name.label"></label>
+            <input type="text" id="skill-name" data-i18n-placeholder="st.skills.name.placeholder">
+          </div>
+          <div class="field">
+            <label for="skill-url" data-i18n="st.skills.url.label"></label>
+            <input type="url" id="skill-url" placeholder="https://example.com/skill.md">
+          </div>
+          <div class="btn-row">
+            <button class="btn-primary" id="btn-add-skill-url" data-i18n="st.skills.add_url"></button>
+          </div>
+          <div class="field" style="margin-top:16px;">
+            <label for="skill-text" data-i18n="st.skills.text.label"></label>
+            <textarea id="skill-text" rows="10" data-i18n-placeholder="st.skills.text.placeholder"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn-primary" id="btn-add-skill-text" data-i18n="st.skills.add_text"></button>
+            <button class="btn-secondary" id="btn-clear-skill-form" data-i18n="st.skills.clear_form"></button>
+            <button type="button" class="btn-secondary" id="btn-cancel-skill-form" data-i18n="st.skills.cancel"></button>
+          </div>
+        </div>
+        <div class="test-result" id="skills-result"></div>
+      </div>
+
+      <div class="provider-card" id="skills-list-card">
+        <div class="setting-label" style="margin-bottom:10px;" data-i18n="st.skills.list.heading"></div>
+        <div id="skills-list"></div>
+      </div>
+
+      <div class="provider-card" id="packaged-skills-card">
+        <div class="setting-label" style="margin-bottom:10px;" data-i18n="st.skills.available.heading"></div>
+        <div id="packaged-skills-list"></div>
+      </div>
+
+      <div class="info-box" data-i18n-html="st.skills.security_html"></div>
+
+      <dialog class="skill-preview-dialog" id="skill-preview-dialog" aria-labelledby="skill-preview-title">
+        <div class="skill-preview-dialog-panel">
+          <div class="skill-preview-dialog-header">
+            <div>
+              <div class="skill-preview-source" id="skill-preview-source"></div>
+              <h3 id="skill-preview-title"></h3>
+            </div>
+            <button type="button" class="skill-preview-dialog-close"
+                    data-i18n-aria-label="sp.schedule_form.cancel">&times;</button>
+          </div>
+          <div class="skill-preview-view-switch">
+            <button type="button" class="skill-preview-view-button" data-skill-preview-view="rendered"
+                    aria-pressed="true" data-i18n="st.skills.preview.rendered"></button>
+            <button type="button" class="skill-preview-view-button" data-skill-preview-view="raw"
+                    aria-pressed="false" data-i18n="st.skills.preview.raw"></button>
+          </div>
+          <div class="skill-preview-body skill-preview-rendered" id="skill-preview-rendered" tabindex="0"></div>
+          <pre class="skill-preview-body skill-preview-raw" id="skill-preview-raw" tabindex="0" hidden></pre>
+        </div>
+      </dialog>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="captcha" data-search>
     <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="captcha" data-i18n="st.tab.captcha"></button></h2>
     <div id="captcha-settings" data-search-scope>
       <div class="provider-card" id="captcha-card" aria-labelledby="captcha-heading">
@@ -656,60 +1045,86 @@
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="cloudbridge" role="tabpanel">
-    <div class="provider-card" id="cb-card">
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" id="cb-enabled-label" data-i18n="st.cb.enabled"></div>
-          <div class="setting-desc" data-i18n="st.cb.desc"></div>
+  <section class="tab-panel" data-panel="cloudbridge" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="cloudbridge" data-i18n="st.tab.cloudbridge"></button></h2>
+    <div id="cloudbridge-settings" data-search-scope>
+      <div class="provider-card" id="cb-card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label" id="cb-enabled-label" data-i18n="st.cb.enabled"></div>
+            <div class="setting-desc" data-i18n="st.cb.desc"></div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="cb-enabled" aria-labelledby="cb-enabled-label">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="cb-enabled" aria-labelledby="cb-enabled-label">
-          <span class="toggle-slider"></span>
+        <div class="cb-presets" id="cb-presets" role="group" data-i18n-aria-label="st.cb.preset_label">
+          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17373/extension" data-i18n="st.cb.preset_cloud" data-i18n-title="st.cb.preset_cloud_hint" aria-pressed="false">Cloud</button>
+          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17374/extension" data-i18n="st.cb.preset_mcp" data-i18n-title="st.cb.preset_mcp_hint" aria-pressed="false">MCP</button>
+          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17375/extension" data-i18n="st.cb.preset_lmstudio" data-i18n-title="st.cb.preset_lmstudio_hint" aria-pressed="false">LM Studio</button>
+          <button class="cb-preset-pill" type="button" id="cb-preset-custom" data-i18n="st.cb.preset_custom" data-i18n-title="st.cb.preset_custom_hint" aria-pressed="false">Custom</button>
+        </div>
+        <label class="cloud-bridge-url-field" for="cb-url" style="margin-top:12px;">
+          <span class="cloud-bridge-url-label" data-i18n="st.cb.url"></span>
+          <input class="setting-input" type="text" id="cb-url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="ws://127.0.0.1:17374/extension">
         </label>
-      </div>
-      <div class="cb-presets" id="cb-presets" role="group" data-i18n-aria-label="st.cb.preset_label">
-        <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17373/extension" data-i18n="st.cb.preset_cloud" data-i18n-title="st.cb.preset_cloud_hint" aria-pressed="false">Cloud</button>
-        <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17374/extension" data-i18n="st.cb.preset_mcp" data-i18n-title="st.cb.preset_mcp_hint" aria-pressed="false">MCP</button>
-        <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17375/extension" data-i18n="st.cb.preset_lmstudio" data-i18n-title="st.cb.preset_lmstudio_hint" aria-pressed="false">LM Studio</button>
-        <button class="cb-preset-pill" type="button" id="cb-preset-custom" data-i18n="st.cb.preset_custom" data-i18n-title="st.cb.preset_custom_hint" aria-pressed="false">Custom</button>
-      </div>
-      <label class="cloud-bridge-url-field" for="cb-url" style="margin-top:12px;">
-        <span class="cloud-bridge-url-label" data-i18n="st.cb.url"></span>
-        <input class="setting-input" type="text" id="cb-url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="ws://127.0.0.1:17374/extension">
-      </label>
-      <label class="cloud-bridge-url-field" for="cb-pairing-key" style="margin-top:12px;">
-        <span class="cloud-bridge-url-label" data-i18n="st.cb.pairing_key"></span>
-        <input class="setting-input" type="password" id="cb-pairing-key" autocomplete="off" spellcheck="false">
-      </label>
-      <div class="setting-desc" style="margin-top:4px;" data-i18n="st.cb.pairing_key_hint"></div>
-      <details class="advanced-settings" id="cb-approval-details" style="margin-top:12px;">
-        <summary data-i18n="st.cb.approval_summary"></summary>
-        <div class="advanced-settings-body">
-          <label class="cloud-bridge-url-field" for="cb-token">
-            <span class="cloud-bridge-url-label" data-i18n="st.cb.token"></span>
-            <input class="setting-input" type="password" id="cb-token" autocomplete="off" spellcheck="false">
-          </label>
-          <div class="setting-desc" style="margin-top:4px;" data-i18n="st.cb.token_hint"></div>
-          <label class="cloud-bridge-url-field" for="cb-browser-id" style="margin-top:12px;">
-            <span class="cloud-bridge-url-label" data-i18n="st.cb.browser_name"></span>
-            <input class="setting-input" type="text" id="cb-browser-id" autocomplete="off" spellcheck="false" maxlength="64">
-          </label>
-          <div class="setting-desc" style="margin-top:12px;"><span data-i18n="st.cb.installation_id"></span> <code id="cb-installation-id">—</code></div>
+        <label class="cloud-bridge-url-field" for="cb-pairing-key" style="margin-top:12px;">
+          <span class="cloud-bridge-url-label" data-i18n="st.cb.pairing_key"></span>
+          <input class="setting-input" type="password" id="cb-pairing-key" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="setting-desc" style="margin-top:4px;" data-i18n="st.cb.pairing_key_hint"></div>
+        <details class="advanced-settings" id="cb-approval-details" style="margin-top:12px;">
+          <summary data-i18n="st.cb.approval_summary"></summary>
+          <div class="advanced-settings-body">
+            <label class="cloud-bridge-url-field" for="cb-token">
+              <span class="cloud-bridge-url-label" data-i18n="st.cb.token"></span>
+              <input class="setting-input" type="password" id="cb-token" autocomplete="off" spellcheck="false">
+            </label>
+            <div class="setting-desc" style="margin-top:4px;" data-i18n="st.cb.token_hint"></div>
+            <label class="cloud-bridge-url-field" for="cb-browser-id" style="margin-top:12px;">
+              <span class="cloud-bridge-url-label" data-i18n="st.cb.browser_name"></span>
+              <input class="setting-input" type="text" id="cb-browser-id" autocomplete="off" spellcheck="false" maxlength="64">
+            </label>
+            <div class="setting-desc" style="margin-top:12px;"><span data-i18n="st.cb.installation_id"></span> <code id="cb-installation-id">—</code></div>
+          </div>
+        </details>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn-secondary" id="cb-test" data-i18n="st.cb.test"></button>
         </div>
-      </details>
-      <div class="btn-row" style="margin-top:14px;">
-        <button class="btn-secondary" id="cb-test" data-i18n="st.cb.test"></button>
+        <div class="cloud-bridge-status" id="cb-status" data-state="disabled" role="status" aria-live="polite" style="margin-top:12px;">
+          <span class="cloud-bridge-status-dot" aria-hidden="true"></span>
+          <span id="cb-status-text" data-i18n="st.cb.status_disabled"></span>
+        </div>
+        <div class="info-box" style="margin-top:16px;" data-i18n-html="st.cb.howto_html"></div>
       </div>
-      <div class="cloud-bridge-status" id="cb-status" data-state="disabled" role="status" aria-live="polite" style="margin-top:12px;">
-        <span class="cloud-bridge-status-dot" aria-hidden="true"></span>
-        <span id="cb-status-text" data-i18n="st.cb.status_disabled"></span>
+      <div class="provider-card" id="firefox-bidi-card">
+        <h3 data-i18n="st.bidi.title">Firefox trusted automation (experimental)</h3>
+        <p data-i18n="st.bidi.desc">Use a local companion for browser dialogs, trusted clicks and typing, and file uploads. Requires Node.js 22+ and Firefox started with remote automation enabled.</p>
+        <p data-i18n-html="st.bidi.setup_html">Install the companion using <code>node firefox-companion/install.mjs</code> from the WebBrain checkout. Restart Firefox with <code>--remote-debugging-port 9222</code>. Keep the connection on this computer.</p>
+        <label><input type="checkbox" id="firefox-bidi-enabled"> <span data-i18n="st.bidi.enable">Use trusted Firefox automation</span></label>
+        <div class="field"><label for="firefox-bidi-port" data-i18n="st.bidi.port">Local Firefox port</label><input id="firefox-bidi-port" type="number" min="1024" max="65535" value="9222"></div>
+        <button type="button" id="firefox-bidi-connect" class="btn-secondary" data-i18n="st.bidi.test">Test connection</button>
+        <p id="firefox-bidi-status" role="status"></p>
       </div>
-      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.cb.howto_html"></div>
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="advanced" role="tabpanel" data-search>
+  <section class="tab-panel" data-panel="offline" data-search>
+    <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="offline" data-i18n="st.tab.offline"></button></h2>
+    <div id="offline-settings" data-search-scope>
+      <div class="setting-row" id="apocalypse-mode-summary">
+        <div class="setting-info">
+          <div class="setting-label" id="apocalypse-mode-label" data-i18n="st.display.apocalypse_mode.label"></div>
+          <div class="setting-desc" data-i18n="st.display.apocalypse_mode.desc"></div>
+          <div class="setting-desc apocalypse-mode-status" id="apocalypse-mode-status" role="status" aria-live="polite" data-i18n="st.display.apocalypse_mode.status.loading"></div>
+        </div>
+        <a id="apocalypse-mode-link" class="btn-secondary apocalypse-mode-open" href="apocalypse-mode.html" target="_blank" rel="noopener" aria-describedby="apocalypse-mode-status" data-i18n="st.offline.open"></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="advanced" data-search>
     <h2 class="search-panel-heading"><button type="button" class="search-panel-link" data-search-tab="advanced" data-i18n="st.tab.advanced"></button></h2>
     <div id="advanced-settings" data-search-scope>
       <h3 class="settings-group-heading" id="adv-group-supervision" tabindex="-1" data-i18n="st.presets.supervision.label"></h3>
@@ -919,29 +1334,6 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="settings-group" id="screenshot-redaction-setting">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label" id="screenshot-redaction-label" data-i18n="st.redaction.toggle.label"></div>
-            <div class="setting-desc" id="screenshot-redaction-desc" data-i18n="st.redaction.toggle.desc"></div>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="toggle-screenshot-redaction" aria-labelledby="screenshot-redaction-label" aria-describedby="screenshot-redaction-desc">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="info-box" data-i18n-html="st.redaction.warning"></div>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
-          <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-strict-secret">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
       <h3 class="settings-group-heading" id="adv-group-automation" tabindex="-1" data-i18n="st.advanced.group.automation"></h3>
       <div class="setting-row">
         <div class="setting-info">
@@ -1007,16 +1399,6 @@
       </div>
       <div class="setting-row">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
-          <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-allow-local-network">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
           <div class="setting-label" data-i18n="st.display.openai_ask_streaming.label"></div>
           <div class="setting-desc" data-i18n="st.display.openai_ask_streaming.desc"></div>
         </div>
@@ -1056,17 +1438,11 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="provider-card" id="firefox-bidi-card">
-        <h3 data-i18n="st.bidi.title">Firefox trusted automation (experimental)</h3>
-        <p data-i18n="st.bidi.desc">Use a local companion for browser dialogs, trusted clicks and typing, and file uploads. Requires Node.js 22+ and Firefox started with remote automation enabled.</p>
-        <p data-i18n-html="st.bidi.setup_html">Install the companion using <code>node firefox-companion/install.mjs</code> from the WebBrain checkout. Restart Firefox with <code>--remote-debugging-port 9222</code>. Keep the connection on this computer.</p>
-        <label><input type="checkbox" id="firefox-bidi-enabled"> <span data-i18n="st.bidi.enable">Use trusted Firefox automation</span></label>
-        <div class="field"><label for="firefox-bidi-port" data-i18n="st.bidi.port">Local Firefox port</label><input id="firefox-bidi-port" type="number" min="1024" max="65535" value="9222"></div>
-        <button type="button" id="firefox-bidi-connect" class="btn-secondary" data-i18n="st.bidi.test">Test connection</button>
-        <p id="firefox-bidi-status" role="status"></p>
-      </div>
     </div>
   </section>
+
+  </main>
+  </div>
 
   <!-- Tab switcher must be an external script — Manifest V3's default
        CSP (`script-src 'self'`) blocks inline <script> execution. -->
@@ -1074,6 +1450,7 @@
   <script type="module" src="apocalypse-comm.js"></script>
   <script type="module" src="download-tracker.js"></script>
   <script src="settings.js" type="module"></script>
+  <script src="safesocial-settings.js" type="module"></script>
   <script src="settings-presets-ui.js" type="module"></script>
   <script src="settings-cloud-bridge.js" type="module"></script>
 </body>

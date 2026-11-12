@@ -328,6 +328,7 @@ li.model .bar { grid-column: 1 / -1; margin: -2px 6px 9px 47px; }
 .confirm-actions { display: flex; gap: 6px; }
 
 .meters { display: grid; gap: 9px; }
+.inline-meters { margin: 2px 6px 12px 47px; }
 .meter { display: grid; grid-template-columns: 76px 1fr 46px; align-items: center; column-gap: 10px; }
 .meter .cells { height: 12px; }
 .meter .win { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
