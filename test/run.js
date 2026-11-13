@@ -121587,12 +121587,17 @@ test('page Stop WebBrain clears stale indicators without stopping recordings', (
     const indicator = fs.readFileSync(path.join(ROOT, prefix, 'src/content/agent-visual-indicator.js'), 'utf8');
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
 
-    const clickStart = indicator.indexOf("button.addEventListener('click', async () => {");
+    const clickStart = indicator.indexOf("button.addEventListener('click', async (event) => {");
     const clickEnd = indicator.indexOf('\n    });', clickStart);
     assert.notEqual(clickStart, -1, `${label}: page Stop handler missing`);
     assert.notEqual(clickEnd, -1, `${label}: page Stop handler boundary missing`);
     const clickBody = indicator.slice(clickStart, clickEnd);
     const localHideIdx = clickBody.indexOf('hide();');
+    // A page script's click() or dispatched click is not a person's: it
+    // neither hides the indicator nor stops the run.
+    const trustedIdx = clickBody.indexOf('if (!event.isTrusted) return;');
+    assert.notEqual(trustedIdx, -1, `${label}: page Stop must ignore untrusted clicks`);
+    assert.equal(trustedIdx < localHideIdx, true, `${label}: an untrusted click must return before hiding the indicator`);
     const abortMessageIdx = clickBody.indexOf(`${runtimeApi}.runtime.sendMessage({ type: 'WB_STOP_AGENT' })`);
     assert.notEqual(localHideIdx, -1, `${label}: page Stop should immediately hide its local indicator`);
     assert.notEqual(abortMessageIdx, -1, `${label}: page Stop should still request agent abort`);

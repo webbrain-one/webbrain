@@ -17026,6 +17026,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // exactly like other tool results.
       predispatch.lap('argumentsMs');
       protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);
+      // A point under the page's own Stop button is the page's to the model:
+      // the button moves away before any check below reads that point.
+      if (!protectedPageFailure) await this._clearAgentStopButton(tabId, this._agentInputPoints(fnName, fnArgs, tc._vision));
       if (!protectedPageFailure && fnName !== 'done' && !Agent.NAV_TOOLS.has(fnName)) {
         try {
           await this._adoptLiveSocialPublishWorkflow(tabId, provider);
@@ -20136,6 +20139,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const ok = !!result && typeof result === 'object' && result.success === true
       && result.noDispatch !== true && result.dispatched !== false;
     this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
+  }
+
+  /**
+   * Agent input is about to land at `points` (viewport CSS px of the top
+   * document; the first is where a press goes). The page's Stop button
+   * (content/agent-visual-indicator.js) is hidden in every screenshot, so a
+   * point under it is the page's to the model; its press must reach the
+   * page, not stop the run. The button moves out of the way first: before
+   * the checks that read the point, and again before each CDP pointer
+   * command (background.js wires cdpClient.beforePointerInput here). Only on
+   * a tab that shows the run; bounded like the cursor's reply. Resolves to
+   * whether it moved.
+   */
+  async _clearAgentStopButton(tabId, points) {
+    const list = (Array.isArray(points) ? points : [])
+      .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+      .slice(0, 8)
+      .map(point => ({ x: Number(point.x), y: Number(point.y) }));
+    if (!list.length || !this._agentCursorShown(tabId)) return false;
+    let timer = null;
+    try {
+      const reply = await Promise.race([
+        Promise.resolve(chrome.tabs.sendMessage(tabId, { type: 'WB_AGENT_POINTER_AT', points: list }, { frameId: 0 })).catch(() => null),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+      ]);
+      return reply?.moved === true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Where a tool call's input lands, when it is a viewport point known before its checks. */
+  _agentInputPoints(name, args, vision = null) {
+    const points = [];
+    if (name === 'click' && args?.x != null && args?.y != null) points.push({ x: args.x, y: args.y });
+    for (const point of [vision?.monitorPoint, vision?.wheelPoint]) if (point) points.push(point);
+    return points;
   }
 
   static BLANK_SCREENSHOT_RETRY_DELAYS_MS = [500, 1000, 1500];
