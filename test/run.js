@@ -16168,6 +16168,13 @@ test('config transfer carries Cookie banners and the new tab switch in both buil
     assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes('newTabEnabled'), `${label}: config export/import omitted the new tab switch`);
     assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.cookieBanners, cookieHost.DEFAULT_COOKIE_BANNER_MODE, `${label}: a file without Cookie banners should restore the host's default`);
     assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.newTabEnabled, false, `${label}: a file without the switch should leave the new tab opt-in`);
+    // Import accepts exactly the modes the host knows: no mode Settings can save
+    // is refused, and no mode the host would treat as the default is accepted.
+    assert.deepEqual(
+      [...configTransfer.CONFIG_COOKIE_BANNER_MODES].sort(),
+      [...cookieHost.COOKIE_BANNER_MODES].sort(),
+      `${label}: config import's Cookie banners modes should match the cookie-banner host's`,
+    );
 
     for (const mode of cookieHost.COOKIE_BANNER_MODES) {
       for (const newTabEnabled of [true, false]) {
@@ -16272,12 +16279,29 @@ test('every setting the Settings page writes is exported or deliberately device-
   for (const [label, configTransfer] of [['chrome', ConfigTransferCh], ['firefox', ConfigTransferFx]]) {
     const srcDir = path.join(ROOT, 'src', label, 'src');
     const allSource = sourceFiles(srcDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
-    const constants = new Map([...allSource.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^'\n]+)'/g)].map((m) => [m[1], m[2]]));
+    // Every value each string constant name has anywhere in the build. A name
+    // defined twice with different values cannot be resolved from source text
+    // alone, so the test refuses it instead of picking one.
+    const constants = new Map();
+    for (const m of allSource.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^'\n]+)'/g)) {
+      if (!constants.has(m[1])) constants.set(m[1], new Set());
+      constants.get(m[1]).add(m[2]);
+    }
     const resolve = (expr) => {
-      if (constants.has(expr)) return constants.get(expr);
+      if (constants.has(expr)) {
+        const values = [...constants.get(expr)];
+        assert.equal(values.length, 1, `${label}: [${expr}] has more than one value in the build (${values.join(', ')}); the scan cannot tell which one Settings writes`);
+        return values[0];
+      }
       const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/.exec(expr);
-      const block = member && new RegExp(`\\bconst\\s+${member[1]}\\s*=\\s*\\{([^}]*)\\}`).exec(allSource);
-      return block?.[1].match(new RegExp(`\\b${member[2]}\\s*:\\s*'([^']+)'`))?.[1] ?? null;
+      if (!member) return null;
+      const values = new Set();
+      for (const block of allSource.matchAll(new RegExp(`\\bconst\\s+${member[1]}\\s*=\\s*\\{([^}]*)\\}`, 'g'))) {
+        const value = block[1].match(new RegExp(`\\b${member[2]}\\s*:\\s*'([^']+)'`))?.[1];
+        if (value) values.add(value);
+      }
+      assert.ok(values.size <= 1, `${label}: [${expr}] has more than one value in the build (${[...values].join(', ')}); the scan cannot tell which one Settings writes`);
+      return [...values][0] ?? null;
     };
 
     const settingsJs = fs.readFileSync(path.join(srcDir, 'ui/settings.js'), 'utf8');

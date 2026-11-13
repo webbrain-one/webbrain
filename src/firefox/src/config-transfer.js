@@ -141,6 +141,11 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
 export const CONFIG_STORAGE_KEYS = Object.freeze(Object.keys(DEFAULT_CONFIG_SETTINGS));
 const CONFIG_STORAGE_KEY_SET = new Set(CONFIG_STORAGE_KEYS);
 
+// The Cookie banners modes an import accepts: COOKIE_BANNER_MODES in
+// agent/cookie-banner-host.js, written out so this module does not load the
+// vendored autoconsent bundle. test/run.js pins that the two lists match.
+export const CONFIG_COOKIE_BANNER_MODES = Object.freeze(['agent', 'everywhere', 'off']);
+
 const BOOLEAN_KEYS = new Set([
   'verboseMode',
   'selectionShortcutEnabled',
@@ -283,7 +288,7 @@ function validSettingValue(key, value) {
   if (key === 'visionMode') return ['auto', 'on', 'off'].includes(value);
   if (key === 'visionQuality') return ['economy', 'balanced', 'sharp'].includes(value);
   if (key === 'imageDetail') return ['high', 'low', 'auto'].includes(value);
-  if (key === 'cookieBanners') return ['agent', 'everywhere', 'off'].includes(value);
+  if (key === 'cookieBanners') return CONFIG_COOKIE_BANNER_MODES.includes(value);
   if (key === 'agentIndicatorStyle') return ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'].includes(value);
   if (key === 'decisionBaseUrl') {
     if (typeof value !== 'string') return false;

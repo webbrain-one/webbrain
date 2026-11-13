@@ -43,8 +43,16 @@ back to Firefox's page.
 ### Settings snapshots
 
 `/export --config` includes `newTabEnabled` (`false` when it was never set), and `/import`
-restores it. Firefox has no switch and never reads the key, but its export and import carry it
-too, so both builds keep one schema and a Chrome snapshot passes through Firefox unchanged.
+restores it. A snapshot without the key leaves the switch alone on `/import`; with
+`/import --replace` it turns the switch off. Firefox has no switch and never reads the key, but
+its export and import carry it too, so both builds keep one schema and a Chrome snapshot passes
+through Firefox unchanged.
+
+Because an unset switch exports as `false`, a snapshot made in Firefox (which never sets the
+key itself) or in a Chrome profile that never turned the new tab on turns the WebBrain new tab
+off when it is imported into Chrome or Murshid. In Murshid that replaces its first-run default
+(`murshid.defaults` in `murshid/app/crx/bridge.js` switches the new tab on), and new tabs then
+show `murshid://newtab`. Settings → General turns it back on.
 
 ## The box
 
