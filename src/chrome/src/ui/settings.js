@@ -4201,10 +4201,13 @@ function renderProviders() {
         const optionsHTML = field.options
           .map(o => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.labelKey ? t(o.labelKey) : o.label)}</option>`)
           .join('');
+        // A tier already chosen (saved, or picked and kept through a
+        // re-render) stays chosen, so Save keeps sending promptTierChosen.
+        const tierChosenAttr = (field.key === 'promptTier' && config.promptTierChosen === true) ? ' data-tier-chosen="true"' : '';
         fieldHTML += `
           <div class="field">
             <label>${escapeHtml(label)}</label>
-            <select data-provider="${id}" data-key="${field.key}" data-type="select">${optionsHTML}</select>
+            <select data-provider="${id}" data-key="${field.key}" data-type="select"${tierChosenAttr}>${optionsHTML}</select>
           </div>
         `;
         if (VISION_UI_PROVIDER_IDS.has(definitionId) && field.key === 'visionMode') {
@@ -5126,6 +5129,9 @@ function syncInputsIntoProvidersData() {
     if (key === 'contextWindow') {
       providersData[id].manualContextWindow = input.dataset.manuallyEdited === 'true';
     }
+    // Keep an unsaved tier pick a choice: a local relay's tier counts only
+    // with promptTierChosen, so without it the rebuilt menu reads Full.
+    if (key === 'promptTier' && input.dataset.tierChosen === 'true') providersData[id].promptTierChosen = true;
   });
 }
 
