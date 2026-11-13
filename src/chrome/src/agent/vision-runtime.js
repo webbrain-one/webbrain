@@ -519,10 +519,16 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     }
   };
 
-  /** What is under CSS points (vision-dom-probe.js); null when it cannot be read. */
+  /**
+   * What is under CSS points (vision-dom-probe.js); null when it cannot be
+   * read. The points are where input is about to go: the page's Stop button
+   * moves out of their way first (agent _clearAgentStopButton), so the probe
+   * reads the page the model saw there, not the button.
+   */
   proto._visionDomProbe = async function _visionDomProbe(tabId, request) {
     if (typeof this._visionPlatformDomProbe !== 'function') return null;
     try {
+      await this._clearAgentStopButton?.(tabId, request?.points);
       return await this._visionPlatformDomProbe(tabId, request);
     } catch (error) {
       if (isControlFlowError(error)) throw error;

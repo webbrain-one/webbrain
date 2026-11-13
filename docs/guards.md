@@ -180,7 +180,7 @@ missing relationship evidence count as verified publication.
 | `click-duplicate-submit` (hard) | A text click repeats a commit or publish caption clicked on the same URL within 45 seconds | The control's caption |
 | `deletion-guard-refusal` (hard) | A Delete or Remove control sits outside one identifiable record (toolbar, bulk, selection) | Nothing (check the page); the buttons are Delete / Don't delete |
 | `deletion-guard-refusal` (hard, on the deletion card) | After a correction, an identified item that an earlier attempt may already have deleted | The item, as on any deletion card |
-| `steer-prior-submission-unreconciled` (hard) | After a correction, a write WebBrain sends itself: an API mutation or `chrome_web_store_publish` | The request: method and address, and the body unless strict secret handling is on |
+| `steer-prior-submission-unreconciled` (hard) | After a correction, a write WebBrain sends itself: an API mutation or `chrome_web_store_publish` | The request: method and address, and the body it sends (for a `fetch_url` replay with no body of its own, the captured body) unless strict secret handling is on; a replay `fetch_url` would refuse gets no card |
 | `recipient-guard-refusal` (hard) | A text send whose recipient the page does not name, with a readable draft | The draft |
 
 ### Hard-class asks for dead ends

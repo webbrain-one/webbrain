@@ -40,6 +40,20 @@ gate never redirects, the new tab page is always shown, and the side panel and S
 switch for it. Firefox's own settings (Home → New windows and tabs) are where a user switches
 back to Firefox's page.
 
+### Settings snapshots
+
+`/export --config` includes `newTabEnabled` (`false` when it was never set), and `/import`
+restores it. A snapshot without the key leaves the switch alone on `/import`; with
+`/import --replace` it turns the switch off. Firefox has no switch and never reads the key, but
+its export and import carry it too, so both builds keep one schema and a Chrome snapshot passes
+through Firefox unchanged.
+
+Because an unset switch exports as `false`, a snapshot made in Firefox (which never sets the
+key itself) or in a Chrome profile that never turned the new tab on turns the WebBrain new tab
+off when it is imported into Chrome or Murshid. In Murshid that replaces its first-run default
+(`murshid.defaults` in `murshid/app/crx/bridge.js` switches the new tab on), and new tabs then
+show `murshid://newtab`. Settings → General turns it back on.
+
 ## The box
 
 | Mode | What happens |

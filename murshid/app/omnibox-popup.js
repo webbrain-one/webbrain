@@ -37,6 +37,8 @@ class OmniboxPopup {
         nodeIntegration: false,
         backgroundThrottling: false,
         spellcheck: false,
+        // Its rows show favicons too: same session as the browser chrome.
+        ...(this.w.ctx.uiPartition ? { partition: this.w.ctx.uiPartition } : {}),
       },
     });
     view.setBackgroundColor('#00000000');

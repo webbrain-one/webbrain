@@ -1,5 +1,5 @@
 import { runFalGeneration, FAL_AUTH_PROBE_URL } from './fal-media.js';
-import { MAX_JOINED_VIDEO_BYTES, storeGeneratedMedia, storeGeneratedMediaBlob } from '../generated-media-store.js';
+import { KEPT_VIDEO_CLIP_MS, MAX_JOINED_VIDEO_BYTES, forgetVideoClips, keepVideoClips, storeGeneratedMedia, storeGeneratedMediaBlob, takeVideoClip } from '../generated-media-store.js';
 import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt } from './media-config.js';
 import { VideoJoinError, joinMp4Clips, mp4DurationSeconds } from './video-join.js';
 import { videoDurationTolerance } from './video-duration-contract.js';
@@ -17,8 +17,6 @@ const VIDEO_CLIP_RETRY_MS = 5000;
 const MAX_RETRY_WAIT_MS = 60000;
 // Downloads of a finished clip that may fail in a row for a passing reason.
 const CLIP_DOWNLOAD_ATTEMPTS = 3;
-// How long the finished clips of a video that failed part-way wait for a retry.
-const KEPT_CLIP_MS = 30 * 60 * 1000;
 const FALLBACK_VIDEO_CLIP_SECONDS = 8;
 const VIDEO_ARGUMENTS = ['duration', 'aspect_ratio', 'resolution', 'scenes', 'estimated_duration'];
 const INLINE_MEDIA = /^data:(image\/(?:png|jpeg|webp|gif)|audio\/(?:mpeg|wav|ogg)|video\/mp4);base64,[A-Za-z0-9+/=\s]+$/;
@@ -595,35 +593,18 @@ async function mapWithConcurrency(items, limit, signal, task) {
   } finally { signal?.removeEventListener('abort', onAbort); }
 }
 
-// The finished clips of videos that failed part-way, oldest first, kept in
-// memory for a retry: each is paid for, and a retry asks the model for the
-// same clip again. A clip is named by what was asked of the model and handed
-// out once, so a video that succeeded is generated anew when asked for again.
-const keptClips = [];
-
-// `inputs` is the saved model input a provider sends with every clip (Comfy
-// Router's): a clip made with other settings is another clip.
+// The finished clips of videos that failed part-way are kept for a retry in
+// IndexedDB (keepVideoClips), which outlives the background worker: each is
+// paid for, and a retry asks the model for the same clip again. A clip is
+// named by what was asked of the model and handed out once, so a video that
+// succeeded is generated anew when asked for again. `inputs` is the saved
+// model input a provider sends with every clip (Comfy Router's): a clip made
+// with other settings is another clip.
 const clipKey = (provider, model, inputs, clip, shape) => JSON.stringify([provider, model, inputs ?? null, clip.prompt, clip.duration ?? null, shape]);
-
-function takeKeptClip(key) {
-  const index = keptClips.findIndex(kept => kept.key === key && Date.now() - kept.at <= KEPT_CLIP_MS);
-  return index < 0 ? null : keptClips.splice(index, 1)[0].bytes;
-}
-
-// Keeps clips ({ key, bytes }) for a retry. Together the kept clips weigh at
-// most what one video may; the oldest go first.
-function keepClips(clips) {
-  const now = Date.now();
-  const fresh = keptClips.filter(kept => now - kept.at <= KEPT_CLIP_MS);
-  fresh.push(...clips.map(clip => ({ ...clip, at: now })));
-  let total = fresh.reduce((sum, kept) => sum + kept.bytes.length, 0);
-  while (fresh.length && total > MAX_JOINED_VIDEO_BYTES) total -= fresh.shift().bytes.length;
-  keptClips.splice(0, keptClips.length, ...fresh);
-}
 
 /** Forgets the clips kept for a retry. */
 export function forgetKeptVideoClips() {
-  keptClips.length = 0;
+  return forgetVideoClips();
 }
 
 /**
@@ -659,8 +640,9 @@ async function runVideo({ provider, model, inputs, entry, text, video, signal, o
   }
   const keys = plan.clips.map(item => clipKey(provider, model, inputs, item, plan.shape));
   // Each clip's bytes, in scene order: those kept from a failed attempt, then
-  // those this run makes.
-  const clips = keys.map(takeKeptClip);
+  // those this run makes. One at a time, so two equal scenes take two clips.
+  const clips = [];
+  for (const key of keys) clips.push(await takeVideoClip(key));
   const missing = plan.clips.map((item, index) => ({ item, index })).filter(({ index }) => !clips[index]);
   const reused = plan.clips.length - missing.length;
   onProgress?.(reused
@@ -693,10 +675,11 @@ async function runVideo({ provider, model, inputs, entry, text, video, signal, o
     // The finished clips are paid for: a retry uses them instead of asking
     // the model again.
     const finished = clips.flatMap((bytes, index) => (bytes ? [{ key: keys[index], bytes }] : []));
-    keepClips(finished);
-    // Stop is reported as it is. Any other failure also says what a retry keeps.
-    if (!finished.length || signal?.aborted) throw error;
-    throw Object.assign(new Error(`${error?.message ?? error} ${finished.length} of ${plan.clips.length} clips are finished and kept for ${KEPT_CLIP_MS / 60000} minutes: a retry generates only the scenes that are missing or changed. Keep prompt, aspect_ratio, resolution and each finished scene's prompt and duration exactly as they were.`),
+    const kept = finished.length > 0 && await keepVideoClips(finished);
+    // Stop is reported as it is. Any other failure also says what a retry
+    // keeps, once the clips are saved.
+    if (!kept || signal?.aborted) throw error;
+    throw Object.assign(new Error(`${error?.message ?? error} ${finished.length} of ${plan.clips.length} clips are finished and kept for ${KEPT_VIDEO_CLIP_MS / 60000} minutes: a retry generates only the scenes that are missing or changed. Keep prompt, aspect_ratio, resolution and each finished scene's prompt and duration exactly as they were.`),
       { clipsKept: finished.length, cause: error });
   }
   return { clips, model, ...lengthDetails, ...fallback,

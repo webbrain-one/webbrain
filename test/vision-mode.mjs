@@ -699,6 +699,8 @@ test('a vision click names the control it clicked: role and a bounded, one-line 
   const account = at({ controlRole: 'button', controlName: 'Account: Test Person (someone@example.com)' });
   assert.deepEqual(visionClickedControl(account), { role: 'button', nameWithheld: true });
   assert.deepEqual(visionClickedControl(account, { redaction: true }), { role: 'button', nameWithheld: true });
+  assert.deepEqual(visionClickedControl(at({ controlRole: 'button', controlName: 'Account ' + 'A'.repeat(58) + ' user@example.com' })), { role: 'button', nameWithheld: true });
+  assert.deepEqual(visionClickedControl(at({ controlRole: 'button', controlNameWithheld: true })), { role: 'button', nameWithheld: true });
   const call = at({ controlRole: 'link', controlName: 'Call +1 555 010 0199' });
   assert.deepEqual(visionClickedControl(call), { role: 'link', name: 'Call +1 555 010 0199' });
   assert.deepEqual(visionClickedControl(call, { redaction: true }), { role: 'link', nameWithheld: true });

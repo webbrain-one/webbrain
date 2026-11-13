@@ -216,7 +216,12 @@ export function visionDomProbe(request) {
   // as a <div> drawn with a pointer cursor, is named only by its attributes.
   const NAME_FROM_CONTENT = ['button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'option',
     'checkbox', 'radio', 'switch', 'treeitem', 'cell', 'gridcell', 'row', 'columnheader', 'rowheader', 'heading', 'tooltip'];
-  const flat = value => String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, NAME_SOURCE_MAX);
+  let nameTooLong = false;
+  const flat = value => {
+    const text = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+    if (text.length > NAME_SOURCE_MAX) { nameTooLong = true; return ''; }
+    return text;
+  };
   const attr = (el, name) => {
     try { return el && el.getAttribute ? String(el.getAttribute(name) || '') : ''; } catch (e) { return ''; }
   };
@@ -239,7 +244,7 @@ export function visionDomProbe(request) {
   // alternative text; nothing for one that holds a field.
   const textOf = el => {
     try {
-      if (el.querySelector(FIELD)) return '';
+      if (el.matches(FIELD) || el.isContentEditable || el.querySelector(FIELD)) return '';
       const text = flat(el.innerText != null ? el.innerText : el.textContent);
       if (text) return text;
       const icon = el.querySelector('img[alt],[role="img"][aria-label],svg title');
@@ -294,7 +299,9 @@ export function visionDomProbe(request) {
     if (!role && String(el.tagName || '').toLowerCase() === 'label') {
       try { role = el.control ? roleOf(el.control) : ''; } catch (e) { role = ''; }
     }
-    return { role, name: nameOf(el, role) };
+    nameTooLong = false;
+    const name = nameOf(el, role);
+    return { role, name: nameTooLong ? '' : name, nameTooLong };
   };
   const points = Array.isArray(req.points) ? req.points.slice(0, 2) : [];
   const found = points.map(point => hit(Number(point && point.x), Number(point && point.y)));
@@ -314,7 +321,8 @@ export function visionDomProbe(request) {
     if (control && index === 0 && req.describeControl === true) {
       const described = describe(control.el);
       if (described.role) info.controlRole = described.role;
-      if (described.name) info.controlName = described.name;
+      if (described.nameTooLong) info.controlNameWithheld = true;
+      else if (described.name) info.controlName = described.name;
     }
     if (!control && !info.opaqueFrame) {
       const point = points[index] || {};
@@ -420,10 +428,10 @@ export function visionClickedControl(point, { redaction = false } = {}) {
   const role = typeof point.controlRole === 'string' && /^[a-z]{2,32}$/.test(point.controlRole) ? point.controlRole : '';
   let name = typeof point.controlName === 'string'
     ? visibleNameText(point.controlName).replace(/\s+/g, ' ').trim() : '';
+  const withheld = point.controlNameWithheld === true || (!!name && (textHoldsEmail(name) || (redaction === true && textHoldsPhone(name))));
   const chars = Array.from(name);
   if (chars.length > VISION_CONTROL_NAME_MAX) name = `${chars.slice(0, VISION_CONTROL_NAME_MAX - 1).join('').trimEnd()}…`;
-  const withheld = !!name && (textHoldsEmail(name) || (redaction === true && textHoldsPhone(name)));
-  if (!role && !name) return null;
+  if (!role && !name && !withheld) return null;
   return {
     ...(role ? { role } : {}),
     ...(name && !withheld ? { name } : {}),

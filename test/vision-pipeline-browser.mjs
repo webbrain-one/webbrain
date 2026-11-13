@@ -502,6 +502,69 @@ test('content-script vision input (Firefox path) marks the element at the point 
   }
 });
 
+// WebBrain's own Stop button sits at the bottom centre while a run is active
+// and is hidden in every screenshot, so the model aims at the page under it.
+// Firefox's vision input (synthetic, or marked for trusted input) must reach
+// that page element: the button moves out of the way first.
+test('content-script vision input (Firefox path) reaches the page under the Stop button, not the button', async () => {
+  const browser = await chromium.launch({ channel: 'chromium' });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await page.setContent(`<!doctype html><style>body{margin:0}#bar{position:fixed;left:0;right:0;bottom:0;height:80px;background:#eee}
+      #accept{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:240px;height:40px;margin:0}</style>
+      <div id="bar"><button id="accept">Accept all</button></div>
+      <script>window.accepted=0;document.getElementById('accept').addEventListener('click',()=>accepted++);
+      window.stopRequests=0;window.listeners=[];
+      window.browser={runtime:{onMessage:{addListener:fn=>listeners.push(fn)},sendMessage:async m=>{if(m?.type==='WB_STOP_AGENT')stopRequests++;return {};}}};</script>`);
+    await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT, 'src/firefox/src/content/agent-visual-indicator.js'), 'utf8') });
+    const source = fs.readFileSync(path.join(ROOT, 'src/firefox/src/content/content.js'), 'utf8');
+    const block = source.slice(source.indexOf('  function _visionTargetAt('), source.indexOf('  let _lastClickIdent = null;'));
+    const guardBlock = source.slice(source.indexOf('  function uniqueFileInputSelector(input) {'), source.indexOf('  /**\n   * Click an element by selector or coordinates.'));
+    await page.evaluate(({ code, guardBlock }) => {
+      // eslint-disable-next-line no-new-func
+      window.__visionInput = new Function(`function withLocalPageDispatch(callback) { return callback(); }
+        function _uniqueFileInputSelector(input) { return input.id ? '#' + input.id : ''; }
+        function _deepSelectorMatches(selector) { return [...document.querySelectorAll(selector)]; }
+        ${guardBlock}\n${code}\nreturn visionInput;`)();
+      window.indicatorMessage = message => listeners.forEach(listener => listener(message, {}, () => {}));
+      indicatorMessage({ type: 'WB_SHOW_AGENT_INDICATORS' });
+    }, { code: block, guardBlock });
+    await page.waitForTimeout(400);
+    const box = id => page.evaluate(id => {
+      const r = document.getElementById(id).getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, bottom: r.bottom };
+    }, id);
+    const run = params => page.evaluate(p => window.__visionInput(p), params);
+    const accept = await box('accept');
+    const stop = await box('webbrain-agent-stop-container');
+    assert.ok(accept.y > stop.top && accept.y < stop.bottom && Math.abs(accept.x - stop.x) < 2, 'the Stop button covers the point');
+
+    // The synthetic click presses the banner's button; the Stop button went to the top.
+    let result = await run({ type: 'click', x: accept.x, y: accept.y });
+    assert.equal(result.success, true);
+    assert.deepEqual(result.target, { tag: 'button' });
+    assert.deepEqual(await page.evaluate(() => ({ accepted, stopRequests })), { accepted: 1, stopRequests: 0 });
+    assert.ok((await box('webbrain-agent-stop-container')).bottom < 350, 'moved to the top');
+
+    // Trusted input marks the banner's button, not the Stop button back over it.
+    await page.evaluate(() => indicatorMessage({ type: 'WB_AGENT_POINTER_AT', points: [{ x: 500, y: 40 }] }));
+    assert.ok((await box('webbrain-agent-stop-container')).top > 350, 'back at the bottom');
+    const token = '0b8d6f43-6c3a-4c43-9d0e-5b5b0f7f4c21';
+    result = await run({ type: 'click', x: accept.x, y: accept.y, _bidiPrepare: token });
+    assert.equal(result.bidiPrepared, true);
+    assert.deepEqual(await page.evaluate(t => [...document.querySelectorAll(`[data-webbrain-bidi="${t}"]`)].map(el => el.id), token), ['accept']);
+
+    // A drag that ends under it is cleared at its end too.
+    await page.evaluate(() => indicatorMessage({ type: 'WB_AGENT_POINTER_AT', points: [{ x: 500, y: 40 }] }));
+    result = await run({ type: 'drag', x: 100, y: 300, toX: accept.x, toY: accept.y, steps: 4 });
+    assert.equal(result.success, true);
+    assert.ok((await box('webbrain-agent-stop-container')).bottom < 350, 'the drag end was cleared');
+    assert.equal(await page.evaluate(() => stopRequests), 0);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('content-script vision drag (Firefox path) moves and releases in a same-origin frame\'s own coordinates', async () => {
   const browser = await chromium.launch({ channel: 'chromium' });
   try {
@@ -1349,6 +1412,8 @@ for (const [engineName, engine] of [['chromium', chromium], ['firefox', firefox]
         <button class="at" style="left:380px;top:220px">${'Delete '.repeat(60)}</button>
         <div role="button" tabindex="0" class="at" style="left:560px;top:220px;height:80px">Reply<div contenteditable="true" style="height:40px">draft text</div></div>
         <button class="at" style="left:740px;top:220px" aria-label="Account: Test Person (someone@example.com)">TP</button>
+        <div role="button" contenteditable="true" class="at" style="left:20px;top:320px">private draft text</div>
+        <button class="at" style="left:200px;top:320px" aria-label="${'A'.repeat(195)} user@example.com">Account</button>
         <div style="position:absolute;left:20px;top:600px"><span id="t1">Remove</span> <span id="t2">attachment</span></div>`);
       for (const build of ['chrome', 'firefox']) {
         const { visionDomProbeExpression, visionClickedControl } = await import(`../src/${build}/src/agent/vision-dom-probe.js`);
@@ -1384,8 +1449,9 @@ for (const [engineName, engine] of [['chromium', chromium], ['firefox', firefox]
         assert.deepEqual((await named(100, 240)).control, { name: 'Card title' }, label);
         assert.deepEqual((await named(280, 240)).control, { role: 'button', name: 'Trash' }, `${label}: an icon's alternative text`);
         const long = await named(460, 240);
-        assert.ok(long.point.controlName.length <= 200, `${label}: the probe cuts a long name`);
-        assert.equal(Array.from(long.control.name).length, 80, label);
+        assert.deepEqual(long.control, { role: 'button', nameWithheld: true }, label);
+        assert.doesNotMatch(JSON.stringify(await named(100, 340)), /private draft text/, label);
+        assert.deepEqual((await named(280, 340)).control, { role: 'button', nameWithheld: true }, label);
         // A control holding an editable area: its text is not read.
         const reply = await named(565, 228);
         assert.equal(reply.point.control, 'div', `${label}: ${JSON.stringify(reply.point)}`);

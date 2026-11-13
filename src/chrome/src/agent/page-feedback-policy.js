@@ -350,11 +350,23 @@ export function pageFeedbackCallPolicy(name, args = {}, state = {}, currentPage 
   return { kind: 'target' };
 }
 
+// A call's arguments as the executor reads them (Agent._parseToolCallArgs):
+// absent or blank text is {}, since OpenAI-compatible relays send "" for a
+// call without arguments and the call then runs with {}. Any other text must
+// be a JSON object. null marks a call the executor refuses; it is never retained.
+export function pageFeedbackCallArgs(call) {
+  const raw = call?.function?.arguments;
+  let args = raw ?? {};
+  if (typeof raw === 'string') {
+    try { args = raw.trim() ? JSON.parse(raw) : {}; } catch { return null; }
+  }
+  return args && typeof args === 'object' && !Array.isArray(args) ? args : null;
+}
+
 export function isPageIndependentCalculationCompletion(calls, state, events) {
   if (state?.pureCalculationComplete !== true || !state.calculationResponseScope
       || calls?.length !== 1 || !events?.length || calls[0].function?.name !== 'done') return false;
-  let args;
-  try { args = JSON.parse(calls[0].function.arguments); } catch { return false; }
+  const args = pageFeedbackCallArgs(calls[0]);
   if (args?.outcome !== 'success') return false;
   // Spontaneous page focus remains material for browser actions. A current
   // literal calculation receipt and its terminal answer do not depend on it.
@@ -385,9 +397,8 @@ export function canRetainPageFeedbackCalls(calls, state, currentPage, events, { 
   // to the field that click focuses, checked at dispatch like its point.
   let visionClicked = false;
   return calls.every(call => {
-    let args;
-    try { args = JSON.parse(call.function?.arguments); } catch { return false; }
-    if (!args || typeof args !== 'object' || Array.isArray(args)) return false;
+    const args = pageFeedbackCallArgs(call);
+    if (!args) return false;
     const name = call.function?.name;
     if (name === 'click_at') visionClicked = true;
     else if (visionClicked && (name === 'type_text' || name === 'press_keys')) return true;

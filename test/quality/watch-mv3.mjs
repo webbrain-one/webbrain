@@ -226,7 +226,7 @@ try {
       if (event.action === 'agent_update') watchEvents.push({ type: event.type, tabId: event.tabId, data: event.data, at: Date.now() });
     });
     await chrome.storage.local.set({ helpImproveWebBrain: false, tracingEnabled: false, autoScreenshot: false,
-      screenshotFallback: false, planBeforeActMode: 'off', planBeforeAct: false, planReviewMode: 'never',
+      screenshotFallback: false, visionMode: 'off', planBeforeActMode: 'off', planBeforeAct: false, planReviewMode: 'never',
       maxAgentSteps: 12, systemOneEnabled: false, agentAllowLocalNetwork: true, askBeforeConsequentialActions: false,
       openaiAskStreamingEnabled: false, scheduledTasksEnabled: true, scheduledRequireConsequentialConfirmation: false });
   });
