@@ -15190,6 +15190,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       fnArgs = coordinates.args;
       predispatch.lap('argumentsMs');
+      // A point under the page's own Stop button is the page's to the model:
+      // the button moves away before any check below reads that point.
+      await this._clearAgentStopButton(tabId, this._agentInputPoints(fnName, fnArgs, tc._vision));
       if (fnName !== 'done' && !Agent.NAV_TOOLS.has(fnName)) {
         try {
           await this._adoptLiveSocialPublishWorkflow(tabId, provider);
@@ -19182,6 +19185,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const ok = !!result && typeof result === 'object' && result.success === true
       && result.noDispatch !== true && result.dispatched !== false;
     this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
+  }
+
+  /**
+   * Agent input is about to land at `points` (viewport CSS px of the top
+   * document; the first is where a press goes). The page's Stop button
+   * (content/agent-visual-indicator.js) is hidden in every screenshot, so a
+   * point under it is the page's to the model; its press must reach the
+   * page, not stop the run. The button moves out of the way first, before
+   * the checks that read the point (content.js visionInput asks again right
+   * before its input). Only on a tab that shows the run; bounded like the
+   * cursor's reply. Resolves to whether it moved.
+   */
+  async _clearAgentStopButton(tabId, points) {
+    const list = (Array.isArray(points) ? points : [])
+      .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+      .slice(0, 8)
+      .map(point => ({ x: Number(point.x), y: Number(point.y) }));
+    if (!list.length || !this._agentCursorShown(tabId)) return false;
+    let timer = null;
+    try {
+      const reply = await Promise.race([
+        Promise.resolve(browser.tabs.sendMessage(tabId, { type: 'WB_AGENT_POINTER_AT', points: list }, { frameId: 0 })).catch(() => null),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+      ]);
+      return reply?.moved === true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Where a tool call's input lands, when it is a viewport point known before its checks. */
+  _agentInputPoints(name, args, vision = null) {
+    const points = [];
+    if (name === 'click' && args?.x != null && args?.y != null) points.push({ x: args.x, y: args.y });
+    for (const point of [vision?.monitorPoint, vision?.wheelPoint]) if (point) points.push(point);
+    return points;
   }
 
   async _captureViewportProbe(tabId) {
@@ -47574,20 +47615,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: false, error: 'read_pdf: no url provided and could not read the active tab URL.' };
         }
 
+        const provider = this.providerManager.getActive();
+        const supportsPdfPassthrough = providerSupportsPdfPassthrough(provider);
         const result = await extractPdfText(pdfUrl, {
           fromPage: args.fromPage,
           toPage: args.toPage,
           maxChars: args.maxChars,
+          includeDocument: supportsPdfPassthrough,
         }, { tabId });
 
-        // Tier 2 — Anthropic Claude PDF passthrough.
-        const provider = this.providerManager.getActive();
+        // Tier 2 — Anthropic Claude PDF passthrough. extractPdfText copies
+        // the bytes before PDF.js detaches them, so the document block is
+        // the same file the text came from. An empty copy is never attached.
         const bytes = result._pdfBytes;
         delete result._pdfBytes;
 
         if (
-          bytes &&
-          providerSupportsPdfPassthrough(provider) &&
+          bytes?.length > 0 &&
+          supportsPdfPassthrough &&
           bytes.length <= PDF_PASSTHROUGH_MAX_BYTES
         ) {
           let docName = result.title || '';

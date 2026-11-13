@@ -32,6 +32,10 @@ const { Updates } = require('./updates');
 
 const PERSISTENT_PARTITION = 'persist:murshid';
 const TEMPORARY_PARTITION = 'murshid-temporary';
+// The browser chrome loads each tab's favicon itself. Its own session is the
+// default one, which keeps a cache and cookies in the profile, so while browser
+// data is temporary it uses a session kept in memory instead.
+const TEMPORARY_UI_PARTITION = 'murshid-temporary-ui';
 const DEBUG = process.argv.includes('--murshid-devtools') || process.env.MURSHID_DEBUG === '1';
 
 app.setName('Murshid');
@@ -84,6 +88,7 @@ if (!app.requestSingleInstanceLock()) {
 
 const ctx = {
   ses: null,
+  uiPartition: undefined, // the browser chrome's session; undefined is the default session
   adblock: null,
   extensions: null,
   crx: null,
@@ -167,7 +172,7 @@ const ctx = {
     const current = this.adblockSite(tab);
     if (!current) return;
     this.adblock.setAllowed(current.site, !current.allowed);
-    if (!tab.wc.isDestroyed()) tab.wc.reload();
+    if (!tab.wc.isDestroyed()) tab.reload();
   },
   sendExtensionCommand(w, name) {
     if (!this.webBrainId || !w?.activeTab) return;
@@ -196,6 +201,7 @@ async function start() {
   const ses = session.fromPartition(ctx.settings.get('persistBrowserSession') === false
     ? TEMPORARY_PARTITION : PERSISTENT_PARTITION);
   ctx.ses = ses;
+  if (!ses.isPersistent()) ctx.uiPartition = TEMPORARY_UI_PARTITION;
   ses.setUserAgent(app.userAgentFallback);
   ctx.adblock = new Adblock({ settings: ctx.settings, userData: ctx.userData });
   identity.install(ses, ctx.settings, ctx);

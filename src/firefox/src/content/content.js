@@ -2586,6 +2586,11 @@
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
       return { success: false, dispatched: false, noDispatch: true, error: 'The point is outside the viewport.' };
     }
+    // WebBrain's own Stop button (agent-visual-indicator.js, top document
+    // only) is not in the screenshots the point was read from: it moves out
+    // of the way of the press and of a drag's end before anything is found
+    // at the point, so the input reaches the page there.
+    window.__webbrainAgentIndicator?.keepClear?.(type === 'drag' ? [{ x, y }, { x: Number(params.toX), y: Number(params.toY) }] : [{ x, y }]);
     const hit = _visionTargetAt(x, y);
     if (!hit) return { success: false, dispatched: false, noDispatch: true, error: 'Nothing is rendered at that point.' };
     if (hit.unmappable) {

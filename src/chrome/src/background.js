@@ -45,6 +45,7 @@ import {
   webgpuModelDisplayName,
 } from './providers/webgpu.js';
 import { Agent } from './agent/agent.js';
+import { cdpClient } from './cdp/cdp-client.js';
 import { normalizeLeanModeSetting } from './agent/lean-mode.js';
 import { normalizeVisionModeSetting } from './agent/vision-mode.js';
 import { normalizeVisionQuality } from './agent/vision-budget.js';
@@ -290,6 +291,10 @@ Promise.all([
 const agent = new Agent(providerManager);
 agent.strictSecretMode = false;
 agent.setStandaloneOfflineRagService(createOffscreenOfflineRetrievalService());
+// Every CDP pointer command first moves the tab's on-page Stop button out of
+// the way of its point (agent._clearAgentStopButton, on a tab that shows the
+// run), so trusted agent input reaches the page there instead of stopping it.
+cdpClient.beforePointerInput = (tabId, point) => agent._clearAgentStopButton(tabId, [point]);
 const ALWAYS_ALLOW_API_MUTATIONS_KEY = 'alwaysAllowApiMutations';
 // apiMutationSitePrompt: true keeps each host's network permission prompt for
 // write requests the default-on setting above allows (written at install, see

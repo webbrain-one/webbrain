@@ -16157,6 +16157,186 @@ test('config transfer validates schema, size, containers, and unknown keys', () 
   assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
 });
 
+test('config transfer carries Cookie banners and the new tab switch in both builds', async () => {
+  const configWith = (settings) => JSON.stringify({ schema: 'webbrain-config/1', settings });
+  for (const [label, prefix, configTransfer] of [
+    ['chrome', 'src/chrome', ConfigTransferCh],
+    ['firefox', 'src/firefox', ConfigTransferFx],
+  ]) {
+    const cookieHost = await import(pathToFileURL(path.join(ROOT, prefix, 'src/agent/cookie-banner-host.js')).href);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes(cookieHost.COOKIE_BANNER_SETTING_KEY), `${label}: config export/import omitted Cookie banners`);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes('newTabEnabled'), `${label}: config export/import omitted the new tab switch`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.cookieBanners, cookieHost.DEFAULT_COOKIE_BANNER_MODE, `${label}: a file without Cookie banners should restore the host's default`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.newTabEnabled, false, `${label}: a file without the switch should leave the new tab opt-in`);
+    // Import accepts exactly the modes the host knows: no mode Settings can save
+    // is refused, and no mode the host would treat as the default is accepted.
+    assert.deepEqual(
+      [...configTransfer.CONFIG_COOKIE_BANNER_MODES].sort(),
+      [...cookieHost.COOKIE_BANNER_MODES].sort(),
+      `${label}: config import's Cookie banners modes should match the cookie-banner host's`,
+    );
+
+    for (const mode of cookieHost.COOKIE_BANNER_MODES) {
+      for (const newTabEnabled of [true, false]) {
+        const exported = configTransfer.createConfigExport({ cookieBanners: mode, newTabEnabled });
+        assert.equal(exported.settings.cookieBanners, mode, `${label}: export dropped Cookie banners ${mode}`);
+        assert.equal(exported.settings.newTabEnabled, newTabEnabled, `${label}: export dropped the new tab switch`);
+        const restored = configTransfer.parseConfigImport(JSON.stringify(exported));
+        assert.equal(restored.settings.cookieBanners, mode, `${label}: /import --replace lost Cookie banners ${mode}`);
+        assert.equal(restored.settings.newTabEnabled, newTabEnabled, `${label}: /import --replace lost the new tab switch`);
+        assert.deepEqual(restored.ignoredKeys, [], `${label}: a round trip should not ignore any key`);
+      }
+    }
+
+    const sparse = configTransfer.parseConfigPatchImport(configWith({ cookieBanners: 'off', newTabEnabled: true }));
+    assert.deepEqual(sparse.settings, { cookieBanners: 'off', newTabEnabled: true }, `${label}: /import should apply both settings`);
+    assert.deepEqual(sparse.ignoredKeys, [], `${label}: /import should not list them as unknown`);
+
+    const fresh = configTransfer.createConfigExport({});
+    assert.equal(fresh.settings.cookieBanners, 'agent', `${label}: an unset Cookie banners exports as Settings shows it`);
+    assert.equal(fresh.settings.newTabEnabled, false, `${label}: an unset new tab switch exports as off, as Settings shows it`);
+    assert.equal(configTransfer.createConfigExport({ cookieBanners: 'sometimes' }).settings.cookieBanners, 'agent', `${label}: an unknown stored mode exports as the default`);
+
+    for (const parse of [configTransfer.parseConfigImport, configTransfer.parseConfigPatchImport]) {
+      assert.throws(() => parse(configWith({ cookieBanners: 'sometimes' })), /cookieBanners/, `${label}: an unknown Cookie banners mode should be refused`);
+      assert.throws(() => parse(configWith({ cookieBanners: true })), /cookieBanners/, `${label}: a non-string Cookie banners value should be refused`);
+      assert.throws(() => parse(configWith({ newTabEnabled: 'true' })), /newTabEnabled/, `${label}: a non-boolean new tab switch should be refused`);
+    }
+  }
+});
+
+// Each storage key a Settings control writes should travel with
+// /export --config, or be listed here with why it stays on this device. This
+// reads the object literals passed to storage.local.set() by the Settings page's
+// scripts. It does not see writes of a prebuilt object (presets, pinned in
+// test/settings-presets.mjs; skills and the clarify-timeout migration, whose
+// keys are exported; the Cloud bridge pairing) or the CAPTCHA provider loop
+// (test/captcha-providers.mjs).
+test('every setting the Settings page writes is exported or deliberately device-local', () => {
+  const deviceLocal = {
+    // Derived from tracingEnabled when a file is imported (background.js import_config).
+    losslessTrace: ['chrome', 'firefox'],
+    // Accumulated spend; Settings only resets it.
+    meteredProviderCostSpentUsd: ['chrome', 'firefox'],
+    // The WebBrain Cloud bridge pairing of this browser.
+    webbrainCloudBridgeBrowserId: ['chrome', 'firefox'],
+    // Chrome's in-browser vision model: consent and downloaded weights belong to
+    // this device, and the choice must not reach Firefox.
+    webgpuVisionEnabled: ['chrome'],
+    webgpuVisionConsentVersion: ['chrome'],
+    // Firefox's connection to its own remote agent on this machine.
+    firefoxBidiEnabled: ['firefox'],
+    firefoxBidiPort: ['firefox'],
+  };
+  const skipString = (src, i) => {
+    for (let j = i + 1; j < src.length; j++) {
+      if (src[j] === '\\') { j++; continue; }
+      if (src[j] === src[i]) return j;
+    }
+    return src.length;
+  };
+  // Top-level keys of the object literal that opens at `open`: plain, quoted or
+  // computed ([NAME]); spreads are skipped.
+  const objectLiteralKeys = (src, open) => {
+    const keys = [];
+    let depth = 0;
+    let expectKey = true;
+    for (let i = open; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '\'' || ch === '"' || ch === '`') {
+        const end = skipString(src, i);
+        if (depth === 1 && expectKey) { keys.push({ name: src.slice(i + 1, end) }); expectKey = false; }
+        i = end;
+      } else if (ch === '/' && src[i + 1] === '/') {
+        i = src.indexOf('\n', i);
+      } else if (ch === '/' && src[i + 1] === '*') {
+        i = src.indexOf('*/', i) + 1;
+      } else if (depth === 1 && expectKey && ch === '[') {
+        const end = src.indexOf(']', i);
+        keys.push({ computed: src.slice(i + 1, end).trim() });
+        expectKey = false;
+        i = end;
+      } else if (ch === '{' || ch === '(' || ch === '[') {
+        depth++;
+      } else if (ch === '}' || ch === ')' || ch === ']') {
+        if (--depth === 0) return keys;
+      } else if (depth === 1 && ch === ',') {
+        expectKey = true;
+      } else if (depth === 1 && expectKey && !/\s/.test(ch)) {
+        if (src.startsWith('...', i)) { expectKey = false; i += 2; continue; }
+        const word = /^[A-Za-z_$][\w$]*/.exec(src.slice(i));
+        if (word) { keys.push({ name: word[0] }); expectKey = false; i += word[0].length - 1; }
+      }
+    }
+    return keys;
+  };
+  const sourceFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return ['vendor', 'locales'].includes(entry.name) ? [] : sourceFiles(full);
+    return entry.name.endsWith('.js') ? [full] : [];
+  });
+
+  for (const [label, configTransfer] of [['chrome', ConfigTransferCh], ['firefox', ConfigTransferFx]]) {
+    const srcDir = path.join(ROOT, 'src', label, 'src');
+    const allSource = sourceFiles(srcDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+    // Every value each string constant name has anywhere in the build. A name
+    // defined twice with different values cannot be resolved from source text
+    // alone, so the test refuses it instead of picking one.
+    const constants = new Map();
+    for (const m of allSource.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^'\n]+)'/g)) {
+      if (!constants.has(m[1])) constants.set(m[1], new Set());
+      constants.get(m[1]).add(m[2]);
+    }
+    const resolve = (expr) => {
+      if (constants.has(expr)) {
+        const values = [...constants.get(expr)];
+        assert.equal(values.length, 1, `${label}: [${expr}] has more than one value in the build (${values.join(', ')}); the scan cannot tell which one Settings writes`);
+        return values[0];
+      }
+      const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/.exec(expr);
+      if (!member) return null;
+      const values = new Set();
+      for (const block of allSource.matchAll(new RegExp(`\\bconst\\s+${member[1]}\\s*=\\s*\\{([^}]*)\\}`, 'g'))) {
+        const value = block[1].match(new RegExp(`\\b${member[2]}\\s*:\\s*'([^']+)'`))?.[1];
+        if (value) values.add(value);
+      }
+      assert.ok(values.size <= 1, `${label}: [${expr}] has more than one value in the build (${[...values].join(', ')}); the scan cannot tell which one Settings writes`);
+      return [...values][0] ?? null;
+    };
+
+    const settingsJs = fs.readFileSync(path.join(srcDir, 'ui/settings.js'), 'utf8');
+    const settingsHtml = fs.readFileSync(path.join(srcDir, 'ui/settings.html'), 'utf8');
+    const pageScripts = new Set(['settings.js']);
+    for (const m of settingsJs.matchAll(/from '\.\/([\w-]+\.js)'/g)) pageScripts.add(m[1]);
+    for (const m of settingsHtml.matchAll(/<script src="([\w-]+\.js)"/g)) pageScripts.add(m[1]);
+
+    const written = new Map();
+    for (const script of pageScripts) {
+      const src = fs.readFileSync(path.join(srcDir, 'ui', script), 'utf8');
+      for (const m of src.matchAll(/storage(?:\?\.|\.)local(?:\?\.|\.)set(?:\?\.)?\(\s*\{/g)) {
+        for (const key of objectLiteralKeys(src, m.index + m[0].length - 1)) {
+          const name = key.name ?? resolve(key.computed);
+          assert.ok(name, `${label}: ui/${script} writes a computed key the test cannot resolve: [${key.computed}]`);
+          written.set(name, script);
+        }
+      }
+    }
+    // The scan itself still works: it finds Settings controls the schema has long carried.
+    for (const key of ['verboseMode', 'themeMode', 'wbLocale', 'askBeforeConsequentialActions', 'safeSocialSettings', 'cookieBanners']) {
+      assert.ok(written.has(key), `${label}: the scan no longer sees the Settings write of ${key}`);
+    }
+
+    const exported = new Set(configTransfer.CONFIG_STORAGE_KEYS);
+    for (const [key, builds] of Object.entries(deviceLocal)) {
+      if (builds.includes(label)) assert.equal(exported.has(key), false, `${label}: ${key} is listed as device-local but is exported`);
+    }
+    const missing = [...written]
+      .filter(([key]) => !exported.has(key) && !deviceLocal[key]?.includes(label))
+      .map(([key, script]) => `${key} (ui/${script})`);
+    assert.deepEqual(missing, [], `${label}: Settings writes these keys but /export --config leaves them out`);
+  }
+});
+
 test('download directory routing is relative and uses each browser-supported path', async () => {
   for (const [label, downloadDirectory] of [
     ['chrome', DownloadDirectoryCh],
@@ -121587,12 +121767,17 @@ test('page Stop WebBrain clears stale indicators without stopping recordings', (
     const indicator = fs.readFileSync(path.join(ROOT, prefix, 'src/content/agent-visual-indicator.js'), 'utf8');
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
 
-    const clickStart = indicator.indexOf("button.addEventListener('click', async () => {");
+    const clickStart = indicator.indexOf("button.addEventListener('click', async (event) => {");
     const clickEnd = indicator.indexOf('\n    });', clickStart);
     assert.notEqual(clickStart, -1, `${label}: page Stop handler missing`);
     assert.notEqual(clickEnd, -1, `${label}: page Stop handler boundary missing`);
     const clickBody = indicator.slice(clickStart, clickEnd);
     const localHideIdx = clickBody.indexOf('hide();');
+    // A page script's click() or dispatched click is not a person's: it
+    // neither hides the indicator nor stops the run.
+    const trustedIdx = clickBody.indexOf('if (!event.isTrusted) return;');
+    assert.notEqual(trustedIdx, -1, `${label}: page Stop must ignore untrusted clicks`);
+    assert.equal(trustedIdx < localHideIdx, true, `${label}: an untrusted click must return before hiding the indicator`);
     const abortMessageIdx = clickBody.indexOf(`${runtimeApi}.runtime.sendMessage({ type: 'WB_STOP_AGENT' })`);
     assert.notEqual(localHideIdx, -1, `${label}: page Stop should immediately hide its local indicator`);
     assert.notEqual(abortMessageIdx, -1, `${label}: page Stop should still request agent abort`);
@@ -127938,6 +128123,57 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     const prompt = build({ url: 'https://github.com/o/r/pull/7', title: 'x' }).find((a) => a.id === 'review-pull-request').prompt;
     assert.match(prompt, /Files changed/);
     assert.match(prompt, /\/pull\/7\/files/);
+  });
+
+  // Both suggestions run in read-only Ask mode: no navigate or click, and
+  // read_page reads only the current tab. A prompt that sends the model to
+  // "open the Files changed tab" from the Conversation tab cannot be followed,
+  // so every read it names has to be one an Ask run can make from that tab.
+  test(`recommended-actions (${label}): GitHub pull-request prompts only name reads Ask mode can make`, () => {
+    const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
+    const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
+    const prompts = (url) => {
+      const actions = build({ url, title: 'Pull Request #7 · o/r' });
+      return ['review-pull-request', 'summarize-pull-request'].map((id) => {
+        const action = actions.find((a) => a.id === id);
+        assert.ok(action, `${id} should be offered on ${url}`);
+        assert.equal(action.mode, 'ask', `${id} stays read-only`);
+        return action.prompt;
+      });
+    };
+    const diffUrl = 'https://patch-diff.githubusercontent.com/raw/o/r/pull/7.diff';
+    const views = {
+      conversation: ['https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/', 'https://github.com/o/r/pull/7#issuecomment-1'],
+      files: ['https://github.com/o/r/pull/7/files', 'https://github.com/o/r/pull/7/files/', 'https://github.com/o/r/pull/7/changes'],
+      other: ['https://github.com/o/r/pull/7/commits', 'https://github.com/o/r/pull/7/checks', 'https://github.com/o/r/pull/7/files/abc123..def456'],
+    };
+    for (const [view, urls] of Object.entries(views)) {
+      for (const url of urls) {
+        for (const prompt of prompts(url)) {
+          const named = [...new Set(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) || [])].filter((name) => allTools.has(name));
+          assert.ok(named.length > 0, `${url}: prompt names its read tools`);
+          for (const name of named) assert.ok(askTools.has(name), `${url}: ${name} is not available in Ask mode`);
+          assert.doesNotMatch(prompt, /\bopen the Files changed tab \(|\bnavigate to\b/i, `${url}: Ask mode cannot open another tab`);
+          assert.match(prompt, /read-only Ask run: you cannot navigate or click/);
+          // github.com/<o>/<r>/pull/<n>.diff answers with a redirect, which
+          // fetch_url never follows.
+          assert.doesNotMatch(prompt, /https:\/\/github\.com\/\S*\.diff/, `${url}: the github.com .diff URL redirects`);
+          if (view === 'files') {
+            assert.match(prompt, /read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true/);
+            assert.ok(!prompt.includes(diffUrl), `${url}: the diff is already on this tab`);
+          } else {
+            assert.ok(prompt.includes(`fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true`), `${url}: diff comes from fetch_url`);
+            assert.ok(prompt.includes('research_url on https://github.com/o/r/pull/7/files'), `${url}: private repositories fall back to research_url`);
+            assert.doesNotMatch(prompt, /continuationArgs/, `${url}: read_page cannot page a diff this tab does not show`);
+          }
+          if (view === 'conversation') {
+            assert.match(prompt, /Use read_page on this tab to read the description, conversation, and status checks\./);
+          } else {
+            assert.ok(prompt.includes('fetch_url on https://github.com/o/r/pull/7, continuing with offset set to nextOffset'), `${url}: the conversation is fetched, not read from this tab`);
+          }
+        }
+      }
+    }
   });
 }
 
