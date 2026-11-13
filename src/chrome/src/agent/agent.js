@@ -117,7 +117,7 @@ import {
   buildClaudeDocumentBlock,
   PDF_PASSTHROUGH_MAX_BYTES,
 } from './pdf-tools.js';
-import { isPdfHandlerTabUrl, pdfUrlFromTabUrl } from './pdf-extraction.js';
+import { isPdfHandlerTabUrl, normalizePdfUrl, pdfUrlFromTabUrl } from './pdf-extraction.js';
 import { normalizePdfOcrResult, PDF_OCR_SYSTEM_PROMPT } from './pdf-ocr.js';
 import * as trace from '../trace/recorder.js';
 import { buildTerminalRuntimeEvent, enqueueCloudRuntimeEvent, flushCloudRuntimeOutbox } from '../trace/cloud-runtime-outbox.js';
@@ -257,6 +257,32 @@ const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
   ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
   ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
+
+// read_pdf fetches what normalizePdfUrl makes of its url: on our own viewer
+// page that is the document in ?url=, not the extension page, whose hostname
+// is the extension id. The permission gate is charged to that address. One
+// the handler would refuse leaves '', and the call fails closed.
+function readPdfPermissionUrl(url) {
+  try {
+    return normalizePdfUrl(url);
+  } catch {
+    return '';
+  }
+}
+
+// Why read_pdf({url}) could not be permission-checked. Only an http(s)
+// document names a site, so nothing was fetched.
+function readPdfPermissionFailure(url) {
+  let target = '';
+  try {
+    target = normalizePdfUrl(url);
+  } catch (error) {
+    return `Cannot run read_pdf: ${error.message} Nothing was fetched.`;
+  }
+  return target.startsWith('file:')
+    ? "Cannot run read_pdf on a file: url: a local file has no site the permission card can name, so it can't be permission-checked. Nothing was read. If the PDF is open in this tab, call read_pdf without url; otherwise ask the user to open the file in this tab."
+    : "Cannot run read_pdf: the PDF's site could not be identified, so it can't be permission-checked. Nothing was fetched.";
+}
 
 function savedWorkflowStepMayDispatchMessage(step) {
   const tool = String(step?.tool || '');
@@ -17897,6 +17923,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ? otpEmailPermissionArgs
             : this._skillPermissionArgsForCapability(skillCallTool, capability, fnArgs);
           if (receivingFrameInput) gateArgs = { ...gateArgs, _inputFrameUrl: inputFrameUrl };
+          if (fnName === 'read_pdf') gateArgs = { ...gateArgs, url: readPdfPermissionUrl(gateArgs?.url) };
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
@@ -17944,6 +17971,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               denied: true,
               error: receivingFrameInput
                 ? `Cannot run ${fnName}: WebBrain could not identify the site of the document ${fnName === 'click' ? 'under that point' : 'that has keyboard focus'}, so the input can't be permission-checked. Nothing was sent. Look at the page again before retrying; for a field inside an embedded frame, use iframe_click / iframe_type with a urlFilter naming the frame's domain.`
+                : fnName === 'read_pdf'
+                ? readPdfPermissionFailure(fnArgs?.url)
                 : `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
