@@ -97,6 +97,10 @@ function stub({ build, lang, seed }) {
     if (msg.action === 'get_user_memory') return { ok: true, enabled: true, records: [] };
     if (msg.action === 'get_webgpu_vision_choice') return { ok: true, choice: 'auto', bonsaiReady: false };
     if (msg.action === 'profile_sync_state') return window.testProfileSyncState || {};
+    if (msg.action === 'apocalypse_mode') {
+      if (msg.command === 'enable') { data.testApocalypseEnabled = msg.enabled === true; save(); }
+      return { enabled: data.testApocalypseEnabled === true, archives: [], installedCount: 0, totalBytes: 0, storage: { usage: 0 } };
+    }
     return {};
   };
   window.chrome = window.browser = {
@@ -497,6 +501,23 @@ try {
       assert.deepEqual(permissionErrors, [], `${build}: Permissions & privacy page errors`);
       await permissions.close();
 
+      // --- Offline opens Apocalypse Mode, and its Enabled switch works ---
+      // Firefox's copy of the page imported a module only Chrome ships until
+      // 48.1.x: the import failed the whole script, so the page looked right
+      // but nothing on it ran and the switch never reached the background.
+      const { page: apocalypse, errors: apocalypseErrors } = await open(browser, build, 'apocalypse-mode.html');
+      const ran = await apocalypse.waitForFunction(() => window.testRequests.some(msg => msg.action === 'apocalypse_mode' && msg.command === 'status')
+        && document.getElementById('storage-usage').textContent.trim() !== '').then(() => true, () => false);
+      assert.ok(ran, `${build}: apocalypse-mode.js runs and shows the background's status`);
+      assert.equal(await apocalypse.locator('#enabled').isChecked(), false, `${build}: Apocalypse Mode starts off`);
+      await apocalypse.locator('#enabled').check();
+      await apocalypse.waitForFunction(() => window.testStore.testApocalypseEnabled === true
+        && document.getElementById('notice').dataset.kind === 'success');
+      assert.equal(await apocalypse.locator('#enabled').isChecked(), true, `${build}: the switch stays on once the background turns it on`);
+      await apocalypse.locator('#enabled').uncheck();
+      await apocalypse.waitForFunction(() => window.testStore.testApocalypseEnabled === false);
+      assert.deepEqual(apocalypseErrors, [], `${build}: Apocalypse Mode page errors`);
+      await apocalypse.close();
       // The side panel opens this section while the rest of Settings can
       // still be waiting on the background (held here at the memory list).
       // Its switches already show what is stored and save from the first click.
