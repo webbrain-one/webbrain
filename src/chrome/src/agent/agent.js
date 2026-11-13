@@ -9930,13 +9930,12 @@ export class Agent extends LoopDetector {
    */
   async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [] } = {}) {
     const spec = semanticQuestion(kind);
-    // Relationship decisions must read the entire latest user message. A
-    // prefix-only verdict can mistake a correction or a new task at its end.
+    // Relationship and page-scope decisions must read the entire request. A
+    // prefix-only verdict can miss a correction or new task at its end.
     const requestText = String(request ?? '');
-    const trusted = kind === 'user_turn_kind' ? requestText : requestText.slice(0, 6000);
+    const trusted = ['user_turn_kind', 'page_read_scope'].includes(kind) ? requestText : requestText.slice(0, 6000);
     const data = boundedSemanticData(page);
-    // Whether a model reads all of it: the request is cut to 6,000 characters
-    // above, and boundedSemanticData shortens long data (an earlier task).
+    // Whether the model reads the entire request and any bounded page data.
     const inputComplete = trusted.length === requestText.length && semanticDataComplete(page);
     // Keyed by the whole request, not the part a model reads, and by whether
     // the data was cut: inputs that share a cut-off start are different.

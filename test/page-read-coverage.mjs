@@ -310,6 +310,17 @@ for (const build of ['chrome', 'firefox']) {
     assert.deepEqual(h.questions.map(question => question.request), ['Summarize this page.', revisedTask('Summarize this page.', NARROWED)]);
   });
 
+  test(`${build}: long revised tasks retain the latest scope correction`, async () => {
+    const task = `Who wrote this article? ${'context '.repeat(900)}`;
+    const widened = 'Actually, summarize the whole article instead.';
+    const h = await batchAgent(build, { task, decide: ({ request }) => request.includes(widened) ? 'whole_page' : 'part' });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    await h.steer(widened);
+    const sent = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(sent.action, 'continue');
+    assert.ok(h.questions[0].request.includes(widened));
+  });
+
   test(`${build}: a correction that widens a question to the whole page sends the answer back`, async () => {
     const task = 'Who wrote this article?';
     const h = await batchAgent(build, { task, decide: ({ request }) => (request === task ? 'part' : 'whole_page') });
