@@ -7022,9 +7022,9 @@ export class Agent extends LoopDetector {
    * whether this request repeats it. Instead of refusing every such write
    * for the rest of the task, WebBrain asks the user on its hard card, which
    * never times out and never goes ahead on its own (an unattended run is
-   * refused). The card shows the request: its method and address, and its
-   * body unless strict secret handling is on. One answer covers one call
-   * with exactly these arguments.
+   * refused). The card shows the request: its method and address, and the
+   * body it sends unless strict secret handling is on. One answer covers one
+   * call with exactly these arguments.
    */
   _priorSubmissionWriteAsk(tabId, guard, name, args = {}) {
     const network = isNetworkMutation(name, args);
@@ -7037,7 +7037,9 @@ export class Agent extends LoopDetector {
       try { url = new URL(String(args?.url || '')); } catch { return null; }
       if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
       host = url.hostname;
-      const body = typeof args.body === 'string' ? args.body : args.body == null ? '' : JSON.stringify(args.body);
+      const sent = this._priorSubmissionWriteBody(tabId, name, args, url);
+      if (!sent.ok) return null;
+      const body = typeof sent.body === 'string' ? sent.body : sent.body == null ? '' : JSON.stringify(sent.body);
       text = [`${String(args.method || '').toUpperCase()} ${url.href.slice(0, 600)}`,
         ...(body && this.strictSecretMode !== true ? [body.slice(0, 800)] : [])].join('\n\n');
     } else {
@@ -7047,6 +7049,22 @@ export class Agent extends LoopDetector {
       reason: 'prior_submission_unreconciled', host: normalizeHost(host), contentLabel: 'request', text,
       stepKey: this._sha256TextSync(JSON.stringify(['steer-prior-submission-unreconciled', guard.taskKey,
         Number(guard.steeringPriorSubmission?.actionSequence || 0), name, args || {}])) };
+  }
+
+  // The body a write sends. A fetch_url replay of a captured request with no
+  // body of its own sends the captured body (network-tools.js
+  // apiReplayOptionsForFetch), so the card shows that one. A replay that
+  // fetch_url would refuse (unknown id, another tab, another origin) is not
+  // asked about: `ok` is false and the plain refusal stands.
+  _priorSubmissionWriteBody(tabId, name, args, url) {
+    const replayRequestId = name === 'fetch_url' ? (args?.replayRequestId || args?.apiReplayRequestId) : '';
+    if (!replayRequestId) return { ok: true, body: args?.body };
+    const replay = globalThis.__webbrainApiRequestReplay?.get(String(replayRequestId));
+    if (!replay || (tabId != null && replay.tabId != null && Number(replay.tabId) !== Number(tabId))) return { ok: false };
+    try {
+      if (new URL(String(replay.url || '')).origin !== url.origin) return { ok: false };
+    } catch { return { ok: false }; }
+    return { ok: true, body: args.body !== undefined ? args.body : (replay.body ?? undefined) };
   }
 
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
