@@ -1501,7 +1501,7 @@ export const AGENT_TOOLS = [
           estimated_duration: { type: 'integer', minimum: 1, description: 'Video only: full seconds the user requested, or an estimate when unspecified, before fitting it to the 120 s maximum. Keep this target when retrying; never replace it with the per-clip limit. Required with scenes.' },
           duration: { type: 'integer', minimum: 1, description: 'Video only: seconds for a single clip.' },
           aspect_ratio: { type: 'string', description: 'Video only, for example "16:9" or "9:16".' },
-          resolution: { type: 'string', description: 'Video only, for example "720p".' },
+          resolution: { type: 'string', description: 'Video only, for example "480p" or "720p". Leave it out unless the user asks for one: fal.ai videos then use the resolution saved in Providers → Generative (480p by default, which costs less) and other providers use the model\'s default.' },
           scenes: {
             type: 'array',
             description: 'Video only: scenes in order covering the requested duration, at most 120 seconds in total. This tool generates and joins the clips automatically; no separate join tool is needed. Load the video-scenes skill first when it is listed.',

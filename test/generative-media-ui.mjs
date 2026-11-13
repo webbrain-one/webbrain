@@ -58,8 +58,22 @@ try {
         assert.equal(await page.locator('#image-gen-heading').innerText(), lang === 'en' ? 'Generative Media' : 'Üretken medya');
         const provider = page.locator('#image-gen-provider');
         assert.equal(await provider.inputValue(), 'fal', 'legacy config defaults to fal.ai');
+        // fal.ai videos default to 480p; 720p is a saved choice.
+        const resolution = page.locator('#image-gen-video-resolution');
+        assert.equal(await resolution.isVisible(), true);
+        assert.deepEqual(await resolution.locator('option').evaluateAll(options => options.map(option => option.value)), ['480p', '720p']);
+        assert.equal(await resolution.inputValue(), '480p', 'a legacy config uses the 480p default');
+        await resolution.selectOption('720p');
+        await page.locator('#btn-save-image-gen').click();
+        await page.waitForFunction(() => testStore.imageGenModel?.videoResolution === '720p');
+        await page.reload();
+        await page.waitForFunction(() => document.querySelector('#image-gen-video-resolution').value === '720p');
+        await resolution.selectOption('480p');
+        await page.locator('#btn-save-image-gen').click();
+        await page.waitForFunction(() => testStore.imageGenModel?.videoResolution === '480p');
         assert.deepEqual(await provider.locator('option').evaluateAll(options => options.map(option => option.value)), ['fal', 'openrouter', 'comfyrouter', 'comfyui']);
         await provider.selectOption('openrouter');
+        assert.equal(await page.locator('#image-gen-video-resolution-field').isVisible(), false, 'resolution is a fal.ai setting');
         assert.equal(await page.locator('#image-gen-api-key').inputValue(), '', 'keys do not cross providers');
         await page.locator('#image-gen-api-key').fill('synthetic-or-key');
         await page.locator('#image-gen-model').fill('google/gemini-2.5-flash-image');
@@ -88,6 +102,7 @@ try {
         assert.equal(await page.locator('#image-gen-model-field').isVisible(), false);
         assert.equal(await page.locator('#image-gen-url-field').isVisible(), true);
         assert.equal(await page.locator('#image-gen-parameters-field').isVisible(), false);
+        assert.equal(await page.locator('#image-gen-video-resolution-field').isVisible(), false);
         assert.equal(await page.locator('#image-gen-base-url').inputValue(), 'http://127.0.0.1:8188');
         await page.locator('#image-gen-workflow').fill(workflow);
         await page.locator('#btn-save-image-gen').click();
@@ -106,6 +121,7 @@ try {
         for (const value of ['fal', 'openrouter', 'comfyrouter', 'comfyui']) {
           await provider.selectOption(value);
           assert.equal(await page.locator('#image-gen-api-key').inputValue(), '');
+          if (value === 'fal') assert.equal(await page.locator('#image-gen-video-resolution').inputValue(), '480p', 'Clear returns to the default');
           await page.locator('#image-gen-heading').scrollIntoViewIfNeeded();
           await page.screenshot({ animations: 'disabled', path: `${output}/${build}-${lang}-${width}-${value}.png` });
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${value}: fits viewport`);

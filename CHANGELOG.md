@@ -7,6 +7,7 @@ This changelog was generated from the repository Git history and release tags. V
 ## [Unreleased]
 
 ### Changed
+- fal.ai videos are made at 480p by default, which costs less than 720p. **Settings → Models → Generative** has a **Video resolution** choice (480p or 720p) for fal.ai. A request that names a resolution still wins, and a model that does not offer the chosen resolution makes the video at its own default.
 - The side panel's **More…** and **Manage site permissions** open Settings → Models → LLM and Settings → Permissions & privacy directly instead of going through the forwarding pages.
 - The user guide, FAQ, repository docs and their translations describe the one-page Settings layout, with new screenshots.
 

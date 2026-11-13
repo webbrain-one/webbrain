@@ -742,12 +742,48 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(join.mp4DurationSeconds(await storedBytes(result.mediaId)), 3, 'one joined asset');
     assert.deepEqual(progress, ['Generating 3 video clips…', 'Video clips: 1 of 3 ready', 'Video clips: 2 of 3 ready',
       'Video clips: 3 of 3 ready', 'Joining 3 clips…']);
-    // One clip without options needs no schema and stays a hosted video.
+    // One clip without options reads the schema only for the default resolution
+    // (480p, as the model writes it) and stays a hosted video.
     const plain = falApi({ model: h3Max.id, schema: h3Max.schema });
     const single = await generate({ prompt: 'A red apple', media: 'video' }, { config: falConfig(h3Max), fetchImpl: plain.fetchImpl, pollIntervalMs: 1 });
     assert.equal(single.success, true, single.error);
-    assert.deepEqual([plain.calls.schemas, plain.calls.submits, plain.calls.downloads], [0, [{ prompt: 'A red apple' }], []]);
+    assert.deepEqual([plain.calls.schemas, plain.calls.submits, plain.calls.downloads], [1, [{ prompt: 'A red apple', resolution: '480P' }], []]);
     assert.equal(single.url, 'https://v3b.fal.media/files/b/clip-0.mp4');
+  });
+
+  test(`${build}: fal.ai videos default to 480p unless the saved setting or the call says otherwise`, async () => {
+    // Grok Imagine on fal.ai: 480p and 720p, in lower case.
+    const grokFal = { id: 'xai/grok-imagine-video/v1.5/lite/text-to-video', schema: falSchema({
+      duration: { type: 'integer', minimum: 1, maximum: 15 },
+      aspect_ratio: { type: 'string', enum: ['16:9', '9:16', '1:1'] },
+      resolution: { type: 'string', enum: ['480p', '720p'] },
+    }) };
+    const submits = async (model, settings, args = {}) => {
+      const api = falApi({ model: model.id, schema: model.schema });
+      const result = await generate({ prompt: 'A red apple', media: 'video', ...args }, { config: falConfig(model, settings), fetchImpl: api.fetchImpl, pollIntervalMs: 1 });
+      assert.equal(result.success, true, result.error);
+      return api.calls.submits;
+    };
+    // Nothing saved: 480p, for a plain clip and for every scene.
+    assert.deepEqual(await submits(grokFal, {}), [{ prompt: 'A red apple', resolution: '480p' }]);
+    assert.deepEqual((await submits(grokFal, {}, { scenes: scenes(2, 4), estimated_duration: 8 })).map(body => body.resolution), ['480p', '480p']);
+    // Written as the model lists it.
+    assert.deepEqual(await submits(h3Max, {}), [{ prompt: 'A red apple', resolution: '480P' }]);
+    // The saved setting replaces the default, and the call replaces the setting.
+    assert.deepEqual(await submits(grokFal, { videoResolution: '720p' }), [{ prompt: 'A red apple', resolution: '720p' }]);
+    assert.deepEqual(await submits(grokFal, { videoResolution: '720p' }, { resolution: '480p' }), [{ prompt: 'A red apple', resolution: '480p' }]);
+    assert.deepEqual(await submits(grokFal, {}, { resolution: '720p' }), [{ prompt: 'A red apple', resolution: '720p' }]);
+    // A default the model does not offer is not sent, and never fails the request.
+    assert.deepEqual(await submits(h3Max, { videoResolution: '720p' }), [{ prompt: 'A red apple' }]);
+    assert.deepEqual(await submits(hailuo, {}), [{ prompt: 'A red apple' }], 'a model that takes no resolution');
+    // Without a readable schema a plain clip uses the model's own default; even a
+    // refused read (403) does not stop it.
+    for (const schema of [null, 404, 403]) {
+      const api = falApi({ model: grokFal.id, schema });
+      const result = await generate({ prompt: 'A red apple', media: 'video' }, { config: falConfig(grokFal), fetchImpl: api.fetchImpl, pollIntervalMs: 1 });
+      assert.equal(result.success, true, `${schema}: ${result.error}`);
+      assert.deepEqual(api.calls.submits, [{ prompt: 'A red apple' }], String(schema));
+    }
   });
 
   test(`${build}: a hosted clip larger than 20 MB is kept when it is not joined`, async () => {

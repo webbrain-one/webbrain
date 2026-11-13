@@ -16,7 +16,7 @@ import { initD1Settings } from './d1-settings.js';
 
 import { t, translationsForKey } from './i18n.js';
 import { escapeHtml } from './utils.js';
-import { MEDIA_PROVIDERS, mediaProvider, validateMediaConfig } from '../agent/media-config.js';
+import { MEDIA_PROVIDERS, mediaProvider, validateMediaConfig, falVideoResolution } from '../agent/media-config.js';
 import { THEME_MODES, applyMode, loadMode, watch } from './theme.js';
 import { renderSkillMarkdown } from './skill-markdown.js';
 import { CAPABILITY_LABEL, PERMISSION_GATE_SESSION_OFF_KEY } from '../agent/permission-gate.js';
@@ -215,6 +215,7 @@ const imageGenParametersInput = document.getElementById('image-gen-parameters');
 const imageGenApiKeyInput = document.getElementById('image-gen-api-key');
 const imageGenModelInput = document.getElementById('image-gen-model');
 const imageGenVideoModelInput = document.getElementById('image-gen-video-model');
+const imageGenVideoResolutionInput = document.getElementById('image-gen-video-resolution');
 const imageGenVideoParametersInput = document.getElementById('image-gen-video-parameters');
 const imageGenVideoWorkflowInput = document.getElementById('image-gen-video-workflow');
 const btnSaveImageGen = document.getElementById('btn-save-image-gen');
@@ -2379,6 +2380,7 @@ function readImageGenForm() {
     model: imageGenModelInput.value.trim(),
     videoModel: imageGenVideoModelInput?.value.trim() || '',
   };
+  if (provider === 'fal') config.videoResolution = falVideoResolution({ videoResolution: imageGenVideoResolutionInput?.value });
   if (provider === 'comfyrouter') {
     config.parameters = imageGenParametersInput.value.trim() || '{}';
     config.videoParameters = imageGenVideoParametersInput?.value.trim() || '{}';
@@ -2393,6 +2395,7 @@ function updateImageGenProvider() {
   for (const [id, hidden] of [
     ['image-gen-key-field', local], ['image-gen-model-field', local], ['image-gen-video-model-field', local],
     ['image-gen-url-field', !local], ['image-gen-workflow-field', !local], ['image-gen-video-workflow-field', !local],
+    ['image-gen-video-resolution-field', provider !== 'fal'],
     ['image-gen-parameters-field', provider !== 'comfyrouter'], ['image-gen-video-parameters-field', provider !== 'comfyrouter'],
   ]) {
     const field = document.getElementById(id); if (field) field.hidden = hidden;
@@ -2412,6 +2415,7 @@ function renderImageGenConfig(config) {
   if (imageGenApiKeyInput) imageGenApiKeyInput.value = config.apiKey || '';
   if (imageGenModelInput) imageGenModelInput.value = config.model || '';
   if (imageGenVideoModelInput) imageGenVideoModelInput.value = config.videoModel || '';
+  if (imageGenVideoResolutionInput) imageGenVideoResolutionInput.value = falVideoResolution(config);
   if (imageGenBaseUrlInput) imageGenBaseUrlInput.value = config.baseUrl || MEDIA_PROVIDERS.comfyui.baseUrl;
   const jsonText = value => (typeof value === 'object' && value ? JSON.stringify(value, null, 2) : value || '');
   if (imageGenWorkflowInput) imageGenWorkflowInput.value = jsonText(config.workflow);
