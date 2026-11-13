@@ -1454,6 +1454,63 @@ for (const { build, Agent } of builds) {
     assert.ok(f.check().unverifiedStepConfirmation, 'one answer covers one call; the same write asks again');
   });
 
+  test(`${build}: a fetch_url replay with no body of its own shows the captured body it sends`, async () => {
+    const previous = globalThis.__webbrainApiRequestReplay;
+    const CAPTURED = '{"id":"A","status":"archived"}';
+    // What background.js captured from the page's own requests, as
+    // network-tools.js apiReplayOptionsForFetch reads it.
+    const capture = tab => new Map([
+      ['api_items', { tabId: tab, url: 'https://cms.example/api/items/A', method: 'POST', body: CAPTURED,
+        headers: { 'content-type': 'application/json', 'x-csrf-token': 'csrf-placeholder' } }],
+      ['api_bodyless', { tabId: tab, url: 'https://cms.example/api/items/A', method: 'DELETE', body: null, headers: {} }],
+      ['api_other_tab', { tabId: tab + 1000, url: 'https://cms.example/api/items/A', method: 'POST', body: CAPTURED, headers: {} }],
+      ['api_other_origin', { tabId: tab, url: 'https://other.example/api/items/A', method: 'POST', body: CAPTURED, headers: {} }],
+    ]);
+    const replayArgs = { url: 'https://cms.example/api/items/B', method: 'POST', replayRequestId: 'api_items' };
+    try {
+      const f = writeFixture();
+      globalThis.__webbrainApiRequestReplay = capture(f.tab);
+      const block = f.check(replayArgs);
+      assert.equal(block.unverifiedStepConfirmation.text, `POST https://cms.example/api/items/B\n\n${CAPTURED}`,
+        'the card shows the captured body that fetch_url sends');
+      assert.doesNotMatch(block.unverifiedStepConfirmation.text, /csrf-placeholder/, 'captured headers stay off the card');
+      assert.equal(f.check({ url: replayArgs.url, method: 'POST', apiReplayRequestId: 'api_items' }).unverifiedStepConfirmation.text,
+        `POST https://cms.example/api/items/B\n\n${CAPTURED}`, 'the older argument name reads the same capture');
+      assert.equal(f.check({ ...replayArgs, body: '{"id":"B"}' }).unverifiedStepConfirmation.text,
+        'POST https://cms.example/api/items/B\n\n{"id":"B"}', 'a body of its own is what goes out');
+      assert.equal(f.check({ url: replayArgs.url, method: 'DELETE', replayRequestId: 'api_bodyless' }).unverifiedStepConfirmation.text,
+        'DELETE https://cms.example/api/items/B', 'a capture without a body sends none');
+      for (const replayRequestId of ['api_unknown', 'api_other_tab', 'api_other_origin']) {
+        const refused = f.check({ ...replayArgs, replayRequestId });
+        assert.equal(refused.blocked, true);
+        assert.equal(refused.unverifiedStepConfirmation, undefined, `${replayRequestId}: a replay fetch_url refuses is not asked about`);
+      }
+      f.agent.strictSecretMode = true;
+      assert.equal(f.check(replayArgs).unverifiedStepConfirmation.text, 'POST https://cms.example/api/items/B',
+        'strict secret handling hides the captured body too');
+      f.agent.strictSecretMode = false;
+      f.agent._beginUnverifiedStepScope(f.tab);
+      const cards = [];
+      assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards),
+        async () => f.check(replayArgs), []), null);
+      assert.equal(cards[0].unverifiedStepConfirmation.content, `POST https://cms.example/api/items/B\n\n${CAPTURED}`);
+      f.agent._settleUnverifiedStepScope(f.tab);
+
+      // The capture changes while the card waits: the answer covered the body shown.
+      const changed = writeFixture();
+      globalThis.__webbrainApiRequestReplay = capture(changed.tab);
+      const moved = await changed.agent._resolveUnverifiedStepConfirmation(changed.tab, changed.check(replayArgs), (type, data) => {
+        if (type !== 'clarify') return;
+        globalThis.__webbrainApiRequestReplay.get('api_items').body = '{"id":"C","status":"archived"}';
+        changed.agent.submitClarifyResponse(changed.tab, data.clarifyId, 'once', 'option');
+      }, async () => changed.check(replayArgs), []);
+      assert.match(moved.error, /changed while the user was being asked/);
+    } finally {
+      if (previous === undefined) delete globalThis.__webbrainApiRequestReplay;
+      else globalThis.__webbrainApiRequestReplay = previous;
+    }
+  });
+
   test(`${build}: "Don't" keeps an API write refused, and chrome_web_store_publish asks instead of asking for a click`, async () => {
     const f = writeFixture();
     const cards = [];

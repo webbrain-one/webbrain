@@ -231,6 +231,11 @@ for (const build of ['chrome', 'firefox']) {
     assert.match(settings, /effectivePromptTier\(config, id\)/);
     assert.match(settings, /select\[data-key="promptTier"\]'\)\.forEach\(\(select\) => \{\n    select\.addEventListener\('change', \(\) => \{ select\.dataset\.tierChosen = 'true'; \}\);/);
     assert.match(settings, /if \(input\.dataset\.key === 'promptTier' && input\.dataset\.tierChosen === 'true'\) config\.promptTierChosen = true;/);
+    // An unsaved pick survives a re-render of the provider list: the draft
+    // keeps the choice, and the rebuilt menu carries it to Save.
+    assert.match(settings, /function syncInputsIntoProvidersData\(\) \{[\s\S]*?if \(key === 'promptTier' && input\.dataset\.tierChosen === 'true'\) providersData\[id\]\.promptTierChosen = true;\n  \}\);\n\}/);
+    assert.match(settings, /const tierChosenAttr = \(field\.key === 'promptTier' && config\.promptTierChosen === true\) \? ' data-tier-chosen="true"' : '';/);
+    assert.match(settings, /data-type="select"\$\{tierChosenAttr\}>/);
   });
 
   test(`${build}: Auto reads real provider instances: category, tier and model`, () => {

@@ -278,13 +278,27 @@ const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 // This computer and the local network, which an address bar opens over http
 // (dev servers and routers rarely serve https), with the private-use names
 // that are not in IANA's list.
-const LOCAL_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|0\.0\.0\.0|\[::1\])$|\.(?:localhost|local|test|internal|lan|home|corp|intranet|home\.arpa)$/i;
+const LOCAL_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|0\.0\.0\.0)$|\.(?:localhost|local|test|internal|lan|home|corp|intranet|home\.arpa)$/i;
+// The same for IPv6, as URL#hostname writes it (bracketed, compressed, lower
+// case): ::1 and ::, link-local fe80::/10 and unique local fc00::/7.
+const LOCAL_IPV6_RE = /^\[(?:::1?|fe[89ab][0-9a-f]:[0-9a-f:]*|f[cd][0-9a-f]{2}:[0-9a-f:]*)\]$/;
+// An IPv4 address written as IPv6 ("[::ffff:192.168.1.1]" becomes "[::ffff:c0a8:101]").
+const MAPPED_IPV4_RE = /^\[::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})\]$/;
+
+function isLocalHost(host) {
+  if (LOCAL_HOST_RE.test(host) || LOCAL_IPV6_RE.test(host)) return true;
+  const mapped = MAPPED_IPV4_RE.exec(host);
+  if (!mapped) return false;
+  const [hi, lo] = [mapped[1], mapped[2]].map((hex) => parseInt(hex, 16));
+  return LOCAL_HOST_RE.test(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+}
 
 /**
  * Returns the http(s) URL the text is, when it is only an address, otherwise
  * null. With a scheme, only http(s). Without one, a name must end in a real
- * top-level domain, so "node.js", "notes.txt" or "config.yaml" stay text, and
- * opens over https, except a local host, which opens over http.
+ * top-level domain, so "node.js", "notes.txt" or "config.yaml" stay text; an
+ * IPv4 or bracketed IPv6 address needs none. It opens over https, except a
+ * local host, which opens over http.
  */
 export function toNavigableUrl(input) {
   const value = String(input || '').trim();
@@ -308,8 +322,10 @@ export function toNavigableUrl(input) {
     return null;
   }
   const host = url.hostname;
-  if (LOCAL_HOST_RE.test(host)) return url.href;
-  if (!IPV4_RE.test(host) && !TLDS.has(host.slice(host.lastIndexOf('.') + 1))) return null;
+  if (isLocalHost(host)) return url.href;
+  // URL has already refused a bracketed host that is not a valid IPv6 address.
+  const isIp = IPV4_RE.test(host) || host.startsWith('[');
+  if (!isIp && !TLDS.has(host.slice(host.lastIndexOf('.') + 1))) return null;
   url.protocol = 'https:';
   return url.href;
 }

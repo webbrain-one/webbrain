@@ -513,8 +513,9 @@ export function capabilityFor(name, args) {
     // COOKIE-BEARING GET to an arbitrary host, same exfil class as fetch_url
     // (worse: it sends auth cookies). Gate per destination host when an
     // explicit url is given. With no url it reads the ACTIVE TAB's own PDF (the
-    // page the user is already on), not an arbitrary request → ungated.
-    return args.url ? Capability.NETWORK : null;
+    // page the user is already on), not an arbitrary request → ungated. The
+    // handler trims the url the same way before falling back to the tab.
+    return String(args.url || '').trim() ? Capability.NETWORK : null;
   }
   if (name === 'read_page_source') {
     // Same policy as read_pdf: no-url reads the active tab; explicit url is
@@ -680,6 +681,24 @@ function resolveHostAgainst(url, base) {
   }
 }
 
+// read_pdf fetches an absolute address, never one resolved against the page.
+// agent.js first unwraps our own PDF viewer page (<extension origin>/…/
+// pdf-handler.html?url=<document>) to the document it shows, because that is
+// what the handler fetches; the viewer's hostname is the extension id, not a
+// site. Only an http(s) document names a site. A file: read (file://server/…
+// included) or an address left unwrapped returns '' so the caller fails
+// closed instead of charging the current page's grant.
+function pdfFetchHost(url) {
+  if (typeof url !== 'string' || !url.trim()) return '';
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return normalizeHost(parsed.href);
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Which host does this capability act on? Navigate/network/download target the
  * destination URL (resolved against the current page); click/type/execute/
@@ -721,6 +740,9 @@ export function hostForCapability(capability, args, currentUrlOrHost, toolName) 
   // fails closed instead of borrowing the top-level page's grant.
   if ((capability === Capability.CLICK || capability === Capability.TYPE) && inputReachesReceivingFrame(toolName, args)) {
     return normalizeHost(args._inputFrameUrl);
+  }
+  if (toolName === 'read_pdf' && capability === Capability.NETWORK) {
+    return pdfFetchHost(args.url);
   }
   if (capability === Capability.NAVIGATE || capability === Capability.NETWORK || capability === Capability.DOWNLOAD) {
     if (typeof args.url === 'string' && args.url) {
