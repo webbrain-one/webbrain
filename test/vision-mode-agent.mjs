@@ -913,6 +913,39 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
     assert.deepEqual(probed.at(-1), { name: 'click', args: { x: 333.3, y: 333.3, coordinate_space: 'css' } });
   });
 
+  // The page's Stop button is hidden in every screenshot, so a point under it
+  // is the page's to the model. It must be out of the way before the first
+  // check that reads the point (the submit probe, the DOM probe, the page
+  // monitor's binding), not only when the input goes out.
+  test(`${build}: the Stop button moves out of a vision point before any check reads it`, async () => {
+    const events = [];
+    const ctx = runAgent(step => {
+      if (step === 1) return { toolCalls: [call('click_at', { x: 648, y: 405 })] };
+      if (step === 2) return { toolCalls: [call('drag_at', { start_x: 300, start_y: 300, end_x: 500, end_y: 300 })] };
+      if (step === 3) return { toolCalls: [call('scroll_at', { direction: 'down', x: 648, y: 405 })] };
+      if (step === 4) return { toolCalls: [call('done', { summary: 'Done.', outcome: 'success' })] };
+      return { content: 'done' };
+    }, { onDispatch: name => events.push(['dispatch', name]) });
+    const round = points => points.map(point => [Math.round(point.x), Math.round(point.y)]);
+    // A call with no point (done) asks nothing: the helper returns at once.
+    ctx.agent._clearAgentStopButton = async (_tab, points) => { if (points?.length) events.push(['clear', round(points)]); return false; };
+    ctx.agent._detectLikelySubmitAction = async (_tab, name) => { events.push(['submit probe', name]); return null; };
+    const probe = ctx.scene.probe.bind(ctx.scene);
+    ctx.scene.probe = request => { events.push(['dom probe', round(request.points)]); return probe(request); };
+    for (const kind of ['Drag', 'Wheel']) {
+      const platform = ctx.agent[`_visionPlatform${kind}`];
+      ctx.agent[`_visionPlatform${kind}`] = async (...args) => { events.push(['dispatch', kind.toLowerCase()]); return platform(...args); };
+    }
+    await runLoop(ctx.agent, nextTab++, false);
+    assert.deepEqual(events, [
+      ['clear', [[720, 450]]], ['dispatch', 'click'],
+      // A drag's start is cleared before its batch checks, both ends before its probe.
+      ['clear', [[333, 333]]], ['clear', [[333, 333], [556, 333]]], ['dom probe', [[333, 333], [556, 333]]],
+      ['submit probe', 'click'], ['dispatch', 'drag'],
+      ['clear', [[720, 450]]], ['clear', [[720, 450]]], ['dom probe', [[720, 450]]], ['dispatch', 'wheel'],
+    ]);
+  });
+
   test(`${build}: scroll_at over a focused number field is refused`, async () => {
     const ctx = runAgent(step => {
       if (step === 1) return { toolCalls: [call('scroll_at', { direction: 'down', x: 648, y: 405 })] };
