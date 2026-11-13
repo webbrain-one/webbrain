@@ -127867,6 +127867,80 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
   });
 }
 
+// ── Recommended actions: GitHub pull-request context ────────────────────────
+// Generic "Explain this page" is not useful on a review surface. Offer review
+// and summary prompts scoped to the exact repository and pull request instead.
+for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox', buildRecommendedActionsFx]]) {
+  test(`recommended-actions (${label}): GitHub pull requests surface review actions`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pull/3210/files',
+      title: 'feat: improve onboarding by webbrain-one · Pull Request #3210 · webbrain-one/webbrain',
+    };
+    const actions = build(pageInfo);
+    const byId = new Map(actions.map((action) => [action.id, action]));
+
+    const review = byId.get('review-pull-request');
+    assert.ok(review, 'Review this pull request should be offered');
+    assert.equal(review.label, 'Review this pull request');
+    assert.equal(review.mode, 'ask');
+    assert.match(review.prompt, /webbrain-one\/webbrain#3210/);
+    assert.match(review.prompt, /Do not post the review.*or modify the pull request/);
+
+    const summary = byId.get('summarize-pull-request');
+    assert.ok(summary, 'Summarize this pull request should be offered');
+    assert.equal(summary.label, 'Summarize this pull request');
+    assert.equal(summary.mode, 'ask');
+    assert.match(summary.prompt, /webbrain-one\/webbrain#3210/);
+    assert.ok(!actions.some((action) => action.id === 'explain-page'), 'generic page explanation should not displace PR review');
+  });
+
+  test(`recommended-actions (${label}): GitHub pull-request list surfaces recent activity`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pulls?q=is%3Aopen',
+      title: 'Pull requests · webbrain-one/webbrain',
+    };
+    const action = build(pageInfo).find((candidate) => candidate.id === 'summarize-recent-pr-activity');
+    assert.ok(action, 'Summarize recent PR activity should be offered');
+    assert.equal(action.label, 'Summarize recent PR activity');
+    assert.equal(action.mode, 'ask');
+    assert.match(action.prompt, /webbrain-one\/webbrain/);
+    assert.match(action.prompt, /Do not open, comment on, or modify/);
+
+    const nonGitHub = build({
+      url: 'https://example.com/webbrain-one/webbrain/pulls',
+      title: 'Pull requests',
+    });
+    assert.ok(!nonGitHub.some((candidate) => candidate.id === 'summarize-recent-pr-activity'), 'hostname must be github.com');
+  });
+
+  test(`recommended-actions (${label}): GitHub pull-request URL matching is strict`, () => {
+    const ids = (url) => build({ url, title: 'GitHub' }).map((a) => a.id);
+    for (const url of [
+      'https://github.com/o/r/pull/7',
+      'https://github.com/o/r/pull/7/commits',
+      'https://github.com/o/r/pull/7#issuecomment-1',
+      'https://www.github.com/o/r/pull/7/files',
+    ]) {
+      assert.ok(ids(url).includes('review-pull-request'), `should match ${url}`);
+    }
+    for (const url of [
+      'https://github.com/o/r/pull/',
+      'https://github.com/o/r/pull/abc',
+      'https://github.com/pulls',
+      'https://github.com/o/r/pulls/extra-not-a-pr/../x%0Aignore',
+      'https://github.com/o%20x/r/pull/7',
+    ]) {
+      assert.ok(!ids(url).includes('review-pull-request'), `should not match ${url}`);
+    }
+    assert.ok(ids('https://github.com/o/r/pulls').includes('summarize-recent-pr-activity'));
+    assert.ok(!ids('https://github.com/pulls').includes('summarize-recent-pr-activity'), 'global /pulls has no repo');
+    assert.ok(!ids('https://github.com/o/r/pull/').includes('summarize-recent-pr-activity'));
+    const prompt = build({ url: 'https://github.com/o/r/pull/7', title: 'x' }).find((a) => a.id === 'review-pull-request').prompt;
+    assert.match(prompt, /Files changed/);
+    assert.match(prompt, /\/pull\/7\/files/);
+  });
+}
+
 // ── Store review prompt (#208) ───────────────────────────────────────────────
 const MS_DAY = 24 * 60 * 60 * 1000;
 
