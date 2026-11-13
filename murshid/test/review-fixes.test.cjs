@@ -50,6 +50,57 @@ test('permissions isolate opaque origins and microphone and camera decisions', a
   assert.equal(await new Promise(resolve => display({frame, securityOrigin:'https://example.com', videoRequested:true}, resolve)), null);
 });
 
+test('app links are allowed per site and scheme, the prompt shows the link, and denied schemes never open', async () => {
+  let check, request;
+  const prompts = [];
+  const responses = [];
+  const ctx = { ses: {
+    setPermissionCheckHandler(fn) { check = fn; }, setPermissionRequestHandler(fn) { request = fn; }, setDisplayMediaRequestHandler() {},
+  }, windowForContents() {}, lastFocusedWindow() {} };
+  const electron = { dialog: { showMessageBox(_parent, opts) { prompts.push(opts); return Promise.resolve({ response: responses.shift() }); } },
+    desktopCapturer: {}, webContents: {} };
+  const { installPermissions } = loadWithElectron('../app/permissions', electron);
+  installPermissions(ctx);
+  const open = (page, externalURL) => new Promise(resolve => request({getURL: () => page}, 'openExternal', resolve, {requestingUrl: page, externalURL}));
+  responses.push(0);
+  assert.equal(await open('https://example.com/a', 'mailto:someone@example.com'), true);
+  assert.match(prompts[0].message, /^example\.com wants to open an app/);
+  assert.match(prompts[0].detail, /^mailto:someone@example\.com\n\nYour choice is remembered/);
+  // The same kind of link is not asked about again, whatever the case of its scheme.
+  assert.equal(await open('https://example.com/b', 'MAILTO:other@example.com'), true);
+  assert.equal(prompts.length, 1);
+  // One Allow is not every app: another scheme is asked about, with its link.
+  responses.push(1);
+  assert.equal(await open('https://example.com/a', 'search-ms:query=report'), false);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1].detail, /^search-ms:query=report\n/);
+  assert.equal(check(null, 'openExternal', 'https://example.com', {}), false);
+  // After a Block the site can't ask again with new schemes; what it was allowed still opens.
+  assert.equal(await open('https://example.com/a', 'zoommtg://example.com/join'), false);
+  assert.equal(await open('https://example.com/a', 'mailto:someone@example.com'), true);
+  assert.equal(prompts.length, 2);
+  // Other sites are asked on their own.
+  responses.push(0);
+  assert.equal(await open('https://example.org/', 'zoommtg://example.org/join'), true);
+  assert.equal(prompts.length, 3);
+  // Schemes Chrome never hands to the system, and links that aren't URLs, are refused without asking.
+  for (const link of ['shell:startup', 'VBScript:msgbox(1)', 'file:///C:/Windows/notepad.exe', 'ms-help://topic', 'not a link', undefined]) {
+    assert.equal(await open('https://example.org/', link), false, String(link));
+  }
+  assert.equal(prompts.length, 3);
+  // A long link is cut short.
+  responses.push(1);
+  assert.equal(await open('https://example.net/', `zoommtg://example.net/join?${'x'.repeat(500)}`), false);
+  const shown = prompts[3].detail.split('\n')[0];
+  assert.ok(shown.length === 201 && shown.endsWith('…'), shown);
+  // A local file is asked every time.
+  responses.push(0, 0);
+  assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
+  assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
+  assert.equal(prompts.length, 6);
+  assert.match(prompts[5].detail, /^mailto:someone@example\.com\n\nThis choice applies only to this request/);
+});
+
 test('reload and hard reload retry failed destinations', () => {
   const { createCommands } = require('../app/commands');
   const calls = [];

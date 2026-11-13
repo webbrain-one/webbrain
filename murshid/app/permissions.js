@@ -27,6 +27,30 @@ const DESCRIBE = {
   'top-level-storage-access': 'permission.storageAccess',
 };
 
+// A link to a scheme Chromium can't load itself (mailto:, zoommtg:, ...) comes
+// here as 'openExternal', and Electron hands an allowed one to the operating
+// system. Allow is kept per site and per scheme, so letting a site open mail
+// links does not let it start other apps; Block covers all of the site's app
+// links, so it can't keep asking with new schemes. These schemes are never
+// handed over, as in Chrome (external_protocol_handler.cc), since Electron has
+// no such list of its own.
+const DENIED_EXTERNAL_SCHEMES = new Set(['afp', 'data', 'disk', 'disks', 'file', 'hcp', 'ie.http', 'javascript',
+  'ms-help', 'nntp', 'res', 'shell', 'vbscript', 'view-source', 'vnd.ms.radio']);
+const EXTERNAL_URL_SHOWN = 200;
+
+/** The link another app would open, parsed (its scheme is lower case), or null. */
+function externalLink(value) {
+  try {
+    const url = new URL(String(value));
+    return { scheme: url.protocol.slice(0, -1), href: url.href };
+  } catch { return null; }
+}
+
+/** The link as the prompt shows it: whole, or its start when it is long. */
+function shownLink(href) {
+  return href.length > EXTERNAL_URL_SHOWN ? `${href.slice(0, EXTERNAL_URL_SHOWN)}…` : href;
+}
+
 function describeRequest(host, permission, mediaTypes) {
   if (mediaTypes.length) {
     const camera = mediaTypes.includes('video');
@@ -50,15 +74,19 @@ function installPermissions(ctx) {
   const answers = new Map();
   const trusted = (origin) => origin.startsWith('murshid://') || (ctx.webBrainId && origin === `chrome-extension://${ctx.webBrainId}`);
   const mediaTypes = (types) => Array.isArray(types) && types.length && types.every((t) => t === 'audio' || t === 'video') ? [...new Set(types)] : [];
-  const keysFor = (origin, permission, types) => permission === 'media'
-    ? mediaTypes(types).map((type) => `${origin} media:${type}`)
-    : [`${origin} ${permission}`];
+  // No keys means nothing that can be asked about: a media request for no
+  // camera or microphone, or an app link that isn't a URL. Those are refused.
+  const keysFor = (origin, permission, types, link) => {
+    if (permission === 'media') return mediaTypes(types).map((type) => `${origin} media:${type}`);
+    if (permission === 'openExternal') return link ? [`${origin} openExternal:${link.scheme}`] : [];
+    return [`${origin} ${permission}`];
+  };
 
   ctx.ses.setPermissionCheckHandler((_wc, permission, requestingOrigin, details = {}) => {
     const origin = originOf(requestingOrigin);
     if (trusted(origin) || ALWAYS.has(permission)) return true;
     if (!origin) return false;
-    const keys = keysFor(origin, permission, [details.mediaType]);
+    const keys = keysFor(origin, permission, [details.mediaType], externalLink(details.externalURL));
     return keys.length > 0 && keys.every((key) => answers.get(key) === true);
   });
 
@@ -66,22 +94,29 @@ function installPermissions(ctx) {
     const url = details.requestingUrl || (details.isMainFrame !== false ? wc?.getURL() : '');
     const origin = originOf(url);
     if (trusted(origin) || ALWAYS.has(permission)) { callback(true); return; }
-    const keys = keysFor(origin, permission, details.mediaTypes);
-    if (permission === 'media' && !keys.length) { callback(false); return; }
+    const link = permission === 'openExternal' ? externalLink(details.externalURL) : null;
+    if (link && DENIED_EXTERNAL_SCHEMES.has(link.scheme)) { callback(false); return; }
+    const keys = keysFor(origin, permission, details.mediaTypes, link);
+    if (!keys.length) { callback(false); return; }
     if (origin && keys.some((key) => answers.get(key) === false)) { callback(false); return; }
     const missing = origin ? keys.filter((key) => !answers.has(key)) : keys;
     if (!missing.length) { callback(true); return; }
+    const appsBlocked = `${origin} openExternal`;
+    if (link && origin && answers.get(appsBlocked) === false) { callback(false); return; }
     const types = permission === 'media' ? mediaTypes(details.mediaTypes).filter((type) => missing.includes(`${origin} media:${type}`)) : [];
     const host = origin ? origin.replace(/^https?:\/\//, '') : t(url?.startsWith('file:') ? 'permission.localFile' : 'permission.thisPage');
     const parent = ctx.windowForContents(wc)?.win || ctx.lastFocusedWindow()?.win;
+    const scope = t(origin ? 'permission.remembered' : 'permission.once');
     dialog.showMessageBox(parent, {
       type: 'question', buttons: [t('permission.allow'), t('permission.block')], defaultId: 1, cancelId: 1,
       title: 'Murshid', message: describeRequest(host, permission, types),
-      detail: t(origin ? 'permission.remembered' : 'permission.once'),
+      // An app link is shown, so it is clear which app the answer is for.
+      detail: link ? `${shownLink(link.href)}\n\n${scope}` : scope,
       noLink: true,
     }).then(({ response }) => {
       const allowed = response === 0;
       if (origin) missing.forEach((key) => answers.set(key, allowed));
+      if (origin && link && !allowed) answers.set(appsBlocked, false);
       callback(allowed);
     }).catch(() => callback(false));
   });
