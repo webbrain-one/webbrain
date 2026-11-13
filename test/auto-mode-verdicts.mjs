@@ -63,7 +63,7 @@ for (const build of BUILDS) {
   const semantic = await import(`../src/${build}/src/agent/semantic-decisions.js`);
   const autoMode = await import(`../src/${build}/src/agent/auto-mode.js`);
   const { projectTraceEventData } = await import(`../src/${build}/src/trace/privacy.js`);
-  const { readSemanticReply, semanticReplyExcerpt, semanticDecisionMessages, semanticBatchDecisionMessages, acceptSemanticAnswer } = semantic;
+  const { readSemanticReply, semanticDecisionMessages, semanticBatchDecisionMessages, acceptSemanticAnswer } = semantic;
 
   test(`${build}: A7's reply, a translation before the JSON, is read as its one answer`, () => {
     const read = readSemanticReply(TR_REPLY);
@@ -105,24 +105,8 @@ for (const build of BUILDS) {
     assert.equal(semantic.SEMANTIC_DECISION_VERSION, 5, 'answers to the old wording are not reused');
   });
 
-  test(`${build}: a trace excerpt keeps a reply's shape and none of the user's words`, () => {
-    const excerpt = semanticReplyExcerpt(TR_REPLY, TR_REQUEST, 'run_mode');
-    assert.ok(excerpt.length <= 160);
-    assert.match(excerpt, /^The request is in Turkish: "…" means "…" Signing up means typing into a form/);
-    for (const word of [...requestWords(TR_REQUEST), 'newsletter']) assert.doesNotMatch(excerpt.toLowerCase(), new RegExp(word), word);
-    // The JSON keeps its field names and the choice, never the quote.
-    assert.equal(semanticReplyExcerpt(json('act', TR_REQUEST), TR_REQUEST, 'run_mode'), '{"choice":"act","evidence":"…"}');
-    assert.equal(semanticReplyExcerpt('{"choice":"act","evidence":"say \\"kaydol\\" now"}', TR_REQUEST, 'run_mode'),
-      '{"choice":"act","evidence":"…"}');
-    // Unquoted words of the request, other quotation marks and a cut-off quote.
-    assert.equal(semanticReplyExcerpt('Bültene kaydol asks to subscribe. {"choice":"act"}', TR_REQUEST, 'run_mode'),
-      '… … asks to subscribe. {"choice":"act"}');
-    assert.equal(semanticReplyExcerpt('„Bu sayfadaki“ heißt «subscribe» und 「登録」.', TR_REQUEST, 'run_mode'), '„…“ heißt «…» und 「…」.');
-    assert.equal(semanticReplyExcerpt('It says "Bu sayfadaki bültene', TR_REQUEST, 'run_mode'), 'It says "…');
-    assert.equal(semanticReplyExcerpt('x'.repeat(400), '', 'run_mode').length, 160);
-  });
-
-  test(`${build}: a metadata trace keeps a run_mode verdict's codes, and only a content trace its excerpt`, () => {
+  test(`${build}: run_mode traces retain codes but never reply excerpts`, () => {
+    for (const secret of ['私の暗証番号は１２３４', 'İstanbul']) assert.equal(JSON.stringify(projectTraceEventData('note', { step: 1, note: 'run_mode_decision', extra: { excerpt: secret } }, { includeContent: true })).includes(secret), false);
     const extra = {
       purpose: 'escalation', choice: null, plan: 'direct', source: 'unavailable', decisionModel: 'off', mainModel: 'rejected',
       model: 'claude-sonnet-5-5-high', failure: 'malformed_or_multiple_json_objects', rawChars: 270, latencyMs: 1623,
@@ -133,13 +117,13 @@ for (const build of BUILDS) {
     assert.deepEqual(projectTraceEventData('note', { step: 1, note: 'run_mode_decision', extra }),
       { step: 1, note: 'run_mode_decision', extra: codes });
     assert.deepEqual(projectTraceEventData('note', { step: 1, note: 'run_mode_decision', extra }, { includeContent: true }),
-      { step: 1, note: 'run_mode_decision', extra: { ...codes, excerpt } });
+      { step: 1, note: 'run_mode_decision', extra: codes });
     // Anything outside the closed lists, a path-like model id or a long
     // excerpt does not survive either tier.
     const unsafe = projectTraceEventData('note', { step: 2, note: 'run_mode_decision', extra: {
       purpose: 'other', choice: TR_REQUEST, source: 'page', failure: TR_REQUEST, decisionModelFailure: 'boom', model: 'C:/Users/someone/model.gguf',
       rawChars: -1, latencyMs: Infinity, decisionModelConfidence: 0.91, decisionModelChoice: 'answer', excerpt: 'y'.repeat(400) } }, { includeContent: true });
-    assert.deepEqual(unsafe, { step: 2, note: 'run_mode_decision', extra: { decisionModelChoice: 'answer', decisionModelConfidence: 0.91, excerpt: 'y'.repeat(160) } });
+    assert.deepEqual(unsafe, { step: 2, note: 'run_mode_decision', extra: { decisionModelChoice: 'answer', decisionModelConfidence: 0.91 } });
   });
 }
 
@@ -231,7 +215,7 @@ for (const build of BUILDS) {
       mainModel: 'answered', format: 'prose_wrapped', source: 'main_model', requested: 'act', outcome: 'accepted' });
     assert.equal(rawChars, TR_REPLY.length);
     assert.ok(Number.isFinite(latencyMs) && latencyMs >= 0);
-    for (const word of requestWords(TR_REQUEST)) assert.doesNotMatch(excerpt.toLowerCase(), new RegExp(word), word);
+    assert.equal(excerpt, undefined);
     assert.equal(JSON.stringify(decision).includes(TR_REQUEST), false, 'the trace never keeps the quote');
   });
 

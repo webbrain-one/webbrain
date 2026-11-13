@@ -144,8 +144,7 @@ function projectPredispatchTiming(data) {
 // Auto mode's `run_mode` answers (agent/auto-mode.js runModeDecisionNote):
 // closed codes, bounded numbers and model ids in every trace, so a refused
 // hand-off shows which model answered what and why it did not count. The
-// excerpt of the active model's reply masks the user's words already
-// (semanticReplyExcerpt); it is kept in content traces only.
+// Only parsed structure is kept; reply prose may contain user data.
 const RUN_MODE_CHOICES = Object.keys(SEMANTIC_QUESTIONS.run_mode.choices);
 const RUN_MODE_DECISION_ENUMS = {
   purpose: ['route', 'escalation'],
@@ -182,7 +181,6 @@ function projectRunModeDecision(data, includeContent) {
     if (typeof value === 'number' && Number.isFinite(value) && value >= 0) extra[key] = Math.min(value, max);
   }
   if (typeof source.model === 'string' && MODEL_ID.test(source.model)) extra.model = source.model;
-  if (includeContent && typeof source.excerpt === 'string' && source.excerpt) extra.excerpt = source.excerpt.slice(0, 160);
   return { step: Number.isFinite(data?.step) ? data.step : 0, note: 'run_mode_decision', extra };
 }
 

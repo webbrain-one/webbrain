@@ -710,49 +710,6 @@ export function readSemanticReply(content) {
   }
 }
 
-// Quotation marks a reply may wrap a string in, and the mark that closes each.
-const QUOTE_PAIRS = Object.freeze({ '"': '"', '“': '”', '„': '“', '«': '»', '‹': '›',
-  '「': '」', '『': '』' });
-
-// A short excerpt of a reply to a fixed-choice question, for the trace. It
-// shows the reply's shape, never whose words it quoted: every quoted string
-// but a JSON field name or a choice key reads "…", and so does every word of
-// the request, so neither the user's words nor a quoted translation of them
-// is kept.
-export function semanticReplyExcerpt(content, request, kind, max = 160) {
-  const keep = new Set(['choice', 'evidence', 'answers', 'item', ...Object.keys(semanticQuestion(kind).choices)]);
-  const own = new Set(String(request ?? '').normalize('NFC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
-  const text = String(content ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, 1000);
-  // Where the string opened at `from` closes; a JSON string's \" does not.
-  const closing = (from, close) => {
-    for (let j = from; j < text.length; j++) {
-      if (close === '"' && text[j] === '\\') j++;
-      else if (text[j] === close) return j;
-    }
-    return -1;
-  };
-  let masked = '';
-  for (let i = 0; i < text.length;) {
-    const close = QUOTE_PAIRS[text[i]];
-    if (close) {
-      const end = closing(i + 1, close);
-      const inner = end < 0 ? null : text.slice(i + 1, end);
-      masked += inner !== null && keep.has(inner) ? text.slice(i, end + 1) : `${text[i]}…${end < 0 ? '' : close}`;
-      if (end < 0) break;
-      i = end + 1;
-      continue;
-    }
-    const word = /^[\p{L}\p{N}]+/u.exec(text.slice(i, i + 200))?.[0];
-    if (word) {
-      masked += own.has(word.toLowerCase()) && !keep.has(word) ? '…' : word;
-      i += word.length;
-    } else {
-      masked += text[i++];
-    }
-  }
-  return masked.length > max ? `${masked.slice(0, max - 1)}…` : masked;
-}
-
 // The same question about several items in one request: each item is
 // untrusted data (a page label, a value a model wrote down) and is answered on
 // its own. The decision model gets one question per item, so its chunks stay
