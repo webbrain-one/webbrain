@@ -111,11 +111,11 @@ const handler = async (request, response) => {
   }
   const query = new URL(request.url, 'http://127.0.0.1').searchParams;
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  // The request only picks between this harness's own fixed values; nothing it
+  // carries is written into the page.
   response.end(request.url.startsWith('/iframe-inner')
-    ? innerHtml(String(query.get('value') || '').replace(/[^A-Za-z ]/g, ''))
-    // Only this harness's own frame addresses are embedded (no reflected markup).
-    : topHtml(/^(?:http:\/\/127\.0\.0\.1:\d{1,5})?\/iframe-inner(?:\?value=[A-Za-z]{0,40})?$/.test(query.get('frame') || '')
-      ? query.get('frame') : '/iframe-inner'));
+    ? innerHtml(query.get('value') === 'Springfield' ? 'Springfield' : '')
+    : topHtml(query.get('frame') === 'cross' ? `http://127.0.0.1:${framePort}/iframe-inner` : '/iframe-inner?value=Springfield'));
 };
 const server = http.createServer(handler);
 // The frame's own origin in the cross-origin variant: the same host on another port.
@@ -148,11 +148,11 @@ try {
 
   for (const variant of [
     // QA case B2: the field holds a stale value, which clear:true replaces.
-    { name: 'same-origin frame', frameUrl: '/iframe-inner?value=Springfield', typeArgs: { text: 'Ankara', clear: true } },
-    { name: 'cross-origin frame of the same site', frameUrl: `http://127.0.0.1:${framePort}/iframe-inner`, typeArgs: { text: 'Ankara' } },
+    { name: 'same-origin frame', frame: 'same', typeArgs: { text: 'Ankara', clear: true } },
+    { name: 'cross-origin frame of the same site', frame: 'cross', typeArgs: { text: 'Ankara' } },
   ]) {
     providerCalls = []; submissions = []; keyframe = null; actionCalls = 0; typeArgs = variant.typeArgs;
-    const url = `http://127.0.0.1:${port}/iframe-form?frame=${encodeURIComponent(variant.frameUrl)}`;
+    const url = `http://127.0.0.1:${port}/iframe-form?frame=${variant.frame}`;
     const page = await context.newPage(); await page.goto(url);
     const inner = page.frames().find(frame => frame !== page.mainFrame());
     await inner.waitForSelector('#city');
