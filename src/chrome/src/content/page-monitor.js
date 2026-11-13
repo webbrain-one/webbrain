@@ -4130,7 +4130,19 @@
       const layoutChanged = !params.release && active && (prepared?.frameReceiver === true && prepared.visionPoint === true
         ? frameReceiverShifted(prepared, params) : coordinatePreparationShifted(prepared));
       const bindingChanged = !params.release && preparedBindingChanged(prepared);
-      const receiverPredicate = !params.release ? nativeReceiverPredicate(prepared, params) : '';
+      let receiverPredicate = !params.release ? nativeReceiverPredicate(prepared, params) : '';
+      // A framed keyboard operation can arrive without a preparation in this
+      // document. Bind its first marked receiver and require the same focused
+      // node for every later command, even when focus changed synchronously
+      // without a revision event during our own input.
+      const unpreparedInput = !params.release && params.nativeInput === true && params.kind === 'input'
+        && !Number.isFinite(prepared?.preparedRevision);
+      let unpreparedReceiver = null;
+      if (unpreparedInput) {
+        unpreparedReceiver = params.nativeTarget ? resolveTarget({ nativeTarget: params.nativeTarget }) : null;
+        if (!unpreparedReceiver || unpreparedReceiver !== deepActiveElement()) receiverPredicate ||= 'target_unresolved';
+        else if (prepared?.unpreparedInputTarget && prepared.unpreparedInputTarget !== unpreparedReceiver) receiverPredicate ||= 'target_changed';
+      }
       const rebased = !params.release && !layoutChanged && !receiverPredicate && rebasePassivePreparation(prepared, params);
       // An operation this document never prepared (native keyboard input
       // that reaches an embedded frame focused by a click in an earlier step)
@@ -4164,7 +4176,10 @@
       const typingPreparation = typingFocusPhase(prepared, params);
       dispatch(params, false, typingPreparation); publishRevision();
       const commanded = operations.get(params.operationId);
-      if (!params.release && commanded && !Number.isFinite(commanded.preparedRevision)) commanded.commandRevision = revision;
+      if (!params.release && commanded && !Number.isFinite(commanded.preparedRevision)) {
+        commanded.commandRevision = revision;
+        if (unpreparedInput && unpreparedReceiver) commanded.unpreparedInputTarget ||= unpreparedReceiver;
+      }
       respond({ ready: true, ...(typingPreparation ? { typingPreparation: true } : {}), ...(active && params.runToken === runToken ? { guard: {
         documentToken, revision, operationId: params.operationId, runToken,
         navigationCandidate: params.navigationCandidate !== false,

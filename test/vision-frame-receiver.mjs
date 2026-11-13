@@ -293,6 +293,18 @@ test('Chrome: a vision click inside an embedded frame is fenced by that frame, l
       } finally { await context.close(); }
     });
 
+    for (const type of ['text', 'password']) await t.test(`a clear that moves focus to a ${type} field refuses further input`, async () => {
+      const script = `city.value = 'Springfield'; const other = document.createElement('input'); other.id = 'other'; other.type = '${type}'; f.append(other); city.addEventListener('input', () => other.focus());`;
+      const { context, agent, inner, point } = await fixture(browserInstance, script);
+      try {
+        assert.equal((await clickAt(agent, point)).success, true);
+        const typed = await typeLater(agent, 'Ankara');
+        assert.equal(typed.success, false, JSON.stringify(typed));
+        assert.equal(await inner.locator('#other').inputValue(), '');
+        assert.equal(commands.some(command => command.method === 'Input.insertText'), false, JSON.stringify(commands));
+      } finally { await context.close(); }
+    });
+
     await t.test("the frame's page script changing the form between its keys refuses the next key", async () => {
       const { context, agent, inner, point } = await fixture(browserInstance, "city.value = 'Springfield';");
       try {
