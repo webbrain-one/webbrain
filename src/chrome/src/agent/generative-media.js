@@ -1,6 +1,6 @@
 import { runFalGeneration, FAL_AUTH_PROBE_URL } from './fal-media.js';
 import { KEPT_VIDEO_CLIP_MS, MAX_JOINED_VIDEO_BYTES, forgetVideoClips, keepVideoClips, storeGeneratedMedia, storeGeneratedMediaBlob, takeVideoClip } from '../generated-media-store.js';
-import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt } from './media-config.js';
+import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt, falVideoResolution } from './media-config.js';
 import { VideoJoinError, joinMp4Clips, mp4DurationSeconds } from './video-join.js';
 import { videoDurationTolerance } from './video-duration-contract.js';
 
@@ -224,6 +224,16 @@ function videoShape(entry, video) {
   return shape;
 }
 
+// The saved resolution, written as the model lists it ("480p" as "480P"), for
+// a request that names none. It is only a default: a model that takes no
+// resolution, or does not list this one, is asked for none, so the default can
+// never make a request fail.
+function defaultVideoShape(entry, resolution) {
+  if (entry?.inputs && !entry.inputs.includes('resolution')) return {};
+  const match = supportedValues(entry, 'supported_resolutions')?.find(value => String(value).toLowerCase() === resolution);
+  return match === undefined ? {} : { resolution: match };
+}
+
 // The JSON Schema types a value has.
 const jsonTypes = value => (typeof value === 'number' ? (Number.isInteger(value) ? ['integer', 'number'] : ['number']) : [typeof value]);
 
@@ -433,9 +443,10 @@ export function planVideoClips(scenes, durations, { maxSeconds = MAX_VIDEO_SECON
 
 // What one generate_image call asks a video model for: one clip, or the
 // clips of its scenes.
-function planVideo(prompt, video, entry) {
+function planVideo(prompt, video, entry, shapeDefaults = {}) {
   const durations = clipDurations(entry);
-  const shape = videoShape(entry, video);
+  // What the call asks for replaces the saved default.
+  const shape = { ...shapeDefaults, ...videoShape(entry, video) };
   const scenes = Array.isArray(video?.scenes) ? video.scenes : null;
   const needsFallback = !durations && (scenes?.length || (video?.duration === undefined && video?.estimated_duration !== undefined));
   const fallbackSeconds = needsFallback ? fallbackVideoDuration(entry) : undefined;
@@ -617,8 +628,8 @@ export function forgetKeptVideoClips() {
  * clips (`provider`, model, saved model input `inputs`, prompt, length and
  * shape) uses them.
  */
-async function runVideo({ provider, model, inputs, entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
-  const plan = planVideo(text, video, entry);
+async function runVideo({ provider, model, inputs, entry, shapeDefaults, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
+  const plan = planVideo(text, video, entry, shapeDefaults);
   const fallback = plan.fallbackClipSeconds ? { fallbackClipSeconds: plan.fallbackClipSeconds } : {};
   if (!plan.scenes) return {
     ...(await single(plan.clips[0], plan.shape)), model,
@@ -846,10 +857,13 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
   if (provider === 'fal') {
     const job = (prompt, input, jobSignal) => runFalGeneration({ prompt, config: { ...config, model }, input, fetchImpl, signal: jobSignal, timeoutMs, pollMs });
     if (kind !== 'video') return job(text, {}, signal);
-    // The model's schema says what it accepts; a plain clip needs none of it.
-    const entry = video ? await falVideoEntry(model, config.apiKey, fetchImpl, signal, timeoutMs) : {};
+    // The model's schema says what it accepts: the length and shape a call
+    // asks for, and whether it takes the saved default resolution. A plain
+    // clip needs the schema only for that default, which must not stop it.
+    const lookup = () => falVideoEntry(model, config.apiKey, fetchImpl, signal, timeoutMs);
+    const entry = video ? await lookup() : await lookup().catch(() => { signal?.throwIfAborted?.(); return {}; });
     return runVideo({
-      ...videoRun, entry,
+      ...videoRun, entry, shapeDefaults: defaultVideoShape(entry, falVideoResolution(config)),
       single: async (clip, shape) => ({ url: (await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, signal)).url }),
       clip: async (clip, shape, groupSignal) => downloadClip((await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, groupSignal)).url,
         { fetchImpl, signal: groupSignal, timeoutMs, label: 'fal.ai', retryMs: pollMs }),

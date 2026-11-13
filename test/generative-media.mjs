@@ -74,6 +74,14 @@ for (const build of ['chrome', 'firefox']) {
     ]) assert.throws(() => config.validateMediaConfig(settings), error, JSON.stringify(settings));
   });
 
+  test(`${build}: the fal.ai video resolution is 480p unless 720p is saved`, () => {
+    assert.deepEqual(['', '480p', '720p', '720P', ' 720p ', '1080p', 720, null, undefined].map(videoResolution => config.falVideoResolution({ videoResolution })),
+      ['480p', '480p', '720p', '720p', '720p', '480p', '480p', '480p', '480p']);
+    assert.equal(config.falVideoResolution(undefined), '480p');
+    // An imported or hand-edited value that is not offered falls back; it does not disable media generation.
+    assert.equal(config.isImageGenConfigured({ provider: 'fal', apiKey: 'k', videoResolution: '1080p' }), true);
+  });
+
   test(`${build}: each request uses the image or the video model, or the provider's default`, async () => {
     // The first submission shows which model (or workflow) a request uses. It
     // fails, so nothing is generated.

@@ -290,6 +290,17 @@ one model keep it as the image model; with OpenRouter, a saved model that the
 video catalog lists makes the videos instead, and calls that do not say what
 they want get a video from it, as before.
 
+fal.ai charges less for a lower resolution, so its videos are made at 480p by
+default. **Video resolution** in the Generative settings switches that to 720p
+(it is saved as `videoResolution`). It is a default only: a call that sets
+`resolution` uses that instead, and a model that takes no resolution, or does
+not list the chosen one, is asked for none and makes the video at its own
+default. WebBrain reads the model's schema to find out, which adds one free
+metadata read to a fal.ai video request that sets no video option (one that
+sets any already reads it). A failed read never stops a plain clip. OpenRouter
+and Comfy Router videos use the model's own default unless the call sets a
+resolution.
+
 For Comfy Router models with native inputs other than `prompt`, paste their input
 JSON in **Image model input JSON** or **Video model input JSON** and place
 `{{prompt}}` in the text field(s). Other values, such as duration or resolution,
