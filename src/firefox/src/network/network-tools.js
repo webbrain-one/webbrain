@@ -207,7 +207,8 @@ function safeFetchResponseMetadata(headers) {
  * Returns { ok: true } if the URL is safe, or { ok: false, error } otherwise.
  *
  * Two tiers of blocks:
- *   - ALWAYS-BLOCKED: non-http schemes, cloud-metadata IPs/hostnames,
+ *   - ALWAYS-BLOCKED: non-http schemes, cloud-metadata IPs/hostnames
+ *     (including the IPv6 metadata addresses inside fc00::/7),
  *     link-local IPv6, multicast/reserved, *.internal/*.local. Never relaxed.
  *   - LOCAL-NETWORK: loopback, RFC1918, unique-local IPv6, `localhost`,
  *     *.localhost. Relaxed when opts.allowLocalNetwork is true.
@@ -267,6 +268,18 @@ export function validateFetchUrl(rawUrl, opts = {}) {
     }
     if (host === '::') {
       return { ok: false, error: `Blocked unspecified IPv6: ${host}` };
+    }
+    // Always-blocked IPv6 cloud metadata. These addresses sit inside
+    // unique-local fc00::/7, which local-network access relaxes below.
+    // URL.hostname has already compressed and lowercased the address, so
+    // one spelling per endpoint matches every way of writing it.
+    const CLOUD_METADATA_IPV6 = new Set([
+      'fd00:ec2::254', // AWS instance metadata (IMDS)
+      'fd00:ec2::23',  // AWS EKS Pod Identity agent
+      'fd20:ce::254',  // Google Cloud metadata server
+    ]);
+    if (CLOUD_METADATA_IPV6.has(host)) {
+      return { ok: false, error: `Blocked cloud metadata IPv6: ${host}` };
     }
     if (!allowLocal) {
       const localHint = ' (enable "Allow agent to access local network" in settings to permit)';

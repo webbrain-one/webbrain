@@ -22828,6 +22828,41 @@ test('IPv4-mapped IPv6 (::ffff:V4) is decoded and re-validated', () => {
   expectAccept('http://[::ffff:8.8.8.8]/'); // public v4 mapped
 });
 
+test('IPv6 cloud metadata addresses stay blocked with local network access on (both builds)', () => {
+  // These sit inside unique-local fc00::/7, the range local-network access
+  // relaxes, so they need their own always-blocked check.
+  const metadataUrls = [
+    'http://[fd00:ec2::254]/latest/meta-data/iam/security-credentials/',
+    'http://[FD00:EC2:0:0:0:0:0:254]/latest/meta-data/', // uncompressed, upper-case
+    'http://[fd00:0ec2::0254]/',                          // leading zeros
+    'http://[fd00:ec2::23]/v1/credentials',               // AWS EKS Pod Identity agent
+    'http://[fd20:ce::254]/computeMetadata/v1/',          // Google Cloud
+  ];
+  for (const [label, validate, validateResolved] of [
+    ['chrome', validateFetchUrl, validateResolvedAddressCh],
+    ['firefox', validateFetchUrlFx, validateResolvedAddressFx],
+  ]) {
+    for (const url of metadataUrls) {
+      for (const allowLocalNetwork of [false, true]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+      }
+      assert.match(validate(url, { allowLocalNetwork: true }).error, /cloud metadata/i, `${label}: ${url}`);
+    }
+    // A public hostname whose DNS answer is a metadata address.
+    for (const address of ['fd00:ec2::254', 'fd00:ec2:0:0:0:0:0:254', '[fd20:ce::254]', 'fd00:ec2::23']) {
+      const result = validateResolved(address, { allowLocalNetwork: true });
+      assert.equal(result.ok, false, `${label}: resolved ${address} must be blocked`);
+      assert.match(result.error, /cloud metadata/i, `${label}: resolved ${address}`);
+    }
+    // Neighbouring unique-local addresses keep the local-network tier.
+    for (const url of ['http://[fd00:ec2::255]/', 'http://[fd20:ce::1]/', 'http://[fd12:3456::254]/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+  }
+});
+
 test('public hosts always accepted', () => {
   expectAccept('https://example.com/');
   expectAccept('https://api.github.com/repos/');
