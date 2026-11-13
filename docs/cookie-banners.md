@@ -18,6 +18,9 @@ Settings → Advanced → **Cookie banners** (storage key `cookieBanners`):
 | `everywhere` | Every tab, including normal browsing and Ask runs, because the user turned it on. |
 | `off` | Never. The help text suggests it for users whose own extension already handles banners. |
 
+`/export --config` includes the setting and `/import` restores it; a snapshot without it
+restores `agent`. Another value in a snapshot is refused as invalid.
+
 ## How it works
 
 - `src/<browser>/src/agent/cookie-banner-host.js` runs in the background. It

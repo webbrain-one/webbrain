@@ -40,6 +40,12 @@ gate never redirects, the new tab page is always shown, and the side panel and S
 switch for it. Firefox's own settings (Home → New windows and tabs) are where a user switches
 back to Firefox's page.
 
+### Settings snapshots
+
+`/export --config` includes `newTabEnabled` (`false` when it was never set), and `/import`
+restores it. Firefox has no switch and never reads the key, but its export and import carry it
+too, so both builds keep one schema and a Chrome snapshot passes through Firefox unchanged.
+
 ## The box
 
 | Mode | What happens |
