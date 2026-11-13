@@ -14,8 +14,8 @@ import { installPageFeedback, beforePageAgentDispatch, hasPageAgentDispatchOwner
 import { JEV_FAST_KEYS, JEV_CLASSIFIER_THRESHOLD, JEV_BROWSER_THRESHOLD, confidentChoice, buildJevBrowserRequest, decideJevBrowser, jevVisualInputRequiresMainModel, JevFastSession } from './systemone-fast.js';
 import { redactSystemOneText, wrapSystemOneData, boundedSystemOneText, systemOneStateBytes } from './systemone-evidence.js';
 import { createSystemOneJudge, isSystemOneResponseContractError, systemOneFailureReason, SYSTEM_ONE_COST_PROVIDER } from './systemone-judge.js';
-import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, modeEscalationRefusal, readModeEscalation, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
-import { SEMANTIC_BATCH_LIMITS, SEMANTIC_DECISION_VERSION, acceptSemanticAnswer, acceptSemanticBatchAnswers, boundedSemanticData, controlEffectCommits, semanticDataComplete, semanticBatchChunks, semanticBatchDecisionMessages, semanticDecisionMessages, semanticQuestion, semanticSystemOneBatchQuestions, semanticSystemOneQuestion, WORKFLOW_STATES } from './semantic-decisions.js';
+import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, RUN_MODE_DECISION_NOTE, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, modeEscalationRefusal, readModeEscalation, runModeDecisionNote, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
+import { SEMANTIC_BATCH_LIMITS, SEMANTIC_DECISION_VERSION, acceptSemanticAnswer, acceptSemanticBatchAnswers, boundedSemanticData, controlEffectCommits, readSemanticReply, semanticAnswerRefusal, semanticDataComplete, semanticBatchChunks, semanticBatchDecisionMessages, semanticDecisionMessages, semanticQuestion, semanticSystemOneBatchQuestions, semanticSystemOneQuestion, WORKFLOW_STATES } from './semantic-decisions.js';
 import { firefoxBidi } from '../bidi/client.js';
 import { SOCIAL_PLATFORMS, socialPublicationApiPlatform, normalizePublicationContract, resolvePublicationText, publicationProgress, exactPublicationText, publicationMediaMatches, publicationContractMessages, publicationAuditMessages, parsePublicationJson, publicationAuditValidation } from './social-publish-contract.js';
 import { mastodonPublicationIntentMessages, normalizeMastodonPublicationIntent, captureNativeMastodonPublication, mastodonPublicationBinding, mastodonPublicationReceipt, mastodonPublicationNavigation } from './mastodon-publication.js';
@@ -9673,6 +9673,17 @@ export class Agent extends LoopDetector {
     }
   }
 
+  // A model's reply to a fixed-choice question (readSemanticReply), after the
+  // checks every model reply gets: an empty one fails with why it was empty
+  // and a cut-off one as truncated.
+  _semanticReply(response, maxTokens) {
+    const content = typeof response?.content === 'string' ? response.content : '';
+    const output = modelOutputDiagnostics(response, { requestedMaxTokens: maxTokens });
+    const failure = output.empty ? output.emptyReason || 'empty_response'
+      : /^(?:length|max_tokens|max_output_tokens|output_limit)$/i.test(output.finishReason || '') ? 'truncated_response' : '';
+    return { content, ...(failure ? { failure } : readSemanticReply(content)) };
+  }
+
   /**
    * One fixed-choice language decision (see semantic-decisions.js): what the
    * user's request says about an action, read by a model in any language
@@ -9690,9 +9701,21 @@ export class Agent extends LoopDetector {
    * remembered on their own; the active model never answers them. An
    * authorizing answer among them needs the whole request and data: when
    * either was cut to fit the decision model, it is not used.
+   * `diagnostics`, when given, is filled with how the answer was reached, for
+   * the caller's trace (auto-mode.js runModeDecisionNote): the path, the model
+   * asked last, what the decision model and the active model each did, why no
+   * answer counted and the active model's parsed reply shape. Never the reply
+   * text or evidence.
    */
-  async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [] } = {}) {
+  async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [], diagnostics = null } = {}) {
     const spec = semanticQuestion(kind);
+    const diag = diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
+    const startedAt = Date.now();
+    const settled = result => {
+      diag.source = result.source;
+      diag.latencyMs = Date.now() - startedAt;
+      return result;
+    };
     // Relationship and page-scope decisions must read the entire request. A
     // prefix-only verdict can miss a correction or new task at its end.
     const requestText = String(request ?? '');
@@ -9720,16 +9743,20 @@ export class Agent extends LoopDetector {
     const cached = await this._semanticCacheHit(tabId, provider, this._semanticDecisionCache.get(cacheKey));
     // A cached answer settles the question, whatever is known about the
     // questions asked alongside it.
-    if (cached && !retryChoices.includes(cached.choice)) return withAlongside({ ...cached, source: 'cache' });
+    if (cached && !retryChoices.includes(cached.choice)) {
+      diag.answeredBy = cached.answeredBy;
+      return settled(withAlongside({ ...cached, source: 'cache' }));
+    }
     const remember = result => {
       store(cacheKey, result);
-      return withAlongside(result);
+      return settled(withAlongside(result));
     };
     const runSignal = signal || this._runAbortSignal(tabId);
     const context = this.systemOneContext(tabId);
     try {
       const settings = await this._jevSettings(tabId, provider);
       decisionKey = this._semanticDecisionKey(settings);
+      if (!settings) diag.decisionModel = 'off';
       const plainText = JSON.stringify({ request: trusted, page: data });
       const decisionText = redactSystemOneText(plainText);
       // What the decision model reads: the input above, with credential lines
@@ -9760,15 +9787,27 @@ export class Agent extends LoopDetector {
         const choice = confidentChoice(answer, spec.authorizing.includes(answer?.choice) ? 0.85 : 0.7);
         this.recordSystemOneVerdict(tabId, { decision: choice ? 'semantic' : 'fallback', reason: choice ? kind : `${kind}_low_confidence`,
           model: verdict.model }, context);
+        Object.assign(diag, {
+          decisionModel: !choice ? 'unsure' : retryChoices.includes(choice) ? 'not_settled' : 'answered',
+          model: verdict.model || settings.decisionConfig?.model || null,
+          ...(typeof answer?.choice === 'string' ? { decisionModelChoice: answer.choice } : {}),
+          ...(Number.isFinite(answer?.confidence) ? { decisionModelConfidence: Math.round(answer.confidence * 100) / 100 } : {}),
+        });
         if (choice && !retryChoices.includes(choice)) return remember({ choice, evidence: '', source: 'decision_model' });
       } else if (settings && !decisionFits) {
         this.recordSystemOneVerdict(tabId, { decision: 'fallback', reason: `${kind}_context_budget` }, context);
+        diag.decisionModel = 'context_budget';
       }
     } catch (error) {
       if (this._isCostAllowanceError(error) || this._checkAbort(tabId)) throw error;
       this.recordSystemOneVerdict(tabId, { decision: 'fallback', reason: `${kind}_${systemOneFailureReason(error)}` }, context);
+      Object.assign(diag, { decisionModel: 'failed', decisionModelFailure: systemOneFailureReason(error) });
     }
-    if (!mainModel || !provider?.chat || this._checkAbort(tabId)) return withAlongside({ choice: null, evidence: '', source: 'unavailable' });
+    if (!mainModel || !provider?.chat || this._checkAbort(tabId)) {
+      diag.mainModel = 'not_asked';
+      return settled(withAlongside({ choice: null, evidence: '', source: 'unavailable' }));
+    }
+    diag.model = provider.model || provider.config?.model || null;
     try {
       const messages = semanticDecisionMessages(kind, trusted, data, text => this._wrapUntrusted('read_page', text));
       const response = await withCompletionTimeout(async completionSignal => {
@@ -9777,12 +9816,20 @@ export class Agent extends LoopDetector {
         return this._chatWithCostAllowance(provider, messages, { temperature: 0, maxTokens: 400, signal: completionSignal },
           this.currentCostState.get(tabId) || null, { tabId, generationName: `semantic_${kind}` });
       }, runSignal, 10000);
-      const accepted = acceptSemanticAnswer(kind, this._socialPublicationResponseObject(response, { maxTokens: 400 }), trusted);
+      const reply = this._semanticReply(response, 400);
+      const accepted = reply.answer ? acceptSemanticAnswer(kind, reply.answer, trusted) : null;
+      Object.assign(diag, {
+        mainModel: accepted ? 'answered' : 'rejected',
+        rawChars: reply.content.length,
+        ...(reply.format ? { format: reply.format } : {}),
+        ...(accepted ? {} : { failure: reply.failure || semanticAnswerRefusal(kind, reply.answer, trusted) }),
+      });
       if (accepted) return remember({ ...accepted, source: 'main_model' });
     } catch (error) {
       if (this._isCostAllowanceError(error) || this._checkAbort(tabId)) throw error;
+      Object.assign(diag, { mainModel: 'failed', failure: Number.isFinite(error?.timeoutMs) ? 'timeout' : 'request_failed' });
     }
-    return withAlongside({ choice: null, evidence: '', source: 'unavailable' });
+    return settled(withAlongside({ choice: null, evidence: '', source: 'unavailable' }));
   }
 
   /**
@@ -9868,9 +9915,9 @@ export class Agent extends LoopDetector {
               { tabId, generationName: `semantic_${kind}`, ...(background ? { background: true } : {}) });
           }, runSignal, mainTimeoutMs);
           if (background && stopped()) break;
-          const accepted = acceptSemanticBatchAnswers(kind,
-            this._socialPublicationResponseObject(response, { maxTokens: 120 + 60 * indexes.length }), trusted,
-            indexes.map(index => data[index]));
+          const reply = this._semanticReply(response, 120 + 60 * indexes.length);
+          if (!reply.answer) throw new Error(reply.failure);
+          const accepted = acceptSemanticBatchAnswers(kind, reply.answer, trusted, indexes.map(index => data[index]));
           indexes.forEach((index, position) => {
             if (accepted[position]) remember(index, { ...accepted[position], source: 'main_model' });
           });
@@ -24450,7 +24497,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.currentRunId.set(tabId, runId);
       // How an automatically routed turn chose its mode, and how long it waited.
       if (runOptions?.modeRoute) {
-        try { trace.recordNote(runId, 0, 'mode_route', runOptions.modeRoute); } catch {}
+        const { decision, ...route } = runOptions.modeRoute;
+        try { trace.recordNote(runId, 0, 'mode_route', route); } catch {}
+        // The route's run_mode answer: its choice, which model or path gave
+        // it, and why there was none.
+        this._traceRunModeDecision(runId, 0, decision);
       }
       this._flushAdapterMatchTraces(tabId, runId);
       const pendingVisionRoutes = this.pendingVisionRouteTraces.get(tabId) || [];
@@ -26373,8 +26424,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // turn starts read-only.
   async _routeAutoRunMode(tabId, question) {
     const startedAt = Date.now();
+    const diagnostics = {};
     try {
-      const verdict = await this._semanticDecision(tabId, 'run_mode', question, { mainModel: false, alongside: ['plan_need'] });
+      const verdict = await this._semanticDecision(tabId, 'run_mode', question, { mainModel: false, alongside: ['plan_need'], diagnostics });
       const tier = this._resolvePromptTier(this._activeProvider(tabId));
       const plan = autoModePlanForChoice(verdict.alongside?.plan_need);
       return {
@@ -26383,9 +26435,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         source: verdict.choice ? verdict.source : 'ask_first',
         latencyMs: Date.now() - startedAt,
         ...(plan ? { plan } : {}),
+        decision: runModeDecisionNote('route', verdict, diagnostics),
       };
     } catch {
-      return { mode: 'ask', choice: null, source: 'ask_first', latencyMs: Date.now() - startedAt };
+      return { mode: 'ask', choice: null, source: 'ask_first', latencyMs: Date.now() - startedAt,
+        decision: runModeDecisionNote('route', null, diagnostics) };
     }
   }
 
@@ -26408,7 +26462,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (routed.mode !== 'ask' && corrected()) {
       firefoxBidi.stopRun(tabId);
-      routed = { mode: 'ask', choice: null, source: 'route_corrected', latencyMs: routed.latencyMs };
+      routed = { mode: 'ask', choice: null, source: 'route_corrected', latencyMs: routed.latencyMs, decision: routed.decision };
     }
     const mode = routed.mode;
     this._autoModeRoutePendingTabs.delete(tabId);
@@ -26430,6 +26484,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           choice: routed.choice ?? null,
           routeMs: Number.isFinite(routed.latencyMs) ? routed.latencyMs : null,
           waitedMs: Date.now() - waitStartedAt,
+          // Recorded as its own trace note (RUN_MODE_DECISION_NOTE). A late
+          // route has none: the turn went on without its answer.
+          ...(routed.decision ? { decision: routed.decision } : {}),
           // plan_need for an action turn (_routedDirectTask).
           ...(() => {
             const plan = mode === 'ask' ? null : this._routePlanSignal(routed.plan, {
@@ -26455,6 +26512,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }));
     const pending = (this._steeringRuns.get(tabId)?.messages || []).map(item => ({ id: String(item.id || ''), text: item.text }));
     return [...applied, ...pending].filter(item => item.id && String(item.text || '').trim());
+  }
+
+  // Records a `run_mode` answer of the route or a hand-off check as its own
+  // trace note (auto-mode.js runModeDecisionNote; trace/privacy.js decides
+  // what each trace tier keeps).
+  _traceRunModeDecision(runId, step, decision) {
+    if (!runId || !decision) return;
+    try { trace.recordNote(runId, step, RUN_MODE_DECISION_NOTE, decision); } catch {}
   }
 
   // Reads a `request_action_mode` call of a routed Ask turn. Its quote must
@@ -26484,15 +26549,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const asked = corrections.length ? { ...base, request: corrected(corrections) } : base;
     // A sure "answer" from routing settles it; an "unclear" one asks again.
     // plan_need rides along for the action run the hand-off restarts.
-    const verdict = await this._semanticDecision(tabId, 'run_mode', asked, { provider, retryChoices: ['unclear'], alongside: ['plan_need'] });
+    const diagnostics = {};
+    const verdict = await this._semanticDecision(tabId, 'run_mode', asked, { provider, retryChoices: ['unclear'], alongside: ['plan_need'], diagnostics });
+    // What the page-free check answered and how, for the trace (never the quote).
+    const decision = outcome => runModeDecisionNote('escalation', verdict, diagnostics, { requested: requested.mode, outcome });
     const latest = this._autoModeTurnCorrections(tabId, messages, snapshot);
     if (latest.length !== corrections.length || latest.some((item, index) => item.id !== corrections[index].id)) {
-      return { superseded: true };
+      return { superseded: true, decision: decision('superseded') };
     }
     const mode = confirmedEscalationMode(requested, verdict.choice, { tier });
-    if (!mode) return { refused: 'not_action' };
+    if (!mode) return { refused: 'not_action', decision: decision('not_action') };
     const plan = autoModePlanForChoice(verdict.alongside?.plan_need);
-    return { accepted: { mode, evidence: requested.evidence, ...(plan ? { plan } : {}) }, corrections };
+    return { accepted: { mode, evidence: requested.evidence, ...(plan ? { plan } : {}) }, corrections, decision: decision('accepted') };
   }
 
   // The conversation and per-tab turn state before a routed turn gathers its
@@ -51209,6 +51277,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           && result.toolCalls?.some(call => call?.function?.name === REQUEST_ACTION_MODE_TOOL_NAME)) {
         const handoff = await this._autoModeEscalation(tabId, result.toolCalls, enriched, provider, autoModeQuestion, messages, autoModeTurnStart,
           runOptions?.autoModeRouting?.continuedTask);
+        // The page-free run_mode answer behind the outcome below, when one
+        // was asked: its choice, the model or path that gave it and why it did
+        // not count (live QA case A7 was refused without any of that).
+        this._traceRunModeDecision(runId, steps, handoff.decision);
         if (handoff.superseded) {
           // Like any response a pending correction supersedes: the next step
           // applies the correction and the model decides again, so a
