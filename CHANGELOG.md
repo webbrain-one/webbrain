@@ -11,6 +11,7 @@ This changelog was generated from the repository Git history and release tags. V
 - The user guide, FAQ, repository docs and their translations describe the one-page Settings layout, with new screenshots.
 
 ### Fixed
+- In Auto mode, an action asked for in another language, such as the Turkish "Bu sayfadaki bültene kaydol." ("Sign up for the newsletter on this page."), is handed from Ask to Act again. The model's check had answered "act", but it explained the request before its answer, and WebBrain discarded that reply and refused the hand-off. Traces now show each of these run-mode checks: the answer, whether the decision model, the main model or an earlier answer gave it, and why an answer did not count. Content traces add a short excerpt of the model's reply with your own words masked.
 - Settings labels that were broken in three languages: German "Planung versuchen", French "Diffuser les réponses en mode Ask" and its description, and Hindi "मैन्युअल" for manual archive updates in Apocalypse Mode.
 
 ## [48.1.0] - 2026-11-12
