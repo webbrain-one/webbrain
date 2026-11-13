@@ -113,7 +113,9 @@ const handler = async (request, response) => {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   response.end(request.url.startsWith('/iframe-inner')
     ? innerHtml(String(query.get('value') || '').replace(/[^A-Za-z ]/g, ''))
-    : topHtml(query.get('frame') || '/iframe-inner'));
+    // Only this harness's own frame addresses are embedded (no reflected markup).
+    : topHtml(/^(?:http:\/\/127\.0\.0\.1:\d{1,5})?\/iframe-inner(?:\?value=[A-Za-z]{0,40})?$/.test(query.get('frame') || '')
+      ? query.get('frame') : '/iframe-inner'));
 };
 const server = http.createServer(handler);
 // The frame's own origin in the cross-origin variant: the same host on another port.
