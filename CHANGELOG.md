@@ -12,6 +12,7 @@ This changelog was generated from the repository Git history and release tags. V
 
 ### Fixed
 - Settings labels that were broken in three languages: German "Planung versuchen", French "Diffuser les réponses en mode Ask" and its description, and Hindi "मैन्युअल" for manual archive updates in Apocalypse Mode.
+- In vision mode, each click now tells the model which control it clicked (for example the Delete button), so it can confirm an action it took after the screenshot of that step has left its memory. Before, a run that had deleted the right post could end as partial because the model could no longer show what it had clicked. The name is shortened to one line and treated as page content. A name that holds an e-mail address is left out, and so is a phone number when screenshot redaction is on.
 
 ## [48.1.0] - 2026-11-12
 

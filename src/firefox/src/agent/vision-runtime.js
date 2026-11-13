@@ -29,7 +29,7 @@ import {
   visionFilePickerBlockedResult,
 } from './vision-tools.js';
 import {
-  VISION_MIN_DRAG_CSS_PX, visionMultiClickRefusal, visionDragRefusal, visionWheelRefusal,
+  VISION_MIN_DRAG_CSS_PX, visionMultiClickRefusal, visionDragRefusal, visionWheelRefusal, visionClickedControl,
 } from './vision-dom-probe.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -534,12 +534,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * Checks right before a vision click is dispatched, in both builds: a
    * native <select> is focused for type_text (its popup never shows in a
    * screenshot), and a double/triple click that would repeat a control's
-   * action is refused. Returns { refusal } or { target }.
+   * action is refused. Returns { refusal } or { target, control? }, where
+   * `control` is the role and name of the control the click activates
+   * (vision-dom-probe.js visionClickedControl), read before the click
+   * changes the page.
    */
   proto._visionClickPreflight = async function _visionClickPreflight(tabId, {
     x, y, button = 'left', clickCount = 1, recipientGuarded = false, submitDetected = false,
   } = {}) {
-    const probe = await this._visionDomProbe(tabId, { points: [{ x, y }], focusSelect: button === 'left' });
+    const probe = await this._visionDomProbe(tabId, { points: [{ x, y }], focusSelect: button === 'left', describeControl: true });
     const point = probe?.points?.[0] || null;
     if (point?.select && button === 'left') {
       return {
@@ -553,9 +556,11 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     const refusal = visionMultiClickRefusal(probe, { clickCount, recipientGuarded, submitDetected });
     if (refusal) return { refusal };
     const background = ['backdrop', 'empty'].includes(point?.dialogBackground) ? point.dialogBackground : '';
+    const control = visionClickedControl(point, { redaction: this.screenshotRedaction === true });
     return {
       target: point?.found ? { tag: point.tag, ...(point.role ? { role: point.role } : {}),
         ...(background ? { dialogBackground: background } : {}) } : null,
+      ...(control ? { control } : {}),
       // The click still goes: outside a dialog may be how it closes. The
       // model is told the point is on no control, which a bare
       // {tag:'div', role:'dialog'} target did not make plain enough.

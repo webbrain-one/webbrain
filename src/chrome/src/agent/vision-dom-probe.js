@@ -9,14 +9,18 @@
 // cannot redefine the DOM methods it calls). It is serialized with
 // toString(), so it must stay self-contained: no imports, no outer names.
 
+import { textHoldsEmail, textHoldsPhone } from './screenshot-redaction.js';
+
 /**
- * @param {{points: {x:number,y:number}[], pair?: boolean, focusSelect?: boolean, focus?: boolean}} request
+ * @param {{points: {x:number,y:number}[], pair?: boolean, focusSelect?: boolean, focus?: boolean, describeControl?: boolean}} request
  *   points are CSS pixels of the top-level viewport. `pair` asks what a
  *   press at points[0] and a release at points[1] would click. `focusSelect`
  *   focuses a native <select> under points[0] (a click on it is answered
  *   with type_text instead of an OS popup no screenshot can show). `focus`
  *   asks whether the focused element is a text field at points[0] (keyboard
  *   input right after a click there goes where the model clicked).
+ *   `describeControl` adds the role and accessible name of the control a
+ *   click at points[0] activates (controlRole, controlName).
  */
 export function visionDomProbe(request) {
   const CLICKABLE = [
@@ -198,6 +202,100 @@ export function visionDomProbe(request) {
     });
     return modal ? 'backdrop' : '';
   };
+  // The role and accessible name of the control a click activates, for the
+  // click's result: once the screenshot it was aimed at has left the
+  // context, that result is the model's only record of what it clicked (a
+  // deletion it could not confirm having made, in a trace). Only the
+  // control's own label: never a text field's value, a select's options or
+  // the text of a field the control contains. Page text, so cut short here
+  // and bounded again by the agent (visionClickedControl).
+  const NAME_SOURCE_MAX = 200;
+  // Fields whose content is rendered as text (an <input>'s value never is).
+  const FIELD = 'textarea,select,[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
+  // Roles a name comes from content for (WAI-ARIA); a generic element, such
+  // as a <div> drawn with a pointer cursor, is named only by its attributes.
+  const NAME_FROM_CONTENT = ['button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'option',
+    'checkbox', 'radio', 'switch', 'treeitem', 'cell', 'gridcell', 'row', 'columnheader', 'rowheader', 'heading', 'tooltip'];
+  const flat = value => String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, NAME_SOURCE_MAX);
+  const attr = (el, name) => {
+    try { return el && el.getAttribute ? String(el.getAttribute(name) || '') : ''; } catch (e) { return ''; }
+  };
+  const roleOf = el => {
+    if (!el || el.nodeType !== 1) return '';
+    const explicit = attr(el, 'role').trim().toLowerCase().split(/\s+/)[0];
+    if (/^[a-z]{2,32}$/.test(explicit)) return explicit;
+    const tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'input') {
+      const type = attr(el, 'type').toLowerCase();
+      if (type === 'checkbox' || type === 'radio') return type;
+      return ['submit', 'button', 'reset', 'image', 'file', 'color'].includes(type) ? 'button' : '';
+    }
+    if (tag === 'a' || tag === 'area') return el.hasAttribute('href') ? 'link' : '';
+    if (tag === 'button' || tag === 'summary') return 'button';
+    if (tag === 'option') return 'option';
+    return '';
+  };
+  // The visible text of a control or label, or an icon-only control's
+  // alternative text; nothing for one that holds a field.
+  const textOf = el => {
+    try {
+      if (el.querySelector(FIELD)) return '';
+      const text = flat(el.innerText != null ? el.innerText : el.textContent);
+      if (text) return text;
+      const icon = el.querySelector('img[alt],[role="img"][aria-label],svg title');
+      if (!icon) return '';
+      const tag = String(icon.tagName || '').toLowerCase();
+      return flat(tag === 'img' ? attr(icon, 'alt') : tag === 'title' ? icon.textContent : attr(icon, 'aria-label'));
+    } catch (e) { return ''; }
+  };
+  const nameOf = (el, role) => {
+    const ids = attr(el, 'aria-labelledby').trim().split(/\s+/).filter(Boolean).slice(0, 8);
+    if (ids.length) {
+      let root = null;
+      try { root = el.getRootNode ? el.getRootNode() : el.ownerDocument; } catch (e) { root = el.ownerDocument; }
+      const parts = [];
+      for (const id of ids) {
+        let ref = null;
+        try { ref = root && root.getElementById ? root.getElementById(id) : el.ownerDocument.getElementById(id); } catch (e) { ref = null; }
+        let field = false;
+        try { field = !!ref && ref.matches(FIELD); } catch (e) { field = true; }
+        if (ref && !field) parts.push(flat(attr(ref, 'aria-label')) || textOf(ref));
+      }
+      const joined = flat(parts.join(' '));
+      if (joined) return joined;
+    }
+    const label = flat(attr(el, 'aria-label'));
+    if (label) return label;
+    const tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'input') {
+      const type = attr(el, 'type').toLowerCase();
+      // A button input's value is its label.
+      if (type === 'submit' || type === 'button' || type === 'reset') {
+        let value = '';
+        try { value = flat(el.value); } catch (e) { value = ''; }
+        if (value) return value;
+      }
+      if (type === 'image' && flat(attr(el, 'alt'))) return flat(attr(el, 'alt'));
+      let labels = [];
+      try { labels = Array.from(el.labels || []).slice(0, 4); } catch (e) { labels = []; }
+      for (const labelEl of labels) {
+        const text = textOf(labelEl);
+        if (text) return text;
+      }
+    } else if (tag === 'label' || NAME_FROM_CONTENT.includes(role)) {
+      const text = textOf(el);
+      if (text) return text;
+    }
+    return flat(attr(el, 'title'));
+  };
+  const describe = el => {
+    let role = roleOf(el);
+    // A label's click goes to its field: the field's role, the label's text.
+    if (!role && String(el.tagName || '').toLowerCase() === 'label') {
+      try { role = el.control ? roleOf(el.control) : ''; } catch (e) { role = ''; }
+    }
+    return { role, name: nameOf(el, role) };
+  };
   const points = Array.isArray(req.points) ? req.points.slice(0, 2) : [];
   const found = points.map(point => hit(Number(point && point.x), Number(point && point.y)));
   const infos = found.map((item, index) => {
@@ -213,6 +311,11 @@ export function visionDomProbe(request) {
     const role = el.getAttribute ? el.getAttribute('role') : '';
     if (role) info.role = String(role).slice(0, 32);
     if (control) info.control = control.kind;
+    if (control && index === 0 && req.describeControl === true) {
+      const described = describe(control.el);
+      if (described.role) info.controlRole = described.role;
+      if (described.name) info.controlName = described.name;
+    }
     if (!control && !info.opaqueFrame) {
       const point = points[index] || {};
       const background = dialogBackgroundOf(el, Number(point.x), Number(point.y));
@@ -286,6 +389,46 @@ export function visionDomProbe(request) {
 /** An expression that evaluates visionDomProbe(request) in a page. */
 export function visionDomProbeExpression(request) {
   return `(${visionDomProbe.toString()})(${JSON.stringify(request || {})})`;
+}
+
+/** Longest control name a vision click result carries, in characters. */
+export const VISION_CONTROL_NAME_MAX = 80;
+
+// Control and format characters (bidi overrides, zero-width marks) that can
+// hide or reorder the rest of a name.
+const NAME_HIDDEN_RANGES = [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x61c, 0x61c], [0x115f, 0x1160], [0x180e, 0x180e],
+  [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff]];
+const visibleNameText = text => Array.from(String(text), char => {
+  const code = char.codePointAt(0);
+  return NAME_HIDDEN_RANGES.some(([from, to]) => code >= from && code <= to) ? ' ' : char;
+}).join('');
+
+/**
+ * The control a vision click activated, for its result: { role?, name? },
+ * or null when the point is on no control or the probe says nothing about
+ * it. The name is page text: one line, at most VISION_CONTROL_NAME_MAX
+ * characters, and it travels only inside the click result, which the agent
+ * wraps as untrusted page content ('click' in UNTRUSTED_CONTENT_TOOLS) and
+ * digests to a content-free line when history is trimmed. A name holding an
+ * e-mail address is withheld (a signed-in header's account button names the
+ * person and their address in a label the screenshot never shows), and with
+ * screenshot `redaction` on so is one holding a phone number, which the
+ * screenshot pixelates; `nameWithheld` says so.
+ */
+export function visionClickedControl(point, { redaction = false } = {}) {
+  if (!point || point.found !== true || point.clickable !== true) return null;
+  const role = typeof point.controlRole === 'string' && /^[a-z]{2,32}$/.test(point.controlRole) ? point.controlRole : '';
+  let name = typeof point.controlName === 'string'
+    ? visibleNameText(point.controlName).replace(/\s+/g, ' ').trim() : '';
+  const chars = Array.from(name);
+  if (chars.length > VISION_CONTROL_NAME_MAX) name = `${chars.slice(0, VISION_CONTROL_NAME_MAX - 1).join('').trimEnd()}…`;
+  const withheld = !!name && (textHoldsEmail(name) || (redaction === true && textHoldsPhone(name)));
+  if (!role && !name) return null;
+  return {
+    ...(role ? { role } : {}),
+    ...(name && !withheld ? { name } : {}),
+    ...(withheld ? { nameWithheld: true } : {}),
+  };
 }
 
 /** Minimum press-to-release distance (CSS px) for drag_at. */
