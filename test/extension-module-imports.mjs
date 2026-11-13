@@ -72,6 +72,21 @@ async function linkProblems(sourceDir) {
   }
 }
 
+// The page with its HTML comments removed. A scan, not a regex replace, so a
+// "<!--" left behind by one removal cannot open a new comment.
+function withoutComments(html) {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = html.indexOf('<!--', at);
+    if (open < 0) return out + html.slice(at);
+    out += html.slice(at, open);
+    const close = html.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    at = close + 3;
+  }
+}
+
 for (const browser of BUILDS) {
   const sourceDir = path.join(ROOT, 'src', browser);
 
@@ -83,7 +98,7 @@ for (const browser of BUILDS) {
   test(`${browser}: every page's scripts and stylesheets are shipped`, () => {
     const missing = [];
     for (const page of filesUnder(sourceDir, /\.html$/)) {
-      const html = readFileSync(page, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+      const html = withoutComments(readFileSync(page, 'utf8'));
       for (const match of html.matchAll(/<(script|link)\b[^>]*?\s(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
         const reference = match[2].split(/[?#]/)[0];
         if (!reference || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(reference)) continue;
