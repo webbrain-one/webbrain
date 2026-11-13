@@ -55253,7 +55253,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             })()
           `);
           throwIfEarlyCdpAborted();
-          const focus = focusCheck?.result?.value;
+          let focus = focusCheck?.result?.value;
+          // Focus inside an embedded frame reads here as the frame element,
+          // while the inserted text reaches the element focused in the
+          // frame's own document: that element decides, as the focused
+          // signature and readbacks below read it (cdpClient
+          // _focusedFrameElement).
+          if (focus?.focused && /^(IFRAME|FRAME)$/i.test(String(focus.tag || ''))) {
+            focus = await cdpClient.describeFocusedFrameElement(tabId).catch(() => null) || focus;
+            throwIfEarlyCdpAborted();
+          }
 
           if (!focus?.focused || !focus?.editable) {
             return {
@@ -55262,6 +55271,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               noDispatch: true,
               error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text with no selector.',
               focusedElement: focus || null,
+            };
+          }
+          // This path has no content-script binding in the frame (the
+          // typing-target preflight binds a framed field only where
+          // WebBrain's content script runs in that frame). A dropdown or
+          // native date field there is set by the content action, which would
+          // reach the top document instead, and credential-not-provided reads
+          // fields through the content script, so it did not see a password
+          // field there: nothing is typed into them from here.
+          if (focus.inFrame === true && (focus.tag === 'SELECT'
+              || (focus.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(String(focus.type || '').toLowerCase()))
+              || String(focus.type || '').toLowerCase() === 'password'
+              || /(?:^|\s)(?:current|new)-password(?:\s|$)/i.test(String(focus.autocomplete || '')))) {
+            return {
+              success: false,
+              dispatched: false,
+              noDispatch: true,
+              retryable: false,
+              error: 'The focused field is a dropdown, date or password field inside an embedded frame, where WebBrain cannot check it, so nothing was typed. Ask the user to fill this field.',
+              focusedElement: { ...focus, value: '' },
             };
           }
           if (focus.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(focus.type)) break trustedTypeText;

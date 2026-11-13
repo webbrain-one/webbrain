@@ -5691,6 +5691,152 @@ export class CDPClient {
     return fallbackResult;
   }
 
+  /**
+   * Keyboard focus inside an embedded frame reads in the top document as the
+   * frame element, while Input.insertText and key events reach the element
+   * focused in that frame's own document, same-process and process-isolated
+   * frames alike (_pageAgentInputTarget marks that receiver). The focused
+   * text helpers (`focused: true`) read that element: focus is followed into
+   * the frame as resolveInputFrame follows it, and read in an isolated world
+   * of the frame, where the page cannot redefine activeElement.
+   *
+   * Returns null while focus rests in the top document (the helpers read it
+   * there as before) or when the frame's document cannot be reached. Else
+   * { objectId, sessionId, offset, release, detach }: the focused element as
+   * a remote object of the debugger session `sessionId` ('' for the tab's
+   * own), the frame content's origin in the top-level viewport (CSS px,
+   * summed over nested frames), release() for the object together with any
+   * frame session attached for it, and detach() for that session alone.
+   */
+  async _focusedFrameElement(tabId) {
+    const deepActive = '(() => { let el = document.activeElement; while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement; return el; })()';
+    const frameOwner = node => !!node?.frameId && /^(IFRAME|FRAME)$/i.test(String(node.nodeName || ''));
+    // Most typing has its focus in the top document: one read settles it.
+    const top = await this.sendCommand(tabId, 'Runtime.evaluate', {
+      expression: `/^(IFRAME|FRAME)$/i.test(String(${deepActive}?.tagName || ''))`, returnByValue: true,
+    }).catch(() => null);
+    if (top?.result?.value !== true) return null;
+    const temporarySessions = [];
+    const detach = async () => {
+      for (const id of temporarySessions.splice(0).reverse()) {
+        try { await this.sendCommand(tabId, 'Target.detachFromTarget', { sessionId: id }); } catch {}
+      }
+    };
+    let sessionId = '';
+    const isolatedContext = async frameId => (await this.sendCommand(tabId, 'Page.createIsolatedWorld',
+      { frameId, worldName: 'webbrain-text-entry' }, sessionId)).executionContextId;
+    const offset = { x: 0, y: 0 };
+    let entered = false;
+    try {
+      for (let hop = 0; hop < 16; hop++) {
+        const rootFrameId = String((await this.getAllFrames(tabId, sessionId))[0]?.id || '');
+        if (!rootFrameId) break;
+        let contextId = await isolatedContext(rootFrameId);
+        // A process-isolated frame, entered through its own session next.
+        let remoteFrameId = '';
+        for (let local = 0; local < 16 && !remoteFrameId; local++) {
+          const focused = await this.sendCommand(tabId, 'Runtime.evaluate', { expression: deepActive, contextId }, sessionId);
+          const objectId = focused?.result?.objectId;
+          if (!objectId) throw new Error('No focused element');
+          let node;
+          try { ({ node } = await this.sendCommand(tabId, 'DOM.describeNode', { objectId }, sessionId)); }
+          catch (error) { this.releaseObject(tabId, objectId, sessionId); throw error; }
+          if (!frameOwner(node)) {
+            // Focus went back to the top document after the first read.
+            if (!entered) { this.releaseObject(tabId, objectId, sessionId); await detach(); return null; }
+            const objectSession = sessionId;
+            return {
+              objectId, sessionId: objectSession, offset, detach,
+              release: async () => { this.releaseObject(tabId, objectId, objectSession); await detach(); },
+            };
+          }
+          entered = true;
+          try {
+            // The frame's content box, in its parent document's viewport.
+            const box = await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
+              objectId, returnByValue: true,
+              functionDeclaration: `function () {
+                const rect = this.getBoundingClientRect();
+                const style = this.ownerDocument.defaultView.getComputedStyle(this);
+                return { x: rect.x + this.clientLeft + (parseFloat(style.paddingLeft) || 0),
+                  y: rect.y + this.clientTop + (parseFloat(style.paddingTop) || 0) };
+              }`,
+            }, sessionId);
+            offset.x += Number(box?.result?.value?.x) || 0;
+            offset.y += Number(box?.result?.value?.y) || 0;
+          } finally { this.releaseObject(tabId, objectId, sessionId); }
+          // A same-process frame's world opens in this session; a
+          // process-isolated document requires its child session.
+          try { contextId = await isolatedContext(String(node.frameId)); }
+          catch { remoteFrameId = String(node.frameId); }
+        }
+        if (!remoteFrameId) break;
+        const existing = [...(this.runtimeContexts.get(tabId)?.values() || [])]
+          .find(context => context.frameId === remoteFrameId && context.sessionId);
+        if (existing) sessionId = existing.sessionId;
+        else {
+          const attached = await this.sendCommand(tabId, 'Target.attachToTarget', { targetId: remoteFrameId, flatten: true });
+          sessionId = attached.sessionId; temporarySessions.push(sessionId);
+        }
+      }
+    } catch { /* The frame's document cannot be read: nothing is claimed about it. */ }
+    await detach();
+    return null;
+  }
+
+  /**
+   * The element selectorless typing reaches while keyboard focus is inside
+   * an embedded frame, described as type_text's own focus check describes a
+   * top-document element, with its rect in the top-level viewport and
+   * `inFrame: true`; unlike there, an editable body counts as focused (an
+   * editor frame). A password field's value is left out. Null while focus
+   * rests in the top document or when the frame's document cannot be read.
+   */
+  async describeFocusedFrameElement(tabId) {
+    const target = await this._focusedFrameElement(tabId);
+    if (!target) return null;
+    try {
+      const described = await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
+        objectId: target.objectId, returnByValue: true,
+        functionDeclaration: `function () {
+          const el = this;
+          const doc = el.ownerDocument;
+          // A frame's editable body is the editor itself (an embedded
+          // rich-text editor's document); any other body has no field focused.
+          if (!el.isConnected || ((el === doc.body || el === doc.documentElement) && el.isContentEditable !== true)) {
+            return { focused: false, inFrame: true };
+          }
+          const tag = el.tagName;
+          const type = String(el.type || '');
+          const r = el.getBoundingClientRect();
+          return {
+            focused: true,
+            editable: el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag),
+            contentEditable: el.isContentEditable === true,
+            tag,
+            type,
+            name: el.name || el.id || el.getAttribute('aria-label') || '',
+            autocomplete: String(el.getAttribute('autocomplete') || '').slice(0, 100),
+            value: type.toLowerCase() === 'password' ? '' : String(el.value || '').slice(0, 50),
+            rect: { x: r.x, y: r.y, w: r.width, h: r.height },
+            inFrame: true,
+          };
+        }`,
+      }, target.sessionId);
+      const focus = described?.result?.value;
+      if (!focus || typeof focus !== 'object') return null;
+      if (focus.rect) {
+        focus.rect = {
+          x: Math.round(focus.rect.x + target.offset.x), y: Math.round(focus.rect.y + target.offset.y),
+          w: Math.round(focus.rect.w), h: Math.round(focus.rect.h),
+        };
+      }
+      return focus;
+    } catch {
+      return null;
+    } finally { await target.release(); }
+  }
+
   async textEntrySignature(tabId, { selector = '', nodeId = null, focused = false } = {}) {
     const signatureFunction = `function () {
       const el = this;
@@ -5725,6 +5871,19 @@ export class CDPClient {
           this.releaseObject(tabId, objectId);
         }
       }
+    }
+    const frameTarget = focused === true ? await this._focusedFrameElement(tabId) : null;
+    if (frameTarget) {
+      try {
+        const result = await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
+          objectId: frameTarget.objectId,
+          returnByValue: true,
+          functionDeclaration: signatureFunction,
+        }, frameTarget.sessionId);
+        return typeof result?.result?.value === 'string' ? result.result.value : null;
+      } catch {
+        return null;
+      } finally { await frameTarget.release(); }
     }
     const selectorJSON = JSON.stringify(String(selector || ''));
     const result = await this.evaluate(tabId, `
@@ -5779,8 +5938,20 @@ export class CDPClient {
 
   async captureTextClearReceipt(tabId, { selector = '', nodeId = null, focused = false } = {}) {
     let targetObjectId = null, receiptObjectId = null;
+    // Focus inside an embedded frame: the receipt is kept on the frame's
+    // focused element, in that frame's session, until it is disposed.
+    let frameTarget = null, receiptSession = '';
     try {
-      if (Number.isInteger(nodeId) && nodeId > 0) {
+      if (!(Number.isInteger(nodeId) && nodeId > 0) && focused === true) frameTarget = await this._focusedFrameElement(tabId);
+      if (frameTarget) {
+        receiptSession = frameTarget.sessionId;
+        try {
+          receiptObjectId = (await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
+            objectId: frameTarget.objectId, returnByValue: false,
+            functionDeclaration: `function () { return (${nativeTextClearReceipt.toString()})(this); }`,
+          }, receiptSession))?.result?.objectId;
+        } finally { this.releaseObject(tabId, frameTarget.objectId, receiptSession); }
+      } else if (Number.isInteger(nodeId) && nodeId > 0) {
         const resolved = await this.sendCommand(tabId, 'DOM.resolveNode', { nodeId });
         targetObjectId = resolved?.object?.objectId;
         if (targetObjectId) receiptObjectId = (await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
@@ -5803,20 +5974,28 @@ export class CDPClient {
           })()`,
         }))?.result?.objectId;
       }
-      if (!receiptObjectId) return null;
+      if (!receiptObjectId) {
+        await frameTarget?.detach();
+        return null;
+      }
       const invoke = async name => {
         try {
           const result = await this.sendCommand(tabId, 'Runtime.callFunctionOn', { objectId: receiptObjectId,
-            returnByValue: true, functionDeclaration: 'function (name) { return this[name](); }', arguments: [{ value: name }] });
+            returnByValue: true, functionDeclaration: 'function (name) { return this[name](); }', arguments: [{ value: name }] },
+          receiptSession);
           return result?.result?.value === true;
         } catch { return false; }
       };
       return {
         current: () => invoke('current'), verify: () => invoke('verify'),
-        dispose: async () => { await invoke('dispose'); await this.releaseObject(tabId, receiptObjectId); },
+        dispose: async () => {
+          await invoke('dispose'); await this.releaseObject(tabId, receiptObjectId, receiptSession);
+          await frameTarget?.detach();
+        },
       };
     } catch {
-      if (receiptObjectId) await this.releaseObject(tabId, receiptObjectId);
+      if (receiptObjectId) await this.releaseObject(tabId, receiptObjectId, receiptSession);
+      await frameTarget?.detach();
       return null;
     } finally {
       if (targetObjectId) await this.releaseObject(tabId, targetObjectId);
@@ -5971,6 +6150,25 @@ export class CDPClient {
           this.releaseObject(tabId, objectId);
         }
       }
+    }
+
+    const frameTarget = focused === true ? await this._focusedFrameElement(tabId) : null;
+    if (frameTarget) {
+      try {
+        const result = await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
+          objectId: frameTarget.objectId,
+          returnByValue: true,
+          functionDeclaration: verifyFunction,
+          arguments: [
+            { value: expected },
+            { value: clear === true },
+            { value: typeof beforeSignature === 'string' ? beforeSignature : '' },
+          ],
+        }, frameTarget.sessionId);
+        return outcome(result?.result?.value);
+      } catch {
+        return outcome(null);
+      } finally { await frameTarget.release(); }
     }
 
     const selectorJSON = JSON.stringify(String(selector || ''));

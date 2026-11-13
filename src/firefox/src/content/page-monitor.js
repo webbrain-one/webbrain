@@ -4132,7 +4132,16 @@
       const bindingChanged = !params.release && preparedBindingChanged(prepared);
       const receiverPredicate = !params.release ? nativeReceiverPredicate(prepared, params) : '';
       const rebased = !params.release && !layoutChanged && !receiverPredicate && rebasePassivePreparation(prepared, params);
-      if (!params.release && active && (prepared?.modelBindingInvalid || layoutChanged || bindingChanged || receiverPredicate || (!rebased && (domTimer || unreported)) || (prepared && prepared.preparedRevision !== revision)
+      // An operation this document never prepared (native keyboard input
+      // that reaches an embedded frame focused by a click in an earlier step)
+      // is created by its first command's dispatch below, without a prepared
+      // revision. Each later command is fenced against the revision at the
+      // command before it (commandRevision), as a prepared operation's are
+      // against its preparation, instead of always being refused: select
+      // all, Delete, then the text.
+      const revisionMoved = !!prepared && (Number.isFinite(prepared.preparedRevision)
+        ? prepared.preparedRevision !== revision : prepared.commandRevision !== revision);
+      if (!params.release && active && (prepared?.modelBindingInvalid || layoutChanged || bindingChanged || receiverPredicate || (!rebased && (domTimer || unreported)) || revisionMoved
           || (params.documentToken && (params.documentToken !== documentToken || (!rebased && params.documentRevision !== revision))))) {
         // Report bounded predicate names and facts without leaking the target.
         const preparationVeto = {
@@ -4142,7 +4151,7 @@
           modelBindingInvalid: prepared?.modelBindingInvalid === true,
           layoutChanged: layoutChanged === true, preparedBindingChanged: bindingChanged === true,
           passiveRebased: rebased === true, pendingFeedback: !!(domTimer || unreported),
-          revisionChanged: !!prepared && prepared.preparedRevision !== revision,
+          revisionChanged: revisionMoved,
           documentChanged: !!params.documentToken && params.documentToken !== documentToken,
           documentRevisionChanged: !!params.documentToken && !rebased && params.documentRevision !== revision,
         };
@@ -4154,6 +4163,8 @@
       // the reply says so, for diagnostics.
       const typingPreparation = typingFocusPhase(prepared, params);
       dispatch(params, false, typingPreparation); publishRevision();
+      const commanded = operations.get(params.operationId);
+      if (!params.release && commanded && !Number.isFinite(commanded.preparedRevision)) commanded.commandRevision = revision;
       respond({ ready: true, ...(typingPreparation ? { typingPreparation: true } : {}), ...(active && params.runToken === runToken ? { guard: {
         documentToken, revision, operationId: params.operationId, runToken,
         navigationCandidate: params.navigationCandidate !== false,
