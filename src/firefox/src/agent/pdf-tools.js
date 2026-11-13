@@ -247,6 +247,11 @@ export async function fetchPdfBytes(url, {
  *     hasExtractableText, truncated, byteLength
  *   }
  *
+ * With `opts.includeDocument === true` and a file no larger than
+ * PDF_PASSTHROUGH_MAX_BYTES, the result also carries `_pdfBytes`: a copy
+ * of the fetched bytes for the Claude document passthrough, taken before
+ * parsing so text and document come from the same fetch.
+ *
  * `hasExtractableText` is a heuristic — a PDF that's pure scanned
  * images returns near-empty text from getTextContent(). The flag tells
  * the planner "you need a vision model for this PDF" without us
@@ -264,6 +269,14 @@ export async function extractPdfText(url, opts = {}, ctx = {}) {
     allowLocalNetwork: allowLocal,
     attachCookies,
   });
+  // PDF.js transfers the input buffer to its worker, which detaches the
+  // caller's Uint8Array (its length becomes 0). Capture the length and the
+  // optional Claude document copy before getDocument(); reading `bytes`
+  // afterwards would report 0 bytes and attach an empty document.
+  const byteLength = bytes.length;
+  const passthrough = opts.includeDocument === true && byteLength <= PDF_PASSTHROUGH_MAX_BYTES
+    ? bytes.slice()
+    : null;
   const pdfjs = await getPdfjs();
 
   const loadingTask = pdfjs.getDocument({
@@ -337,12 +350,12 @@ export async function extractPdfText(url, opts = {}, ctx = {}) {
     pages,
     hasExtractableText,
     truncated,
-    byteLength: bytes.length,
-    // The raw bytes are kept on `_pdfBytes` for the Tier 2 Claude
-    // passthrough path; the batch loop strips it before stringifying
-    // so the LLM doesn't see ~1 MB of base64 nonsense in the tool
-    // result text.
-    _pdfBytes: bytes,
+    byteLength,
+    // The pre-parse copy is kept on `_pdfBytes` for the Tier 2 Claude
+    // passthrough path; the read_pdf handler strips it before the result
+    // is stringified so the LLM doesn't see ~1 MB of base64 nonsense in
+    // the tool result text.
+    ...(passthrough ? { _pdfBytes: passthrough } : {}),
   };
 }
 

@@ -46,9 +46,46 @@ function pathFromUrl(url) {
   }
 }
 
+// Which pull-request tab the path shows. Only the bare Files changed tab
+// (/files, or /changes, which GitHub routes to the same tab) holds the whole
+// diff; a /files/<range> view holds only some of its commits.
+function githubPullRequestView(rest = '') {
+  const segments = String(rest).split('/').filter(Boolean);
+  if (!segments.length) return 'conversation';
+  if (segments.length === 1 && /^(?:files|changes)$/i.test(segments[0])) return 'files';
+  return 'other';
+}
+
 function githubPullRequestContext(path = '') {
-  const match = GITHUB_PR_PATH_RE.exec(String(path));
-  return match ? { owner: match[1], repo: match[2], number: match[3] } : null;
+  const value = String(path);
+  const match = GITHUB_PR_PATH_RE.exec(value);
+  return match ? {
+    owner: match[1],
+    repo: match[2],
+    number: match[3],
+    view: githubPullRequestView(value.slice(match[0].length)),
+  } : null;
+}
+
+// The pull-request suggestions run in read-only Ask mode, which has no
+// navigate or click tool, and read_page reads only the current tab. So the
+// prompt names only reads this tab can make: read_page for what the tab
+// shows, fetch_url for the rest. github.com/<owner>/<repo>/pull/<n>.diff
+// redirects to patch-diff.githubusercontent.com and fetch_url follows no
+// redirect, so the diff is fetched from that host directly. That host never
+// sees the user's GitHub sign-in, so a private repository's diff may not load
+// there. research_url on the Files changed tab is then the fallback: it
+// renders with the user's sign-in but returns one bounded read.
+function githubPullRequestReadSteps({ owner, repo, number, view }) {
+  const pageUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+  const diffUrl = `https://patch-diff.githubusercontent.com/raw/${owner}/${repo}/pull/${number}.diff`;
+  const overview = view === 'conversation'
+    ? 'Use read_page on this tab to read the description, conversation, and status checks.'
+    : `Read the description, conversation, and status checks with fetch_url on ${pageUrl}, continuing with offset set to nextOffset while hasMore is true.`;
+  const diff = view === 'files'
+    ? 'Use read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true.'
+    : `Read the full diff with fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true. If that fails, for example because the repository is private, use research_url on ${pageUrl}/files instead. It returns one bounded read, so name any changed files it did not cover and tell me to open the Files changed tab and run this again for a complete read.`;
+  return `This is a read-only Ask run: you cannot navigate or click, and read_page reads only this tab. ${overview} ${diff}`;
 }
 
 function githubPullsContext(path = '') {
@@ -381,16 +418,17 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const pullRequest = githubPullRequestContext(path);
   if (host === 'github.com' && pullRequest) {
     const reference = `${pullRequest.owner}/${pullRequest.repo}#${pullRequest.number}`;
+    const readSteps = githubPullRequestReadSteps(pullRequest);
     addUnique(actions, {
       id: 'review-pull-request',
       label: 'Review this pull request',
-      prompt: `Review GitHub pull request ${reference}. Use read_page to read its description and conversation, then open the Files changed tab (/pull/${pullRequest.number}/files) and read the full diff, continuing with read_page continuationArgs while hasMore is true; also check the status checks. Report prioritized correctness, security, compatibility, and test-coverage findings with exact file and line references. Do not post the review, comment, approve, close, or modify the pull request unless I explicitly ask.`,
+      prompt: `Review GitHub pull request ${reference}. ${readSteps} Report prioritized correctness, security, compatibility, and test-coverage findings with exact file and line references. Do not post the review, comment, approve, close, or modify the pull request unless I explicitly ask.`,
       mode: 'ask',
     });
     addUnique(actions, {
       id: 'summarize-pull-request',
       label: 'Summarize this pull request',
-      prompt: `Use read_page to read GitHub pull request ${reference}, including its description, review comments, and checks; open the Files changed tab (/pull/${pullRequest.number}/files) for the changed files. Summarize the intent, implementation, material risks, review status, and remaining blockers. Do not post or modify anything.`,
+      prompt: `Summarize GitHub pull request ${reference}, including its review comments. ${readSteps} Summarize the intent, implementation, material risks, review status, and remaining blockers. Do not post or modify anything.`,
       mode: 'ask',
     });
   }

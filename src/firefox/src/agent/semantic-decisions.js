@@ -142,8 +142,10 @@ export const SEMANTIC_QUESTIONS = Object.freeze({
   // start of (page-read-coverage.js). Only the user's own words are read.
   page_read_scope: Object.freeze({
     instructions: 'A user sent the request in `request` to a browser assistant about the web page open in their '
-      + 'browser. The assistant has read only the first part of that page. Decide whether a complete answer to the '
-      + 'request needs the content of the whole page. Judge the meaning in any language.',
+      + 'browser. When the user corrected the request while it ran, `request` gives the original request followed by '
+      + 'the corrections in order; judge the request as the latest correction leaves it. The assistant has read only '
+      + 'the first part of that page. Decide whether a complete answer to the request needs the content of the whole '
+      + 'page. Judge the meaning in any language.',
     choices: Object.freeze({
       whole_page: 'It asks about the page as a whole: a summary, overview, outline or review of the page, everything '
         + 'or every item on it, its main points, or how it ends.',

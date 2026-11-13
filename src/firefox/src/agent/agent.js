@@ -104,6 +104,7 @@ import { executeWikipediaSkillTool } from './wikipedia-offline.js';
 import {
   isPdfUrl,
   isPdfHandlerTabUrl,
+  normalizePdfUrl,
   pdfUrlFromTabUrl,
   extractPdfText,
   providerSupportsPdfPassthrough,
@@ -274,6 +275,32 @@ const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
   ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
   ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
+
+// read_pdf fetches what normalizePdfUrl makes of its url: on our own viewer
+// page that is the document in ?url=, not the extension page, whose hostname
+// is the extension id. The permission gate is charged to that address. One
+// the handler would refuse leaves '', and the call fails closed.
+function readPdfPermissionUrl(url) {
+  try {
+    return normalizePdfUrl(url);
+  } catch {
+    return '';
+  }
+}
+
+// Why read_pdf({url}) could not be permission-checked. Only an http(s)
+// document names a site, so nothing was fetched.
+function readPdfPermissionFailure(url) {
+  let target = '';
+  try {
+    target = normalizePdfUrl(url);
+  } catch (error) {
+    return `Cannot run read_pdf: ${error.message} Nothing was fetched.`;
+  }
+  return target.startsWith('file:')
+    ? "Cannot run read_pdf on a file: url: a local file has no site the permission card can name, so it can't be permission-checked. Nothing was read. If the PDF is open in this tab, call read_pdf without url; otherwise ask the user to open the file in this tab."
+    : "Cannot run read_pdf: the PDF's site could not be identified, so it can't be permission-checked. Nothing was fetched.";
+}
 
 function savedWorkflowStepMayDispatchMessage(step) {
   const tool = String(step?.tool || '');
@@ -1166,13 +1193,32 @@ export class Agent extends LoopDetector {
     if (state) recordPageObservation(state, url, page, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
   }
 
+  // A steering correction replaces the request the page's coverage was
+  // decided for, a recommended action's own scope included, so the revised
+  // task is read again (page_read_scope) before an answer is judged against
+  // it, and the read-coverage check may send one answer back under it. What
+  // the run has read stays recorded: a page already read to its end needs no
+  // second read.
+  _resetPageReadCoverageForSteering(tabId) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (!state) return;
+    state.scope = null;
+    state.gap = null;
+    state.steered = true;
+    const guard = this._guardRunState(tabId);
+    guard.advised.delete('read-coverage-incomplete');
+    guard.caveats.delete('read-coverage-incomplete');
+    guard.outcomeDowngrades?.delete('read-coverage-incomplete');
+  }
+
   // Before an Ask answer is accepted (done or a plain final): when the page
   // content the model was given was cut off and no read reached the end of
   // the page, whether the request is about the whole page. That is asked
-  // once per run (page_read_scope); the synchronous check that follows
-  // (_readCompletenessBlock) then sends the answer back with the exact next
-  // read. Act runs, conversations (their own whole-thread check) and runs
-  // with no recorded coverage are not affected.
+  // once per run and again after a steering correction (page_read_scope);
+  // the synchronous check that follows (_readCompletenessBlock) then sends
+  // the answer back with the exact next read. Act runs, conversations (their
+  // own whole-thread check) and runs with no recorded coverage are not
+  // affected.
   async _preparePageReadCoverage(tabId, allowedToolNames = null) {
     const state = this.pageReadCoverage?.get(tabId);
     if (!state) return null;
@@ -1184,9 +1230,14 @@ export class Agent extends LoopDetector {
     const gap = pageReadCoverageGap(state, url, { tools: allowedToolNames instanceof Set ? allowedToolNames : null });
     if (!gap) return null;
     if (state.scope == null) {
+      // A steered task is the request with its corrections in order: "in
+      // Turkish" keeps a summary of the whole page, "just who wrote it" does
+      // not.
+      const request = (state.steered ? this._activeTaskBinding(this.conversations.get(tabId) || []).text : '')
+        || this._latestTaskText(tabId) || '';
       let choice = null;
       try {
-        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request: this._latestTaskText(tabId) || '' }))?.choice || null;
+        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request }))?.choice || null;
       } catch (error) {
         if (this._checkAbort(tabId)) throw error;
       }
@@ -6380,6 +6431,9 @@ export class Agent extends LoopDetector {
     if (run.revision === run.authorizedRevision) return null;
     if (!this._isActionMode(mode) || this._isStandaloneChatRun(runOptions)) {
       run.authorizedRevision = run.revision;
+      // Ask has no planner gate to set this revision's read obligation; its
+      // page coverage decision is made again for the revised request.
+      this._resetPageReadCoverageForSteering(tabId);
       return { changed: true };
     }
     // A revision never inherits success counters or dispatch authorization.
@@ -6515,9 +6569,9 @@ export class Agent extends LoopDetector {
    * whether this request repeats it. Instead of refusing every such write
    * for the rest of the task, WebBrain asks the user on its hard card, which
    * never times out and never goes ahead on its own (an unattended run is
-   * refused). The card shows the request: its method and address, and its
-   * body unless strict secret handling is on. One answer covers one call
-   * with exactly these arguments.
+   * refused). The card shows the request: its method and address, and the
+   * body it sends unless strict secret handling is on. One answer covers one
+   * call with exactly these arguments.
    */
   _priorSubmissionWriteAsk(tabId, guard, name, args = {}) {
     const network = isNetworkMutation(name, args);
@@ -6530,7 +6584,9 @@ export class Agent extends LoopDetector {
       try { url = new URL(String(args?.url || '')); } catch { return null; }
       if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
       host = url.hostname;
-      const body = typeof args.body === 'string' ? args.body : args.body == null ? '' : JSON.stringify(args.body);
+      const sent = this._priorSubmissionWriteBody(tabId, name, args, url);
+      if (!sent.ok) return null;
+      const body = typeof sent.body === 'string' ? sent.body : sent.body == null ? '' : JSON.stringify(sent.body);
       text = [`${String(args.method || '').toUpperCase()} ${url.href.slice(0, 600)}`,
         ...(body && this.strictSecretMode !== true ? [body.slice(0, 800)] : [])].join('\n\n');
     } else {
@@ -6540,6 +6596,22 @@ export class Agent extends LoopDetector {
       reason: 'prior_submission_unreconciled', host: normalizeHost(host), contentLabel: 'request', text,
       stepKey: this._sha256TextSync(JSON.stringify(['steer-prior-submission-unreconciled', guard.taskKey,
         Number(guard.steeringPriorSubmission?.actionSequence || 0), name, args || {}])) };
+  }
+
+  // The body a write sends. A fetch_url replay of a captured request with no
+  // body of its own sends the captured body (network-tools.js
+  // apiReplayOptionsForFetch), so the card shows that one. A replay that
+  // fetch_url would refuse (unknown id, another tab, another origin) is not
+  // asked about: `ok` is false and the plain refusal stands.
+  _priorSubmissionWriteBody(tabId, name, args, url) {
+    const replayRequestId = name === 'fetch_url' ? (args?.replayRequestId || args?.apiReplayRequestId) : '';
+    if (!replayRequestId) return { ok: true, body: args?.body };
+    const replay = globalThis.__webbrainApiRequestReplay?.get(String(replayRequestId));
+    if (!replay || (tabId != null && replay.tabId != null && Number(replay.tabId) !== Number(tabId))) return { ok: false };
+    try {
+      if (new URL(String(replay.url || '')).origin !== url.origin) return { ok: false };
+    } catch { return { ok: false }; }
+    return { ok: true, body: args.body !== undefined ? args.body : (replay.body ?? undefined) };
   }
 
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
@@ -9632,8 +9704,8 @@ export class Agent extends LoopDetector {
    * `diagnostics`, when given, is filled with how the answer was reached, for
    * the caller's trace (auto-mode.js runModeDecisionNote): the path, the model
    * asked last, what the decision model and the active model each did, why no
-   * answer counted, and the active model's reply shape with an excerpt that
-   * keeps none of the user's words. Never the evidence.
+   * answer counted and the active model's parsed reply shape. Never the reply
+   * text or evidence.
    */
   async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [], diagnostics = null } = {}) {
     const spec = semanticQuestion(kind);
@@ -9644,13 +9716,12 @@ export class Agent extends LoopDetector {
       diag.latencyMs = Date.now() - startedAt;
       return result;
     };
-    // Relationship decisions must read the entire latest user message. A
-    // prefix-only verdict can mistake a correction or a new task at its end.
+    // Relationship and page-scope decisions must read the entire request. A
+    // prefix-only verdict can miss a correction or new task at its end.
     const requestText = String(request ?? '');
-    const trusted = kind === 'user_turn_kind' ? requestText : requestText.slice(0, 6000);
+    const trusted = ['user_turn_kind', 'page_read_scope'].includes(kind) ? requestText : requestText.slice(0, 6000);
     const data = boundedSemanticData(page);
-    // Whether a model reads all of it: the request is cut to 6,000 characters
-    // above, and boundedSemanticData shortens long data (an earlier task).
+    // Whether the model reads the entire request and any bounded page data.
     const inputComplete = trusted.length === requestText.length && semanticDataComplete(page);
     // Keyed by the whole request, not the part a model reads, and by whether
     // the data was cut: inputs that share a cut-off start are different.
@@ -15237,6 +15308,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       fnArgs = coordinates.args;
       predispatch.lap('argumentsMs');
+      // A point under the page's own Stop button is the page's to the model:
+      // the button moves away before any check below reads that point.
+      await this._clearAgentStopButton(tabId, this._agentInputPoints(fnName, fnArgs, tc._vision));
       if (fnName !== 'done' && !Agent.NAV_TOOLS.has(fnName)) {
         try {
           await this._adoptLiveSocialPublishWorkflow(tabId, provider);
@@ -16049,6 +16123,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ? otpEmailPermissionArgs
             : this._skillPermissionArgsForCapability(skillCallTool, capability, fnArgs);
           if (receivingFrameInput) gateArgs = { ...gateArgs, _inputFrameUrl: curUrl };
+          if (fnName === 'read_pdf') gateArgs = { ...gateArgs, url: readPdfPermissionUrl(gateArgs?.url) };
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
@@ -16095,6 +16170,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               denied: true,
               error: receivingFrameInput
                 ? `Cannot run ${fnName}: WebBrain could not identify the site of the document ${fnName === 'click' ? 'under that point' : 'that has keyboard focus'}, so the input can't be permission-checked. Nothing was sent. Look at the page again before retrying; for a field inside an embedded frame, use iframe_click / iframe_type with a urlFilter naming the frame's domain.`
+                : fnName === 'read_pdf'
+                ? readPdfPermissionFailure(fnArgs?.url)
                 : `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
@@ -18124,10 +18201,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // _visionClickPreflight), after whatever the click itself reported.
     const note = preflight.note && response?.success !== false
       ? [response?.note, preflight.note].filter(Boolean).join(' ') : response?.note;
+    // What was clicked, by role and name: the record that outlasts the
+    // screenshot (vision-runtime.js _visionClickPreflight). Not for an input
+    // the page refused before anything went out.
+    const control = preflight.control && response?.noDispatch !== true ? preflight.control : null;
     return {
       ...response,
       x,
       y,
+      ...(control ? { control } : {}),
       ...(vision?.imageId ? { image: vision.imageId } : {}),
       ...(note ? { note } : {}),
     };
@@ -19229,6 +19311,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const ok = !!result && typeof result === 'object' && result.success === true
       && result.noDispatch !== true && result.dispatched !== false;
     this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
+  }
+
+  /**
+   * Agent input is about to land at `points` (viewport CSS px of the top
+   * document; the first is where a press goes). The page's Stop button
+   * (content/agent-visual-indicator.js) is hidden in every screenshot, so a
+   * point under it is the page's to the model; its press must reach the
+   * page, not stop the run. The button moves out of the way first, before
+   * the checks that read the point (content.js visionInput asks again right
+   * before its input). Only on a tab that shows the run; bounded like the
+   * cursor's reply. Resolves to whether it moved.
+   */
+  async _clearAgentStopButton(tabId, points) {
+    const list = (Array.isArray(points) ? points : [])
+      .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+      .slice(0, 8)
+      .map(point => ({ x: Number(point.x), y: Number(point.y) }));
+    if (!list.length || !this._agentCursorShown(tabId)) return false;
+    let timer = null;
+    try {
+      const reply = await Promise.race([
+        Promise.resolve(browser.tabs.sendMessage(tabId, { type: 'WB_AGENT_POINTER_AT', points: list }, { frameId: 0 })).catch(() => null),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+      ]);
+      return reply?.moved === true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Where a tool call's input lands, when it is a viewport point known before its checks. */
+  _agentInputPoints(name, args, vision = null) {
+    const points = [];
+    if (name === 'click' && args?.x != null && args?.y != null) points.push({ x: args.x, y: args.y });
+    for (const point of [vision?.monitorPoint, vision?.wheelPoint]) if (point) points.push(point);
+    return points;
   }
 
   async _captureViewportProbe(tabId) {
@@ -47642,20 +47762,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: false, error: 'read_pdf: no url provided and could not read the active tab URL.' };
         }
 
+        const provider = this.providerManager.getActive();
+        const supportsPdfPassthrough = providerSupportsPdfPassthrough(provider);
         const result = await extractPdfText(pdfUrl, {
           fromPage: args.fromPage,
           toPage: args.toPage,
           maxChars: args.maxChars,
+          includeDocument: supportsPdfPassthrough,
         }, { tabId });
 
-        // Tier 2 — Anthropic Claude PDF passthrough.
-        const provider = this.providerManager.getActive();
+        // Tier 2 — Anthropic Claude PDF passthrough. extractPdfText copies
+        // the bytes before PDF.js detaches them, so the document block is
+        // the same file the text came from. An empty copy is never attached.
         const bytes = result._pdfBytes;
         delete result._pdfBytes;
 
         if (
-          bytes &&
-          providerSupportsPdfPassthrough(provider) &&
+          bytes?.length > 0 &&
+          supportsPdfPassthrough &&
           bytes.length <= PDF_PASSTHROUGH_MAX_BYTES
         ) {
           let docName = result.title || '';

@@ -58,6 +58,24 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 // runs (handled below in selectRedactionRegions).
 const PHONE_RE = /(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?){2,5}\d{2,4}/;
 
+/**
+ * Whether short page text that reaches the model as text rather than pixels
+ * (a vision click's control name, vision-dom-probe.js visionClickedControl)
+ * holds an e-mail address, or a phone number of at least seven digits,
+ * anywhere in it. Stricter than region selection below, which looks only at
+ * text that is itself one address or number.
+ */
+export function textHoldsEmail(text) {
+  return EMAIL_RE.test(String(text ?? ''));
+}
+
+export function textHoldsPhone(text) {
+  for (const match of String(text ?? '').matchAll(new RegExp(PHONE_RE.source, 'g'))) {
+    if ((match[0].match(/\d/g) || []).length >= 7) return true;
+  }
+  return false;
+}
+
 // Input element types whose *value* is sensitive and should always be
 // redacted when redaction is on.
 const SENSITIVE_INPUT_TYPES = new Set([
