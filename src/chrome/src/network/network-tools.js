@@ -3,6 +3,7 @@ import { createRequestDeadline, readResponseText, responseAbortError } from './r
 import { prepareAuthenticatedDownload, createAuthenticatedDownloadJobs, createDiskDownloadStore } from './download-staging.js';
 import { isMastodonPublicMediaUrl } from '../agent/public-media-url.js';
 import { isKnownMastodonHost } from '../agent/adapters.js';
+import { getDomain as publicSuffixListDomain } from '../../vendor/tldts/index.esm.min.js';
 /**
  * Network & download tools for the WebBrain agent.
  *
@@ -438,7 +439,7 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false } 
 // ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
 
 /**
- * Best-effort registrable-domain extractor (a.k.a. eTLD+1).
+ * Registrable-domain extractor (a.k.a. eTLD+1).
  *
  * Used to decide whether an agent-driven fetch should attach the user's
  * cookies: we attach cookies only when the fetch target shares the
@@ -446,41 +447,22 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false } 
  * way, a prompt-injected page on news.example.com can't steer the agent
  * into a cookied read of mail.google.com.
  *
- * This is NOT the full Public Suffix List — it covers common ccTLD
- * patterns and well-known multi-tenant hosts. For unknown multi-label
- * suffixes it falls back to "last 2 labels", which over-matches on rare
- * ccTLDs. If you need PSL-perfect accuracy, swap in a vetted PSL.
+ * The lookup uses the Public Suffix List bundled in vendor/tldts, with its
+ * private section, so tenants of shared hosts (evil.appspot.com and
+ * victim.appspot.com, buckets under s3.amazonaws.com, universities under
+ * edu.tr) are separate sites, as they are for the browser's own cookies.
+ * A host the list gives no registrable domain for (a public suffix itself,
+ * a single label, or an invalid name) is returned whole, so it matches only
+ * itself. IP literals are returned as-is.
  */
-const KNOWN_MULTI_LABEL_TLDS = new Set([
-  // ccTLD patterns
-  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
-  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
-  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
-  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
-  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
-  'org.uk', 'org.au', 'org.nz',
-  'net.au', 'net.uk',
-  // Known multi-tenant hosting (PSL "private" section)
-  'github.io', 'gitlab.io',
-  'netlify.app', 'netlify.com',
-  'vercel.app',
-  'pages.dev', 'workers.dev',
-  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
-  'cloudfront.net', 'azurewebsites.net',
-  'r2.dev', 'github.dev',
-]);
-
 export function registrableDomain(host) {
   if (!host) return host;
-  const lower = String(host).toLowerCase();
+  let lower = String(host).toLowerCase();
+  // A trailing dot names the same DNS host. Left on, the lookup would reduce
+  // example.com. and other.com. alike to "com.".
+  while (lower.endsWith('.')) lower = lower.slice(0, -1);
   if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower; // IP literal
-  const parts = lower.split('.');
-  if (parts.length < 2) return lower;
-  const last2 = parts.slice(-2).join('.');
-  if (parts.length >= 3 && KNOWN_MULTI_LABEL_TLDS.has(last2)) {
-    return parts.slice(-3).join('.');
-  }
-  return last2;
+  return publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
 }
 
 // ─── Allow-local-network setting (cached) ───────────────────────────────

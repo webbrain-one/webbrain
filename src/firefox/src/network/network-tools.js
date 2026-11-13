@@ -4,6 +4,7 @@ import { isMastodonPublicMediaUrl } from '../agent/public-media-url.js';
 import { isKnownMastodonHost } from '../agent/adapters.js';
 import { firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
 import { filenameInConfiguredDownloadDirectory } from '../download-directory.js';
+import { getDomain as publicSuffixListDomain } from '../../vendor/tldts/index.esm.min.js';
 
 /**
  * Network & download tools for the WebBrain agent (Firefox).
@@ -437,38 +438,20 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false, p
 // ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
 
 /**
- * Best-effort registrable-domain (eTLD+1) extractor. Used to decide whether
- * an agent-driven fetch should attach the user's cookies. See chrome's copy
- * for the full rationale.
+ * Registrable-domain (eTLD+1) extractor, from the Public Suffix List bundled
+ * in vendor/tldts (private section included). Used to decide whether an
+ * agent-driven fetch should attach the user's cookies. A host the list gives
+ * no registrable domain for is returned whole, so it matches only itself.
+ * See chrome's copy for the full rationale.
  */
-const KNOWN_MULTI_LABEL_TLDS = new Set([
-  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
-  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
-  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
-  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
-  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
-  'org.uk', 'org.au', 'org.nz',
-  'net.au', 'net.uk',
-  'github.io', 'gitlab.io',
-  'netlify.app', 'netlify.com',
-  'vercel.app',
-  'pages.dev', 'workers.dev',
-  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
-  'cloudfront.net', 'azurewebsites.net',
-  'r2.dev', 'github.dev',
-]);
-
 export function registrableDomain(host) {
   if (!host) return host;
-  const lower = String(host).toLowerCase();
+  let lower = String(host).toLowerCase();
+  // A trailing dot names the same DNS host. Left on, the lookup would reduce
+  // example.com. and other.com. alike to "com.".
+  while (lower.endsWith('.')) lower = lower.slice(0, -1);
   if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower;
-  const parts = lower.split('.');
-  if (parts.length < 2) return lower;
-  const last2 = parts.slice(-2).join('.');
-  if (parts.length >= 3 && KNOWN_MULTI_LABEL_TLDS.has(last2)) {
-    return parts.slice(-3).join('.');
-  }
-  return last2;
+  return publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
 }
 
 // ─── Allow-local-network setting (cached) ───────────────────────────────

@@ -23660,9 +23660,122 @@ test('case-insensitive — same registrable domain', () => {
 });
 
 test('firefox port registrableDomain matches chrome', () => {
-  const samples = ['github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1'];
+  const samples = [
+    'github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1',
+    'evil.appspot.com', 'bucket.s3.amazonaws.com', 'obs.uni1.edu.tr', 'shop.example.com.ua',
+    'appspot.com', 'example.com.', 'localhost', '[::1]',
+  ];
   for (const h of samples) {
     assert.equal(registrableDomainFx(h), registrableDomain(h), `mismatch on ${h}`);
+  }
+});
+
+const REGISTRABLE_DOMAIN_BUILDS = [['chrome', registrableDomain], ['firefox', registrableDomainFx]];
+
+test('Public Suffix List private section keeps tenants of shared hosts apart (both builds)', () => {
+  // Each pair used to reduce to the same "last two labels", so read_pdf,
+  // fetch_url and read_page_source sent one tenant's cookies on behalf of a
+  // page hosted by another.
+  const tenants = [
+    ['evil.appspot.com', 'victim.appspot.com'],
+    ['attacker.blogspot.com', 'victim.blogspot.com'],
+    ['attacker-bucket.s3.amazonaws.com', 'victim-bucket.s3.amazonaws.com'],
+    ['app-a.us-east-1.elb.amazonaws.com', 'app-b.us-east-1.elb.amazonaws.com'],
+    ['attacker.herokuapp.com', 'victim.herokuapp.com'],
+  ];
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const [a, b] of tenants) {
+      assert.equal(rd(a), a, `${label}: ${a} is its own registrable domain`);
+      assert.notEqual(rd(a), rd(b), `${label}: ${a} and ${b} are different sites`);
+    }
+    assert.equal(rd('www.victim.appspot.com'), 'victim.appspot.com', `${label}: subdomains stay with their tenant`);
+  }
+});
+
+test('second-level ccTLD registries are public suffixes (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    assert.equal(rd('kisi.uni2.edu.tr'), 'uni2.edu.tr', label);
+    assert.equal(rd('obs.uni1.edu.tr'), 'uni1.edu.tr', label);
+    assert.notEqual(rd('kisi.uni2.edu.tr'), rd('obs.uni1.edu.tr'), `${label}: different universities`);
+    assert.equal(rd('obs.uni1.edu.tr'), rd('www.uni1.edu.tr'), `${label}: one university is one site`);
+    assert.notEqual(rd('a.agency1.gov.tr'), rd('b.agency2.gov.tr'), `${label}: gov.tr`);
+    assert.notEqual(rd('a.assoc1.org.tr'), rd('b.assoc2.org.tr'), `${label}: org.tr`);
+    assert.notEqual(rd('shop.store1.com.ua'), rd('shop.store2.com.ua'), `${label}: com.ua`);
+    // The previously listed suffixes behave as before.
+    assert.equal(rd('foo.bar.example.co.uk'), 'example.co.uk', label);
+    assert.equal(rd('shop.example.com.tr'), 'example.com.tr', label);
+  }
+});
+
+test('a host with no registrable domain matches only itself (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    // A public suffix itself: never the same site as one of its tenants.
+    assert.equal(rd('appspot.com'), 'appspot.com', label);
+    assert.notEqual(rd('appspot.com'), rd('victim.appspot.com'), label);
+    assert.equal(rd('github.io'), 'github.io', label);
+    assert.equal(rd('co.uk'), 'co.uk', label);
+    assert.equal(rd('localhost'), 'localhost', label);
+    assert.equal(rd('foo.localhost'), 'foo.localhost', label);
+    // A trailing dot names the same host; it must not collapse to the TLD.
+    assert.equal(rd('www.example.com.'), 'example.com', label);
+    assert.notEqual(rd('evil.com.'), rd('victim.com.'), `${label}: trailing-dot hosts stay distinct`);
+    assert.equal(rd('.'), '', `${label}: a bare dot has no registrable domain`);
+  }
+});
+
+test('vendored tldts (Public Suffix List) matches its pinned package in both builds', () => {
+  const pinned = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).devDependencies.tldts;
+  for (const build of ['chrome', 'firefox']) {
+    const dir = path.join(ROOT, 'src', build, 'vendor', 'tldts');
+    assert.equal(
+      createHash('sha256').update(fs.readFileSync(path.join(dir, 'index.esm.min.js'))).digest('hex'),
+      '1f4e2f0bfab5a01e51032948573cf2920366ea0f50addc4e69bd3fffb9aec536',
+      `${build}: vendored tldts does not match the published tldts@${pinned} dist/index.esm.min.js`,
+    );
+    const readme = fs.readFileSync(path.join(dir, 'README.webbrain.md'), 'utf8');
+    assert.match(readme, new RegExp(`Version: \`${escapeRegExpLiteral(pinned)}\``), `${build}: README names another version than package.json`);
+    assert.match(fs.readFileSync(path.join(dir, 'LICENSE'), 'utf8'), /Permission is hereby granted, free of charge/, `${build}: MIT license missing`);
+  }
+});
+
+test('fetch_url and read_page_source send cookies only within one registrable domain (both builds)', async () => {
+  const savedFetch = globalThis.fetch;
+  const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser;
+  try {
+    let activeUrl = '';
+    globalThis.chrome = globalThis.browser = { tabs: { get: async () => ({ url: activeUrl }) } };
+    const cases = [
+      ['https://attacker.appspot.com/page', 'https://victim.appspot.com/private', 'omit'],
+      ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/report', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni2.edu.tr/grades', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/grades', 'include'],
+      ['https://www.example.com/', 'https://api.example.com/data', 'include'],
+    ];
+    for (const [label, fetchUrl, readPageSource] of [
+      ['chrome', fetchUrlCh, readPageSourceCh],
+      ['firefox', fetchUrlFx, readPageSourceFx],
+    ]) {
+      for (const [tabUrl, target, expected] of cases) {
+        activeUrl = tabUrl;
+        for (const [tool, run] of [
+          ['fetch_url', () => fetchUrl(target, {}, { tabId: 7 })],
+          ['read_page_source', () => readPageSource(target, {}, { tabId: 7 })],
+        ]) {
+          const credentials = [];
+          globalThis.fetch = async (_url, init) => {
+            credentials.push(init.credentials);
+            return new Response('<!doctype html><title>ok</title><p>ok</p>', { headers: { 'Content-Type': 'text/html' } });
+          };
+          const result = await run();
+          assert.equal(result.success, true, `${label} ${tool}: ${JSON.stringify(result)}`);
+          assert.deepEqual(credentials, [expected], `${label} ${tool}: tab ${tabUrl} -> ${target}`);
+        }
+      }
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedChrome === undefined) delete globalThis.chrome; else globalThis.chrome = savedChrome;
+    if (savedBrowser === undefined) delete globalThis.browser; else globalThis.browser = savedBrowser;
   }
 });
 

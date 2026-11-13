@@ -404,6 +404,17 @@ async function testPdfCookieDomainsUseDocumentUrlsInBothBrowsers() {
       assert.equal(await pdfFetchCredentials(viewer('https://private.example.com/document.pdf'), 7), 'omit', name);
       activeUrl = viewer('https://alice.github.io/a.pdf');
       assert.equal(await pdfFetchCredentials(viewer('https://bob.github.io/b.pdf'), 7), 'omit', name);
+      // Tenants of shared hosts and second-level ccTLD registries outside the
+      // old hard-coded suffix list are separate sites too.
+      for (const [page, pdf, expected] of [
+        ['https://attacker.appspot.com/', 'https://victim.appspot.com/private.pdf', 'omit'],
+        ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/q3.pdf', 'omit'],
+        ['https://kisi.uni2.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'omit'],
+        ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'include'],
+      ]) {
+        activeUrl = page;
+        assert.equal(await pdfFetchCredentials(pdf, 7), expected, `${name}: ${page} -> ${pdf}`);
+      }
       await assert.rejects(pdfFetchCredentials(viewer('javascript:alert(1)'), 7), /must use http/);
     }
   } finally {
