@@ -22194,6 +22194,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ...(button !== 'left' ? { button } : {}),
       ...(clickCount > 1 ? { clicks: clickCount } : {}),
       ...(hit?.target ? { target: hit.target } : {}),
+      // What was clicked, by role and name: the record that outlasts the
+      // screenshot (vision-runtime.js _visionClickPreflight).
+      ...(preflight.control ? { control: preflight.control } : {}),
       ...(vision?.imageId ? { image: vision.imageId } : {}),
       ...(redirected?.redirected ? { redirectedFromNewTab: true } : {}),
       ...(preflight.note ? { note: preflight.note } : {}),

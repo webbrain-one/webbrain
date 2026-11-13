@@ -18154,10 +18154,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // _visionClickPreflight), after whatever the click itself reported.
     const note = preflight.note && response?.success !== false
       ? [response?.note, preflight.note].filter(Boolean).join(' ') : response?.note;
+    // What was clicked, by role and name: the record that outlasts the
+    // screenshot (vision-runtime.js _visionClickPreflight). Not for an input
+    // the page refused before anything went out.
+    const control = preflight.control && response?.noDispatch !== true ? preflight.control : null;
     return {
       ...response,
       x,
       y,
+      ...(control ? { control } : {}),
       ...(vision?.imageId ? { image: vision.imageId } : {}),
       ...(note ? { note } : {}),
     };

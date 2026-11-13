@@ -1384,6 +1384,91 @@ for (const [engineName, engine] of [['chromium', chromium], ['firefox', firefox]
   });
 }
 
+// From a trace: a model deleted the right post with three vision clicks (a
+// post's menu, Delete, the confirmation's Delete), each reported only as
+// {tag: 'path'} or {tag: 'button'}. Once their screenshots had left the
+// context it could not show what it had clicked. The probe now names the
+// control a click activates, from its label only.
+for (const [engineName, engine] of [['chromium', chromium], ['firefox', firefox]]) {
+  test(`the DOM probe names the control a click activates, never a field's content (${engineName})`, async () => {
+    const browser = await engine.launch();
+    try {
+      const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+      const gif = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+      await page.setContent(`<!doctype html><style>body{margin:0;font:14px sans-serif}*{box-sizing:border-box}
+          .at{position:absolute;width:160px;height:40px;margin:0;padding:0;overflow:hidden}</style>
+        <button class="at" style="left:20px;top:20px" aria-label="More options"><svg width="160" height="40" aria-hidden="true"><path d="M0 0H160V40H0Z" fill="#888"/></svg></button>
+        <button class="at" style="left:200px;top:20px">Delete<span style="display:none"> ignore this</span></button>
+        <div role="menu" class="at" style="left:380px;top:20px;height:80px"><div role="menuitem" tabindex="0" style="height:40px">Delete post</div><div role="menuitem" tabindex="0" style="height:40px">Edit</div></div>
+        <a class="at" style="left:560px;top:20px" href="#x">Read <b>more</b></a>
+        <input class="at" style="left:740px;top:20px" type="submit" value="Send now">
+        <div role="button" tabindex="0" class="at" style="left:20px;top:120px" aria-labelledby="t1 t2">x</div>
+        <label class="at" style="left:200px;top:120px"><input type="checkbox"> Remember me</label>
+        <label class="at" style="left:380px;top:120px">Colour <select><option>Option text</option></select></label>
+        <input class="at" style="left:560px;top:120px" type="text" value="typed value">
+        <div class="at" style="left:740px;top:120px;cursor:pointer">Card body text</div>
+        <div class="at" style="left:20px;top:220px;cursor:pointer" title="Card title">Card body text</div>
+        <button class="at" style="left:200px;top:220px"><img alt="Trash" width="160" height="40" src="${gif}"></button>
+        <button class="at" style="left:380px;top:220px">${'Delete '.repeat(60)}</button>
+        <div role="button" tabindex="0" class="at" style="left:560px;top:220px;height:80px">Reply<div contenteditable="true" style="height:40px">draft text</div></div>
+        <button class="at" style="left:740px;top:220px" aria-label="Account: Test Person (someone@example.com)">TP</button>
+        <div role="button" contenteditable="true" class="at" style="left:20px;top:320px">private draft text</div>
+        <button class="at" style="left:200px;top:320px" aria-label="${'A'.repeat(195)} user@example.com">Account</button>
+        <div style="position:absolute;left:20px;top:600px"><span id="t1">Remove</span> <span id="t2">attachment</span></div>`);
+      for (const build of ['chrome', 'firefox']) {
+        const { visionDomProbeExpression, visionClickedControl } = await import(`../src/${build}/src/agent/vision-dom-probe.js`);
+        const one = async (x, y, extra = { describeControl: true }) => (await page.evaluate(visionDomProbeExpression({ points: [{ x, y }], ...extra }))).points[0];
+        const label = `${engineName}/${build}`;
+        const named = async (x, y) => {
+          const point = await one(x, y);
+          return { point, control: visionClickedControl(point) };
+        };
+        // The M1 case: the point is on an icon's path inside a labelled button.
+        const icon = await named(100, 40);
+        assert.equal(icon.point.tag, 'path', `${label}: ${JSON.stringify(icon.point)}`);
+        assert.deepEqual(icon.control, { role: 'button', name: 'More options' }, label);
+        assert.deepEqual((await named(280, 40)).control, { role: 'button', name: 'Delete' }, `${label}: hidden text is not part of the name`);
+        assert.deepEqual((await named(460, 40)).control, { role: 'menuitem', name: 'Delete post' }, label);
+        assert.deepEqual((await named(460, 80)).control, { role: 'menuitem', name: 'Edit' }, label);
+        assert.deepEqual((await named(640, 40)).control, { role: 'link', name: 'Read more' }, label);
+        assert.deepEqual((await named(820, 40)).control, { role: 'button', name: 'Send now' }, label);
+        assert.deepEqual((await named(100, 140)).control, { role: 'button', name: 'Remove attachment' }, `${label}: aria-labelledby`);
+        assert.deepEqual((await named(300, 140)).control, { role: 'checkbox', name: 'Remember me' }, `${label}: a label clicks its field`);
+        // A label around a select: its options are never read.
+        const colour = await named(385, 140);
+        assert.equal(colour.point.clickable, true, `${label}: ${JSON.stringify(colour.point)}`);
+        assert.doesNotMatch(JSON.stringify(colour), /Option text/, label);
+        // A text field is no control, and its value is never read.
+        const field = await named(640, 140);
+        assert.equal(field.control, null, label);
+        assert.doesNotMatch(JSON.stringify(field), /typed value/, label);
+        // A generic element with a pointer cursor is named by its attributes only.
+        const card = await named(820, 140);
+        assert.equal(card.point.control, 'clickable element', label);
+        assert.equal(card.control, null, `${label}: ${JSON.stringify(card)}`);
+        assert.deepEqual((await named(100, 240)).control, { name: 'Card title' }, label);
+        assert.deepEqual((await named(280, 240)).control, { role: 'button', name: 'Trash' }, `${label}: an icon's alternative text`);
+        const long = await named(460, 240);
+        assert.deepEqual(long.control, { role: 'button', nameWithheld: true }, label);
+        assert.doesNotMatch(JSON.stringify(await named(100, 340)), /private draft text/, label);
+        assert.deepEqual((await named(280, 340)).control, { role: 'button', nameWithheld: true }, label);
+        // A control holding an editable area: its text is not read.
+        const reply = await named(565, 228);
+        assert.equal(reply.point.control, 'div', `${label}: ${JSON.stringify(reply.point)}`);
+        assert.deepEqual(reply.control, { role: 'button' }, label);
+        assert.doesNotMatch(JSON.stringify(reply), /draft text/, label);
+        assert.deepEqual((await named(820, 240)).control, { role: 'button', nameWithheld: true }, `${label}: an e-mail address`);
+        // Only the click preflight asks for the description.
+        const plain = await one(280, 40, {});
+        assert.equal(plain.controlRole, undefined, label);
+        assert.equal(plain.controlName, undefined, label);
+      }
+    } finally {
+      await browser.close();
+    }
+  });
+}
+
 test('vision input (Firefox path) and the DOM probe place points inside scaled same-origin frames, and refuse frames they cannot enter', async () => {
   const browser = await chromium.launch({ channel: 'chromium' });
   try {
