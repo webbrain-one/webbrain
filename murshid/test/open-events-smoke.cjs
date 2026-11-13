@@ -10,6 +10,20 @@ app.commandLine.appendSwitch('host-resolver-rules', 'MAP public.example 127.0.0.
 const file = path.join(process.env.MURSHID_PROFILE, 'test file.html');
 fs.writeFileSync(file, '<!doctype html><title>isolated fixture</title>');
 const requestHeaders = new Map();
+// A one-page PDF for the offscreen read_pdf step.
+const pdfText = 'Murshid offscreen PDF fixture';
+const pdfFixture = (() => {
+  const contents = `BT /F1 24 Tf 72 720 Td (${pdfText}) Tj ET`;
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${contents.length} >>\nstream\n${contents}\nendstream`];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((body, i) => { const at = pdf.length; pdf += `${i + 1} 0 obj\n${body}\nendobj\n`; return at; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map(o => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+})();
 const server = http.createServer((req, res) => {
   requestHeaders.set(req.url, req.headers);
   if (req.url === '/download-abort') { req.socket.destroy(); return; }
@@ -19,6 +33,7 @@ const server = http.createServer((req, res) => {
   if (req.url === '/download-cross-origin') { res.writeHead(302, { location: 'http://example.invalid/other' }); res.end(); return; }
   if (req.url === '/address-redirect') { res.writeHead(302, { location: '/address-final', 'Access-Control-Allow-Origin': '*' }); res.end(); return; }
   if (req.url === '/address-error') { req.socket.destroy(); return; }
+  if (req.url === '/address-pdf.pdf') { res.writeHead(200, { 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(pdfFixture); return; }
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.end(req.url === '/download-final' ? 'download fixture' : '<!doctype html><title>isolated fixture</title>');
 });
@@ -124,17 +139,38 @@ const waitFor = async (condition) => {
       assert.match(blockedAddress, /blocked address/i, String(blockedAddress));
       const allowedAddress = await evaluate("(async () => { const watcher = testWatchFetchAddresses(testAddressUrl, true); try { await fetch(testAddressUrl); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()");
       assert.equal(allowedAddress, null);
-      // read_pdf fetches from the offscreen document; the worker must still
-      // see the address that fetch reached (strict watcher, as pdf-tools.js).
-      const offscreenAddress = async (url, allowLocal) => {
-        await evaluate(`(() => { globalThis.testOffscreenWatcher = testWatchFetchAddresses(${JSON.stringify(url)}, ${allowLocal}, {requireAddress:true}); return true; })()`);
+      // read_pdf: the real offscreen host fetches a served PDF and asks the
+      // worker for a verdict over native messaging. The worker answers with
+      // pdf-tools.js's verdict listener and its strict address watcher.
+      const pdfSource = fs.readFileSync(path.join(__dirname, '../../src/chrome/src/agent/pdf-extraction.js'), 'utf8');
+      const verdictSource = (pdfSource.match(/^export const PDF_FETCH_VERDICT_MESSAGE = .*$/m)[0] + '\n'
+        + pdfSource.slice(pdfSource.indexOf('export async function isTrustedPdfVerdictSender('), pdfSource.indexOf('export function bytesToBase64(')))
+        .replace(/^export /gm, '');
+      const readPdf = (url, allowLocal) => evaluate(`(async () => {
+        ${verdictSource}
+        const requestId = crypto.randomUUID();
+        const watcher = testWatchFetchAddresses(${JSON.stringify(url)}, ${allowLocal}, {requireAddress:true});
+        const verdict = createPdfVerdictListener(requestId, watcher);
+        const senders = [];
+        const listener = (message, sender, reply) => {
+          if (message?.type === PDF_FETCH_VERDICT_MESSAGE && message.requestId === requestId) senders.push({tab: sender.tab != null, documentId: sender.documentId});
+          return verdict(message, sender, reply);
+        };
+        chrome.runtime.onMessage.addListener(listener);
         try {
-          await offscreenWindow.webContents.executeJavaScript(`fetch(${JSON.stringify(url)}, {cache:'no-store'}).then(r => r.text())`);
-          return await evaluate("testOffscreenWatcher.settledFailure('fetch')");
-        } finally { await evaluate('testOffscreenWatcher.close()'); }
-      };
-      assert.equal(await offscreenAddress(`${base}/address-offscreen`, true), null);
-      assert.match(String(await offscreenAddress(`http://public.example:${fixturePort}/address-offscreen`, false)), /blocked address/i);
+          const response = await chrome.runtime.sendMessage({type:'offscreen-pdf-extract', requestId, url:${JSON.stringify(url)}, options:{allowLocalNetwork:${allowLocal}}});
+          return {ok: response?.ok, error: response?.error, text: response?.result?.pages?.join(' '), senders};
+        } finally { chrome.runtime.onMessage.removeListener(listener); watcher.close(); }
+      })()`);
+      const pdfRead = await readPdf(`${base}/address-pdf.pdf`, true);
+      assert.equal(pdfRead.ok, true, JSON.stringify(pdfRead));
+      assert.match(pdfRead.text || '', new RegExp(pdfText));
+      assert.equal(pdfRead.senders.length, 1, JSON.stringify(pdfRead.senders));
+      assert.equal(pdfRead.senders[0].documentId, getOffscreen().documentId, 'the verdict request must come from the offscreen document');
+      console.log(`The offscreen verdict request ${pdfRead.senders[0].tab ? 'carries' : 'has no'} sender.tab`);
+      const blockedPdf = await readPdf(`http://public.example:${fixturePort}/address-pdf.pdf`, false);
+      assert.equal(blockedPdf.ok, false, JSON.stringify(blockedPdf));
+      assert.match(String(blockedPdf.error), /blocked address/i);
       await waitFor(() => bridge.offscreenRequests.size === 0); // the response ends each binding
       await evaluate("globalThis.testResearchWatcher = testWatchResponseAddresses({types:['main_frame']}, d => d.tabId, false)");
       const researchTab = ctx.windows[0].addTab({ url: publicLookingUrl, active: false });
@@ -142,7 +178,7 @@ const waitFor = async (condition) => {
       assert.match(await evaluate(`testResearchWatcher.failure(${researchTab.id})`), /blocked address/i);
       await evaluate('testResearchWatcher.close()');
       ctx.windows[0].closeTab(researchTab);
-      console.log('Response-address events protect worker fetches, offscreen fetches and research tabs');
+      console.log('Response-address events protect worker fetches, read_pdf in the offscreen document and research tabs');
       await evaluate(`(() => {
         globalThis.tabRequestEvents = [];
         globalThis.tabRequestListeners = ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived'].map(name => {

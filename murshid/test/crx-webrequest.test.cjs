@@ -11,9 +11,12 @@ const { pathToFileURL } = require('node:url');
 const EXT = 'a'.repeat(32);
 const OFFSCREEN_URL = `chrome-extension://${EXT}/src/offscreen/offscreen.html`;
 const PDF_URL = 'https://example.com/paper.pdf';
+const srcModule = (file) => pathToFileURL(path.join(__dirname, '../../src/chrome/src', file)).href;
+// What electron.webContents.getAllWebContents() returns to the bridge.
+const allContents = [];
 
 function loadBridge() {
-  const electron = { BrowserWindow: class {}, ipcMain: {}, shell: {}, webContents: { getAllWebContents: () => [] } };
+  const electron = { BrowserWindow: class {}, ipcMain: {}, shell: {}, webContents: { getAllWebContents: () => allContents } };
   const file = '../app/crx/bridge';
   const original = Module._load;
   Module._load = function (name, ...args) { return name === 'electron' ? electron : original.call(this, name, ...args); };
@@ -26,10 +29,15 @@ function offscreenBridge(deliver) {
   const { CrxBridge } = loadBridge();
   const bridge = Object.create(CrxBridge.prototype);
   const mainFrame = { frameToken: 'offscreen-frame' };
-  const win = { isDestroyed: () => false, webContents: { id: 7, mainFrame, getURL: () => OFFSCREEN_URL } };
-  const state = { win, generation: 1, documentId: 'offscreen-document-1' };
-  bridge.ctx = { webBrainId: EXT, windows: [] };
   bridge.ses = { extensions: { getExtension: () => ({ manifest: { permissions: ['webRequest'], host_permissions: ['<all_urls>'] } }) } };
+  const win = { isDestroyed: () => false,
+    webContents: { id: 7, mainFrame, session: bridge.ses, isDestroyed: () => false, getURL: () => OFFSCREEN_URL } };
+  allContents.splice(0, allContents.length, win.webContents);
+  const state = { win, generation: 1, documentId: 'offscreen-document-1' };
+  bridge.ctx = { webBrainId: EXT, windows: [], windowForTab: () => null };
+  bridge.runningWorker = () => null;
+  bridge.panelContents = new Map();
+  bridge.offscreen = new Map([[EXT, win]]);
   bridge.offscreenIdentity = new Map([[EXT, state]]);
   bridge.offscreenRequests = new Map();
   bridge.requestEventAcks = new Map();
@@ -118,9 +126,9 @@ test('offscreen response events are relayed only for a request bound to the curr
   assert.equal(delivered.at(-1).statusCode, 401);
 });
 
-// read_pdf (src/chrome/src/agent/pdf-tools.js) waits in the worker for a
-// verified response address before the offscreen host may read the bytes.
-test('read_pdf address check settles on relayed offscreen events', async (t) => {
+// A worker `chrome` whose webRequest events take what the bridge relays, as
+// the worker's preload shim delivers it: to listeners whose tabId matches.
+function installWorkerChrome(t) {
   // One listener function is added to several events, as the watcher does.
   const listeners = new Set();
   const event = (name) => ({
@@ -134,27 +142,34 @@ test('read_pdf address check settles on relayed offscreen events', async (t) => 
       .map(name => [name, event(name)])),
   };
   t.after(() => { globalThis.chrome = previous; });
-  const networkTools = pathToFileURL(path.join(__dirname, '../../src/chrome/src/network/network-tools.js')).href;
-  const { watchFetchAddresses } = await import(networkTools);
-  // Deliver as the worker's preload shim does: to listeners whose tabId matches.
-  const { bridge, details } = offscreenBridge((name, payload) => {
+  const deliver = (name, payload) => {
     for (const { name: listening, fn, filter } of [...listeners]) {
       if (listening === name && (filter?.tabId === undefined || filter.tabId === payload.tabId)) fn({ ...payload });
     }
-  });
-  const fetchThroughOffscreen = async (id, ip) => {
-    await bridge.forwardWebRequest('onBeforeRequest', details(id));
-    await bridge.forwardWebRequest('onHeadersReceived', details(id, { statusCode: 200 }));
-    await bridge.forwardWebRequest('onResponseStarted', details(id, { ip, statusCode: 200 }));
   };
+  return { listeners, deliver };
+}
+
+const fetchThroughOffscreen = async (bridge, details, id, ip) => {
+  await bridge.forwardWebRequest('onBeforeRequest', details(id));
+  await bridge.forwardWebRequest('onHeadersReceived', details(id, { statusCode: 200 }));
+  await bridge.forwardWebRequest('onResponseStarted', details(id, { ip, statusCode: 200 }));
+};
+
+// read_pdf (src/chrome/src/agent/pdf-tools.js) waits in the worker for a
+// verified response address before the offscreen host may read the bytes.
+test('read_pdf address check settles on relayed offscreen events', async (t) => {
+  const { listeners, deliver } = installWorkerChrome(t);
+  const { watchFetchAddresses } = await import(srcModule('network/network-tools.js'));
+  const { bridge, details } = offscreenBridge(deliver);
 
   let watcher = watchFetchAddresses(PDF_URL, false, { requireAddress: true });
-  await fetchThroughOffscreen(61, '203.0.113.10');
+  await fetchThroughOffscreen(bridge, details, 61, '203.0.113.10');
   assert.equal(await watcher.settledFailure('fetch', 200), null, 'a public PDF must be readable');
   watcher.close();
 
   watcher = watchFetchAddresses(PDF_URL, false, { requireAddress: true });
-  await fetchThroughOffscreen(62, '10.0.0.5');
+  await fetchThroughOffscreen(bridge, details, 62, '10.0.0.5');
   assert.match(await watcher.settledFailure('fetch', 200), /resolved to a blocked address/);
   watcher.close();
 
@@ -164,4 +179,35 @@ test('read_pdf address check settles on relayed offscreen events', async (t) => 
     'without a response address the check still fails closed');
   watcher.close();
   assert.equal(listeners.size, 0);
+});
+
+// Electron adds tab details to messages from every window, the hidden
+// offscreen window included, so read_pdf's verdict listener identifies the
+// offscreen document by the documentId Murshid's getContexts reports.
+test('read_pdf verdict reaches the offscreen document through Murshid contexts', async (t) => {
+  const { deliver } = installWorkerChrome(t);
+  const { watchFetchAddresses } = await import(srcModule('network/network-tools.js'));
+  const { createPdfVerdictListener } = await import(srcModule('agent/pdf-extraction.js'));
+  const { bridge, state, details } = offscreenBridge(deliver);
+  const runtime = {
+    id: EXT,
+    getURL: (file) => `chrome-extension://${EXT}/${file}`,
+    // As preload-post.js installs it: a promise for the bridge handler's answer.
+    getContexts: async (filter) => bridge.handlers['runtime.getContexts'].call(bridge, { extId: EXT }, filter),
+  };
+  const offscreenSender = { id: EXT, url: OFFSCREEN_URL, frameId: 0, documentId: state.documentId, tab: { id: 7, url: OFFSCREEN_URL } };
+  const ask = (listener, sender) => new Promise((resolve) => {
+    assert.equal(listener({ type: 'offscreen-pdf-fetch-verdict', requestId: 'request-1' }, sender, resolve), true);
+  });
+
+  const watcher = watchFetchAddresses(PDF_URL, false, { requireAddress: true });
+  const listener = createPdfVerdictListener('request-1', watcher, runtime);
+  await fetchThroughOffscreen(bridge, details, 71, '203.0.113.10');
+  assert.deepEqual(await ask(listener, offscreenSender), { ok: true });
+  const refused = { ok: false, error: 'Unauthorized PDF response verification sender.' };
+  // A tab that loaded offscreen.html, and the document before a reload.
+  assert.deepEqual(await ask(listener, { ...offscreenSender, tab: { id: 9, url: OFFSCREEN_URL }, documentId: 'tab-document' }), refused);
+  state.documentId = 'offscreen-document-2';
+  assert.deepEqual(await ask(listener, offscreenSender), refused);
+  watcher.close();
 });

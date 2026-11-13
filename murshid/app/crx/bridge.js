@@ -248,6 +248,9 @@ class CrxBridge {
       } else {
         // A redirect, the response or an error ends this URL's request. A
         // followed redirect is bound again at its next onBeforeRequest.
+        // Murshid hooks no onCompleted, so onResponseStarted is where a
+        // successful request ends; the 24-hour timer only clears a request
+        // that never reaches any of these three events.
         this.discardOffscreenRequest(key);
       }
     }
