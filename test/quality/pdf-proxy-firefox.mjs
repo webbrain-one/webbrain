@@ -5,6 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { BidiSession } from '../../firefox-companion/session.mjs';
+import { firefoxBinary } from '../firefox-binary.mjs';
 
 // Install the real PDF modules in a disposable Firefox profile behind a local
 // HTTP proxy. Firefox reports that proxy's socket IP in webRequest; destination
@@ -89,8 +90,7 @@ const prefs = {
 };
 await fs.writeFile(path.join(profile, 'user.js'), Object.entries(prefs)
   .map(([key, value]) => `user_pref(${JSON.stringify(key)}, ${JSON.stringify(value)});`).join('\n'));
-const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin'
-  ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'), [
+const firefox = spawn((await firefoxBinary()).binary, [
   '--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0',
 ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' } });
 let session;
