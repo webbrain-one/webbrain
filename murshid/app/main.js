@@ -167,7 +167,7 @@ const ctx = {
     const current = this.adblockSite(tab);
     if (!current) return;
     this.adblock.setAllowed(current.site, !current.allowed);
-    if (!tab.wc.isDestroyed()) tab.wc.reload();
+    if (!tab.wc.isDestroyed()) tab.reload();
   },
   sendExtensionCommand(w, name) {
     if (!this.webBrainId || !w?.activeTab) return;

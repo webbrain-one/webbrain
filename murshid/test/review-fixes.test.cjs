@@ -52,8 +52,9 @@ test('permissions isolate opaque origins and microphone and camera decisions', a
 
 test('reload and hard reload retry failed destinations', () => {
   const { createCommands } = require('../app/commands');
+  const { Tab } = loadWithElectron('../app/tab', { WebContentsView: class {}, dialog: {} });
   const calls = [];
-  const tab = {errorFor:'https://example.test/', load: u => calls.push(['load',u]), wc:{reload:()=>calls.push(['reload']),reloadIgnoringCache:()=>calls.push(['hard'])}};
+  const tab = Object.assign(Object.create(Tab.prototype), {errorFor:'https://example.test/', load: u => calls.push(['load',u]), wc:{reload:()=>calls.push(['reload']),reloadIgnoringCache:()=>calls.push(['hard'])}});
   const commands = createCommands({});
   commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
   tab.errorFor = null; commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
