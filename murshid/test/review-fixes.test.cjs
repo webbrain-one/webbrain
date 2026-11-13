@@ -124,7 +124,7 @@ test('with browser data kept off, the browser chrome and the address bar list lo
   class BrowserWindow { constructor(options) { made.push(options); this.id = made.length; this.webContents = contents(); } once() {} on() {} }
   class WebContentsView { constructor(options) { made.push(options); this.webContents = contents(); } setBackgroundColor() {} }
   const electron = { BrowserWindow, WebContentsView, dialog: {}, nativeTheme: { shouldUseDarkColors: false, on() {} },
-    screen: { getPrimaryDisplay: () => ({ workArea: { width: 1600, height: 1000 } }) } };
+    screen: { getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } }), getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } }] } };
   const modules = ['../app/window', '../app/omnibox-popup', '../app/tab'];
   modules.forEach((file) => delete require.cache[require.resolve(file)]);
   try {
