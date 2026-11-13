@@ -25,6 +25,7 @@
   "nav.for_websites": "Para sa mga website",
   "nav.research": "Pananaliksik",
   "nav.developers": "Para sa developers",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "AI assistant para sa site mo, gamit ang isang script tag",
   "nav.dev.research_desc": "Ang aming mga model, dataset at benchmark",
   "nav.dev.cloud_desc": "Magpatakbo ng browser tasks gamit ang API",

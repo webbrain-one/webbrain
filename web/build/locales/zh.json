@@ -25,6 +25,7 @@
   "nav.for_websites": "面向网站",
   "nav.research": "研究",
   "nav.developers": "开发者",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "一个 script 标签，为你的网站加上 AI 助手",
   "nav.dev.research_desc": "我们的模型、数据集和基准测试",
   "nav.dev.cloud_desc": "通过 API 运行浏览器任务",

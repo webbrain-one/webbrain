@@ -25,6 +25,7 @@
   "nav.for_websites": "สำหรับเว็บไซต์",
   "nav.research": "งานวิจัย",
   "nav.developers": "นักพัฒนา",
+  "nav.companion": "Companion",
   "nav.dev.websites_desc": "ผู้ช่วย AI สำหรับเว็บไซต์ของคุณ ด้วยแท็ก script เดียว",
   "nav.dev.research_desc": "โมเดล ชุดข้อมูล และเบนช์มาร์กของเรา",
   "nav.dev.cloud_desc": "รันงานบนเบราว์เซอร์ผ่าน API",
