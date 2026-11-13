@@ -20,12 +20,17 @@ import {
   sendEmergencyDownloadCommand,
 } from './emergency-download-client.js';
 import { createOfflineRagReadinessController } from './offline-rag-readiness.js';
-import {
-  WEBGPU_DTYPE,
-  WEBGPU_MODEL_ID,
-} from '../providers/webgpu.js';
 import { t } from './i18n.js';
 import { THEME_MODES, applyMode, loadMode, watch } from './theme.js';
+
+// The in-browser WebGPU provider (providers/webgpu.js) runs in Chrome's
+// offscreen document, so the Firefox build does not ship it. Importing it
+// here failed the whole module, and with it the Enabled switch and every
+// control on this page. Firefox hides the WebGPU cards (supportsWebgpuVision
+// below); these only seed the shared download state, with the values of
+// Chrome's providers/webgpu.js.
+const WEBGPU_MODEL_ID = 'LiquidAI/LFM2.5-2.6B-ONNX';
+const WEBGPU_DTYPE = 'q4f16';
 
 const runtimeApi = globalThis.browser || globalThis.chrome;
 let currentThemeMode = 'system';
