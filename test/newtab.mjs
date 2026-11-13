@@ -93,6 +93,37 @@ test('toNavigableUrl opens an address typed alone and leaves look-alike prompts'
   assert.ok([...TLDS].every((tld) => /^(?:[a-z]{2,63}|xn--[a-z0-9-]+)$/.test(tld)), 'lower-case ASCII and punycode, as URL#hostname gives them');
 });
 
+// A bracketed IPv6 address needs no top-level domain. Like IPv4, a public one
+// opens over https and this computer or the local network over http.
+test('toNavigableUrl opens a bracketed IPv6 address typed alone', () => {
+  for (const [input, url] of [
+    ['[2001:db8::1]', 'https://[2001:db8::1]/'],
+    ['[2606:4700:4700::1111]/dns-query?x=1', 'https://[2606:4700:4700::1111]/dns-query?x=1'],
+    ['[2001:DB8:0:0:0:0:0:1]:8443', 'https://[2001:db8::1]:8443/'],
+    ['[::ffff:8.8.8.8]', 'https://[::ffff:808:808]/'],
+    ['[fec0::1]', 'https://[fec0::1]/'],
+    ['[fbff::1]', 'https://[fbff::1]/'],
+    ['[::1]', 'http://[::1]/'],
+    ['[::]:8000', 'http://[::]:8000/'],
+    ['[fe80::1]:8080', 'http://[fe80::1]:8080/'],
+    ['[FE80::1]', 'http://[fe80::1]/'],
+    ['[febf::1]', 'http://[febf::1]/'],
+    ['[fe80::]', 'http://[fe80::]/'],
+    ['[fc00::1]', 'http://[fc00::1]/'],
+    ['[fd12:3456::7]/admin', 'http://[fd12:3456::7]/admin'],
+    ['[::ffff:127.0.0.1]:3000', 'http://[::ffff:7f00:1]:3000/'],
+    ['[::ffff:192.168.1.1]', 'http://[::ffff:c0a8:101]/'],
+  ]) {
+    assert.equal(toNavigableUrl(input), url, input);
+  }
+  for (const input of [
+    '[1::2::3]', '[12345::1]', '[dead:beef]', '[gg::1]', '[1]', '[::1', '[::1]x',
+    '[fe80::1%eth0]', '[::1]:99999', '[2001:db8::1] is down?',
+  ]) {
+    assert.equal(toNavigableUrl(input), null, input);
+  }
+});
+
 test('the task box opens a typed address in every mode instead of handing it to WebBrain', () => {
   const src = readFileSync(nt('features/agent/TaskBox.jsx'), 'utf8');
   const submit = src.slice(src.indexOf('const onSubmit'), src.indexOf('return (\n'));
