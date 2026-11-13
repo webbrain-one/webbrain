@@ -17,6 +17,8 @@ const { mapInternal } = require('../url');
 
 const CHANNEL = 'murshid-crx';
 const EVENT_CHANNEL = 'murshid-crx-event';
+// webRequest events that report where a request went (ip, redirect, error).
+const OFFSCREEN_RESPONSE_EVENTS = ['onBeforeRedirect', 'onResponseStarted', 'onErrorOccurred'];
 
 class CrxBridge {
   constructor(ctx) {
@@ -209,8 +211,13 @@ class CrxBridge {
     this.offscreenRequests.delete(key);
   }
 
+  // The offscreen document's fetches (read_pdf, authenticated downloads). A
+  // request is bound to the current document at onBeforeRequest; later events
+  // are relayed only for that binding. The response events carry the address
+  // the request reached, which read_pdf's address check waits for.
   async forwardOffscreenRequest(event, details) {
-    if (event !== 'onBeforeRequest' && event !== 'onHeadersReceived') return;
+    const responseEvent = OFFSCREEN_RESPONSE_EVENTS.includes(event);
+    if (event !== 'onBeforeRequest' && event !== 'onHeadersReceived' && !responseEvent) return;
     if (details.resourceType !== 'xhr' || !details.frame || !details.initiatorOrigin) return;
     const extId = extIdFromUrl(`${details.initiatorOrigin}/`);
     const state = extId && this.offscreenIdentity.get(extId);
@@ -234,8 +241,15 @@ class CrxBridge {
       const binding = this.offscreenRequests.get(key);
       if (!binding || binding.state !== state || binding.generation !== state.generation
         || binding.documentId !== state.documentId || binding.url !== details.url) return;
-      clearTimeout(binding.timer);
-      this.offscreenRequests.delete(key);
+      if (event === 'onHeadersReceived') {
+        // One response per binding, as before: a repeated one is not relayed.
+        if (binding.headersRelayed) return;
+        binding.headersRelayed = true;
+      } else {
+        // A redirect, the response or an error ends this URL's request. A
+        // followed redirect is bound again at its next onBeforeRequest.
+        this.discardOffscreenRequest(key);
+      }
     }
     const payload = {
       requestId: key, url: details.url, method: details.method, type: 'xmlhttprequest',
@@ -246,6 +260,9 @@ class CrxBridge {
         // Redirect validation needs Location only; do not relay cookies or
         // unrelated response headers through this supplemental path.
         responseHeaders: Object.entries(details.responseHeaders || {}).filter(([name]) => name.toLowerCase() === 'location').flatMap(([name, values]) => [].concat(values).map((value) => ({ name, value }))),
+      } : {}),
+      ...(responseEvent ? {
+        ip: details.ip, error: details.error, redirectUrl: details.redirectURL, statusCode: details.statusCode,
       } : {}),
     };
     return this.deliverWebRequest(extId, event, payload);

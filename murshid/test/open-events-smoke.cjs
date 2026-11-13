@@ -124,13 +124,25 @@ const waitFor = async (condition) => {
       assert.match(blockedAddress, /blocked address/i, String(blockedAddress));
       const allowedAddress = await evaluate("(async () => { const watcher = testWatchFetchAddresses(testAddressUrl, true); try { await fetch(testAddressUrl); return await watcher.settledFailure('fetch'); } finally { watcher.close(); } })()");
       assert.equal(allowedAddress, null);
+      // read_pdf fetches from the offscreen document; the worker must still
+      // see the address that fetch reached (strict watcher, as pdf-tools.js).
+      const offscreenAddress = async (url, allowLocal) => {
+        await evaluate(`(() => { globalThis.testOffscreenWatcher = testWatchFetchAddresses(${JSON.stringify(url)}, ${allowLocal}, {requireAddress:true}); return true; })()`);
+        try {
+          await offscreenWindow.webContents.executeJavaScript(`fetch(${JSON.stringify(url)}, {cache:'no-store'}).then(r => r.text())`);
+          return await evaluate("testOffscreenWatcher.settledFailure('fetch')");
+        } finally { await evaluate('testOffscreenWatcher.close()'); }
+      };
+      assert.equal(await offscreenAddress(`${base}/address-offscreen`, true), null);
+      assert.match(String(await offscreenAddress(`http://public.example:${fixturePort}/address-offscreen`, false)), /blocked address/i);
+      await waitFor(() => bridge.offscreenRequests.size === 0); // the response ends each binding
       await evaluate("globalThis.testResearchWatcher = testWatchResponseAddresses({types:['main_frame']}, d => d.tabId, false)");
       const researchTab = ctx.windows[0].addTab({ url: publicLookingUrl, active: false });
       await waitFor(async () => Boolean(await evaluate(`testResearchWatcher.failure(${researchTab.id})`)));
       assert.match(await evaluate(`testResearchWatcher.failure(${researchTab.id})`), /blocked address/i);
       await evaluate('testResearchWatcher.close()');
       ctx.windows[0].closeTab(researchTab);
-      console.log('Response-address events protect worker fetches and research tabs');
+      console.log('Response-address events protect worker fetches, offscreen fetches and research tabs');
       await evaluate(`(() => {
         globalThis.tabRequestEvents = [];
         globalThis.tabRequestListeners = ['onBeforeRequest', 'onBeforeSendHeaders', 'onHeadersReceived'].map(name => {
