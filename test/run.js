@@ -127944,6 +127944,57 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     assert.match(prompt, /Files changed/);
     assert.match(prompt, /\/pull\/7\/files/);
   });
+
+  // Both suggestions run in read-only Ask mode: no navigate or click, and
+  // read_page reads only the current tab. A prompt that sends the model to
+  // "open the Files changed tab" from the Conversation tab cannot be followed,
+  // so every read it names has to be one an Ask run can make from that tab.
+  test(`recommended-actions (${label}): GitHub pull-request prompts only name reads Ask mode can make`, () => {
+    const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
+    const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
+    const prompts = (url) => {
+      const actions = build({ url, title: 'Pull Request #7 · o/r' });
+      return ['review-pull-request', 'summarize-pull-request'].map((id) => {
+        const action = actions.find((a) => a.id === id);
+        assert.ok(action, `${id} should be offered on ${url}`);
+        assert.equal(action.mode, 'ask', `${id} stays read-only`);
+        return action.prompt;
+      });
+    };
+    const diffUrl = 'https://patch-diff.githubusercontent.com/raw/o/r/pull/7.diff';
+    const views = {
+      conversation: ['https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/', 'https://github.com/o/r/pull/7#issuecomment-1'],
+      files: ['https://github.com/o/r/pull/7/files', 'https://github.com/o/r/pull/7/files/', 'https://github.com/o/r/pull/7/changes'],
+      other: ['https://github.com/o/r/pull/7/commits', 'https://github.com/o/r/pull/7/checks', 'https://github.com/o/r/pull/7/files/abc123..def456'],
+    };
+    for (const [view, urls] of Object.entries(views)) {
+      for (const url of urls) {
+        for (const prompt of prompts(url)) {
+          const named = [...new Set(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) || [])].filter((name) => allTools.has(name));
+          assert.ok(named.length > 0, `${url}: prompt names its read tools`);
+          for (const name of named) assert.ok(askTools.has(name), `${url}: ${name} is not available in Ask mode`);
+          assert.doesNotMatch(prompt, /\bopen the Files changed tab \(|\bnavigate to\b/i, `${url}: Ask mode cannot open another tab`);
+          assert.match(prompt, /read-only Ask run: you cannot navigate or click/);
+          // github.com/<o>/<r>/pull/<n>.diff answers with a redirect, which
+          // fetch_url never follows.
+          assert.doesNotMatch(prompt, /https:\/\/github\.com\/\S*\.diff/, `${url}: the github.com .diff URL redirects`);
+          if (view === 'files') {
+            assert.match(prompt, /read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true/);
+            assert.ok(!prompt.includes(diffUrl), `${url}: the diff is already on this tab`);
+          } else {
+            assert.ok(prompt.includes(`fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true`), `${url}: diff comes from fetch_url`);
+            assert.ok(prompt.includes('research_url on https://github.com/o/r/pull/7/files'), `${url}: private repositories fall back to research_url`);
+            assert.doesNotMatch(prompt, /continuationArgs/, `${url}: read_page cannot page a diff this tab does not show`);
+          }
+          if (view === 'conversation') {
+            assert.match(prompt, /Use read_page on this tab to read the description, conversation, and status checks\./);
+          } else {
+            assert.ok(prompt.includes('fetch_url on https://github.com/o/r/pull/7, continuing with offset set to nextOffset'), `${url}: the conversation is fetched, not read from this tab`);
+          }
+        }
+      }
+    }
+  });
 }
 
 // ── Store review prompt (#208) ───────────────────────────────────────────────
