@@ -20,8 +20,13 @@ section, tenants of shared hosts such as `appspot.com`, `blogspot.com` or
 cookie rules. The dependency is bundled with the extension; no executable
 code or list data is fetched at runtime.
 
+`registrableDomain()` also keeps `SUPPLEMENTAL_PUBLIC_SUFFIXES`, the suffixes
+it hard-coded before it used this list, plus `app.github.dev`, as a floor:
+the longer of the two results wins. This snapshot lacks three of those
+suffixes (`github.dev`, `glitch.me`, `netlify.com`).
+
 To update: bump the `tldts` devDependency, run `npm install`, copy
 `node_modules/tldts/dist/index.esm.min.js` and `node_modules/tldts/LICENSE`
 into `src/chrome/vendor/tldts/` and `src/firefox/vendor/tldts/`, update the
 version and SHA-256 here and in `test/run.js`, then run
-`WEBBRAIN_TEST_FILTER="registrable|tldts" node test/run.js`.
+`WEBBRAIN_TEST_FILTER="registrab|tldts|hard-coded" node test/run.js`.

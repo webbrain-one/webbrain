@@ -22763,6 +22763,31 @@ test('rejects *.internal and *.local regardless of allowLocal', () => {
   }
 });
 
+test('a trailing dot does not get a hostname past the fetch gate (both builds)', () => {
+  // URL.hostname keeps the trailing dot, and localhost. is the same DNS host
+  // as localhost.
+  for (const [label, validate] of [['chrome', validateFetchUrl], ['firefox', validateFetchUrlFx]]) {
+    for (const allowLocalNetwork of [false, true]) {
+      for (const url of [
+        'http://metadata.google.internal./computeMetadata/v1/',
+        'http://metadata.azure.com./metadata/instance',
+        'http://corp-jenkins.internal./',
+        'http://router.local../',
+      ]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+        assert.match(result.error, /Blocked hostname/, `${label}: ${url}`);
+      }
+    }
+    for (const url of ['http://localhost./', 'http://app.localhost.:3000/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+    assert.equal(validate('http://example.com./').ok, true, `${label}: public trailing-dot host`);
+    assert.equal(validate('http://./').ok, false, `${label}: a bare dot has no hostname`);
+  }
+});
+
 test('rejects 169.254.169.254 (cloud metadata IP) regardless of allowLocal', () => {
   for (const allowLocal of [false, true]) {
     expectReject('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: allowLocal });
@@ -22837,6 +22862,8 @@ test('IPv6 cloud metadata addresses stay blocked with local network access on (b
     'http://[fd00:0ec2::0254]/',                          // leading zeros
     'http://[fd00:ec2::23]/v1/credentials',               // AWS EKS Pod Identity agent
     'http://[fd20:ce::254]/computeMetadata/v1/',          // Google Cloud
+    'http://[fd00:c1::a9fe:a9fe]/opc/v2/instance/',       // Oracle Cloud
+    'http://[fd00:c1::169.254.169.254]/opc/v1/',          // Oracle, dotted tail
   ];
   for (const [label, validate, validateResolved] of [
     ['chrome', validateFetchUrl, validateResolvedAddressCh],
@@ -22850,7 +22877,7 @@ test('IPv6 cloud metadata addresses stay blocked with local network access on (b
       assert.match(validate(url, { allowLocalNetwork: true }).error, /cloud metadata/i, `${label}: ${url}`);
     }
     // A public hostname whose DNS answer is a metadata address.
-    for (const address of ['fd00:ec2::254', 'fd00:ec2:0:0:0:0:0:254', '[fd20:ce::254]', 'fd00:ec2::23']) {
+    for (const address of ['fd00:ec2::254', 'fd00:ec2:0:0:0:0:0:254', '[fd20:ce::254]', 'fd00:ec2::23', 'fd00:c1::a9fe:a9fe']) {
       const result = validateResolved(address, { allowLocalNetwork: true });
       assert.equal(result.ok, false, `${label}: resolved ${address} must be blocked`);
       assert.match(result.error, /cloud metadata/i, `${label}: resolved ${address}`);
@@ -23699,6 +23726,7 @@ test('firefox port registrableDomain matches chrome', () => {
     'github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1',
     'evil.appspot.com', 'bucket.s3.amazonaws.com', 'obs.uni1.edu.tr', 'shop.example.com.ua',
     'appspot.com', 'example.com.', 'localhost', '[::1]',
+    'victim-space.github.dev', 'attacker-8080.app.github.dev', 'a.glitch.me', 'a.netlify.com',
   ];
   for (const h of samples) {
     assert.equal(registrableDomainFx(h), registrableDomain(h), `mismatch on ${h}`);
@@ -23736,9 +23764,50 @@ test('second-level ccTLD registries are public suffixes (both builds)', () => {
     assert.notEqual(rd('a.agency1.gov.tr'), rd('b.agency2.gov.tr'), `${label}: gov.tr`);
     assert.notEqual(rd('a.assoc1.org.tr'), rd('b.assoc2.org.tr'), `${label}: org.tr`);
     assert.notEqual(rd('shop.store1.com.ua'), rd('shop.store2.com.ua'), `${label}: com.ua`);
-    // The previously listed suffixes behave as before.
+    // co.uk and com.tr were on the old hard-coded list too.
     assert.equal(rd('foo.bar.example.co.uk'), 'example.co.uk', label);
     assert.equal(rd('shop.example.com.tr'), 'example.com.tr', label);
+  }
+});
+
+// The suffixes registrableDomain() hard-coded before it used the Public
+// Suffix List. Three of them (github.dev, glitch.me, netlify.com) are not on
+// the bundled list, so the code keeps the old list as a floor.
+const FORMER_HARD_CODED_SUFFIXES = [
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev',
+];
+
+test('every suffix on the former hard-coded list still keeps its tenants apart (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const suffix of FORMER_HARD_CODED_SUFFIXES) {
+      assert.equal(rd(`a.${suffix}`), `a.${suffix}`, `${label}: a.${suffix} is its own site`);
+      assert.equal(rd(`www.a.${suffix}`), `a.${suffix}`, `${label}: www.a.${suffix} stays with a.${suffix}`);
+      assert.notEqual(rd(`a.${suffix}`), rd(`b.${suffix}`), `${label}: a.${suffix} and b.${suffix} are different sites`);
+    }
+    // A public Codespaces forwarded port is attacker-controlled content on
+    // app.github.dev; it must not share a site with someone else's codespace.
+    assert.equal(rd('attacker-8080.app.github.dev'), 'attacker-8080.app.github.dev', label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space.github.dev'), label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space-3000.app.github.dev'), label);
+    assert.equal(rd('github.dev'), 'github.dev', `${label}: the editor host matches only itself`);
+    assert.notEqual(rd('github.dev'), rd('victim-space.github.dev'), label);
+    // Where the Public Suffix List is stricter than the old list, it wins.
+    assert.equal(rd('a.service.gov.uk'), 'a.service.gov.uk', label);
+    assert.notEqual(rd('a.service.gov.uk'), rd('b.service.gov.uk'), label);
+    assert.equal(rd('www.example.gov.uk'), 'example.gov.uk', label);
   }
 });
 

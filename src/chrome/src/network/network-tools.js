@@ -247,6 +247,9 @@ export function validateFetchUrl(rawUrl, opts = {}) {
   // URL.hostname keeps the [..] around IPv6 literals — strip them.
   let host = (u.hostname || '').toLowerCase();
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  // A trailing dot names the same DNS host (localhost. is localhost), and
+  // URL.hostname keeps it, so drop it before the hostname checks.
+  host = host.replace(/\.+$/, '');
   if (!host) return { ok: false, error: 'URL has no hostname.' };
 
   // Always-blocked hostnames (cloud metadata aliases + intranet TLDs).
@@ -306,6 +309,7 @@ export function validateFetchUrl(rawUrl, opts = {}) {
       'fd00:ec2::254', // AWS instance metadata (IMDS)
       'fd00:ec2::23',  // AWS EKS Pod Identity agent
       'fd20:ce::254',  // Google Cloud metadata server
+      'fd00:c1::a9fe:a9fe', // Oracle Cloud metadata (cloud-init's Oracle datasource)
     ]);
     if (CLOUD_METADATA_IPV6.has(host)) {
       return { ok: false, error: `Blocked cloud metadata IPv6: ${host}` };
@@ -467,7 +471,43 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false } 
  * A host the list gives no registrable domain for (a public suffix itself,
  * a single label, or an invalid name) is returned whole, so it matches only
  * itself. IP literals are returned as-is.
+ *
+ * SUPPLEMENTAL_PUBLIC_SUFFIXES is a floor under the list: the suffixes this
+ * function hard-coded before it used the Public Suffix List, plus
+ * app.github.dev. The result is whichever of the two gives the longer
+ * registrable domain, so moving to the list never puts a host on the same
+ * site as more hosts than the old rules did. The bundled snapshot lacks
+ * github.dev, glitch.me and netlify.com.
  */
+const SUPPLEMENTAL_PUBLIC_SUFFIXES = new Set([
+  // ccTLD patterns (all on the Public Suffix List too)
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  // Multi-tenant hosting. app.github.dev holds Codespaces forwarded ports,
+  // one per codespace.
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev', 'app.github.dev',
+]);
+
+function supplementalRegistrableDomain(lower) {
+  const labels = lower.split('.');
+  // Longest listed suffix first, so x.app.github.dev is its own site.
+  for (let i = 1; i < labels.length; i++) {
+    if (SUPPLEMENTAL_PUBLIC_SUFFIXES.has(labels.slice(i).join('.'))) return labels.slice(i - 1).join('.');
+  }
+  return '';
+}
+
 export function registrableDomain(host) {
   if (!host) return host;
   let lower = String(host).toLowerCase();
@@ -475,7 +515,10 @@ export function registrableDomain(host) {
   // example.com. and other.com. alike to "com.".
   while (lower.endsWith('.')) lower = lower.slice(0, -1);
   if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower; // IP literal
-  return publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
+  const fromList = publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
+  const fromFloor = supplementalRegistrableDomain(lower);
+  // Both are label suffixes of the host, so the longer one is the stricter.
+  return fromFloor.length > fromList.length ? fromFloor : fromList;
 }
 
 // ─── Allow-local-network setting (cached) ───────────────────────────────

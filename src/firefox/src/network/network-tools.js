@@ -226,6 +226,9 @@ export function validateFetchUrl(rawUrl, opts = {}) {
 
   let host = (u.hostname || '').toLowerCase();
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  // A trailing dot names the same DNS host (localhost. is localhost), and
+  // URL.hostname keeps it, so drop it before the hostname checks.
+  host = host.replace(/\.+$/, '');
   if (!host) return { ok: false, error: 'URL has no hostname.' };
 
   const ALWAYS_BLOCKED_HOSTS = new Set([
@@ -277,6 +280,7 @@ export function validateFetchUrl(rawUrl, opts = {}) {
       'fd00:ec2::254', // AWS instance metadata (IMDS)
       'fd00:ec2::23',  // AWS EKS Pod Identity agent
       'fd20:ce::254',  // Google Cloud metadata server
+      'fd00:c1::a9fe:a9fe', // Oracle Cloud metadata (cloud-init's Oracle datasource)
     ]);
     if (CLOUD_METADATA_IPV6.has(host)) {
       return { ok: false, error: `Blocked cloud metadata IPv6: ${host}` };
@@ -455,8 +459,38 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false, p
  * in vendor/tldts (private section included). Used to decide whether an
  * agent-driven fetch should attach the user's cookies. A host the list gives
  * no registrable domain for is returned whole, so it matches only itself.
+ * SUPPLEMENTAL_PUBLIC_SUFFIXES (the former hard-coded list plus
+ * app.github.dev) is a floor under the list: the longer result wins.
  * See chrome's copy for the full rationale.
  */
+const SUPPLEMENTAL_PUBLIC_SUFFIXES = new Set([
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  // github.dev, glitch.me and netlify.com are not on the bundled list.
+  // app.github.dev holds Codespaces forwarded ports, one per codespace.
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev', 'app.github.dev',
+]);
+
+function supplementalRegistrableDomain(lower) {
+  const labels = lower.split('.');
+  // Longest listed suffix first, so x.app.github.dev is its own site.
+  for (let i = 1; i < labels.length; i++) {
+    if (SUPPLEMENTAL_PUBLIC_SUFFIXES.has(labels.slice(i).join('.'))) return labels.slice(i - 1).join('.');
+  }
+  return '';
+}
+
 export function registrableDomain(host) {
   if (!host) return host;
   let lower = String(host).toLowerCase();
@@ -464,7 +498,10 @@ export function registrableDomain(host) {
   // example.com. and other.com. alike to "com.".
   while (lower.endsWith('.')) lower = lower.slice(0, -1);
   if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower;
-  return publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
+  const fromList = publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
+  const fromFloor = supplementalRegistrableDomain(lower);
+  // Both are label suffixes of the host, so the longer one is the stricter.
+  return fromFloor.length > fromList.length ? fromFloor : fromList;
 }
 
 // ─── Allow-local-network setting (cached) ───────────────────────────────
