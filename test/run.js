@@ -85139,6 +85139,81 @@ function receivingFrameGateAgent(AgentClass, tabId, { frameUrls = [], choice = '
   return { agent, state };
 }
 
+// read_pdf fetches the document behind our own viewer page, so its card must
+// name that document's site, not the extension id in the viewer URL, and a
+// local file must not ride on the current page's grant.
+test('read_pdf permission is charged to the unwrapped document host in both builds', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  const inner = 'https://attacker.example/x.pdf?d=SECRET';
+  try {
+    for (const [label, AgentClass, apiName, scheme, extensionId, tabId] of [
+      ['chrome', AgentCh, 'chrome', 'chrome-extension', 'abcdefghijklmnopabcdefghijklmnop', 5131],
+      ['firefox', AgentFx, 'browser', 'moz-extension', '00000000-0000-4000-8000-000000000000', 5132],
+    ]) {
+      const viewer = `${scheme}://${extensionId}/src/ui/pdf-handler.html?url=${encodeURIComponent(inner)}&tabId=${tabId}`;
+      delete globalThis.chrome;
+      delete globalThis.browser;
+      globalThis[apiName] = {
+        runtime: {
+          id: extensionId,
+          getURL: urlPath => `${scheme}://${extensionId}/${urlPath}`,
+          getManifest: () => ({
+            mime_types_handler: { 'application/pdf': { handler_url: 'src/ui/pdf-handler.html' } },
+          }),
+        },
+      };
+      for (const { name, pageUrl, url, prompts, error } of [
+        { name: 'wrapped url from a site', pageUrl: 'https://news.example/article', url: viewer, prompts: ['attacker.example'] },
+        { name: 'wrapped url on the viewer tab', pageUrl: viewer, url: viewer, prompts: ['attacker.example'] },
+        { name: 'plain document url', pageUrl: 'https://news.example/article', url: 'https://papers.example/report.pdf', prompts: ['papers.example'] },
+        { name: 'local file from a site', pageUrl: 'https://news.example/article', url: 'file:///C:/Users/test/report.pdf', prompts: [], error: /file: url[\s\S]*without url/ },
+        { name: 'unsupported scheme', pageUrl: 'https://news.example/article', url: 'data:application/pdf;base64,JVBERi0=', prompts: [], error: /must use http:, https:, or file:/ },
+      ]) {
+        const agent = new AgentClass({ getVisionProvider: async () => null });
+        const executed = [];
+        const asked = [];
+        agent._ensureGateSetting = async () => false;
+        agent._skipPermissionGate = false;
+        agent._currentUrl = async () => pageUrl;
+        agent._recordProgressObservation = async () => null;
+        agent._autoRecordProgressAction = () => null;
+        agent._progressWarningForAction = () => '';
+        agent._persist = () => { };
+        agent._detectLikelySubmitAction = async () => null;
+        agent.permissions.hydrate = async () => { };
+        // The current site and the extension id already hold "always" grants.
+        agent.permissions.check = host => host === 'news.example' || host === extensionId
+          ? { allowed: true, needsPrompt: false }
+          : { allowed: false, needsPrompt: true };
+        agent.permissions.record = async () => { };
+        agent._promptPermission = async (_tabId, capability, host) => {
+          asked.push({ capability, host });
+          return 'deny';
+        };
+        agent.executeTool = async (_tabId, toolName) => {
+          executed.push(toolName);
+          return { success: true };
+        };
+        const messages = [];
+        await agent._executeToolBatch(tabId, [{ id: `pdf_${tabId}`, function: { name: 'read_pdf', arguments: JSON.stringify({ url }) } }],
+          messages, () => { }, { supportsVision: false }, '', new Set(['read_pdf']), 1);
+        assert.deepEqual(asked, prompts.map(host => ({ capability: Capability.NETWORK, host })), `${label}: ${name}: wrong permission host`);
+        assert.deepEqual(executed, [], `${label}: ${name}: read_pdf ran without the document host's permission`);
+        const result = JSON.parse(messages[0].content);
+        assert.equal(result.denied, true, `${label}: ${name}`);
+        if (error) assert.match(result.error, error, `${label}: ${name}`);
+        else assert.match(result.error, new RegExp(`denied permission to .* ${prompts[0].replace(/\./g, '\\.')}`), `${label}: ${name}`);
+      }
+    }
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = previousBrowser;
+  }
+});
+
 const RECEIVING_FRAME_CALLS = [
   ['click', { x: 120, y: 80, coordinate_space: 'css' }, 'click'],
   ['type_text', { text: '4242 4242 4242 4242' }, 'type'],
@@ -115404,6 +115479,38 @@ test('requiredHosts: download_files gates EVERY distinct host in urls[]', () => 
   assert.deepEqual(requiredHosts(Capability.NAVIGATE, { url: 'https://dest.com/x' }, top), ['dest.com']);
   // unidentifiable iframe target → [] so the caller fails closed
   assert.deepEqual(requiredHosts(Capability.CLICK, {}, top, 'iframe_click'), []);
+});
+
+test('requiredHosts: read_pdf names only the http(s) document it fetches, never the page or the viewer', () => {
+  for (const [label, Cap, reqHosts, classify] of [
+    ['firefox', Capability, requiredHosts, capabilityFor],
+    ['chrome', CapabilityCh, requiredHostsCh, capabilityForCh],
+  ]) {
+    const page = 'https://news.example/article';
+    const inner = encodeURIComponent('https://attacker.example/x.pdf?d=SECRET');
+    for (const [url, expected] of [
+      ['https://papers.example/report.pdf', ['papers.example']],
+      ['https://www.papers.example/report.pdf', ['papers.example']],
+      ['  http://papers.example/report.pdf  ', ['papers.example']],
+      // A local file has no site; it must not be charged to the page's grant.
+      ['file:///C:/Users/test/report.pdf', []],
+      ['file://fileserver/share/report.pdf', []],
+      // agent.js unwraps our own viewer first. A viewer URL reaching the gate
+      // must not be charged to the extension id the card would show.
+      [`chrome-extension://abcdefghijklmnopabcdefghijklmnop/src/ui/pdf-handler.html?url=${inner}`, []],
+      [`moz-extension://00000000-0000-4000-8000-000000000000/src/ui/pdf-handler.html?url=${inner}`, []],
+      // read_pdf never resolves against the page, so neither does its gate.
+      ['/files/report.pdf', []],
+      ['//papers.example/report.pdf', []],
+      ['not a url', []],
+    ]) {
+      assert.deepEqual(reqHosts(Cap.NETWORK, { url }, page, 'read_pdf'), expected, `${label}: read_pdf ${url}`);
+    }
+    // fetch_url keeps resolving against the page.
+    assert.deepEqual(reqHosts(Cap.NETWORK, { url: '/api/data' }, page, 'fetch_url'), ['news.example'], `${label}: fetch_url`);
+    // A blank url reads the active tab, as the handler does after trimming.
+    assert.equal(classify('read_pdf', { url: '   ' }), null, `${label}: blank url is the active-tab read`);
+  }
 });
 
 test('hydrateFrom replaces always-grants but keeps once-grants (live revoke)', async () => {
