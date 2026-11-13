@@ -47574,20 +47574,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: false, error: 'read_pdf: no url provided and could not read the active tab URL.' };
         }
 
+        const provider = this.providerManager.getActive();
+        const supportsPdfPassthrough = providerSupportsPdfPassthrough(provider);
         const result = await extractPdfText(pdfUrl, {
           fromPage: args.fromPage,
           toPage: args.toPage,
           maxChars: args.maxChars,
+          includeDocument: supportsPdfPassthrough,
         }, { tabId });
 
-        // Tier 2 — Anthropic Claude PDF passthrough.
-        const provider = this.providerManager.getActive();
+        // Tier 2 — Anthropic Claude PDF passthrough. extractPdfText copies
+        // the bytes before PDF.js detaches them, so the document block is
+        // the same file the text came from. An empty copy is never attached.
         const bytes = result._pdfBytes;
         delete result._pdfBytes;
 
         if (
-          bytes &&
-          providerSupportsPdfPassthrough(provider) &&
+          bytes?.length > 0 &&
+          supportsPdfPassthrough &&
           bytes.length <= PDF_PASSTHROUGH_MAX_BYTES
         ) {
           let docName = result.title || '';
