@@ -88,17 +88,34 @@ test('app links are allowed per site and scheme, the prompt shows the link, and 
     assert.equal(await open('https://example.org/', link), false, String(link));
   }
   assert.equal(prompts.length, 3);
-  // A long link is cut short.
+  // Murshid's own pages open app links without asking, but not the denied schemes.
+  assert.equal(await open('murshid://downloads/', 'mailto:someone@example.com'), true);
+  assert.equal(await open('murshid://downloads/', 'shell:startup'), false);
+  assert.equal(check(null, 'openExternal', 'murshid://downloads', { externalURL: 'shell:startup' }), false);
+  assert.equal(prompts.length, 3);
+  // A long link shows its start and its end.
   responses.push(1);
-  assert.equal(await open('https://example.net/', `zoommtg://example.net/join?${'x'.repeat(500)}`), false);
+  const long = `zoommtg://example.net/join?${'x'.repeat(500)}&end=1`;
+  assert.equal(await open('https://example.net/', long), false);
   const shown = prompts[3].detail.split('\n')[0];
-  assert.ok(shown.length === 201 && shown.endsWith('…'), shown);
+  assert.equal(shown, `${long.slice(0, 140)}…${long.slice(-60)}`);
+  // The URL parser keeps the spaces of an opaque path. They are encoded, so a
+  // page can't pad its link to put words of its own on a line in the dialog.
+  responses.push(1);
+  const padded = `ms-msdt:${' '.repeat(60)}Trusted by Example`;
+  assert.equal(new URL(padded).href, padded);
+  assert.equal(await open('https://example.edu/', padded), false);
+  const paddedShown = prompts[4].detail.split('\n\n')[0];
+  assert.doesNotMatch(paddedShown, /\s/);
+  const encoded = padded.replaceAll(' ', '%20');
+  assert.equal(paddedShown, `${encoded.slice(0, 140)}…${encoded.slice(-60)}`);
+  assert.ok(paddedShown.startsWith('ms-msdt:%20') && paddedShown.endsWith('%20Trusted%20by%20Example'), paddedShown);
   // A local file is asked every time.
   responses.push(0, 0);
   assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
   assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
-  assert.equal(prompts.length, 6);
-  assert.match(prompts[5].detail, /^mailto:someone@example\.com\n\nThis choice applies only to this request/);
+  assert.equal(prompts.length, 7);
+  assert.match(prompts[6].detail, /^mailto:someone@example\.com\n\nThis choice applies only to this request/);
 });
 
 test('with browser data kept off, the browser chrome and the address bar list load favicons in their own session', () => {

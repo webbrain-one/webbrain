@@ -36,7 +36,9 @@ const DESCRIBE = {
 // no such list of its own.
 const DENIED_EXTERNAL_SCHEMES = new Set(['afp', 'data', 'disk', 'disks', 'file', 'hcp', 'ie.http', 'javascript',
   'ms-help', 'nntp', 'res', 'shell', 'vbscript', 'view-source', 'vnd.ms.radio']);
-const EXTERNAL_URL_SHOWN = 200;
+// A long link is shown by its start and its end.
+const SHOWN_HEAD = 140;
+const SHOWN_TAIL = 60;
 
 /** The link another app would open, parsed (its scheme is lower case), or null. */
 function externalLink(value) {
@@ -46,9 +48,16 @@ function externalLink(value) {
   } catch { return null; }
 }
 
-/** The link as the prompt shows it: whole, or its start when it is long. */
+/**
+ * The link as the prompt shows it, as one unbroken word. The URL parser has
+ * already percent-encoded all but printable ASCII, except the spaces of an
+ * opaque path ('search-ms:a    b'). Those are encoded here, or a page could
+ * pad its link so the dialog wraps the page's own words onto a line of their
+ * own, or push the part that matters out of sight.
+ */
 function shownLink(href) {
-  return href.length > EXTERNAL_URL_SHOWN ? `${href.slice(0, EXTERNAL_URL_SHOWN)}…` : href;
+  const text = href.replace(/\s/g, encodeURIComponent);
+  return text.length > SHOWN_HEAD + SHOWN_TAIL ? `${text.slice(0, SHOWN_HEAD)}…${text.slice(-SHOWN_TAIL)}` : text;
 }
 
 function describeRequest(host, permission, mediaTypes) {
@@ -82,20 +91,26 @@ function installPermissions(ctx) {
     return [`${origin} ${permission}`];
   };
 
+  const linkOf = (permission, details) => permission === 'openExternal' ? externalLink(details.externalURL) : null;
+  // As in Chrome, these schemes are refused whoever asks, Murshid's own pages too.
+  const deniedLink = (link) => Boolean(link && DENIED_EXTERNAL_SCHEMES.has(link.scheme));
+
   ctx.ses.setPermissionCheckHandler((_wc, permission, requestingOrigin, details = {}) => {
     const origin = originOf(requestingOrigin);
+    const link = linkOf(permission, details);
+    if (deniedLink(link)) return false;
     if (trusted(origin) || ALWAYS.has(permission)) return true;
     if (!origin) return false;
-    const keys = keysFor(origin, permission, [details.mediaType], externalLink(details.externalURL));
+    const keys = keysFor(origin, permission, [details.mediaType], link);
     return keys.length > 0 && keys.every((key) => answers.get(key) === true);
   });
 
   ctx.ses.setPermissionRequestHandler((wc, permission, callback, details = {}) => {
     const url = details.requestingUrl || (details.isMainFrame !== false ? wc?.getURL() : '');
     const origin = originOf(url);
+    const link = linkOf(permission, details);
+    if (deniedLink(link)) { callback(false); return; }
     if (trusted(origin) || ALWAYS.has(permission)) { callback(true); return; }
-    const link = permission === 'openExternal' ? externalLink(details.externalURL) : null;
-    if (link && DENIED_EXTERNAL_SCHEMES.has(link.scheme)) { callback(false); return; }
     const keys = keysFor(origin, permission, details.mediaTypes, link);
     if (!keys.length) { callback(false); return; }
     if (origin && keys.some((key) => answers.get(key) === false)) { callback(false); return; }
