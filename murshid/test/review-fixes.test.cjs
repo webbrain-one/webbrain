@@ -101,6 +101,27 @@ test('app links are allowed per site and scheme, the prompt shows the link, and 
   assert.match(prompts[5].detail, /^mailto:someone@example\.com\n\nThis choice applies only to this request/);
 });
 
+test('with browser data kept off, the browser chrome and the address bar list load favicons in their own session', () => {
+  const made = [];
+  const contents = () => ({ on() {}, loadFile() {}, setWindowOpenHandler() {}, send() {} });
+  class BrowserWindow { constructor(options) { made.push(options); this.id = made.length; this.webContents = contents(); } once() {} on() {} }
+  class WebContentsView { constructor(options) { made.push(options); this.webContents = contents(); } setBackgroundColor() {} }
+  const electron = { BrowserWindow, WebContentsView, dialog: {}, nativeTheme: { shouldUseDarkColors: false, on() {} },
+    screen: { getPrimaryDisplay: () => ({ workArea: { width: 1600, height: 1000 } }) } };
+  const modules = ['../app/window', '../app/omnibox-popup', '../app/tab'];
+  modules.forEach((file) => delete require.cache[require.resolve(file)]);
+  try {
+    const { MurshidWindow } = loadWithElectron('../app/window', electron);
+    for (const uiPartition of [undefined, 'murshid-temporary-ui']) {
+      made.length = 0;
+      const w = new MurshidWindow({ uiPartition, settings: { get() {} } });
+      w.omniPopup.ensure();
+      assert.equal(made.length, 2);
+      for (const options of made) assert.equal(options.webPreferences.partition, uiPartition);
+    }
+  } finally { modules.forEach((file) => delete require.cache[require.resolve(file)]); }
+});
+
 test('reload and hard reload retry failed destinations', () => {
   const { createCommands } = require('../app/commands');
   const calls = [];

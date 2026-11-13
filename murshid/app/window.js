@@ -71,6 +71,7 @@ class MurshidWindow {
         sandbox: true,
         nodeIntegration: false,
         spellcheck: false,
+        ...(ctx.uiPartition ? { partition: ctx.uiPartition } : {}),
       },
     });
     this.id = this.win.id;
