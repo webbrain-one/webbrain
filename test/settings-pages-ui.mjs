@@ -6,7 +6,9 @@
 // deep links from the old tabs and pages, the search across every section,
 // the single Record traces switch, the moved controls, the combined switches
 // in General (settings-presets.js) with the Advanced controls they stand for,
-// and the provider refresh after a profile sync in another Settings tab.
+// the provider refresh after a profile sync in another Settings tab, the
+// Permissions & privacy switches while the other sections are still loading,
+// and an unsaved Vision endpoint surviving a refocus (Chrome).
 import { chromium, firefox } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -59,8 +61,12 @@ function stub({ build, lang, seed }) {
   const pick = keys => keys == null ? { ...data }
     : Object.fromEntries((Array.isArray(keys) ? keys : typeof keys === 'string' ? [keys] : Object.keys(keys))
       .map(k => [k, data[k] ?? (keys && typeof keys === 'object' && !Array.isArray(keys) ? keys[k] : undefined)]));
+  // window.testHold (see holdUntilReleased) can keep a reply or a read
+  // waiting, as a slow background would. A held read still returns what
+  // storage held when it was made.
+  const hold = (kind, what) => window.testHold?.(kind, what);
   const storage = {
-    async get(keys) { return structuredClone(pick(keys)); },
+    async get(keys) { const result = structuredClone(pick(keys)); await hold('get', keys); return result; },
     async set(values) {
       const changes = {};
       for (const [k, v] of Object.entries(values)) { changes[k] = { oldValue: data[k], newValue: v }; data[k] = structuredClone(v); }
@@ -72,6 +78,7 @@ function stub({ build, lang, seed }) {
   let managerPromise;
   const reply = async msg => {
     window.testRequests.push(msg);
+    await hold('message', msg);
     if (msg.action === 'get_providers') {
       managerPromise ||= import(`/src/${build}/src/providers/manager.js`).then(async ({ ProviderManager }) => {
         const manager = new ProviderManager();
@@ -115,12 +122,24 @@ function stub({ build, lang, seed }) {
   };
 }
 
-async function open(browser, build, path, { lang = 'en', seed = {}, width = 1280 } = {}) {
+// Keeps the background reply to `action`, or the storage read of the single
+// key `key`, waiting until window.testRelease() is called.
+function holdUntilReleased({ action, key }) {
+  const waiting = [];
+  window.testHeld = 0;
+  window.testRelease = () => { window.testHold = null; waiting.splice(0).forEach(resolve => resolve()); };
+  window.testHold = (kind, what) => ((kind === 'message' && what.action === action) || (kind === 'get' && what === key))
+    ? new Promise(resolve => { window.testHeld += 1; waiting.push(resolve); })
+    : null;
+}
+
+async function open(browser, build, path, { lang = 'en', seed = {}, width = 1280, hold = null } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.setDefaultTimeout(10_000);
   await page.addInitScript(stub, { build, lang, seed });
+  if (hold) await page.addInitScript(holdUntilReleased, hold);
   await page.goto(`${origin}/src/${build}/src/ui/${path}`);
   return { page, errors };
 }
@@ -499,6 +518,77 @@ try {
       await apocalypse.waitForFunction(() => window.testStore.testApocalypseEnabled === false);
       assert.deepEqual(apocalypseErrors, [], `${build}: Apocalypse Mode page errors`);
       await apocalypse.close();
+      // The side panel opens this section while the rest of Settings can
+      // still be waiting on the background (held here at the memory list).
+      // Its switches already show what is stored and save from the first click.
+      const quick = { timeout: 3000 };
+      const { page: early, errors: earlyErrors } = await open(browser, build, 'settings.html#permissions', {
+        seed: { askBeforeConsequentialActions: false, wb_permissions: [grant] },
+        hold: { action: 'get_user_memory' },
+      });
+      await early.waitForFunction(() => window.testHeld > 0);
+      await early.waitForFunction(() => document.getElementById('toggle-permission-gate').checked === false
+        && document.getElementById('permission-gate-warning').style.display === '', null, quick)
+        .catch(() => assert.fail(`${build}: the stored master switch shows while other sections load`));
+      await early.locator('#permissions-list button[data-host="example.com"]').waitFor(quick)
+        .catch(() => assert.fail(`${build}: the grants show while other sections load`));
+      await early.locator('#toggle-screenshot-redaction').locator('..').click();
+      await early.waitForFunction(() => window.testStore.screenshotRedaction === true, null, quick)
+        .catch(() => assert.fail(`${build}: the redaction switch saves while other sections load`));
+      await early.locator('#toggle-permission-gate').locator('..').click();
+      await early.waitForFunction(() => window.testStore.askBeforeConsequentialActions === true, null, quick)
+        .catch(() => assert.fail(`${build}: the master switch saves while other sections load`));
+      assert.notEqual(await early.evaluate(() => document.documentElement.dataset.settingsReady), 'true', `${build}: the other sections were still loading`);
+      await early.evaluate(() => window.testRelease());
+      await early.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
+      assert.equal(await early.locator('#toggle-screenshot-redaction').isChecked(), true, `${build}: the redaction click stands once Settings has loaded`);
+      assert.equal(await early.locator('#toggle-permission-gate').isChecked(), true, `${build}: the master switch click stands once Settings has loaded`);
+      assert.equal(await visible(early, '#permission-gate-warning'), false, `${build}: the warning goes with prompts back on`);
+      assert.deepEqual(earlyErrors, [], `${build}: early Permissions & privacy errors`);
+      await early.close();
+
+      // A click made before the stored value has been read is not undone by it.
+      const { page: unread, errors: unreadErrors } = await open(browser, build, 'settings.html#permissions', { hold: { key: 'screenshotRedaction' } });
+      await unread.waitForFunction(() => window.testHeld > 0);
+      await unread.locator('#toggle-screenshot-redaction').locator('..').click();
+      await unread.waitForFunction(() => window.testStore.screenshotRedaction === true, null, quick)
+        .catch(() => assert.fail(`${build}: the redaction switch saves before its stored value is read`));
+      await unread.evaluate(() => window.testRelease());
+      await unread.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
+      assert.equal(await unread.locator('#toggle-screenshot-redaction').isChecked(), true, `${build}: reading the stored value keeps the click`);
+      assert.deepEqual(unreadErrors, [], `${build}: unread redaction errors`);
+      await unread.close();
+
+      // Chrome rereads the Vision endpoint each time the Settings tab gets
+      // focus again. That must not put the stored values back over an edit
+      // that has not been saved, or Save stores the old endpoint.
+      if (build === 'chrome') {
+        const stored = { type: 'openai', baseUrl: 'https://vision.example/v1', apiKey: 'sk-test-a', model: 'vision-a' };
+        const { page: vision, errors: visionErrors } = await open(browser, build, 'settings.html#vision', { seed: { visionModel: stored } });
+        await vision.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
+        assert.equal(await vision.locator('#vision-model').inputValue(), 'vision-a');
+        // The reload asks for the in-browser choice once it has decided what the fields show.
+        const refocus = async () => {
+          const before = await vision.evaluate(() => window.testRequests.filter(msg => msg.action === 'get_webgpu_vision_choice').length);
+          await vision.evaluate(() => window.dispatchEvent(new Event('focus')));
+          await vision.waitForFunction(n => window.testRequests.filter(msg => msg.action === 'get_webgpu_vision_choice').length > n, before);
+        };
+        await vision.locator('#vision-model').fill('vision-b');
+        await vision.locator('#vision-api-key').fill('sk-test-b');
+        await refocus();
+        assert.equal(await vision.locator('#vision-model').inputValue(), 'vision-b', 'chrome: a refocus keeps the unsaved model');
+        assert.equal(await vision.locator('#vision-api-key').inputValue(), 'sk-test-b', 'chrome: a refocus keeps the unsaved key');
+        await vision.locator('#btn-save-vision').click();
+        await vision.waitForFunction(() => window.testStore.visionModel?.model === 'vision-b')
+          .catch(() => assert.fail('chrome: Save stores the edit made before the refocus'));
+        assert.equal(await store(vision, 'visionModel').then(config => config.apiKey), 'sk-test-b');
+        // With nothing unsaved, a refocus still shows a change made elsewhere.
+        await vision.evaluate(() => { window.testStore.visionModel = { type: 'openai', baseUrl: 'https://vision.example/v1', apiKey: 'sk-test-b', model: 'vision-c' }; });
+        await refocus();
+        assert.equal(await vision.locator('#vision-model').inputValue(), 'vision-c', 'chrome: a refocus shows a change made elsewhere');
+        assert.deepEqual(visionErrors, [], 'chrome: Vision refocus errors');
+        await vision.close();
+      }
       console.log(`PASS ${build}: settings page, its sections and the forwarded pages`);
     } finally {
       await browser.close();

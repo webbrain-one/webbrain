@@ -104,6 +104,7 @@ import { executeWikipediaSkillTool } from './wikipedia-offline.js';
 import {
   isPdfUrl,
   isPdfHandlerTabUrl,
+  normalizePdfUrl,
   pdfUrlFromTabUrl,
   extractPdfText,
   providerSupportsPdfPassthrough,
@@ -274,6 +275,32 @@ const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
   ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
   ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
+
+// read_pdf fetches what normalizePdfUrl makes of its url: on our own viewer
+// page that is the document in ?url=, not the extension page, whose hostname
+// is the extension id. The permission gate is charged to that address. One
+// the handler would refuse leaves '', and the call fails closed.
+function readPdfPermissionUrl(url) {
+  try {
+    return normalizePdfUrl(url);
+  } catch {
+    return '';
+  }
+}
+
+// Why read_pdf({url}) could not be permission-checked. Only an http(s)
+// document names a site, so nothing was fetched.
+function readPdfPermissionFailure(url) {
+  let target = '';
+  try {
+    target = normalizePdfUrl(url);
+  } catch (error) {
+    return `Cannot run read_pdf: ${error.message} Nothing was fetched.`;
+  }
+  return target.startsWith('file:')
+    ? "Cannot run read_pdf on a file: url: a local file has no site the permission card can name, so it can't be permission-checked. Nothing was read. If the PDF is open in this tab, call read_pdf without url; otherwise ask the user to open the file in this tab."
+    : "Cannot run read_pdf: the PDF's site could not be identified, so it can't be permission-checked. Nothing was fetched.";
+}
 
 function savedWorkflowStepMayDispatchMessage(step) {
   const tool = String(step?.tool || '');
@@ -6515,9 +6542,9 @@ export class Agent extends LoopDetector {
    * whether this request repeats it. Instead of refusing every such write
    * for the rest of the task, WebBrain asks the user on its hard card, which
    * never times out and never goes ahead on its own (an unattended run is
-   * refused). The card shows the request: its method and address, and its
-   * body unless strict secret handling is on. One answer covers one call
-   * with exactly these arguments.
+   * refused). The card shows the request: its method and address, and the
+   * body it sends unless strict secret handling is on. One answer covers one
+   * call with exactly these arguments.
    */
   _priorSubmissionWriteAsk(tabId, guard, name, args = {}) {
     const network = isNetworkMutation(name, args);
@@ -6530,7 +6557,9 @@ export class Agent extends LoopDetector {
       try { url = new URL(String(args?.url || '')); } catch { return null; }
       if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
       host = url.hostname;
-      const body = typeof args.body === 'string' ? args.body : args.body == null ? '' : JSON.stringify(args.body);
+      const sent = this._priorSubmissionWriteBody(tabId, name, args, url);
+      if (!sent.ok) return null;
+      const body = typeof sent.body === 'string' ? sent.body : sent.body == null ? '' : JSON.stringify(sent.body);
       text = [`${String(args.method || '').toUpperCase()} ${url.href.slice(0, 600)}`,
         ...(body && this.strictSecretMode !== true ? [body.slice(0, 800)] : [])].join('\n\n');
     } else {
@@ -6540,6 +6569,22 @@ export class Agent extends LoopDetector {
       reason: 'prior_submission_unreconciled', host: normalizeHost(host), contentLabel: 'request', text,
       stepKey: this._sha256TextSync(JSON.stringify(['steer-prior-submission-unreconciled', guard.taskKey,
         Number(guard.steeringPriorSubmission?.actionSequence || 0), name, args || {}])) };
+  }
+
+  // The body a write sends. A fetch_url replay of a captured request with no
+  // body of its own sends the captured body (network-tools.js
+  // apiReplayOptionsForFetch), so the card shows that one. A replay that
+  // fetch_url would refuse (unknown id, another tab, another origin) is not
+  // asked about: `ok` is false and the plain refusal stands.
+  _priorSubmissionWriteBody(tabId, name, args, url) {
+    const replayRequestId = name === 'fetch_url' ? (args?.replayRequestId || args?.apiReplayRequestId) : '';
+    if (!replayRequestId) return { ok: true, body: args?.body };
+    const replay = globalThis.__webbrainApiRequestReplay?.get(String(replayRequestId));
+    if (!replay || (tabId != null && replay.tabId != null && Number(replay.tabId) !== Number(tabId))) return { ok: false };
+    try {
+      if (new URL(String(replay.url || '')).origin !== url.origin) return { ok: false };
+    } catch { return { ok: false }; }
+    return { ok: true, body: args.body !== undefined ? args.body : (replay.body ?? undefined) };
   }
 
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
@@ -15190,6 +15235,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       fnArgs = coordinates.args;
       predispatch.lap('argumentsMs');
+      // A point under the page's own Stop button is the page's to the model:
+      // the button moves away before any check below reads that point.
+      await this._clearAgentStopButton(tabId, this._agentInputPoints(fnName, fnArgs, tc._vision));
       if (fnName !== 'done' && !Agent.NAV_TOOLS.has(fnName)) {
         try {
           await this._adoptLiveSocialPublishWorkflow(tabId, provider);
@@ -16002,6 +16050,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ? otpEmailPermissionArgs
             : this._skillPermissionArgsForCapability(skillCallTool, capability, fnArgs);
           if (receivingFrameInput) gateArgs = { ...gateArgs, _inputFrameUrl: curUrl };
+          if (fnName === 'read_pdf') gateArgs = { ...gateArgs, url: readPdfPermissionUrl(gateArgs?.url) };
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
@@ -16048,6 +16097,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               denied: true,
               error: receivingFrameInput
                 ? `Cannot run ${fnName}: WebBrain could not identify the site of the document ${fnName === 'click' ? 'under that point' : 'that has keyboard focus'}, so the input can't be permission-checked. Nothing was sent. Look at the page again before retrying; for a field inside an embedded frame, use iframe_click / iframe_type with a urlFilter naming the frame's domain.`
+                : fnName === 'read_pdf'
+                ? readPdfPermissionFailure(fnArgs?.url)
                 : `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
@@ -19182,6 +19233,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const ok = !!result && typeof result === 'object' && result.success === true
       && result.noDispatch !== true && result.dispatched !== false;
     this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
+  }
+
+  /**
+   * Agent input is about to land at `points` (viewport CSS px of the top
+   * document; the first is where a press goes). The page's Stop button
+   * (content/agent-visual-indicator.js) is hidden in every screenshot, so a
+   * point under it is the page's to the model; its press must reach the
+   * page, not stop the run. The button moves out of the way first, before
+   * the checks that read the point (content.js visionInput asks again right
+   * before its input). Only on a tab that shows the run; bounded like the
+   * cursor's reply. Resolves to whether it moved.
+   */
+  async _clearAgentStopButton(tabId, points) {
+    const list = (Array.isArray(points) ? points : [])
+      .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+      .slice(0, 8)
+      .map(point => ({ x: Number(point.x), y: Number(point.y) }));
+    if (!list.length || !this._agentCursorShown(tabId)) return false;
+    let timer = null;
+    try {
+      const reply = await Promise.race([
+        Promise.resolve(browser.tabs.sendMessage(tabId, { type: 'WB_AGENT_POINTER_AT', points: list }, { frameId: 0 })).catch(() => null),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+      ]);
+      return reply?.moved === true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Where a tool call's input lands, when it is a viewport point known before its checks. */
+  _agentInputPoints(name, args, vision = null) {
+    const points = [];
+    if (name === 'click' && args?.x != null && args?.y != null) points.push({ x: args.x, y: args.y });
+    for (const point of [vision?.monitorPoint, vision?.wheelPoint]) if (point) points.push(point);
+    return points;
   }
 
   async _captureViewportProbe(tabId) {
@@ -47574,20 +47663,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: false, error: 'read_pdf: no url provided and could not read the active tab URL.' };
         }
 
+        const provider = this.providerManager.getActive();
+        const supportsPdfPassthrough = providerSupportsPdfPassthrough(provider);
         const result = await extractPdfText(pdfUrl, {
           fromPage: args.fromPage,
           toPage: args.toPage,
           maxChars: args.maxChars,
+          includeDocument: supportsPdfPassthrough,
         }, { tabId });
 
-        // Tier 2 — Anthropic Claude PDF passthrough.
-        const provider = this.providerManager.getActive();
+        // Tier 2 — Anthropic Claude PDF passthrough. extractPdfText copies
+        // the bytes before PDF.js detaches them, so the document block is
+        // the same file the text came from. An empty copy is never attached.
         const bytes = result._pdfBytes;
         delete result._pdfBytes;
 
         if (
-          bytes &&
-          providerSupportsPdfPassthrough(provider) &&
+          bytes?.length > 0 &&
+          supportsPdfPassthrough &&
           bytes.length <= PDF_PASSTHROUGH_MAX_BYTES
         ) {
           let docName = result.title || '';

@@ -220,7 +220,7 @@ func (a *App) routes(e *gin.Engine) {
 		res, err := a.D1.EvaluateJSON(c.Request.Context(), body)
 		if err != nil {
 			status := http.StatusBadRequest
-			if errors.Is(err, d1.ErrNotReady) {
+			if errors.Is(err, d1.ErrNotReady) || errors.Is(err, d1.ErrShuttingDown) {
 				status = http.StatusServiceUnavailable
 			}
 			fail(c, status, err)

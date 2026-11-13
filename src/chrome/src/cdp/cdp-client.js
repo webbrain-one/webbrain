@@ -509,6 +509,9 @@ export class CDPClient {
     this.dialogRuns = new Map(); // tabId -> active action-run owner
     this.dialogIntents = new Map(); // tabId -> the run's wish to answer dialogs, across debugger connections
     this.fileChooserGuards = new Map(); // tabId -> temporary protocol interception
+    // (tabId, { x, y }) => Promise, awaited before each top-level pointer
+    // command (_beforeCommand); background.js sets it.
+    this.beforePointerInput = null;
     this._debuggerListenersRegistered = false;
     this._onDebuggerEvent = (source, method, params) => {
       const tabId = source?.tabId;
@@ -954,6 +957,15 @@ export class CDPClient {
       throw new Error(`Not attached to tab ${tabId}`);
     }
 
+    // Trusted pointer input lands on whatever is drawn at its point, WebBrain's
+    // own Stop button included, which screenshots never show. The hook
+    // (agent _clearAgentStopButton) moves the button out of the way first, so
+    // the press reaches the page and the hit test below marks the page's node.
+    // Best effort: it never holds back or refuses the command.
+    if (method === 'Input.dispatchMouseEvent' && !sessionId && typeof this.beforePointerInput === 'function'
+        && Number.isFinite(params.x) && Number.isFinite(params.y)) {
+      try { await this.beforePointerInput(tabId, { x: params.x, y: params.y }); } catch { /* decorative UI only */ }
+    }
     if (['Input.dispatchMouseEvent', 'Input.dispatchKeyEvent', 'Input.insertText'].includes(method)) {
       const release = ['mouseReleased', 'keyUp'].includes(params.type);
       let target = {};
