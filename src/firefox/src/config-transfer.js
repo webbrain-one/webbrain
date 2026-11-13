@@ -41,6 +41,9 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   imageDetail: 'auto',
   maxScreenshotsPerTurn: 0,
   maxImageDimension: 1568,
+  // Settings → Advanced → Cookie banners: 'agent' (tabs an Act/Dev run drives),
+  // 'everywhere' or 'off' (agent/cookie-banner-host.js).
+  cookieBanners: 'agent',
   useSiteAdapters: true,
   researchEscalationEnabled: false,
   researchEscalationEngine: 'chatgpt',
@@ -48,6 +51,11 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   alwaysAllowApiMutations: true,
   apiMutationObserverEnabled: true,
   pdfViewerEnabled: true,
+  // Chrome's Settings → General → New tab switch (opt-in, newtab/src/lib/gate.js).
+  // Firefox has no switch and never reads it, but carries it like
+  // pdfViewerEnabled so both builds share one schema and a Chrome export keeps
+  // the choice through a Firefox round trip.
+  newTabEnabled: false,
   webMcpEnabled: true,
   openaiAskStreamingEnabled: true,
   planBeforeActMode: 'try',
@@ -133,6 +141,11 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
 export const CONFIG_STORAGE_KEYS = Object.freeze(Object.keys(DEFAULT_CONFIG_SETTINGS));
 const CONFIG_STORAGE_KEY_SET = new Set(CONFIG_STORAGE_KEYS);
 
+// The Cookie banners modes an import accepts: COOKIE_BANNER_MODES in
+// agent/cookie-banner-host.js, written out so this module does not load the
+// vendored autoconsent bundle. test/run.js pins that the two lists match.
+export const CONFIG_COOKIE_BANNER_MODES = Object.freeze(['agent', 'everywhere', 'off']);
+
 const BOOLEAN_KEYS = new Set([
   'verboseMode',
   'selectionShortcutEnabled',
@@ -146,6 +159,7 @@ const BOOLEAN_KEYS = new Set([
   'alwaysAllowApiMutations',
   'apiMutationObserverEnabled',
   'pdfViewerEnabled',
+  'newTabEnabled',
   'webMcpEnabled',
   'openaiAskStreamingEnabled',
   'planBeforeAct',
@@ -215,6 +229,7 @@ const STRING_KEYS = new Set([
   'themeMode',
   'autoScreenshot',
   'imageDetail',
+  'cookieBanners',
   'researchEscalationEngine',
   'planBeforeActMode',
   'planReviewMode',
@@ -273,6 +288,7 @@ function validSettingValue(key, value) {
   if (key === 'visionMode') return ['auto', 'on', 'off'].includes(value);
   if (key === 'visionQuality') return ['economy', 'balanced', 'sharp'].includes(value);
   if (key === 'imageDetail') return ['high', 'low', 'auto'].includes(value);
+  if (key === 'cookieBanners') return CONFIG_COOKIE_BANNER_MODES.includes(value);
   if (key === 'agentIndicatorStyle') return ['random', 'circuit', 'aurora', 'scan', 'gears', 'classic'].includes(value);
   if (key === 'decisionBaseUrl') {
     if (typeof value !== 'string') return false;

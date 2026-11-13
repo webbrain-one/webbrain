@@ -1,10 +1,13 @@
 package d1
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -103,6 +106,96 @@ func TestShutdownWaitsForDecisionInstaller(t *testing.T) {
 	case <-shutdownDone:
 	case <-time.After(5 * time.Second):
 		t.Fatal("shutdown did not finish after installation stopped")
+	}
+}
+
+// blockingEvaluator stands in for a loaded model whose decision runs until
+// its context ends or the test releases it.
+type blockingEvaluator struct {
+	started chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+	closed  atomic.Bool
+}
+
+func newBlockingEvaluator() *blockingEvaluator {
+	return &blockingEvaluator{started: make(chan struct{}, 1), release: make(chan struct{})}
+}
+
+func (e *blockingEvaluator) evaluate(ctx context.Context, req request, model string) (*ordered, error) {
+	e.calls.Add(1)
+	select {
+	case e.started <- struct{}{}:
+	default:
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-e.release:
+		return newOrdered(), nil
+	}
+}
+
+func (e *blockingEvaluator) close()                 { e.closed.Store(true) }
+func (e *blockingEvaluator) runtimeVersion() string { return "test" }
+
+var testDecisionBody = []byte(`{"state":"Order confirmed.","questions":{"completion":{"type":"choice",` +
+	`"instructions":"Did the task finish?","criteria":{"completed":"It finished.","not_completed":"It did not."}}}}`)
+
+// Quitting during a slow decision (Compass on the CPU takes tens of seconds)
+// must end it instead of holding Unload, and the companion, until it ends.
+func TestShutdownEndsRunningDecision(t *testing.T) {
+	t.Setenv("WBC_HOME", t.TempDir())
+	m := NewManager(nil, nil)
+	eng := newBlockingEvaluator()
+	t.Cleanup(func() { close(eng.release) })
+	m.eng, m.engSpec = eng, m.active()
+	decided := make(chan error, 1)
+	go func() {
+		_, err := m.EvaluateJSON(context.Background(), testDecisionBody)
+		decided <- err
+	}()
+	select {
+	case <-eng.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("decision did not start")
+	}
+	unloaded := make(chan struct{})
+	go func() {
+		m.BeginShutdown()
+		m.Unload()
+		close(unloaded)
+	}()
+	select {
+	case <-unloaded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown waited for the running decision to finish")
+	}
+	if err := <-decided; !errors.Is(err, ErrShuttingDown) {
+		t.Fatalf("decision ended with %v, want ErrShuttingDown", err)
+	}
+	if !eng.closed.Load() {
+		t.Fatal("Unload did not release the sessions")
+	}
+}
+
+// A decision that arrives, or was waiting for the model, once shutdown has
+// begun must not run on the loaded sessions.
+func TestDecisionDuringShutdownDoesNotRun(t *testing.T) {
+	t.Setenv("WBC_HOME", t.TempDir())
+	m := NewManager(nil, nil)
+	eng := newBlockingEvaluator()
+	close(eng.release) // decisions answer at once
+	m.eng, m.engSpec = eng, m.active()
+	if _, err := m.EvaluateJSON(context.Background(), testDecisionBody); err != nil {
+		t.Fatalf("decision before shutdown: %v", err)
+	}
+	m.BeginShutdown()
+	if _, err := m.EvaluateJSON(context.Background(), testDecisionBody); !errors.Is(err, ErrShuttingDown) {
+		t.Fatalf("decision during shutdown returned %v, want ErrShuttingDown", err)
+	}
+	if n := eng.calls.Load(); n != 1 {
+		t.Fatalf("loaded model ran %d decisions, want only the one before shutdown", n)
 	}
 }
 

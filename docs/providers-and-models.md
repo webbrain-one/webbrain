@@ -383,12 +383,15 @@ A fal.ai request that is being made is not given up for a passing failure: a
 status or result read that fails with a network error, 5xx, 408 or 429 is tried
 again (five status reads, three result reads, waiting longer each time), and so
 is the download of a finished clip (three tries). When a clip fails for good,
-the clips still being made are cancelled and the finished ones are kept in
-memory for 30 minutes; the error says how many (`clipsKept`). A retry with the
+the clips still being made are cancelled and the finished ones are kept for 30
+minutes in the extension's IndexedDB (`webbrain_kept_video_clips`, at most
+160 MB together, oldest dropped first), so they outlive the background worker
+that Chrome stops soon after a run ends; the error says how many
+(`clipsKept`), and promises none when they could not be saved. A retry with the
 same `prompt`, shape and scenes (and, for Comfy Router, the same saved video
 model input) generates only the scenes that are missing or
-changed and reports `reusedClips`. A restarted worker keeps none, and a video
-that succeeded is generated anew when asked for again.
+changed and reports `reusedClips`. Each kept clip is used once, expired ones
+are deleted, and a video that succeeded is generated anew when asked for again.
 Each requested video keeps its own duration obligation across retries, Continue,
 and worker restart. For multiple videos, use a distinct `video_id` per deliverable
 and reuse it on retries; a verified intro cannot satisfy a failed outro. Without

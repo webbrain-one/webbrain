@@ -491,6 +491,17 @@ async function testPdfCookieDomainsUseDocumentUrlsInBothBrowsers() {
       assert.equal(await pdfFetchCredentials(viewer('https://private.example.com/document.pdf'), 7), 'omit', name);
       activeUrl = viewer('https://alice.github.io/a.pdf');
       assert.equal(await pdfFetchCredentials(viewer('https://bob.github.io/b.pdf'), 7), 'omit', name);
+      // Tenants of shared hosts and second-level ccTLD registries outside the
+      // old hard-coded suffix list are separate sites too.
+      for (const [page, pdf, expected] of [
+        ['https://attacker.appspot.com/', 'https://victim.appspot.com/private.pdf', 'omit'],
+        ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/q3.pdf', 'omit'],
+        ['https://kisi.uni2.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'omit'],
+        ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'include'],
+      ]) {
+        activeUrl = page;
+        assert.equal(await pdfFetchCredentials(pdf, 7), expected, `${name}: ${page} -> ${pdf}`);
+      }
       await assert.rejects(pdfFetchCredentials(viewer('javascript:alert(1)'), 7), /must use http/);
     }
   } finally {
@@ -744,7 +755,79 @@ async function testFirefoxPdfExtractionSsrfAndCookieHardening() {
   }
 }
 
+// The Firefox build parses PDFs in the background page with the vendored
+// PDF.js, which transfers the input buffer to its worker and so detaches the
+// caller's Uint8Array. The Claude document must still carry the whole file.
+async function testFirefoxReadPdfKeepsClaudeBytesAfterPdfjsDetachesThem() {
+  const previous = { browser: globalThis.browser, fetch: globalThis.fetch };
+  const hadDomMatrix = 'DOMMatrix' in globalThis;
+  const url = 'https://example.com/paper.pdf';
+  const pdf = buildSinglePagePdf('Hello from Firefox');
+  const fetchedBuffers = [];
+  const webRequest = addressEvents();
+  // The modern PDF.js build needs a DOMMatrix while it evaluates; see above.
+  if (!hadDomMatrix) globalThis.DOMMatrix = class DOMMatrix {};
+  globalThis.browser = {
+    webRequest,
+    dns: { resolve: async () => ({ addresses: ['93.184.216.34'] }) },
+    runtime: { getURL: relative => pathToFileURL(path.join(root, 'src', 'firefox', relative)).href },
+    tabs: { get: async id => ({ id, url }) },
+  };
+  globalThis.fetch = async fetchUrl => {
+    webRequest.onResponseStarted.emit({ tabId: -1, url: fetchUrl, ip: '93.184.216.34' });
+    return {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => {
+        const buffer = pdf.slice().buffer;
+        fetchedBuffers.push(buffer);
+        return buffer;
+      },
+    };
+  };
+  try {
+    const { extractPdfText } = await import(new URL('../src/firefox/src/agent/pdf-tools.js', import.meta.url));
+    const plain = await extractPdfText(url, {}, { tabId: 71 });
+    assert.deepEqual(plain.pages, ['Hello from Firefox']);
+    assert.equal(fetchedBuffers.at(-1).byteLength, 0,
+      'Fixture precondition: PDF.js must detach the fetched buffer, or this test no longer covers the bug.');
+    assert.equal(plain.byteLength, pdf.length, 'byteLength must be read before PDF.js detaches the bytes.');
+    assert.equal('_pdfBytes' in plain, false, 'Without a Claude provider no document copy is kept.');
+
+    const withDocument = await extractPdfText(url, { includeDocument: true }, { tabId: 71 });
+    assert.equal(withDocument.byteLength, pdf.length);
+    assert.deepEqual(withDocument._pdfBytes, pdf, 'The document copy must be the fetched PDF, not a detached array.');
+
+    const { Agent } = await import(new URL('../src/firefox/src/agent/agent.js', import.meta.url));
+    class AnthropicProvider { config = { model: 'claude-test' }; }
+    class OpenAIProvider { config = { model: 'text-test' }; }
+    const claude = await new Agent({ getActive: () => new AnthropicProvider() })
+      ._executeToolImpl(71, 'read_pdf', { url });
+    assert.equal(claude.success, true, claude.error);
+    assert.equal(claude.method, 'pdf_text+claude_document');
+    assert.equal(claude.byteLength, pdf.length);
+    assert.equal('_pdfBytes' in claude, false, 'Raw bytes must not reach the stringified tool result.');
+    assert.equal(claude._attachDocument.type, 'document');
+    assert.equal(claude._attachDocument.source.media_type, 'application/pdf');
+    assert.deepEqual(new Uint8Array(Buffer.from(claude._attachDocument.source.data, 'base64')), pdf,
+      'Claude must receive the whole PDF, not an empty document block.');
+
+    const other = await new Agent({ getActive: () => new OpenAIProvider() })
+      ._executeToolImpl(71, 'read_pdf', { url });
+    assert.equal(other.success, true, other.error);
+    assert.equal(other.method, 'pdf_text');
+    assert.equal(other.byteLength, pdf.length);
+    assert.equal(other._attachDocument, undefined);
+    assert.equal('_pdfBytes' in other, false);
+  } finally {
+    if (!hadDomMatrix) delete globalThis.DOMMatrix;
+    globalThis.browser = previous.browser;
+    globalThis.fetch = previous.fetch;
+  }
+}
+
 const tests = [
+  ['Firefox read_pdf keeps the Claude document bytes after PDF.js detaches them', testFirefoxReadPdfKeepsClaudeBytesAfterPdfjsDetachesThem],
   ['Chrome PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testPdfExtractionSsrfAndCookieHardening],
   ['Firefox PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testFirefoxPdfExtractionSsrfAndCookieHardening],
   ['Firefox PDF proxy reads require validated destination DNS answers', testFirefoxPdfProxyRequiresValidatedDestination],

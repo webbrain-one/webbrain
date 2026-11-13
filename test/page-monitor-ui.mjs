@@ -2514,6 +2514,157 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     } finally { await browser.close(); }
   });
 
+  // The run's indicator over a page whose cookie bar has its button centred
+  // where the Stop button sits; counts the banner's clicks and Stop requests.
+  async function stopButtonOverBanner(page) {
+    await page.addScriptTag({ content: read(build, 'content/agent-visual-indicator.js') });
+    await page.evaluate(() => {
+      // A cookie bar fixed to the bottom, its button centred where the Stop button sits.
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:80px;background:#eee;z-index:1000';
+      const accept = document.createElement('button');
+      accept.id = 'accept';
+      accept.textContent = 'Accept all';
+      accept.style.cssText = 'position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:240px;height:40px;margin:0';
+      bar.append(accept);
+      document.body.append(bar);
+      window.accepted = 0;
+      accept.addEventListener('click', () => { accepted++; });
+      window.stopRequests = 0;
+      const send = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async message => {
+        if (message?.type === 'WB_STOP_AGENT') stopRequests++;
+        return send.call(chrome.runtime, message);
+      };
+      window.indicatorMessage = message => {
+        let answer = null;
+        messageListeners.forEach(listener => listener(message, {}, reply => { if (reply && 'ok' in reply) answer = reply; }));
+        return answer;
+      };
+      indicatorMessage({ type: 'WB_SHOW_AGENT_INDICATORS' });
+    });
+    // Slid in (its 300 ms transition), where a press lands on it.
+    await page.waitForFunction(() => document.getElementById('webbrain-agent-stop-button')?.style.opacity === '1');
+    await page.waitForTimeout(400);
+    await page.evaluate(() => { feedback = []; });
+  }
+  const boxOf = (page, id) => page.evaluate(id => {
+    const r = document.getElementById(id).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, bottom: r.bottom };
+  }, id);
+
+  // Screenshots are taken with the Stop button hidden, so the model aims at
+  // the page under it. Agent input there must reach the page, not stop the
+  // run, and only a person's click on the button stops it.
+  test(`${build}: the Stop button gets out of the agent's way and takes only a person's click`, async () => {
+    const { browser, page } = await fixture(engine, build);
+    try {
+      await stopButtonOverBanner(page);
+      const height = page.viewportSize().height;
+      const stop = () => boxOf(page, 'webbrain-agent-stop-container');
+      const pointerAt = (...points) => page.evaluate(points => indicatorMessage({ type: 'WB_AGENT_POINTER_AT', points }), points);
+      const accept = await boxOf(page, 'accept');
+      const atBottom = await stop();
+      assert.ok(Math.abs(atBottom.x - accept.x) < 2 && atBottom.top < accept.y && atBottom.bottom > accept.y,
+        `the Stop button covers the banner's button: ${JSON.stringify({ atBottom, accept })}`);
+
+      // A page script's click on the button is not a person's.
+      await page.evaluate(() => {
+        const button = document.getElementById('webbrain-agent-stop-button');
+        button.click();
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      });
+      await page.waitForTimeout(60);
+      assert.equal(await page.evaluate(() => stopRequests), 0, 'a page script stopped the run');
+      assert.equal(await page.evaluate(() => document.getElementById('webbrain-agent-stop-button').style.opacity), '1', 'nor hid the indicator');
+
+      // Agent input elsewhere leaves it alone; input aimed at the banner's
+      // button moves it to the top first, and the trusted click accepts.
+      assert.deepEqual(await pointerAt({ x: 100, y: 100 }), { ok: true, moved: false });
+      assert.deepEqual(await stop(), atBottom);
+      assert.deepEqual(await pointerAt({ x: accept.x, y: accept.y }), { ok: true, moved: true });
+      const atTop = await stop();
+      assert.ok(atTop.bottom < height / 2 && Math.abs(atTop.x - atBottom.x) < 2, JSON.stringify(atTop));
+      assert.deepEqual(await pointerAt({ x: accept.x, y: accept.y }), { ok: true, moved: false }, 'already clear');
+      await page.mouse.click(accept.x, accept.y);
+      await page.waitForTimeout(60);
+      assert.deepEqual(await page.evaluate(() => ({ accepted, stopRequests })), { accepted: 1, stopRequests: 0 });
+
+      // While a screenshot hides it, the cursor's approach to a point under
+      // its new place sends it back to the bottom, where it reappears.
+      await page.evaluate(() => indicatorMessage({ type: 'WB_HIDE_FOR_TOOL_USE' }));
+      await page.evaluate(point => indicatorMessage({ type: 'WB_SHOW_AGENT_TARGET', phase: 'approach', source: 'click_coordinates',
+        rect: { x: Math.round(point.x), y: Math.round(point.y), w: 1, h: 1 } }), atTop);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('webbrain-agent-stop-container')).display), 'none');
+      await page.evaluate(() => indicatorMessage({ type: 'WB_SHOW_AFTER_TOOL_USE' }));
+      assert.deepEqual(await stop(), atBottom);
+
+      // A drag from under one place to under the other keeps its press clear.
+      assert.deepEqual(await pointerAt({ x: accept.x, y: accept.y }, { x: atTop.x, y: atTop.y }), { ok: true, moved: true });
+      assert.deepEqual(await stop(), atTop);
+      assert.deepEqual(await pointerAt({ x: atTop.x, y: atTop.y }, { x: accept.x, y: accept.y }), { ok: true, moved: true });
+      assert.deepEqual(await stop(), atBottom);
+
+      // A person's click still stops the run.
+      await page.mouse.click(atBottom.x, atBottom.y);
+      await page.waitForTimeout(60);
+      assert.deepEqual(await page.evaluate(() => ({ accepted, stopRequests })), { accepted: 1, stopRequests: 1 });
+      assert.deepEqual(await pointerAt({ x: accept.x, y: accept.y }), { ok: true, moved: false }, 'a stopped run moves nothing');
+      // Moving the button is WebBrain's own UI: no page feedback but the person's clicks.
+      assert.deepEqual((await page.evaluate(() => feedback)).filter(event => event.source !== 'user'), []);
+    } finally { await browser.close(); }
+  });
+
+  // The same through the real transport: a trusted CDP click the agent sends
+  // where the Stop button sits (cdp-client beforePointerInput, as background.js
+  // wires it) presses the page's control, not the button.
+  if (build === 'chrome') test('Chrome: a trusted CDP click under the Stop button reaches the page, not the button', async () => {
+    const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser;
+    const { browser, context, page } = await fixture(chromium, 'chrome');
+    const tab = 913;
+    try {
+      await stopButtonOverBanner(page);
+      const accept = await boxOf(page, 'accept');
+      const rootSession = await context.newCDPSession(page);
+      const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
+      const api = {
+        storage: { local: area, session: area },
+        runtime: { getURL: value => value, getManifest: () => ({ version: 'test' }) },
+        tabs: {
+          sendMessage: async (_tab, message) => page.evaluate(msg => new Promise(resolve => {
+            for (const listener of messageListeners) listener(msg, {}, resolve);
+            setTimeout(() => resolve(undefined), 100);
+          }), message),
+        },
+        debugger: {
+          sendCommand(_source, method, params, callback) {
+            rootSession.send(method, params).then(callback, error => {
+              api.runtime.lastError = { message: error.message }; callback(); delete api.runtime.lastError;
+            });
+          },
+        },
+      };
+      globalThis.chrome = api; delete globalThis.browser;
+      const client = new CDPClient();
+      client.sessions.set(tab, {});
+      const agent = new Agent({});
+      agent.isAgentIndicatorShown = id => id === tab;
+      client.beforePointerInput = (tabId, point) => agent._clearAgentStopButton(tabId, [point]);
+      for (const [type, buttons] of [['mouseMoved', 0], ['mousePressed', 1], ['mouseReleased', 0]]) {
+        await client.sendCommand(tab, 'Input.dispatchMouseEvent', {
+          type, x: accept.x, y: accept.y, button: type === 'mouseMoved' ? 'none' : 'left', buttons, clickCount: 1,
+        });
+      }
+      await page.waitForTimeout(60);
+      assert.deepEqual(await page.evaluate(() => ({ accepted, stopRequests })), { accepted: 1, stopRequests: 0 });
+      assert.ok((await boxOf(page, 'webbrain-agent-stop-container')).bottom < page.viewportSize().height / 2, 'the Stop button moved to the top');
+    } finally {
+      if (savedChrome === undefined) delete globalThis.chrome; else globalThis.chrome = savedChrome;
+      if (savedBrowser === undefined) delete globalThis.browser; else globalThis.browser = savedBrowser;
+      await browser.close();
+    }
+  });
+
   test(`${build}: companion native markers renew per key without hiding a later human edit`, async () => {
     const { browser, page } = await fixture(engine, build);
     try {

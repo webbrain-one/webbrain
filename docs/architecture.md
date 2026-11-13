@@ -1669,7 +1669,7 @@ src/
 │   ├── manifest.json
 │   ├── skills/       # Packaged default skills
 │   └── src/          # Same structure, minus cdp/, offscreen/, recorder/
-└── vendor/           # Third-party libs (pdfjs, katex)
+└── vendor/           # Third-party libs (pdfjs, katex, tldts Public Suffix List)
 ```
 
 Both builds share the same adapter set, provider implementations, accessibility tree, and most tool code. The `src/shared/` pattern is intentionally avoided — files are duplicated between `chrome/` and `firefox/` so each build is self-contained and can be loaded directly without a build step for development.
