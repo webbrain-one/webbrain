@@ -1090,7 +1090,13 @@ as the next read_page window in the largest windows read_page returns. A
 recommended action decides it by construction: Summarize this page is the
 whole page, and an action whose first read is not of the page text (a video's
 transcript) is not. An answer given again without reading on is accepted as
-partial with the note that only part of the page was read. Short pages, a
+partial with the note that only part of the page was read. A steering
+correction replaces that decision, a recommended action's included: the
+question reads the revised task (the request and its corrections in order)
+the next time an answer arrives over an unread rest, and the guard may send
+one answer back under it, so a summary steered to "just tell me who wrote it"
+ends without the note, and a question widened to the whole article is read on.
+What the run read before the correction still counts. Short pages, a
 question about one part of the page, unsure readings, requests about selected
 text, pages whose content was read through a reader of its own source (the
 open video's transcript, the tab's PDF, the framed documents, the page's own

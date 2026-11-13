@@ -1585,13 +1585,32 @@ export class Agent extends LoopDetector {
     if (state) recordPageObservation(state, url, page, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
   }
 
+  // A steering correction replaces the request the page's coverage was
+  // decided for, a recommended action's own scope included, so the revised
+  // task is read again (page_read_scope) before an answer is judged against
+  // it, and the read-coverage check may send one answer back under it. What
+  // the run has read stays recorded: a page already read to its end needs no
+  // second read.
+  _resetPageReadCoverageForSteering(tabId) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (!state) return;
+    state.scope = null;
+    state.gap = null;
+    state.steered = true;
+    const guard = this._guardRunState(tabId);
+    guard.advised.delete('read-coverage-incomplete');
+    guard.caveats.delete('read-coverage-incomplete');
+    guard.outcomeDowngrades?.delete('read-coverage-incomplete');
+  }
+
   // Before an Ask answer is accepted (done or a plain final): when the page
   // content the model was given was cut off and no read reached the end of
   // the page, whether the request is about the whole page. That is asked
-  // once per run (page_read_scope); the synchronous check that follows
-  // (_readCompletenessBlock) then sends the answer back with the exact next
-  // read. Act runs, conversations (their own whole-thread check) and runs
-  // with no recorded coverage are not affected.
+  // once per run and again after a steering correction (page_read_scope);
+  // the synchronous check that follows (_readCompletenessBlock) then sends
+  // the answer back with the exact next read. Act runs, conversations (their
+  // own whole-thread check) and runs with no recorded coverage are not
+  // affected.
   async _preparePageReadCoverage(tabId, allowedToolNames = null) {
     const state = this.pageReadCoverage?.get(tabId);
     if (!state) return null;
@@ -1603,9 +1622,14 @@ export class Agent extends LoopDetector {
     const gap = pageReadCoverageGap(state, url, { tools: allowedToolNames instanceof Set ? allowedToolNames : null });
     if (!gap) return null;
     if (state.scope == null) {
+      // A steered task is the request with its corrections in order: "in
+      // Turkish" keeps a summary of the whole page, "just who wrote it" does
+      // not.
+      const request = (state.steered ? this._activeTaskBinding(this.conversations.get(tabId) || []).text : '')
+        || this._latestTaskText(tabId) || '';
       let choice = null;
       try {
-        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request: this._latestTaskText(tabId) || '' }))?.choice || null;
+        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request }))?.choice || null;
       } catch (error) {
         if (this._checkAbort(tabId)) throw error;
       }
@@ -6887,6 +6911,9 @@ export class Agent extends LoopDetector {
     if (run.revision === run.authorizedRevision) return null;
     if (!this._isActionMode(mode) || this._isStandaloneChatRun(runOptions)) {
       run.authorizedRevision = run.revision;
+      // Ask has no planner gate to set this revision's read obligation; its
+      // page coverage decision is made again for the revised request.
+      this._resetPageReadCoverageForSteering(tabId);
       return { changed: true };
     }
     // A revision never inherits success counters or dispatch authorization.
@@ -9947,13 +9974,12 @@ export class Agent extends LoopDetector {
    */
   async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [] } = {}) {
     const spec = semanticQuestion(kind);
-    // Relationship decisions must read the entire latest user message. A
-    // prefix-only verdict can mistake a correction or a new task at its end.
+    // Relationship and page-scope decisions must read the entire request. A
+    // prefix-only verdict can miss a correction or new task at its end.
     const requestText = String(request ?? '');
-    const trusted = kind === 'user_turn_kind' ? requestText : requestText.slice(0, 6000);
+    const trusted = ['user_turn_kind', 'page_read_scope'].includes(kind) ? requestText : requestText.slice(0, 6000);
     const data = boundedSemanticData(page);
-    // Whether a model reads all of it: the request is cut to 6,000 characters
-    // above, and boundedSemanticData shortens long data (an earlier task).
+    // Whether the model reads the entire request and any bounded page data.
     const inputComplete = trusted.length === requestText.length && semanticDataComplete(page);
     // Keyed by the whole request, not the part a model reads, and by whether
     // the data was cut: inputs that share a cut-off start are different.
