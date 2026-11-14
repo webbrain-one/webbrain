@@ -1,0 +1,595 @@
+WEBVTT
+
+00:00:00.454 --> 00:00:05.717
+Welcome to WebBrain. This walkthrough follows the redesigned Settings page
+
+00:00:05.717 --> 00:00:10.605
+in version forty-nine. Everything now lives behind one sidebar,
+
+00:00:10.758 --> 00:00:13.146
+including models and permissions.
+
+00:00:13.923 --> 00:00:18.146
+We'll start with the everyday choices, then visit the deeper controls.
+
+00:00:18.923 --> 00:00:23.132
+You don't need to configure every section before your first conversation.
+
+00:00:25.054 --> 00:00:26.736
+The sidebar is your map.
+
+00:00:27.518 --> 00:00:32.759
+General comes first, followed by Models, Permissions and privacy, Budgets,
+
+00:00:32.762 --> 00:00:38.224
+Memory, and Skills. Integrations, Offline, and Advanced sit
+
+00:00:38.224 --> 00:00:43.496
+below. The search box looks across all sections, so you can find a
+
+00:00:43.496 --> 00:00:45.871
+setting without remembering where it lives.
+
+00:00:46.648 --> 00:00:49.064
+Clear the search to return to browsing.
+
+00:00:50.974 --> 00:00:55.159
+General starts with appearance, the agent's activity effect, and an
+
+00:00:55.159 --> 00:01:00.422
+optional download subfolder. Messages during a running task can wait in
+
+00:01:00.422 --> 00:01:02.484
+the queue or steer the current work.
+
+00:01:03.261 --> 00:01:07.253
+Selection shortcuts and Chrome's PDF viewer are here too.
+
+00:01:08.044 --> 00:01:10.038
+These are everyday preferences;
+
+00:01:10.150 --> 00:01:12.402
+begin with whatever feels comfortable.
+
+00:01:14.294 --> 00:01:17.348
+Agent supervision combines several controls.
+
+00:01:18.130 --> 00:01:21.035
+Balanced is the default and adapts to your model.
+
+00:01:21.826 --> 00:01:26.459
+Thorough plans every turn, asks for plan approval, and stops when a check
+
+00:01:26.459 --> 00:01:28.182
+cannot confirm an action.
+
+00:01:28.959 --> 00:01:33.277
+Fast lets the model check its own work and skips plan-review stops.
+
+00:01:34.068 --> 00:01:36.741
+It makes most sense with a capable model.
+
+00:01:38.654 --> 00:01:41.328
+There is also an Unsupervised option.
+
+00:01:42.110 --> 00:01:47.080
+It turns off action guards, including checks around recipients, deletion,
+
+00:01:47.096 --> 00:01:49.783
+spending, credentials, and publishing.
+
+00:01:50.574 --> 00:01:53.126
+Treat that as a deliberate trust decision.
+
+00:01:53.917 --> 00:01:57.691
+Permission prompts remain a separate setting in every preset.
+
+00:01:58.468 --> 00:02:01.984
+For a first setup, leave supervision on Balanced.
+
+00:02:03.894 --> 00:02:07.111
+Image quality balances detail against cost.
+
+00:02:07.893 --> 00:02:11.137
+Economy sends smaller and fewer screenshots.
+
+00:02:11.915 --> 00:02:14.059
+Balanced is the everyday default.
+
+00:02:14.836 --> 00:02:19.619
+Sharp sends larger, high-detail images and captures after actions that
+
+00:02:19.619 --> 00:02:24.266
+change the page. Try more detail when the agent struggles to see
+
+00:02:24.266 --> 00:02:28.597
+something; use Economy when image traffic is expensive or slow.
+
+00:02:30.534 --> 00:02:35.314
+Completion alerts can play sounds, show confetti, and flash the tab.
+
+00:02:36.109 --> 00:02:38.348
+Quiet keeps only the flashing tab;
+
+00:02:38.501 --> 00:02:40.345
+Off disables those alerts.
+
+00:02:41.123 --> 00:02:44.775
+Each combined control has a Fine-tune in Advanced link.
+
+00:02:45.552 --> 00:02:50.264
+If individual settings no longer match a preset, General shows Custom.
+
+00:02:51.055 --> 00:02:54.068
+Choosing a preset restores that group's settings.
+
+00:02:55.974 --> 00:03:00.387
+Under Models, LLM is where you choose the main conversational model.
+
+00:03:01.169 --> 00:03:05.391
+Look for the Selected badge to see which provider is selected for chat.
+
+00:03:06.169 --> 00:03:09.481
+WebBrain Compass includes a free weekly allowance.
+
+00:03:10.259 --> 00:03:14.063
+You can also bring a cloud API key, use a router, or
+
+00:03:14.063 --> 00:03:15.514
+connect a local model.
+
+00:03:17.454 --> 00:03:21.897
+Use the category filters and provider search to narrow the list, then
+
+00:03:21.897 --> 00:03:27.404
+expand a card. For a cloud API, enter your key and model, save
+
+00:03:27.404 --> 00:03:30.132
+the configuration, and test the connection.
+
+00:03:30.923 --> 00:03:33.828
+Select for chat chooses it for conversation.
+
+00:03:34.619 --> 00:03:37.499
+A configured provider and the provider selected for
+
+00:03:37.499 --> 00:03:39.154
+chat are different things.
+
+00:03:41.054 --> 00:03:44.448
+Local providers need a running server and its address.
+
+00:03:45.230 --> 00:03:47.795
+Load models helps find what's available.
+
+00:03:48.572 --> 00:03:53.012
+Check the context window and prompt tier against your model's capacity.
+
+00:03:53.790 --> 00:03:56.993
+Ollama also needs to allow the extension's origin;
+
+00:03:57.132 --> 00:03:59.262
+its card explains that setup.
+
+00:04:00.040 --> 00:04:03.790
+Chrome's WebGPU provider is another option, running the
+
+00:04:03.790 --> 00:04:05.526
+model inside the browser.
+
+00:04:07.454 --> 00:04:10.440
+The remaining model sections configure helpers.
+
+00:04:11.236 --> 00:04:13.801
+Vision decides how screenshots are read.
+
+00:04:14.578 --> 00:04:17.782
+A capable chat model can handle images itself.
+
+00:04:18.559 --> 00:04:22.839
+Chrome also offers an in-browser vision route, or you can configure a
+
+00:04:22.839 --> 00:04:27.989
+separate endpoint here. A separate vision model can read screenshots while
+
+00:04:27.989 --> 00:04:30.486
+your main model handles the conversation.
+
+00:04:32.414 --> 00:04:37.371
+Speech holds a Whisper-compatible transcription endpoint: its base URL,
+
+00:04:37.442 --> 00:04:39.436
+API key, and model.
+
+00:04:40.218 --> 00:04:43.380
+Save and test it before relying on recordings.
+
+00:04:44.158 --> 00:04:46.818
+This is an optional helper configuration.
+
+00:04:47.609 --> 00:04:51.536
+You can leave it alone if you don't need transcription, and return when
+
+00:04:51.536 --> 00:04:53.557
+you have a service you want to use.
+
+00:04:55.454 --> 00:04:59.731
+Generative connects the services used to create images and video.
+
+00:05:00.527 --> 00:05:05.279
+Choose a provider, then configure the model and any required credentials.
+
+00:05:06.070 --> 00:05:10.904
+The fields change for hosted services and local ComfyUI workflows.
+
+00:05:11.695 --> 00:05:15.062
+Video has its own model and resolution options.
+
+00:05:15.839 --> 00:05:19.111
+Set up only the media service you intend to use.
+
+00:05:21.014 --> 00:05:25.118
+Decision models handle supporting judgments, such as checking whether a
+
+00:05:25.118 --> 00:05:30.176
+task is complete. Auto chooses the available route without manual
+
+00:05:30.176 --> 00:05:33.828
+setup, and the status line explains what it is using.
+
+00:05:34.619 --> 00:05:38.353
+On reveals provider controls and individual features.
+
+00:05:39.130 --> 00:05:40.961
+Off disables this helper.
+
+00:05:41.739 --> 00:05:45.567
+Start with Auto unless you have a specific reason to change it.
+
+00:05:47.494 --> 00:05:51.826
+SafeSocial is an optional local image classifier for Instagram.
+
+00:05:52.607 --> 00:05:57.607
+Choose the categories you want softened, then blur, hide, dim, or warn on
+
+00:05:57.607 --> 00:06:02.401
+matching images. A higher threshold filters fewer images.
+
+00:06:03.178 --> 00:06:06.382
+It starts off; enabling it downloads a model.
+
+00:06:07.173 --> 00:06:12.020
+Classification runs on your device, and filtered images can be revealed.
+
+00:06:13.934 --> 00:06:17.885
+Permissions and privacy is now a section in this same sidebar.
+
+00:06:18.681 --> 00:06:21.680
+Keep Ask before consequential actions on.
+
+00:06:22.458 --> 00:06:26.476
+Saved site permissions appear underneath, where you can revoke them.
+
+00:06:27.254 --> 00:06:31.276
+Allowing an action on one site is a narrower choice than turning off the
+
+00:06:31.276 --> 00:06:33.311
+permission gate for every site.
+
+00:06:35.214 --> 00:06:38.513
+The Privacy controls below are separate choices.
+
+00:06:39.308 --> 00:06:43.765
+Screenshot redaction tries to blur sensitive-looking content before vision
+
+00:06:43.765 --> 00:06:47.512
+processing, but cannot guarantee that everything is hidden.
+
+00:06:48.289 --> 00:06:52.729
+Strict secret handling prevents credentials being repeated in answers.
+
+00:06:53.520 --> 00:06:58.368
+Both start off. Local network access also starts off;
+
+00:06:58.561 --> 00:07:01.642
+enable it only when your task needs that access.
+
+00:07:03.534 --> 00:07:05.705
+Budgets brings the limits together.
+
+00:07:06.487 --> 00:07:11.066
+Session and total cost allowances stop further eligible paid model calls
+
+00:07:11.066 --> 00:07:14.419
+when reported or estimated spend reaches the allowance.
+
+00:07:15.196 --> 00:07:19.242
+These controls apply to usage-billed cloud and router providers.
+
+00:07:20.020 --> 00:07:23.345
+They exclude WebBrain Compass and local providers.
+
+00:07:24.123 --> 00:07:26.759
+Estimated cost here is not a replacement for
+
+00:07:26.759 --> 00:07:28.671
+your provider's billing records.
+
+00:07:30.574 --> 00:07:35.398
+Clarify timeout controls how long ordinary questions wait, and the next
+
+00:07:35.398 --> 00:07:37.800
+option decides what happens afterward.
+
+00:07:38.595 --> 00:07:42.138
+Permission and form-submit confirmations still wait for you.
+
+00:07:42.929 --> 00:07:47.902
+Below that, Max Agent Steps limits a run's length, and request timeout
+
+00:07:47.902 --> 00:07:50.793
+controls how long WebBrain waits for the model.
+
+00:07:51.571 --> 00:07:54.190
+Slow local models may need more time.
+
+00:07:56.094 --> 00:08:00.561
+Memory begins with optional encrypted cloud sync for Compass members.
+
+00:08:01.357 --> 00:08:06.530
+It syncs memories, profile autofill, and API-key provider settings,
+
+00:08:06.629 --> 00:08:09.574
+encrypted with your sync password before upload.
+
+00:08:10.351 --> 00:08:13.337
+Chat history and OAuth sign-ins are excluded.
+
+00:08:14.129 --> 00:08:18.473
+Keep that password somewhere safe: WebBrain cannot recover it for you.
+
+00:08:20.374 --> 00:08:25.184
+Profile auto-fill is a short block of details the agent can reuse, for
+
+00:08:25.184 --> 00:08:28.890
+example a name, company, or preferred writing style.
+
+00:08:29.672 --> 00:08:33.175
+When enabled, this text goes into the model's prompt.
+
+00:08:33.952 --> 00:08:38.748
+Keep it minimal. It is stored locally in plain text, so this is
+
+00:08:38.748 --> 00:08:40.199
+not a password vault.
+
+00:08:42.094 --> 00:08:45.787
+User memory holds durable preferences across tasks.
+
+00:08:46.569 --> 00:08:51.973
+Review saved records, forget outdated details, or export and import them.
+
+00:08:52.751 --> 00:08:56.678
+Automatic learning after chats and learning from completed forms are
+
+00:08:56.678 --> 00:09:01.987
+optional. The character limit controls how much memory reaches the prompt.
+
+00:09:02.764 --> 00:09:05.778
+Enabled memory is shared with your configured model,
+
+00:09:05.876 --> 00:09:07.829
+so avoid storing secrets.
+
+00:09:09.734 --> 00:09:13.386
+MemCode adds optional recall from a connected account.
+
+00:09:14.168 --> 00:09:18.010
+Connecting the account and enabling recall are separate steps.
+
+00:09:18.788 --> 00:09:23.027
+The integration is read-only and does not automatically upload your local
+
+00:09:23.027 --> 00:09:28.231
+memory. Search queries and matching memories reach MemCode and your
+
+00:09:28.231 --> 00:09:33.051
+configured model. Local WebBrain memory remains the default.
+
+00:09:34.974 --> 00:09:38.721
+Skills add reusable instructions and sometimes tools.
+
+00:09:39.517 --> 00:09:44.707
+Review the enabled and packaged lists, or use Add skill to import a URL or
+
+00:09:44.707 --> 00:09:49.952
+paste instructions. Relevant skills are loaded on demand in Mid and Full
+
+00:09:49.952 --> 00:09:52.992
+prompt tiers; Compact does not load them.
+
+00:09:53.783 --> 00:09:56.620
+Read unfamiliar skills before enabling them,
+
+00:09:56.799 --> 00:09:58.834
+especially their tool permissions.
+
+00:10:00.734 --> 00:10:04.821
+Under Integrations, CAPTCHA holds optional solver accounts.
+
+00:10:05.616 --> 00:10:09.757
+Configure a service with your own key, save it, and test it.
+
+00:10:10.548 --> 00:10:14.258
+When multiple solvers are available, their advanced weights set the
+
+00:10:14.258 --> 00:10:18.837
+preference order. These are separate services with their own usage
+
+00:10:18.837 --> 00:10:22.940
+charges. You can leave this section unconfigured until a
+
+00:10:22.940 --> 00:10:24.363
+task calls for it.
+
+00:10:26.294 --> 00:10:28.954
+Bridge lets a backend control this browser.
+
+00:10:29.736 --> 00:10:35.046
+Choose the Cloud, MCP, LM Studio, or custom local destination,
+
+00:10:35.198 --> 00:10:37.790
+then supply the matching pairing information.
+
+00:10:38.568 --> 00:10:41.472
+Only one destination is active at a time.
+
+00:10:42.250 --> 00:10:45.304
+The connection status shows whether setup worked.
+
+00:10:46.081 --> 00:10:48.935
+Leave Bridge off until you want a trusted program
+
+00:10:48.935 --> 00:10:50.508
+connected to your browser.
+
+00:10:52.414 --> 00:10:57.004
+The experimental WebMCP switch below Bridge is a separate feature.
+
+00:10:57.786 --> 00:11:01.821
+It lets WebBrain discover structured tools offered by supported Chrome
+
+00:11:01.821 --> 00:11:06.763
+pages. It does not configure an external MCP client.
+
+00:11:07.541 --> 00:11:11.369
+Use the documentation link when setting up a backend connection;
+
+00:11:11.563 --> 00:11:15.310
+the names are similar, but the directions of integration differ.
+
+00:11:17.214 --> 00:11:20.241
+Offline shows the status of Apocalypse Mode.
+
+00:11:21.023 --> 00:11:25.575
+Its button opens the separate kit manager, where you prepare local models
+
+00:11:25.575 --> 00:11:27.786
+and offline reference archives.
+
+00:11:28.577 --> 00:11:31.971
+Set that up while you have a connection and enough storage.
+
+00:11:32.749 --> 00:11:34.960
+This Settings section is the overview;
+
+00:11:35.167 --> 00:11:39.403
+the downloads and detailed offline controls live in the kit manager.
+
+00:11:41.334 --> 00:11:45.190
+Advanced exposes the controls behind General's presets.
+
+00:11:45.972 --> 00:11:50.727
+Action guards, strict checks, Lean mode, planning, and plan review sit
+
+00:11:50.727 --> 00:11:55.738
+together. The default review policy uses a confidence threshold.
+
+00:11:56.515 --> 00:12:00.303
+If you change these individually, General may show Custom.
+
+00:12:01.094 --> 00:12:04.477
+Keeping the Balanced preset is a useful starting point while
+
+00:12:04.477 --> 00:12:05.901
+you learn the trade-offs.
+
+00:12:07.814 --> 00:12:12.719
+Vision and screenshots includes automatic capture, detail level, image
+
+00:12:12.719 --> 00:12:15.040
+count, and maximum dimensions.
+
+00:12:15.835 --> 00:12:20.319
+These controls can materially change token use and how well the model sees
+
+00:12:20.319 --> 00:12:25.533
+small text. The Image quality preset changes several together.
+
+00:12:26.311 --> 00:12:30.628
+If you fine-tune them, make one change at a time and compare the result.
+
+00:12:32.534 --> 00:12:37.249
+Privacy and diagnostics includes Help Improve WebBrain, which is on by
+
+00:12:37.249 --> 00:12:41.118
+default for eligible Compass text and tool interactions.
+
+00:12:41.914 --> 00:12:45.416
+Review its explanation and opt out here if you prefer.
+
+00:12:46.194 --> 00:12:50.514
+Local and bring-your-own API requests have separate per-provider research
+
+00:12:50.514 --> 00:12:54.085
+sharing. Trace recording is another control;
+
+00:12:54.278 --> 00:12:57.468
+inspect diagnostic exports before sharing them.
+
+00:12:59.374 --> 00:13:04.062
+Automation brings together scheduled tasks, confirmation for consequential
+
+00:13:04.062 --> 00:13:07.904
+scheduled actions, cookie banners, and site adapters.
+
+00:13:08.699 --> 00:13:12.300
+Keep scheduled confirmations enabled while you get comfortable with
+
+00:13:12.300 --> 00:13:17.667
+unattended work. Cookie-banner behavior has its own menu, so choose
+
+00:13:17.667 --> 00:13:19.376
+how broadly it should apply.
+
+00:13:20.167 --> 00:13:23.047
+These controls are available when a workflow gives you a
+
+00:13:23.047 --> 00:13:24.539
+reason to adjust them.
+
+00:13:26.454 --> 00:13:32.008
+The final Advanced groups cover API mutation access, request observation,
+
+00:13:32.066 --> 00:13:36.927
+streaming, and interface preferences such as verbose output, voice input,
+
+00:13:36.971 --> 00:13:42.288
+and tab grouping. Read each description before changing behavior you rely
+
+00:13:42.288 --> 00:13:47.532
+on. Allowing API mutations does not remove the other confirmation
+
+00:13:47.532 --> 00:13:51.986
+checks. Most people can leave these controls as they are.
+
+00:13:53.894 --> 00:13:55.848
+That's the new Settings layout.
+
+00:13:56.630 --> 00:14:01.154
+Choose your model, keep supervision and image quality on Balanced, and
+
+00:14:01.154 --> 00:14:03.135
+leave permission prompts enabled.
+
+00:14:03.912 --> 00:14:05.866
+Adjust alerts to your taste.
+
+00:14:06.643 --> 00:14:11.535
+Then return to a real task, see what helps, and change settings only when
+
+00:14:11.535 --> 00:14:12.659
+you have a reason.
+
+00:14:13.437 --> 00:14:16.735
+The sidebar and search will bring you back to the right place.

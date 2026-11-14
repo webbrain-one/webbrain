@@ -1,260 +1,297 @@
-# WebBrain Settings walkthrough — recording script
+# WebBrain 49.0.0 Settings walkthrough
 
-Replaces the run of show in `assets/WebBrain_Settings_YouTube_Walkthrough.docx`, which follows the old six-tab layout (General, Providers, Multimodal, Memory, Skills, Permissions). Settings is now one page with a sidebar, three combined switches in General, and the former Providers and Permissions pages as sections.
+This is the source script for the 1080p English walkthrough embedded at `/docs/#settings-walkthrough`. It replaces the version 22.3.1 video and follows the current `src/chrome/src/ui/settings.html` sidebar. Providers and Permissions are sections on this one page; their old HTML pages redirect here.
 
-The video it produces replaces `web/assets/webbrain-settings-walkthrough-1080p.mp4` (and its poster) on the docs overview, `/docs/#settings-walkthrough`. When the new video is in place, remove the "older layout" sentence from that section in `web/docs/index.html`.
+The machine-readable scene list is [`settings-walkthrough-scenes.json`](settings-walkthrough-scenes.json). Each scene contains its stable ID, title, sidebar `data-tab` value, actual UI focus selector, and spoken narration. Optional `shots` contain additional focus selectors and exact spoken `cue` phrases; switch to each at its measured word time. Treat that JSON as the narration source of truth. The transcript below mirrors it.
 
-Target running time: 16–19 minutes.
+There are 34 scenes and 1,678 narration words. Duration and chapter offsets must come from the rendered audio; do not reuse the old video's timestamps. Each screen must remain visible for its complete matching narration, including natural pauses.
 
-## Recording setup
+## Capture and narration notes
 
-- **Privacy check.** Record from a clean browser profile. Use dummy API keys, a fictional profile, harmless memory records and demo permission grants. Never show a real sync email, provider credential, personal memory or production trace. The synthetic profile used for the docs screenshots (`DOC_SEED` in `test/systemone-ui.mjs`) is a good starting point.
-- **Window.** 1280 × 800 or larger, so the sidebar sits beside the page. Below about 880 px wide the sidebar turns into a strip above the page; show that once, in chapter 1, and record everything else wide.
-- **Style.** Move the pointer slowly. Pause briefly after every sidebar click. Zoom only if the text stays sharp.
-- **Editing rhythm.** Use each chapter's entry frame for its title card and the exit frame under the chapter's last sentence, then cut to the next section.
+- Use the actual current HTML, styles, localization, and rendering logic. Record with a clean, isolated demo browser profile; never read an existing personal browser profile or credentials.
+- Capture English at 1920 × 1080, keeping the sidebar visible. Focus the scene selector and preserve enough surrounding UI to make its location clear. A long card may need more than one view.
+- For scene 09 expand the OpenAI provider card; for scene 10 expand Ollama. Keep credentials blank or use visibly fictional demo data. Do not show a successful connection unless a real test was performed.
+- Scene 02 explains search; demonstrating a harmless query and clearing it is optional. Scene 05 explains Unsupervised without turning it on. Do not enable bridges, download models, connect accounts, buy credits, or change real permissions during recording.
+- Use a calm, conversational English voice. Align captions and screen changes to measured speech timing. Give every new section a brief visual settling pause.
+- Final outputs replace `web/assets/webbrain-settings-walkthrough-1080p.mp4` and its poster. Update the embed version, duration, captions, and cache version after rendering; remove any statement that this video shows an older layout.
 
-## Run of show
+## Reproducing the video
 
-| Time | Chapter |
-|---|---|
-| 0:00 | One page, one sidebar |
-| 1:00 | The fastest possible setup |
-| 2:00 | General and the three combined switches |
-| 5:00 | Models → LLM in detail |
-| 7:00 | The helper models |
-| 9:30 | Permissions & privacy |
-| 11:00 | Budgets |
-| 12:00 | Memory |
-| 13:30 | Skills |
-| 14:15 | Integrations: CAPTCHA and Bridge |
-| 15:00 | Offline: Apocalypse Mode |
-| 15:30 | Advanced |
-| 17:30 | Recommended configurations and closing |
+The current cut is **14:18.20**, 1920 × 1080 at 25 fps, with English Aria Neural
+narration, 198 caption cues, and 34 chapters. The voice runs at `-8%`; each scene
+adds 350 ms before speech and at least 650 ms after it. Additional focus shots
+switch at the narration's measured word boundaries.
 
----
+Authoring requires the repository's Playwright installation and Chromium,
+FFmpeg/ffprobe on PATH, and Python with `edge-tts` (this cut used 7.3.1). Edge TTS
+sends only the public narration text to Microsoft's speech service. The capture
+uses an isolated synthetic profile and blocks external network requests.
 
-## Chapter 1 · 0:00 — One page, one sidebar
+After updating the scene narration and selectors for any future UI changes:
 
-**Entry frame.** Settings open on General, the sidebar fully visible.
+```sh
+node scripts/render-settings-walkthrough.mjs --capture
+py -3.11 scripts/narrate-settings-walkthrough.py
+node scripts/render-settings-walkthrough.mjs --render
+npm run build:web
+```
 
-**On screen.** Hover down the sidebar, one entry at a time: General; the Models group (LLM, Vision, Speech, Generative, Decision, SafeSocial); Permissions & privacy; Budgets; Memory; Skills; the Integrations group (CAPTCHA, Bridge); Offline; Advanced. Then type "timeout" in the search box at the top of the sidebar, let the results from several sections appear, and clear it.
+On other platforms, use the Python executable with `edge-tts` installed instead
+of `py -3.11`. Temporary PNGs, speech, exact timings, and clips stay in the ignored
+`.build/settings-walkthrough/` directory. The renderer replaces the MP4 and poster
+and writes the English caption and chapter WebVTT files under `web/assets/`.
+Update the docs duration and media cache version if the resulting cut changes.
 
-**Narration.**
-- WebBrain has a lot of settings, but you only need a few of them. In this video I'll start with those, and then walk through every section, so you know what is there when you need it.
-- Everything is on one page. The sidebar lists the sections: General for everyday choices, Models for the AI that powers WebBrain and its helpers, Permissions & privacy for what WebBrain may do and what leaves your browser, then Budgets, Memory, Skills, the Integrations, Offline mode and, at the bottom, Advanced.
-- If you know what you're looking for, use the search box at the top. It searches every section at once and shows each match under its section's name.
+## Chapter grouping
 
-**Optional close-up.** Narrow the window below 880 px to show the sidebar becoming a strip, then widen it again.
+| Scenes | Chapter | Content |
+|---|---|---|
+| 01–02 | One page, one sidebar | General and cross-section search |
+| 03–07 | Everyday choices | General, supervision, image quality, alerts |
+| 08–10 | Choose a main model | LLM, cloud setup, local setup |
+| 11–15 | Supporting models | Vision, Speech, Generative, Decision, SafeSocial |
+| 16–17 | Permissions and privacy | Site permissions, redaction, secrets, local network |
+| 18–19 | Budgets | Cloud allowances, clarification, steps, request timeout |
+| 20–23 | Memory | Encrypted sync, profile, user memory, MemCode recall |
+| 24 | Skills | Packaged and custom skills |
+| 25–27 | Integrations | CAPTCHA, Bridge, experimental WebMCP |
+| 28 | Offline | Apocalypse Mode status and kit manager |
+| 29–33 | Advanced | Supervision, images, diagnostics, automation, API and interface |
+| 34 | A simple starting configuration | Return to General |
 
-**Narration (optional).** In a narrow window, the sidebar becomes a strip you scroll sideways.
+## Current behavior checked against source
 
-**Exit frame.** The sidebar with LLM highlighted.
+- Main provider selection is labeled **Selected** / **Select for chat**. An **Active** badge can also indicate a configured provider; the two concepts are distinct.
+- WebBrain Compass includes a free **weekly** allowance. Eligible cloud cost budgets exclude Compass and local providers.
+- Supervision has Thorough, Balanced, Fast, and Unsupervised. Only Unsupervised disables action guards; the permission gate is a separate setting in every preset.
+- Screenshot redaction, strict secret handling, and agent access to the local network start off. Redaction is best effort.
+- Cloud sync is for Compass members and excludes chat history and OAuth sign-ins. MemCode recall is a separate optional read-only integration.
+- Experimental WebMCP page tools are different from connecting an external MCP client through Bridge.
+- Sources reviewed: `settings.html`, `settings.js`, `settings-presets.js`, provider rendering, and the English Settings, presets, sidebar, CAPTCHA, Bridge, SafeSocial, and MemCode localization copy.
 
----
+## Narration and capture targets
 
-## Chapter 2 · 1:00 — The fastest possible setup
+### 01-overview · One Settings page, one sidebar
 
-**Entry frame.** Models → LLM, with the active provider card and its badge.
+**Section:** `display` · **Focus:** `#display-settings`
 
-**On screen.** Point to the Active badge. Expand the active card, then briefly open one other card. Dummy credentials only.
+Welcome to WebBrain. This walkthrough follows the redesigned Settings page in version forty-nine. Everything now lives behind one sidebar, including models and permissions. We'll start with the everyday choices, then visit the deeper controls. You don't need to configure every section before your first conversation.
 
-**Narration.**
-- If you only want to get started, this is the important part. You can also get here from the side panel: open the model menu and choose More….
-- The provider marked Active is the model WebBrain uses right now. WebBrain Cloud needs no setup and includes a daily allowance. You can also use your own cloud API key, a model router, or a model running on your own computer.
-- To switch, open a provider's card, fill in its fields, click Save, then Test Connection. When the test passes, click Set Active. That's the whole setup; everything after this is fine-tuning.
+### 02-navigation · Find a setting quickly
 
-**Mid-chapter close-up.** Save, Test Connection and Set Active on a cloud card.
+**Section:** `display` · **Focus:** `#settings-search`
 
-**Exit frame.** The active card after a successful test.
+The sidebar is your map. General comes first, followed by Models, Permissions and privacy, Budgets, Memory, and Skills. Integrations, Offline, and Advanced sit below. The search box looks across all sections, so you can find a setting without remembering where it lives. Clear the search to return to browsing.
 
----
+### 03-general · General: everyday comfort
 
-## Chapter 3 · 2:00 — General and the three combined switches
+**Section:** `display` · **Focus:** `#display-settings .setting-row:first-child`
 
-**Entry frame.** General, top of the section.
+General starts with appearance, the agent's activity effect, and an optional download subfolder. Messages during a running task can wait in the queue or steer the current work. Selection shortcuts and Chrome's PDF viewer are here too. These are everyday preferences; begin with whatever feels comfortable.
 
-**On screen.** Show Appearance, Agent activity effect, Download directory, Messages during a running task, Selection shortcut and, in Chrome, Use WebBrain PDF viewer. Keep this brisk. Slow down at the three combined switches.
+### 04-supervision · Agent supervision
 
-**Narration.**
-- The first few settings are about comfort: light or dark mode, the animation you see while WebBrain works, where downloads go, and what happens when you type while a task is running: queue the message for later, or steer the task with it.
-- Below them are three switches that each set a group of related settings at once. They're the most useful settings on the page.
+**Section:** `display` · **Focus:** `[data-preset-group=supervision]`
 
-**On screen.** Open the Agent supervision menu. Show Thorough, Balanced, Fast.
+Agent supervision combines several controls. Balanced is the default and adapts to your model. Thorough plans every turn, asks for plan approval, and stops when a check cannot confirm an action. Fast lets the model check its own work and skips plan-review stops. It makes most sense with a capable model.
 
-**Narration.**
-- Agent supervision decides how closely WebBrain checks the agent while it works. Thorough plans every turn, asks you to approve each plan, and stops whenever a check can't confirm an action. Balanced, the default, adapts to the model: strong cloud models check their own work, smaller models get WebBrain's checks. Fast lets the model check its own work and runs plans without stopping for review. It's best with strong models.
-- Whatever you pick, permission prompts stay on, and so do the limits on who receives a message, deleting data, spending money, credentials and publishing.
+### 05-unsupervised · Understand Unsupervised
 
-**On screen.** Open Image quality: Economy, Balanced, Sharp. Then Completion alerts: All, Quiet, Off.
+**Section:** `display` · **Focus:** `[data-preset-group=supervision]`
 
-**Narration.**
-- Image quality decides how much picture the model gets. Economy sends smaller and fewer screenshots to save tokens. Sharp sends full-size screenshots after every action that changes the page, which costs more.
-- Completion alerts decide what happens when a plan waits for you or a task finishes: a sound, confetti and a flashing tab, just the flashing tab, or nothing.
+There is also an Unsupervised option. It turns off action guards, including checks around recipients, deletion, spending, credentials, and publishing. Treat that as a deliberate trust decision. Permission prompts remain a separate setting in every preset. For a first setup, leave supervision on Balanced.
 
-**Mid-chapter close-up.** Click "Fine-tune in Advanced" under Agent supervision; Advanced opens at the Agent supervision heading. Change Lean mode to Off, go back to General, and show the switch now reading Custom with its note. Pick Balanced again.
+### 06-image-quality · Image quality
 
-**Narration.**
-- Each switch has a "Fine-tune in Advanced" link that takes you to the settings behind it. If you change one of those, the switch shows Custom. Pick a position to reset them.
+**Section:** `display` · **Focus:** `[data-preset-group=image]`
 
-**On screen.** Research escalation and, in Chrome, "Use WebBrain as my new tab page".
+Image quality balances detail against cost. Economy sends smaller and fewer screenshots. Balanced is the everyday default. Sharp sends larger, high-detail images and captures after actions that change the page. Try more detail when the agent struggles to see something; use Economy when image traffic is expensive or slow.
 
-**Narration.**
-- The last two are optional: Research escalation can offer to send a very complex research question to ChatGPT, always with your approval, and in Chrome WebBrain can replace your new tab page.
+### 07-alerts-presets · Alerts and fine-tuning
 
-**Exit frame.** The three combined switches on their defaults.
+**Section:** `display` · **Focus:** `[data-preset-group=alerts]`
 
----
+Completion alerts can play sounds, show confetti, and flash the tab. Quiet keeps only the flashing tab; Off disables those alerts. Each combined control has a Fine-tune in Advanced link. If individual settings no longer match a preset, General shows Custom. Choosing a preset restores that group's settings.
 
-## Chapter 4 · 5:00 — Models → LLM in detail
+### 08-llm · Models: choose your main model
 
-**Entry frame.** Models → LLM with the Local, Cloud and Router filters and the search field.
+**Section:** `llm` · **Focus:** `#providers`
 
-**On screen.** Click each filter. Search for "ollama". Open a local card (llama.cpp or Ollama) and point to the server URL, Load models, context window, Model Supports Vision and Prompt Tier. Then open a cloud card and point to the API key and the cost fields.
+Under Models, LLM is where you choose the main conversational model. Look for the Selected badge to see which provider is selected for chat. WebBrain Compass includes a free weekly allowance. You can also bring a cloud API key, use a router, or connect a local model.
 
-**Narration.**
-- The list is long, so use the filters and the search box. The active provider always stays visible.
-- A local provider needs the address of the server on your computer and a model name. Load models fills the model list for you. Context window and prompt tier tell WebBrain how much the model can handle; smaller local models do better with a smaller tier.
-- Cloud providers need an API key. The cost fields only estimate usage for the cost allowance in Budgets; they don't change what the provider bills.
-- In Chrome, the WebGPU card runs a model entirely in your browser, with no server at all.
+### 09-provider-setup · Save, test, select for chat
 
-**Exit frame.** The provider list with a filter applied.
+**Section:** `llm` · **Focus:** `.provider-card[data-provider-id=openai]`
 
----
+- At “save the configuration”: `.provider-card[data-provider-id=openai] .btn-row:has(.btn-save)`
 
-## Chapter 5 · 7:00 — The helper models
+Use the category filters and provider search to narrow the list, then expand a card. For a cloud API, enter your key and model, save the configuration, and test the connection. Select for chat chooses it for conversation. A configured provider and the provider selected for chat are different things.
 
-**Entry frame.** Models → Vision.
+### 10-local-models · Local models and model capacity
 
-**On screen.** Show the in-browser vision model choice (Chrome) and the optional endpoint fields. Then Speech, Generative, Decision (Auto / On / Off and its status line) and SafeSocial, one after another.
+**Section:** `llm` · **Focus:** `.provider-card[data-provider-id=ollama]`
 
-**Narration.**
-- The other entries under Models are optional helpers. None of them changes your active provider.
-- Vision decides what reads screenshots. If your chat model can see images, it does that itself. If it can't, Chrome can use a model running in your browser. You can also save a separate vision endpoint, so a cheaper chat model does the planning and a vision model only reads screenshots.
-- Speech is a Whisper-compatible endpoint for recordings. Generative connects an image and video service for the generate tool.
-- Decision models answer the agent's quick yes-or-no questions, like "is this task finished?". Auto needs no setup, and the status line tells you what it's using. On lets you pick a provider; Off never uses one.
-- SafeSocial is an optional on-device filter for Instagram images.
+- At “Check the context window”: `.provider-card[data-provider-id=ollama] .field:has([data-key=contextWindow])`
+- At “Ollama also needs”: `.provider-card[data-provider-id=ollama] .provider-ollama-warning`
 
-**Exit frame.** Decision on Auto with its status line.
+Local providers need a running server and its address. Load models helps find what's available. Check the context window and prompt tier against your model's capacity. Ollama also needs to allow the extension's origin; its card explains that setup. Chrome's WebGPU provider is another option, running the model inside the browser.
 
----
+### 11-vision · Vision: reading screenshots
 
-## Chapter 6 · 9:30 — Permissions & privacy
+**Section:** `vision` · **Focus:** `#vision-card`
 
-**Entry frame.** Permissions & privacy with "Ask before consequential actions" on and two demo grants.
+- At “or you can configure a separate endpoint here”: `#vision-endpoint-fields`
 
-**On screen.** Point to the master switch, then to the grant list; revoke one grant. Scroll to the Privacy heading and point to the three switches.
+The remaining model sections configure helpers. Vision decides how screenshots are read. A capable chat model can handle images itself. Chrome also offers an in-browser vision route, or you can configure a separate endpoint here. A separate vision model can read screenshots while your main model handles the conversation.
 
-**Narration.**
-- This is where you control what WebBrain may do. Keep "Ask before consequential actions" on. WebBrain then asks the first time it clicks, types or acts on a site. When you choose "Always allow", it remembers that one action on that one site, and the grant shows up here. Revoke it and WebBrain asks again.
-- The same switch is in the side panel, behind the warning button next to the microphone, and its "Manage site permissions" link brings you here.
-- Below, under Privacy: screenshot redaction blurs form fields and personal-looking text before a screenshot reaches a vision model. It's best effort, not a guarantee. Strict secret handling stops WebBrain from repeating passwords and keys in its answers. Local network access lets the agent reach servers on your own network; leave it off unless you need it.
+### 12-speech · Speech: transcribing recordings
 
-**Mid-chapter close-up.** Turn the master switch off to show the warning, then turn it back on.
+**Section:** `speech` · **Focus:** `#transcription-card`
 
-**Narration.** Turning the master switch off allows actions on every site without asking, until you turn it back on. That's much broader than allowing one action on one site.
+Speech holds a Whisper-compatible transcription endpoint: its base URL, API key, and model. Save and test it before relying on recordings. This is an optional helper configuration. You can leave it alone if you don't need transcription, and return when you have a service you want to use.
 
-**Exit frame.** The master switch back on.
+### 13-generative · Generative: images and video
 
----
+**Section:** `generative` · **Focus:** `#image-gen-card`
 
-## Chapter 7 · 11:00 — Budgets
+Generative connects the services used to create images and video. Choose a provider, then configure the model and any required credentials. The fields change for hosted services and local ComfyUI workflows. Video has its own model and resolution options. Set up only the media service you intend to use.
 
-**Entry frame.** Budgets.
+### 14-decision · Decision: small supporting judgments
 
-**On screen.** Point to the two cost allowances and Reset spend, the clarify timeout and its policy, Max Agent Steps and the request timeout.
+**Section:** `decision` · **Focus:** `#system-one-card`
 
-**Narration.**
-- Budgets holds every hard limit. The cost allowances stop paid model calls once a conversation, or all conversations together, reach the amount you set.
-- The clarify timeout decides how long a question waits for your answer, and what happens when nobody answers.
-- Max Agent Steps caps how many actions one message may take, and the request timeout is how long WebBrain waits for the model to start answering. Slow local models may need more.
+Decision models handle supporting judgments, such as checking whether a task is complete. Auto chooses the available route without manual setup, and the status line explains what it is using. On reveals provider controls and individual features. Off disables this helper. Start with Auto unless you have a specific reason to change it.
 
-**Exit frame.** The step slider at 130.
+### 15-safesocial · SafeSocial: an optional local filter
 
----
+**Section:** `safesocial` · **Focus:** `#safesocial-card`
 
-## Chapter 8 · 12:00 — Memory
+- At “Choose the categories”: `#safesocial-card .safesocial-labels-fieldset`
+- At “A higher threshold”: `#safesocial-card .field:has(#safesocial-threshold)`
 
-**Entry frame.** Memory with Encrypted Cloud Sync and profile auto-fill.
+SafeSocial is an optional local image classifier for Instagram. Choose the categories you want softened, then blur, hide, dim, or warn on matching images. A higher threshold filters fewer images. It starts off; enabling it downloads a model. Classification runs on your device, and filtered images can be revealed.
 
-**On screen.** Point to sync, then profile auto-fill, then user memory with harmless demo records. Turn user memory off to show its options greying out, then back on.
+### 16-permissions · Permissions and privacy
 
-**Narration.**
-- Memory holds three things. Encrypted Cloud Sync, for Compass members, encrypts your keys, profile and memories with a password only you know before they're uploaded.
-- Profile auto-fill is a short block of details WebBrain can use when filling forms. User memory keeps preferences you want WebBrain to remember. Auto-learning and learning from forms are optional, and they only work while user memory is on.
-- Don't keep passwords or keys here.
+**Section:** `permissions` · **Focus:** `#permissions-card`
 
-**Exit frame.** The memory list.
+Permissions and privacy is now a section in this same sidebar. Keep Ask before consequential actions on. Saved site permissions appear underneath, where you can revoke them. Allowing an action on one site is a narrower choice than turning off the permission gate for every site.
 
----
+### 17-privacy · Screenshot redaction and secrets
 
-## Chapter 9 · 13:30 — Skills
+**Section:** `permissions` · **Focus:** `#screenshot-redaction-setting`
 
-**Entry frame.** Skills with the enabled list and the packaged skills.
+The Privacy controls below are separate choices. Screenshot redaction tries to blur sensitive-looking content before vision processing, but cannot guarantee that everything is hidden. Strict secret handling prevents credentials being repeated in answers. Both start off. Local network access also starts off; enable it only when your task needs that access.
 
-**On screen.** Point to the enabled list, then click Add skill to show the form, and Cancel.
+### 18-cost-budgets · Budgets: cloud cost allowances
 
-**Narration.**
-- Skills add instructions, and sometimes tools, to WebBrain. Enable a packaged skill, or add your own from a link or pasted text.
-- Importing a skill is a trust decision: its tools can call the addresses it declares without asking each time.
+**Section:** `budgets` · **Focus:** `#budget-settings .setting-row:first-child`
 
-**Exit frame.** The enabled list.
+Budgets brings the limits together. Session and total cost allowances stop further eligible paid model calls when reported or estimated spend reaches the allowance. These controls apply to usage-billed cloud and router providers. They exclude WebBrain Compass and local providers. Estimated cost here is not a replacement for your provider's billing records.
 
----
+### 19-timeouts · Questions, steps, and timeouts
 
-## Chapter 10 · 14:15 — Integrations: CAPTCHA and Bridge
+**Section:** `budgets` · **Focus:** `.setting-row:has(#range-clarify-timeout)`
 
-**Entry frame.** CAPTCHA, with one card per solver.
+- At “Below that, Max Agent Steps”: `.setting-row:has(#range-max-steps)`
 
-**On screen.** Point to one solver card and its Advanced weight. Then open Bridge and point to "Let a backend control this browser", the presets and the pairing key.
+Clarify timeout controls how long ordinary questions wait, and the next option decides what happens afterward. Permission and form-submit confirmations still wait for you. Below that, Max Agent Steps limits a run's length, and request timeout controls how long WebBrain waits for the model. Slow local models may need more time.
 
-**Narration.**
-- Under Integrations, CAPTCHA holds your solver accounts. Nothing runs until you save a key, and you can enable several; the highest weight goes first.
-- Bridge lets another program drive this browser: an MCP client like Claude Code or Cursor, LM Studio, or WebBrain Cloud. It's off until you turn it on, and it only accepts connections from your own computer. The MCP and LM Studio guides walk through the setup.
+### 20-sync · Memory: encrypted cloud sync
 
-**Exit frame.** Bridge, switched off.
+**Section:** `memory` · **Focus:** `#profile-sync-card`
 
----
+Memory begins with optional encrypted cloud sync for Compass members. It syncs memories, profile autofill, and API-key provider settings, encrypted with your sync password before upload. Chat history and OAuth sign-ins are excluded. Keep that password somewhere safe: WebBrain cannot recover it for you.
 
-## Chapter 11 · 15:00 — Offline: Apocalypse Mode
+### 21-profile · Profile auto-fill
 
-**Entry frame.** Offline with its status line.
+**Section:** `memory` · **Focus:** `#profile-card`
 
-**On screen.** Point to the status line, then click "Open Apocalypse Mode" and show the kit page opening in a new tab. Close it.
+Profile auto-fill is a short block of details the agent can reuse, for example a name, company, or preferred writing style. When enabled, this text goes into the model's prompt. Keep it minimal. It is stored locally in plain text, so this is not a password vault.
 
-**Narration.**
-- Offline shows whether Apocalypse Mode is on and what it has installed. Open Apocalypse Mode to manage it: the switch, the local models and the offline Wikipedia archives live on its own page, because turning it on starts large downloads.
+### 22-user-memory · User memory and optional learning
 
-**Exit frame.** The Offline section.
+**Section:** `memory` · **Focus:** `#user-memory-card`
 
----
+- At “Review saved records”: `#user-memory-card .field:has(#user-memory-list)`
+- At “Automatic learning after chats”: `#user-memory-card .setting-row:has(#toggle-user-memory-auto)`
 
-## Chapter 12 · 15:30 — Advanced
+User memory holds durable preferences across tasks. Review saved records, forget outdated details, or export and import them. Automatic learning after chats and learning from completed forms are optional. The character limit controls how much memory reaches the prompt. Enabled memory is shared with your configured model, so avoid storing secrets.
 
-**Entry frame.** Advanced, at the Agent supervision heading.
+### 23-memcode · Optional MemCode recall
 
-**On screen.** Scroll slowly through the headings: Agent supervision, Vision and screenshots, Completion alerts, Privacy and diagnostics, Automation, Network and API, Interface. Pause on Enforce action guards, Lean mode and the image budget.
+**Section:** `memory` · **Focus:** `#memcode-recall-card`
 
-**Narration.**
-- Advanced holds every fine-grained control, sorted under headings. The first three groups are the settings behind the combined switches in General, so you rarely need to touch them one by one.
-- Enforce action guards should stay on. Turning it off lets the model decide by itself whether to send, retry, delete or publish.
-- Lean mode, planning and plan review are what the Agent supervision switch sets. Vision mode, screenshot size, auto-screenshot and the image budget are what Image quality sets.
-- The rest are for specific needs: Record traces for comparing models, scheduled tasks and their confirmation, cookie banners, site adapters, the API options, and interface preferences like Verbose Mode and voice input.
+MemCode adds optional recall from a connected account. Connecting the account and enabling recall are separate steps. The integration is read-only and does not automatically upload your local memory. Search queries and matching memories reach MemCode and your configured model. Local WebBrain memory remains the default.
 
-**Exit frame.** The Agent supervision heading.
+### 24-skills · Skills: reusable instructions
 
----
+**Section:** `skills` · **Focus:** `#skills-settings`
 
-## Chapter 13 · 17:30 — Recommended configurations and closing
+- At “or use Add skill”: `#btn-show-skill-form`
 
-**Entry frame.** General with the three combined switches.
+Skills add reusable instructions and sometimes tools. Review the enabled and packaged lists, or use Add skill to import a URL or paste instructions. Relevant skills are loaded on demand in Mid and Full prompt tiers; Compact does not load them. Read unfamiliar skills before enabling them, especially their tool permissions.
 
-**On screen.** Set each configuration as it's described, then return everything to the defaults.
+### 25-captcha · Integrations: CAPTCHA solvers
 
-**Narration.**
-- Three configurations cover most people.
-- A strong cloud model: leave everything on Balanced. If you trust the model and want speed, try Agent supervision on Fast.
-- A smaller or local model: keep Agent supervision on Balanced, or Thorough for important tasks, and Image quality on Economy if screenshots are slow.
-- Privacy first: run a local model, turn on screenshot redaction and strict secret handling in Permissions & privacy, and keep local network access off.
-- Whatever you choose, keep "Ask before consequential actions" on. That's it. Thanks for watching.
+**Section:** `captcha` · **Focus:** `#captcha-card`
 
-**Exit frame.** Hold the sidebar for two seconds, then cut to the WebBrain side panel or the end card.
+- At “When multiple solvers are available”: `.captcha-provider[aria-labelledby=capsolver-heading] .captcha-advanced`
+
+Under Integrations, CAPTCHA holds optional solver accounts. Configure a service with your own key, save it, and test it. When multiple solvers are available, their advanced weights set the preference order. These are separate services with their own usage charges. You can leave this section unconfigured until a task calls for it.
+
+### 26-bridge · Bridge: connect another program
+
+**Section:** `cloudbridge` · **Focus:** `#cb-card`
+
+Bridge lets a backend control this browser. Choose the Cloud, MCP, LM Studio, or custom local destination, then supply the matching pairing information. Only one destination is active at a time. The connection status shows whether setup worked. Leave Bridge off until you want a trusted program connected to your browser.
+
+### 27-webmcp · Experimental WebMCP
+
+**Section:** `cloudbridge` · **Focus:** `#webmcp-card`
+
+The experimental WebMCP switch below Bridge is a separate feature. It lets WebBrain discover structured tools offered by supported Chrome pages. It does not configure an external MCP client. Use the documentation link when setting up a backend connection; the names are similar, but the directions of integration differ.
+
+### 28-offline · Offline: Apocalypse Mode
+
+**Section:** `offline` · **Focus:** `#apocalypse-mode-summary`
+
+Offline shows the status of Apocalypse Mode. Its button opens the separate kit manager, where you prepare local models and offline reference archives. Set that up while you have a connection and enough storage. This Settings section is the overview; the downloads and detailed offline controls live in the kit manager.
+
+### 29-advanced-supervision · Advanced: supervision controls
+
+**Section:** `advanced` · **Focus:** `#adv-group-supervision`
+
+- At “The default review policy”: `#row-plan-review-confidence`
+
+Advanced exposes the controls behind General's presets. Action guards, strict checks, Lean mode, planning, and plan review sit together. The default review policy uses a confidence threshold. If you change these individually, General may show Custom. Keeping the Balanced preset is a useful starting point while you learn the trade-offs.
+
+### 30-advanced-vision · Advanced: screenshots and image budget
+
+**Section:** `advanced` · **Focus:** `#image-budget-card`
+
+Vision and screenshots includes automatic capture, detail level, image count, and maximum dimensions. These controls can materially change token use and how well the model sees small text. The Image quality preset changes several together. If you fine-tune them, make one change at a time and compare the result.
+
+### 31-diagnostics · Privacy and diagnostics
+
+**Section:** `advanced` · **Focus:** `#adv-group-privacy`
+
+Privacy and diagnostics includes Help Improve WebBrain, which is on by default for eligible Compass text and tool interactions. Review its explanation and opt out here if you prefer. Local and bring-your-own API requests have separate per-provider research sharing. Trace recording is another control; inspect diagnostic exports before sharing them.
+
+### 32-automation · Automation controls
+
+**Section:** `advanced` · **Focus:** `#adv-group-automation`
+
+Automation brings together scheduled tasks, confirmation for consequential scheduled actions, cookie banners, and site adapters. Keep scheduled confirmations enabled while you get comfortable with unattended work. Cookie-banner behavior has its own menu, so choose how broadly it should apply. These controls are available when a workflow gives you a reason to adjust them.
+
+### 33-network-interface · Network, API, and interface
+
+**Section:** `advanced` · **Focus:** `#adv-group-network`
+
+The final Advanced groups cover API mutation access, request observation, streaming, and interface preferences such as verbose output, voice input, and tab grouping. Read each description before changing behavior you rely on. Allowing API mutations does not remove the other confirmation checks. Most people can leave these controls as they are.
+
+### 34-closing · A simple starting configuration
+
+**Section:** `display` · **Focus:** `[data-preset-group=supervision]`
+
+That's the new Settings layout. Choose your model, keep supervision and image quality on Balanced, and leave permission prompts enabled. Adjust alerts to your taste. Then return to a real task, see what helps, and change settings only when you have a reason. The sidebar and search will bring you back to the right place.
