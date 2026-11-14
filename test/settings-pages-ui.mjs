@@ -253,7 +253,7 @@ try {
       await page.locator('#select-preset-supervision').selectOption('fast');
       assert.equal(await store(page, 'leanMode'), 'on', `${build}: Fast turns lean mode on`);
       assert.equal(await store(page, 'planReviewMode'), 'never', `${build}: Fast runs plans without a review stop`);
-      assert.equal(await store(page, 'enforceActionGuards'), true, `${build}: no preset turns action guards off`);
+      assert.equal(await store(page, 'enforceActionGuards'), true, `${build}: Fast keeps action guards on`);
       assert.equal(await store(page, 'askBeforeConsequentialActions'), undefined, `${build}: no preset touches the permission gate`);
       assert.equal(await page.locator('#select-lean-mode').inputValue(), 'on', `${build}: the Advanced control follows the preset`);
       assert.equal(await page.locator('#range-plan-review-confidence').isDisabled(), true, `${build}: the threshold row follows the preset's review mode`);
@@ -284,6 +284,14 @@ try {
       assert.equal(await page.locator('#toggle-enforce-action-guards').isChecked(), false, `${build}: a storage change reaches the Advanced control`);
       await page.locator('#select-preset-supervision').selectOption('balanced');
       assert.equal(await store(page, 'enforceActionGuards'), true, `${build}: a preset turns guards back on`);
+      // Unsupervised is Fast with action guards off.
+      await page.locator('#select-preset-supervision').selectOption('unsupervised');
+      assert.equal(await store(page, 'enforceActionGuards'), false, `${build}: Unsupervised turns action guards off`);
+      assert.equal(await store(page, 'leanMode'), 'on', `${build}: Unsupervised keeps Fast's lean mode`);
+      assert.equal(await store(page, 'planReviewMode'), 'never', `${build}: Unsupervised keeps Fast's plan review`);
+      assert.equal(await page.locator('#toggle-enforce-action-guards').isChecked(), false, `${build}: the Advanced control follows Unsupervised`);
+      assert.equal(await page.locator('#preset-supervision-note').getAttribute('data-tone'), 'warning', `${build}: Unsupervised flags guards off`);
+      await page.locator('#select-preset-supervision').selectOption('balanced');
       await page.locator('#select-preset-image').selectOption('sharp');
       assert.deepEqual([await store(page, 'visionQuality'), await store(page, 'imageDetail'), await store(page, 'maxImageDimension'), await store(page, 'autoScreenshot')],
         ['sharp', 'high', 2048, 'state_change'], `${build}: Sharp raises every image setting`);

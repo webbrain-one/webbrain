@@ -8,7 +8,7 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
 
 ## Enforce action guards
 
-Settings → Advanced → **Enforce action guards** is on by default in Chrome and Firefox. Each run reads the switch when it starts. Switching it off gives the model control over browser actions such as sending, retrying, deleting and publishing. A Send click, Enter or `chat_send` can then reach the visible chat without WebBrain checking the recipient or blocking a possible duplicate. Only an observed delivery receipt confirms delivery.
+Settings → Advanced → **Enforce action guards** is on by default in Chrome and Firefox. Each run reads the switch when it starts. Switching it off gives the model control over browser actions such as sending, retrying, deleting and publishing. Settings → General → Agent supervision → **Unsupervised** turns it off with Fast's other settings; choosing Thorough, Balanced or Fast turns it back on. A Send click, Enter or `chat_send` can then reach the visible chat without WebBrain checking the recipient or blocking a possible duplicate. Only an observed delivery receipt confirms delivery.
 
 **Lean mode** independently controls how much of its work the model verifies itself. **Strict checks** controls how quality checks handle uncertainty while enforcement is on. Site permissions, explicit submit confirmation, browser access restrictions, Stop and run budgets apply with either setting. Scheduled jobs still reconcile an interrupted action before automatic replay, and managed bots still use the remote service’s action reservations.
 

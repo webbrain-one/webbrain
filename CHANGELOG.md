@@ -6,6 +6,11 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [49.0.0] - 2026-11-14
+
+### Added
+- Settings → General → Agent supervision has a fourth position, **Unsupervised**: Fast with Enforce action guards off, for runs where you accept that the model decides by itself whether to send, retry, delete or publish. Permission prompts and site permissions still apply. Chrome and Firefox.
+
 ### Changed
 - fal.ai videos are made at 480p by default, which costs less than 720p. **Settings → Models → Generative** has a **Video resolution** choice (480p or 720p) for fal.ai. A request that names a resolution still wins, and a model that does not offer the chosen resolution makes the video at its own default.
 - The side panel's **More…** and **Manage site permissions** open Settings → Models → LLM and Settings → Permissions & privacy directly instead of going through the forwarding pages.
