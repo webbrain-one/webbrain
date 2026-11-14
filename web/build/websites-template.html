@@ -295,6 +295,26 @@
     .section-title { font-size: clamp(32px, 3.6vw, 50px); font-weight: 750; line-height: 1.06; letter-spacing: -0.045em; text-wrap: balance; }
     .section-description { max-width: 470px; color: var(--text-dim); font-size: 16px; line-height: 1.75; }
 
+    /* Real product examples: keep the interface large enough to read. */
+    .embedded-ai .section-intro { align-items: center; }
+    .ai-example { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 2fr); align-items: center; gap: 40px; margin-top: 48px; }
+    .ai-example figcaption { min-width: 0; }
+    .ai-example-product { display: block; margin-bottom: 14px; color: var(--accent-text); font-size: 14px; font-weight: 700; }
+    .ai-example h3 { font-size: clamp(24px, 2.4vw, 31px); font-weight: 730; line-height: 1.15; letter-spacing: -0.035em; text-wrap: balance; }
+    .ai-example p { margin-top: 16px; color: var(--text-dim); font-size: 15px; line-height: 1.75; }
+    .ai-example-source { display: inline-block; margin-top: 18px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+    .ai-example-image { display: block; min-width: 0; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 14px; background: #fff; box-shadow: 0 16px 40px var(--shadow-card); }
+    .ai-example-image img { display: block; width: 100%; height: auto; }
+    /* The Google demo's unused right margin stays in the full-size source. */
+    .ai-example-image--gmail img { width: 138%; max-width: none; }
+    .ai-example-image:hover { outline: 2px solid var(--accent-text); outline-offset: 4px; text-decoration: none; }
+    .ai-example-image:focus-visible { outline-offset: 4px; }
+    .ai-example-image-note { display: block; padding: 9px 14px; border-top: 1px solid #e5e7eb; background: #f8fafc; color: #475569; font-size: 12px; text-align: end; }
+    .ai-your-site { display: flex; align-items: center; justify-content: space-between; gap: 36px; margin-top: 48px; padding: 30px 0 0; border-top: 1px solid var(--border); }
+    .ai-your-site h3 { font-size: 25px; line-height: 1.2; letter-spacing: -0.03em; }
+    .ai-your-site p { max-width: 690px; margin-top: 12px; color: var(--text-dim); font-size: 15.5px; line-height: 1.75; }
+    .ai-your-site .btn { flex-shrink: 0; }
+
     .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: step; list-style: none; }
     .step { position: relative; padding: 24px 24px 26px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-card); counter-increment: step; }
     .step::before {
@@ -380,6 +400,12 @@
       :root { --site-width: calc(100% - 32px); }
       main { padding-top: 52px; }
       .steps { grid-template-columns: 1fr; }
+      .ai-example { grid-template-columns: 1fr; gap: 22px; margin-top: 38px; }
+      .ai-example figcaption { max-width: 580px; }
+      .ai-example-product { margin-bottom: 9px; }
+      .ai-example p { margin-top: 12px; }
+      .ai-example-source { margin-top: 12px; }
+      .ai-your-site { flex-direction: column; align-items: flex-start; gap: 22px; }
       .nav-links .nav-secondary { display: none; }
     }
     @media (max-width: 640px) {
@@ -519,6 +545,47 @@ WebBrain.<span class="tok-attr">reloadConfig</span>();</pre>
         <span>Your real site ID is in the dashboard.</span>
         <button class="copy-btn" type="button" id="copy-code">Copy</button>
       </div>
+    </div>
+  </section>
+
+  <section class="section embedded-ai" id="ai-built-in" aria-labelledby="embedded-ai-title">
+    <div class="section-intro">
+      <h2 class="section-title" id="embedded-ai-title">Google and X do it.<br>Your website can, too.</h2>
+      <p class="section-description">They put AI right where people are already reading and working. Give your visitors that same kind of help, built into your own website.</p>
+    </div>
+
+    <figure class="ai-example">
+      <figcaption>
+        <span class="ai-example-product">Gmail + Gemini</span>
+        <h3>Clean up email with a simple request.</h3>
+        <p>Ask Gemini to find and archive messages without leaving Gmail. Here, it prepares an inbox cleanup for the user to review and confirm.</p>
+        <a class="ai-example-source" href="https://support.google.com/mail/answer/14355636?hl=en">See how Google does it</a>
+      </figcaption>
+      <a class="ai-example-image ai-example-image--gmail" href="/assets/websites/gmail-gemini.png" aria-label="View the full Gmail and Gemini screenshot">
+        <img src="/assets/websites/gmail-gemini.png" width="1920" height="1080" loading="lazy" decoding="async" alt="Gmail's Gemini sidebar prepares to archive 64 conversations matching an appointment confirmation request, with an Archive all button for confirmation.">
+        <span class="ai-example-image-note">Google product demo. Open full image.</span>
+      </a>
+    </figure>
+
+    <figure class="ai-example">
+      <figcaption>
+        <span class="ai-example-product">X + Grok</span>
+        <h3>Ask about the post you're reading.</h3>
+        <p>On X, readers can open Grok from a post to ask for context and understand what they're seeing. The help starts with the content already in front of them.</p>
+        <a class="ai-example-source" href="https://x.ai/news/grok-1212">See how X does it</a>
+      </figcaption>
+      <a class="ai-example-image" href="/assets/websites/x-grok.jpg" aria-label="View the full X and Grok screenshot">
+        <img src="/assets/websites/x-grok.jpg" width="2464" height="1402" loading="lazy" decoding="async" alt="xAI's demo shows a post about Woman Reading with a Grok button and an adjacent explanation of the artist, artwork, and context.">
+        <span class="ai-example-image-note">xAI product demo. Open full image.</span>
+      </a>
+    </figure>
+
+    <div class="ai-your-site">
+      <div>
+        <h3>Now bring it to your website.</h3>
+        <p>Help readers understand an article, shoppers choose a product, or customers complete a form. WebBrain for Websites adds an AI guide to the site you already have, with actions only when you enable them.</p>
+      </div>
+      <a class="btn" href="#how-it-works">See how to add it</a>
     </div>
   </section>
 
