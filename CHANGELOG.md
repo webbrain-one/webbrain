@@ -6,6 +6,15 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [49.0.1] - 2026-11-14
+
+### Added
+- Added Abliteration.ai to the LLM provider catalog in Chrome and Firefox. Its image limit is respected in vision mode and Ask requests, with a clear error when attachments leave insufficient room.
+
+### Changed
+- WebBrain Companion download links now point to version 0.1.4.
+- The websites page shows Gmail and Grok as examples of embedded AI, and the Settings walkthrough reflects the unified Settings interface.
+
 ## [49.0.0] - 2026-11-14
 
 ### Added
