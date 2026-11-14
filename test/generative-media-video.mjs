@@ -14,11 +14,50 @@ const area = { get: async () => ({}), set: async () => {}, remove: async () => {
 globalThis.chrome = globalThis.browser = { storage: { local: area, session: area }, runtime: { getURL: x => x, sendMessage: async () => ({}) } };
 
 // The generated media store's IndexedDB calls, kept in memory: Node has no
-// IndexedDB. Other databases never open.
+// IndexedDB. The kept clips' records (by id, oldest first) outlive a module
+// instance, as the database outlives the background worker. Other databases
+// never open.
 const assets = new Map();
+const keptClipRecords = new Map();
+let nextKeptClipId = 1;
+// True: the kept clips' database cannot be opened.
+let keptClipsBroken = false;
+// A read-write transaction over the kept clips: each request answers in turn,
+// and the transaction completes once none is left.
+function keptClipsTransaction() {
+  const transaction = {};
+  let pending = 0;
+  const request = apply => {
+    const read = {};
+    pending += 1;
+    setTimeout(() => {
+      read.result = apply();
+      read.onsuccess?.();
+      if (--pending === 0) setTimeout(() => { if (!pending) transaction.oncomplete?.(); });
+    });
+    return read;
+  };
+  transaction.objectStore = () => ({
+    getAll: () => request(() => [...keptClipRecords.values()].map(record => ({ ...record }))),
+    add: record => request(() => { const id = nextKeptClipId++; keptClipRecords.set(id, { ...record, id }); return id; }),
+    delete: id => request(() => { keptClipRecords.delete(id); }),
+    clear: () => request(() => { keptClipRecords.clear(); }),
+  });
+  return transaction;
+}
 globalThis.indexedDB = {
   open(name) {
     const request = {};
+    if (name === 'webbrain_kept_video_clips') {
+      if (keptClipsBroken) {
+        request.error = new Error('The database cannot be opened.');
+        setTimeout(() => request.onerror?.());
+        return request;
+      }
+      request.result = { close() {}, transaction: keptClipsTransaction };
+      setTimeout(() => request.onsuccess?.());
+      return request;
+    }
     if (name !== 'webbrain_generated_media') return request;
     request.result = {
       close() {},
@@ -742,12 +781,48 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(join.mp4DurationSeconds(await storedBytes(result.mediaId)), 3, 'one joined asset');
     assert.deepEqual(progress, ['Generating 3 video clips…', 'Video clips: 1 of 3 ready', 'Video clips: 2 of 3 ready',
       'Video clips: 3 of 3 ready', 'Joining 3 clips…']);
-    // One clip without options needs no schema and stays a hosted video.
+    // One clip without options reads the schema only for the default resolution
+    // (480p, as the model writes it) and stays a hosted video.
     const plain = falApi({ model: h3Max.id, schema: h3Max.schema });
     const single = await generate({ prompt: 'A red apple', media: 'video' }, { config: falConfig(h3Max), fetchImpl: plain.fetchImpl, pollIntervalMs: 1 });
     assert.equal(single.success, true, single.error);
-    assert.deepEqual([plain.calls.schemas, plain.calls.submits, plain.calls.downloads], [0, [{ prompt: 'A red apple' }], []]);
+    assert.deepEqual([plain.calls.schemas, plain.calls.submits, plain.calls.downloads], [1, [{ prompt: 'A red apple', resolution: '480P' }], []]);
     assert.equal(single.url, 'https://v3b.fal.media/files/b/clip-0.mp4');
+  });
+
+  test(`${build}: fal.ai videos default to 480p unless the saved setting or the call says otherwise`, async () => {
+    // Grok Imagine on fal.ai: 480p and 720p, in lower case.
+    const grokFal = { id: 'xai/grok-imagine-video/v1.5/lite/text-to-video', schema: falSchema({
+      duration: { type: 'integer', minimum: 1, maximum: 15 },
+      aspect_ratio: { type: 'string', enum: ['16:9', '9:16', '1:1'] },
+      resolution: { type: 'string', enum: ['480p', '720p'] },
+    }) };
+    const submits = async (model, settings, args = {}) => {
+      const api = falApi({ model: model.id, schema: model.schema });
+      const result = await generate({ prompt: 'A red apple', media: 'video', ...args }, { config: falConfig(model, settings), fetchImpl: api.fetchImpl, pollIntervalMs: 1 });
+      assert.equal(result.success, true, result.error);
+      return api.calls.submits;
+    };
+    // Nothing saved: 480p, for a plain clip and for every scene.
+    assert.deepEqual(await submits(grokFal, {}), [{ prompt: 'A red apple', resolution: '480p' }]);
+    assert.deepEqual((await submits(grokFal, {}, { scenes: scenes(2, 4), estimated_duration: 8 })).map(body => body.resolution), ['480p', '480p']);
+    // Written as the model lists it.
+    assert.deepEqual(await submits(h3Max, {}), [{ prompt: 'A red apple', resolution: '480P' }]);
+    // The saved setting replaces the default, and the call replaces the setting.
+    assert.deepEqual(await submits(grokFal, { videoResolution: '720p' }), [{ prompt: 'A red apple', resolution: '720p' }]);
+    assert.deepEqual(await submits(grokFal, { videoResolution: '720p' }, { resolution: '480p' }), [{ prompt: 'A red apple', resolution: '480p' }]);
+    assert.deepEqual(await submits(grokFal, {}, { resolution: '720p' }), [{ prompt: 'A red apple', resolution: '720p' }]);
+    // A default the model does not offer is not sent, and never fails the request.
+    assert.deepEqual(await submits(h3Max, { videoResolution: '720p' }), [{ prompt: 'A red apple' }]);
+    assert.deepEqual(await submits(hailuo, {}), [{ prompt: 'A red apple' }], 'a model that takes no resolution');
+    // Without a readable schema a plain clip uses the model's own default; even a
+    // refused read (403) does not stop it.
+    for (const schema of [null, 404, 403]) {
+      const api = falApi({ model: grokFal.id, schema });
+      const result = await generate({ prompt: 'A red apple', media: 'video' }, { config: falConfig(grokFal), fetchImpl: api.fetchImpl, pollIntervalMs: 1 });
+      assert.equal(result.success, true, `${schema}: ${result.error}`);
+      assert.deepEqual(api.calls.submits, [{ prompt: 'A red apple' }], String(schema));
+    }
   });
 
   test(`${build}: a hosted clip larger than 20 MB is kept when it is not joined`, async () => {
@@ -1003,7 +1078,7 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(restyled.success, true, restyled.error);
     assert.equal(other.calls.submits.length, 4);
     // Stop keeps what it has without changing what the user is told.
-    media.forgetKeptVideoClips();
+    await media.forgetKeptVideoClips();
     const controller = new AbortController();
     const stopping = falApi({ model: h3Max.id, schema: h3Max.schema });
     const stopped = await generate(story('Something fine'), { config: falConfig(h3Max), pollIntervalMs: 1, signal: controller.signal,
@@ -1020,6 +1095,50 @@ for (const build of ['chrome', 'firefox']) {
     const continued = await run(resumed, story('Something fine'));
     assert.equal(continued.success, true, continued.error);
     assert.ok(continued.reusedClips >= 1 && resumed.calls.submits.length === 4 - continued.reusedClips, 'the clips finished before Stop are used');
+  });
+
+  test(`${build}: kept clips outlive the background worker, for 30 minutes`, async () => {
+    // fal.ai refuses the last scene when it is submitted, after the others are ready.
+    const story = last => ({ prompt: 'Story', scenes: [...scenes(3, 10), { prompt: last, duration: 10 }], estimated_duration: 40 });
+    const run = (module, api, last) => module.generateImage(story(last), { config: falConfig(h3Max), retryDelayMs: 1, pollIntervalMs: 1,
+      fetchImpl: async (url, init = {}) => {
+        if (init.method === 'POST' && JSON.parse(init.body).prompt.endsWith('flagged')) {
+          await new Promise(done => setTimeout(done, 20));
+          return json({ detail: 'The prompt was flagged.' }, 422);
+        }
+        return api.fetchImpl(url, init);
+      } });
+    const failed = await run(media, falApi({ model: h3Max.id, schema: h3Max.schema }), 'Something flagged');
+    assert.match(failed.error, /^Clip 4 of 4 failed: .* 3 of 4 clips are finished and kept for 30 minutes: /);
+    assert.equal(keptClipRecords.size, 3, 'the finished clips are saved');
+    // Chrome stops the idle worker before the user asks for the retry: the
+    // retry runs in a new instance of the module, with nothing in memory.
+    const restarted = await import(`../src/${build}/src/agent/generative-media.js?worker=restarted`);
+    const resumed = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const retried = await run(restarted, resumed, 'Something fine');
+    assert.equal(retried.success, true, retried.error);
+    assert.deepEqual(resumed.calls.submits.map(body => body.prompt), ['Story\n\nSomething fine'], 'only the changed scene is generated');
+    assert.equal(retried.reusedClips, 3);
+    assert.equal(join.mp4DurationSeconds(await storedBytes(retried.mediaId)), 4, 'one joined video of all four scenes');
+    assert.equal(keptClipRecords.size, 0, 'each kept clip is handed out once');
+    // Clips kept more than 30 minutes ago are not used, and are deleted.
+    assert.equal((await run(media, falApi({ model: h3Max.id, schema: h3Max.schema }), 'Something flagged')).clipsKept, 3);
+    for (const record of keptClipRecords.values()) record.at -= 30 * 60 * 1000 + 1;
+    const late = falApi({ model: h3Max.id, schema: h3Max.schema });
+    const remade = await run(restarted, late, 'Something fine');
+    assert.equal(remade.success, true, remade.error);
+    assert.equal(late.calls.submits.length, 4);
+    assert.equal(remade.reusedClips, undefined);
+    assert.equal(keptClipRecords.size, 0, 'the expired clips are deleted');
+    // Clips that cannot be saved are not promised.
+    keptClipsBroken = true;
+    try {
+      const lost = await run(media, falApi({ model: h3Max.id, schema: h3Max.schema }), 'Something flagged');
+      assert.equal(lost.success, false);
+      assert.match(lost.error, /^Clip 4 of 4 failed: /);
+      assert.doesNotMatch(lost.error, /kept/);
+      assert.equal(lost.clipsKept, undefined);
+    } finally { keptClipsBroken = false; }
   });
 
   test(`${build}: kept clips are not used with another saved model input`, async () => {

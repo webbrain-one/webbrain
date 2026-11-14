@@ -125,6 +125,7 @@
           <option value="thorough" data-i18n="st.presets.supervision.thorough"></option>
           <option value="balanced" selected data-i18n="st.presets.supervision.balanced"></option>
           <option value="fast" data-i18n="st.presets.supervision.fast"></option>
+          <option value="unsupervised" data-i18n="st.presets.supervision.unsupervised"></option>
           <option value="custom" data-i18n="st.presets.custom" hidden disabled></option>
         </select>
       </div>
@@ -297,6 +298,14 @@
         <div class="field" id="image-gen-video-model-field">
           <label for="image-gen-video-model" data-i18n="st.imagegen.video_model"></label>
           <input type="text" id="image-gen-video-model" placeholder="xai/grok-imagine-video/v1.5/lite/text-to-video">
+        </div>
+        <div class="field" id="image-gen-video-resolution-field">
+          <label for="image-gen-video-resolution" data-i18n="st.imagegen.video_resolution"></label>
+          <select id="image-gen-video-resolution">
+            <option value="480p">480p</option>
+            <option value="720p">720p</option>
+          </select>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.5;" data-i18n="st.imagegen.video_resolution_hint"></div>
         </div>
         <div class="field" id="image-gen-video-parameters-field" hidden>
           <label for="image-gen-video-parameters" data-i18n="st.imagegen.video_parameters"></label>

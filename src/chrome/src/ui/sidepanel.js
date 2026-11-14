@@ -355,7 +355,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
 
   function openProviderSettings() {
     try {
-      chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/providers.html#llm') });
+      chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/settings.html#llm') });
     } catch {
       chrome.runtime.openOptionsPage();
     }
@@ -487,7 +487,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     if (!providerStatus) return;
     providerStatus.textContent = '';
     const changeLink = document.createElement('a');
-    changeLink.href = chrome.runtime.getURL('src/ui/providers.html#llm');
+    changeLink.href = chrome.runtime.getURL('src/ui/settings.html#llm');
     changeLink.target = '_blank';
     changeLink.rel = 'noopener noreferrer';
     changeLink.textContent = t('ob.cloud.change');
@@ -2240,7 +2240,7 @@ function closePermissionGatePopover() {
 }
 
 async function openPermissionsSettingsPage() {
-  const url = chrome.runtime.getURL('src/ui/permissions.html');
+  const url = chrome.runtime.getURL('src/ui/settings.html#permissions');
   try {
     await chrome.tabs.create({ url });
   } catch {
@@ -8941,7 +8941,7 @@ async function loadProviders() {
 }
 
 async function openProvidersSettingsPage() {
-  const url = chrome.runtime.getURL('src/ui/providers.html#llm');
+  const url = chrome.runtime.getURL('src/ui/settings.html#llm');
   try {
     await chrome.tabs.create({ url });
   } catch {

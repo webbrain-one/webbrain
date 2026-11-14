@@ -16,8 +16,8 @@ import { installPageFeedback, beforePageAgentDispatch, capturePageAgentInputComp
 import { JEV_FAST_KEYS, JEV_CLASSIFIER_THRESHOLD, JEV_BROWSER_THRESHOLD, confidentChoice, buildJevBrowserRequest, decideJevBrowser, jevVisualInputRequiresMainModel, JevFastSession } from './systemone-fast.js';
 import { redactSystemOneText, wrapSystemOneData, boundedSystemOneText, systemOneStateBytes } from './systemone-evidence.js';
 import { createSystemOneJudge, isSystemOneResponseContractError, systemOneFailureReason, SYSTEM_ONE_COST_PROVIDER } from './systemone-judge.js';
-import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, modeEscalationRefusal, readModeEscalation, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
-import { SEMANTIC_BATCH_LIMITS, SEMANTIC_DECISION_VERSION, acceptSemanticAnswer, acceptSemanticBatchAnswers, boundedSemanticData, controlEffectCommits, semanticDataComplete, semanticBatchChunks, semanticBatchDecisionMessages, semanticDecisionMessages, semanticQuestion, semanticSystemOneBatchQuestions, semanticSystemOneQuestion, WORKFLOW_STATES } from './semantic-decisions.js';
+import { AUTO_MODE, AUTO_MODE_ASK_NOTE, autoModeGenerativeMediaNote, REQUEST_ACTION_MODE_TOOL_NAME, RUN_MODE_DECISION_NOTE, autoModeForChoice, autoModeHardRoute, autoModePlanForChoice, carriesUntrustedText, confirmedEscalationMode, isRunMode, modeEscalationRefusal, readModeEscalation, runModeDecisionNote, settleAutoModeRoute, withRoutedRuntimeMode } from './auto-mode.js';
+import { SEMANTIC_BATCH_LIMITS, SEMANTIC_DECISION_VERSION, acceptSemanticAnswer, acceptSemanticBatchAnswers, boundedSemanticData, controlEffectCommits, readSemanticReply, semanticAnswerRefusal, semanticDataComplete, semanticBatchChunks, semanticBatchDecisionMessages, semanticDecisionMessages, semanticQuestion, semanticSystemOneBatchQuestions, semanticSystemOneQuestion, WORKFLOW_STATES } from './semantic-decisions.js';
 import { SOCIAL_PLATFORMS, socialPublicationApiPlatform, normalizePublicationContract, resolvePublicationText, publicationProgress, exactPublicationText, publicationMediaMatches, publicationContractMessages, publicationAuditMessages, parsePublicationJson, publicationAuditValidation } from './social-publish-contract.js';
 import { mastodonPublicationIntentMessages, normalizeMastodonPublicationIntent, captureNativeMastodonPublication, mastodonPublicationBinding, mastodonPublicationReceipt, mastodonPublicationNavigation } from './mastodon-publication.js';
 import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, RETIRED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_BATCHING, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_LEAN_NOTE, SYSTEM_PROMPT_GENERATIVE_MEDIA, SYSTEM_PROMPT_DEV_APPENDIX, SYSTEM_PROMPT_WEBMCP_ASK, SYSTEM_PROMPT_WEBMCP_ACT, getVisionActPrompt } from './tools.js';
@@ -117,7 +117,7 @@ import {
   buildClaudeDocumentBlock,
   PDF_PASSTHROUGH_MAX_BYTES,
 } from './pdf-tools.js';
-import { isPdfHandlerTabUrl, pdfUrlFromTabUrl } from './pdf-extraction.js';
+import { isPdfHandlerTabUrl, normalizePdfUrl, pdfUrlFromTabUrl } from './pdf-extraction.js';
 import { normalizePdfOcrResult, PDF_OCR_SYSTEM_PROMPT } from './pdf-ocr.js';
 import * as trace from '../trace/recorder.js';
 import { buildTerminalRuntimeEvent, enqueueCloudRuntimeEvent, flushCloudRuntimeOutbox } from '../trace/cloud-runtime-outbox.js';
@@ -257,6 +257,32 @@ const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
   ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
   ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
+
+// read_pdf fetches what normalizePdfUrl makes of its url: on our own viewer
+// page that is the document in ?url=, not the extension page, whose hostname
+// is the extension id. The permission gate is charged to that address. One
+// the handler would refuse leaves '', and the call fails closed.
+function readPdfPermissionUrl(url) {
+  try {
+    return normalizePdfUrl(url);
+  } catch {
+    return '';
+  }
+}
+
+// Why read_pdf({url}) could not be permission-checked. Only an http(s)
+// document names a site, so nothing was fetched.
+function readPdfPermissionFailure(url) {
+  let target = '';
+  try {
+    target = normalizePdfUrl(url);
+  } catch (error) {
+    return `Cannot run read_pdf: ${error.message} Nothing was fetched.`;
+  }
+  return target.startsWith('file:')
+    ? "Cannot run read_pdf on a file: url: a local file has no site the permission card can name, so it can't be permission-checked. Nothing was read. If the PDF is open in this tab, call read_pdf without url; otherwise ask the user to open the file in this tab."
+    : "Cannot run read_pdf: the PDF's site could not be identified, so it can't be permission-checked. Nothing was fetched.";
+}
 
 function savedWorkflowStepMayDispatchMessage(step) {
   const tool = String(step?.tool || '');
@@ -1559,13 +1585,32 @@ export class Agent extends LoopDetector {
     if (state) recordPageObservation(state, url, page, Number(maxChars) === 16000 ? 16000 : STANDARD_TOOL_RESULT_CHARS);
   }
 
+  // A steering correction replaces the request the page's coverage was
+  // decided for, a recommended action's own scope included, so the revised
+  // task is read again (page_read_scope) before an answer is judged against
+  // it, and the read-coverage check may send one answer back under it. What
+  // the run has read stays recorded: a page already read to its end needs no
+  // second read.
+  _resetPageReadCoverageForSteering(tabId) {
+    const state = this.pageReadCoverage?.get(tabId);
+    if (!state) return;
+    state.scope = null;
+    state.gap = null;
+    state.steered = true;
+    const guard = this._guardRunState(tabId);
+    guard.advised.delete('read-coverage-incomplete');
+    guard.caveats.delete('read-coverage-incomplete');
+    guard.outcomeDowngrades?.delete('read-coverage-incomplete');
+  }
+
   // Before an Ask answer is accepted (done or a plain final): when the page
   // content the model was given was cut off and no read reached the end of
   // the page, whether the request is about the whole page. That is asked
-  // once per run (page_read_scope); the synchronous check that follows
-  // (_readCompletenessBlock) then sends the answer back with the exact next
-  // read. Act runs, conversations (their own whole-thread check) and runs
-  // with no recorded coverage are not affected.
+  // once per run and again after a steering correction (page_read_scope);
+  // the synchronous check that follows (_readCompletenessBlock) then sends
+  // the answer back with the exact next read. Act runs, conversations (their
+  // own whole-thread check) and runs with no recorded coverage are not
+  // affected.
   async _preparePageReadCoverage(tabId, allowedToolNames = null) {
     const state = this.pageReadCoverage?.get(tabId);
     if (!state) return null;
@@ -1577,9 +1622,14 @@ export class Agent extends LoopDetector {
     const gap = pageReadCoverageGap(state, url, { tools: allowedToolNames instanceof Set ? allowedToolNames : null });
     if (!gap) return null;
     if (state.scope == null) {
+      // A steered task is the request with its corrections in order: "in
+      // Turkish" keeps a summary of the whole page, "just who wrote it" does
+      // not.
+      const request = (state.steered ? this._activeTaskBinding(this.conversations.get(tabId) || []).text : '')
+        || this._latestTaskText(tabId) || '';
       let choice = null;
       try {
-        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request: this._latestTaskText(tabId) || '' }))?.choice || null;
+        choice = (await this._semanticDecision(tabId, 'page_read_scope', { request }))?.choice || null;
       } catch (error) {
         if (this._checkAbort(tabId)) throw error;
       }
@@ -6861,6 +6911,9 @@ export class Agent extends LoopDetector {
     if (run.revision === run.authorizedRevision) return null;
     if (!this._isActionMode(mode) || this._isStandaloneChatRun(runOptions)) {
       run.authorizedRevision = run.revision;
+      // Ask has no planner gate to set this revision's read obligation; its
+      // page coverage decision is made again for the revised request.
+      this._resetPageReadCoverageForSteering(tabId);
       return { changed: true };
     }
     // A revision never inherits success counters or dispatch authorization.
@@ -6996,9 +7049,9 @@ export class Agent extends LoopDetector {
    * whether this request repeats it. Instead of refusing every such write
    * for the rest of the task, WebBrain asks the user on its hard card, which
    * never times out and never goes ahead on its own (an unattended run is
-   * refused). The card shows the request: its method and address, and its
-   * body unless strict secret handling is on. One answer covers one call
-   * with exactly these arguments.
+   * refused). The card shows the request: its method and address, and the
+   * body it sends unless strict secret handling is on. One answer covers one
+   * call with exactly these arguments.
    */
   _priorSubmissionWriteAsk(tabId, guard, name, args = {}) {
     const network = isNetworkMutation(name, args);
@@ -7011,7 +7064,9 @@ export class Agent extends LoopDetector {
       try { url = new URL(String(args?.url || '')); } catch { return null; }
       if (!/^https?:$/.test(url.protocol) || url.username || url.password) return null;
       host = url.hostname;
-      const body = typeof args.body === 'string' ? args.body : args.body == null ? '' : JSON.stringify(args.body);
+      const sent = this._priorSubmissionWriteBody(tabId, name, args, url);
+      if (!sent.ok) return null;
+      const body = typeof sent.body === 'string' ? sent.body : sent.body == null ? '' : JSON.stringify(sent.body);
       text = [`${String(args.method || '').toUpperCase()} ${url.href.slice(0, 600)}`,
         ...(body && this.strictSecretMode !== true ? [body.slice(0, 800)] : [])].join('\n\n');
     } else {
@@ -7021,6 +7076,22 @@ export class Agent extends LoopDetector {
       reason: 'prior_submission_unreconciled', host: normalizeHost(host), contentLabel: 'request', text,
       stepKey: this._sha256TextSync(JSON.stringify(['steer-prior-submission-unreconciled', guard.taskKey,
         Number(guard.steeringPriorSubmission?.actionSequence || 0), name, args || {}])) };
+  }
+
+  // The body a write sends. A fetch_url replay of a captured request with no
+  // body of its own sends the captured body (network-tools.js
+  // apiReplayOptionsForFetch), so the card shows that one. A replay that
+  // fetch_url would refuse (unknown id, another tab, another origin) is not
+  // asked about: `ok` is false and the plain refusal stands.
+  _priorSubmissionWriteBody(tabId, name, args, url) {
+    const replayRequestId = name === 'fetch_url' ? (args?.replayRequestId || args?.apiReplayRequestId) : '';
+    if (!replayRequestId) return { ok: true, body: args?.body };
+    const replay = globalThis.__webbrainApiRequestReplay?.get(String(replayRequestId));
+    if (!replay || (tabId != null && replay.tabId != null && Number(replay.tabId) !== Number(tabId))) return { ok: false };
+    try {
+      if (new URL(String(replay.url || '')).origin !== url.origin) return { ok: false };
+    } catch { return { ok: false }; }
+    return { ok: true, body: args.body !== undefined ? args.body : (replay.body ?? undefined) };
   }
 
   _steeringPriorSubmissionBlock(tabId, name, args, detectedSubmit) {
@@ -9883,6 +9954,17 @@ export class Agent extends LoopDetector {
     }
   }
 
+  // A model's reply to a fixed-choice question (readSemanticReply), after the
+  // checks every model reply gets: an empty one fails with why it was empty
+  // and a cut-off one as truncated.
+  _semanticReply(response, maxTokens) {
+    const content = typeof response?.content === 'string' ? response.content : '';
+    const output = modelOutputDiagnostics(response, { requestedMaxTokens: maxTokens });
+    const failure = output.empty ? output.emptyReason || 'empty_response'
+      : /^(?:length|max_tokens|max_output_tokens|output_limit)$/i.test(output.finishReason || '') ? 'truncated_response' : '';
+    return { content, ...(failure ? { failure } : readSemanticReply(content)) };
+  }
+
   /**
    * One fixed-choice language decision (see semantic-decisions.js): what the
    * user's request says about an action, read by a model in any language
@@ -9900,16 +9982,27 @@ export class Agent extends LoopDetector {
    * remembered on their own; the active model never answers them. An
    * authorizing answer among them needs the whole request and data: when
    * either was cut to fit the decision model, it is not used.
+   * `diagnostics`, when given, is filled with how the answer was reached, for
+   * the caller's trace (auto-mode.js runModeDecisionNote): the path, the model
+   * asked last, what the decision model and the active model each did, why no
+   * answer counted and the active model's parsed reply shape. Never the reply
+   * text or evidence.
    */
-  async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [] } = {}) {
+  async _semanticDecision(tabId, kind, { request = '', page = {} } = {}, { provider = this._activeProvider(tabId), signal = null, mainModel = true, retryChoices = [], alongside = [], diagnostics = null } = {}) {
     const spec = semanticQuestion(kind);
-    // Relationship decisions must read the entire latest user message. A
-    // prefix-only verdict can mistake a correction or a new task at its end.
+    const diag = diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
+    const startedAt = Date.now();
+    const settled = result => {
+      diag.source = result.source;
+      diag.latencyMs = Date.now() - startedAt;
+      return result;
+    };
+    // Relationship and page-scope decisions must read the entire request. A
+    // prefix-only verdict can miss a correction or new task at its end.
     const requestText = String(request ?? '');
-    const trusted = kind === 'user_turn_kind' ? requestText : requestText.slice(0, 6000);
+    const trusted = ['user_turn_kind', 'page_read_scope'].includes(kind) ? requestText : requestText.slice(0, 6000);
     const data = boundedSemanticData(page);
-    // Whether a model reads all of it: the request is cut to 6,000 characters
-    // above, and boundedSemanticData shortens long data (an earlier task).
+    // Whether the model reads the entire request and any bounded page data.
     const inputComplete = trusted.length === requestText.length && semanticDataComplete(page);
     // Keyed by the whole request, not the part a model reads, and by whether
     // the data was cut: inputs that share a cut-off start are different.
@@ -9931,16 +10024,20 @@ export class Agent extends LoopDetector {
     const cached = await this._semanticCacheHit(tabId, provider, this._semanticDecisionCache.get(cacheKey));
     // A cached answer settles the question, whatever is known about the
     // questions asked alongside it.
-    if (cached && !retryChoices.includes(cached.choice)) return withAlongside({ ...cached, source: 'cache' });
+    if (cached && !retryChoices.includes(cached.choice)) {
+      diag.answeredBy = cached.answeredBy;
+      return settled(withAlongside({ ...cached, source: 'cache' }));
+    }
     const remember = result => {
       store(cacheKey, result);
-      return withAlongside(result);
+      return settled(withAlongside(result));
     };
     const runSignal = signal || this._runAbortSignal(tabId);
     const context = this.systemOneContext(tabId);
     try {
       const settings = await this._jevSettings(tabId, provider);
       decisionKey = this._semanticDecisionKey(settings);
+      if (!settings) diag.decisionModel = 'off';
       const plainText = JSON.stringify({ request: trusted, page: data });
       const decisionText = redactSystemOneText(plainText);
       // What the decision model reads: the input above, with credential lines
@@ -9971,15 +10068,27 @@ export class Agent extends LoopDetector {
         const choice = confidentChoice(answer, spec.authorizing.includes(answer?.choice) ? 0.85 : 0.7);
         this.recordSystemOneVerdict(tabId, { decision: choice ? 'semantic' : 'fallback', reason: choice ? kind : `${kind}_low_confidence`,
           model: verdict.model }, context);
+        Object.assign(diag, {
+          decisionModel: !choice ? 'unsure' : retryChoices.includes(choice) ? 'not_settled' : 'answered',
+          model: verdict.model || settings.decisionConfig?.model || null,
+          ...(typeof answer?.choice === 'string' ? { decisionModelChoice: answer.choice } : {}),
+          ...(Number.isFinite(answer?.confidence) ? { decisionModelConfidence: Math.round(answer.confidence * 100) / 100 } : {}),
+        });
         if (choice && !retryChoices.includes(choice)) return remember({ choice, evidence: '', source: 'decision_model' });
       } else if (settings && !decisionFits) {
         this.recordSystemOneVerdict(tabId, { decision: 'fallback', reason: `${kind}_context_budget` }, context);
+        diag.decisionModel = 'context_budget';
       }
     } catch (error) {
       if (this._isCostAllowanceError(error) || this._checkAbort(tabId)) throw error;
       this.recordSystemOneVerdict(tabId, { decision: 'fallback', reason: `${kind}_${systemOneFailureReason(error)}` }, context);
+      Object.assign(diag, { decisionModel: 'failed', decisionModelFailure: systemOneFailureReason(error) });
     }
-    if (!mainModel || !provider?.chat || this._checkAbort(tabId)) return withAlongside({ choice: null, evidence: '', source: 'unavailable' });
+    if (!mainModel || !provider?.chat || this._checkAbort(tabId)) {
+      diag.mainModel = 'not_asked';
+      return settled(withAlongside({ choice: null, evidence: '', source: 'unavailable' }));
+    }
+    diag.model = provider.model || provider.config?.model || null;
     try {
       const messages = semanticDecisionMessages(kind, trusted, data, text => this._wrapUntrusted('read_page', text));
       const response = await withCompletionTimeout(async completionSignal => {
@@ -9988,12 +10097,20 @@ export class Agent extends LoopDetector {
         return this._chatWithCostAllowance(provider, messages, { temperature: 0, maxTokens: 400, signal: completionSignal },
           this.currentCostState.get(tabId) || null, { tabId, generationName: `semantic_${kind}` });
       }, runSignal, 10000);
-      const accepted = acceptSemanticAnswer(kind, this._socialPublicationResponseObject(response, { maxTokens: 400 }), trusted);
+      const reply = this._semanticReply(response, 400);
+      const accepted = reply.answer ? acceptSemanticAnswer(kind, reply.answer, trusted) : null;
+      Object.assign(diag, {
+        mainModel: accepted ? 'answered' : 'rejected',
+        rawChars: reply.content.length,
+        ...(reply.format ? { format: reply.format } : {}),
+        ...(accepted ? {} : { failure: reply.failure || semanticAnswerRefusal(kind, reply.answer, trusted) }),
+      });
       if (accepted) return remember({ ...accepted, source: 'main_model' });
     } catch (error) {
       if (this._isCostAllowanceError(error) || this._checkAbort(tabId)) throw error;
+      Object.assign(diag, { mainModel: 'failed', failure: Number.isFinite(error?.timeoutMs) ? 'timeout' : 'request_failed' });
     }
-    return withAlongside({ choice: null, evidence: '', source: 'unavailable' });
+    return settled(withAlongside({ choice: null, evidence: '', source: 'unavailable' }));
   }
 
   /**
@@ -10079,9 +10196,9 @@ export class Agent extends LoopDetector {
               { tabId, generationName: `semantic_${kind}`, ...(background ? { background: true } : {}) });
           }, runSignal, mainTimeoutMs);
           if (background && stopped()) break;
-          const accepted = acceptSemanticBatchAnswers(kind,
-            this._socialPublicationResponseObject(response, { maxTokens: 120 + 60 * indexes.length }), trusted,
-            indexes.map(index => data[index]));
+          const reply = this._semanticReply(response, 120 + 60 * indexes.length);
+          if (!reply.answer) throw new Error(reply.failure);
+          const accepted = acceptSemanticBatchAnswers(kind, reply.answer, trusted, indexes.map(index => data[index]));
           indexes.forEach((index, position) => {
             if (accepted[position]) remember(index, { ...accepted[position], source: 'main_model' });
           });
@@ -17026,6 +17143,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // exactly like other tool results.
       predispatch.lap('argumentsMs');
       protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);
+      // A point under the page's own Stop button is the page's to the model:
+      // the button moves away before any check below reads that point.
+      if (!protectedPageFailure) await this._clearAgentStopButton(tabId, this._agentInputPoints(fnName, fnArgs, tc._vision));
       if (!protectedPageFailure && fnName !== 'done' && !Agent.NAV_TOOLS.has(fnName)) {
         try {
           await this._adoptLiveSocialPublishWorkflow(tabId, provider);
@@ -17894,6 +18014,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             ? otpEmailPermissionArgs
             : this._skillPermissionArgsForCapability(skillCallTool, capability, fnArgs);
           if (receivingFrameInput) gateArgs = { ...gateArgs, _inputFrameUrl: inputFrameUrl };
+          if (fnName === 'read_pdf') gateArgs = { ...gateArgs, url: readPdfPermissionUrl(gateArgs?.url) };
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
@@ -17941,6 +18062,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               denied: true,
               error: receivingFrameInput
                 ? `Cannot run ${fnName}: WebBrain could not identify the site of the document ${fnName === 'click' ? 'under that point' : 'that has keyboard focus'}, so the input can't be permission-checked. Nothing was sent. Look at the page again before retrying; for a field inside an embedded frame, use iframe_click / iframe_type with a urlFilter naming the frame's domain.`
+                : fnName === 'read_pdf'
+                ? readPdfPermissionFailure(fnArgs?.url)
                 : `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
@@ -20138,6 +20261,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._showAgentTarget(tabId, { ok }, 'verdict', 'done');
   }
 
+  /**
+   * Agent input is about to land at `points` (viewport CSS px of the top
+   * document; the first is where a press goes). The page's Stop button
+   * (content/agent-visual-indicator.js) is hidden in every screenshot, so a
+   * point under it is the page's to the model; its press must reach the
+   * page, not stop the run. The button moves out of the way first: before
+   * the checks that read the point, and again before each CDP pointer
+   * command (background.js wires cdpClient.beforePointerInput here). Only on
+   * a tab that shows the run; bounded like the cursor's reply. Resolves to
+   * whether it moved.
+   */
+  async _clearAgentStopButton(tabId, points) {
+    const list = (Array.isArray(points) ? points : [])
+      .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+      .slice(0, 8)
+      .map(point => ({ x: Number(point.x), y: Number(point.y) }));
+    if (!list.length || !this._agentCursorShown(tabId)) return false;
+    let timer = null;
+    try {
+      const reply = await Promise.race([
+        Promise.resolve(chrome.tabs.sendMessage(tabId, { type: 'WB_AGENT_POINTER_AT', points: list }, { frameId: 0 })).catch(() => null),
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), AGENT_CURSOR_REPLY_MAX_MS); }),
+      ]);
+      return reply?.moved === true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Where a tool call's input lands, when it is a viewport point known before its checks. */
+  _agentInputPoints(name, args, vision = null) {
+    const points = [];
+    if (name === 'click' && args?.x != null && args?.y != null) points.push({ x: args.x, y: args.y });
+    for (const point of [vision?.monitorPoint, vision?.wheelPoint]) if (point) points.push(point);
+    return points;
+  }
+
   static BLANK_SCREENSHOT_RETRY_DELAYS_MS = [500, 1000, 1500];
 
   static _summarizeBlankness(info) {
@@ -22079,6 +22241,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ...(button !== 'left' ? { button } : {}),
       ...(clickCount > 1 ? { clicks: clickCount } : {}),
       ...(hit?.target ? { target: hit.target } : {}),
+      // What was clicked, by role and name: the record that outlasts the
+      // screenshot (vision-runtime.js _visionClickPreflight).
+      ...(preflight.control ? { control: preflight.control } : {}),
       ...(vision?.imageId ? { image: vision.imageId } : {}),
       ...(redirected?.redirected ? { redirectedFromNewTab: true } : {}),
       ...(preflight.note ? { note: preflight.note } : {}),
@@ -27662,7 +27827,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.currentRunId.set(tabId, runId);
       // How an automatically routed turn chose its mode, and how long it waited.
       if (runOptions?.modeRoute) {
-        try { trace.recordNote(runId, 0, 'mode_route', runOptions.modeRoute); } catch {}
+        const { decision, ...route } = runOptions.modeRoute;
+        try { trace.recordNote(runId, 0, 'mode_route', route); } catch {}
+        // The route's run_mode answer: its choice, which model or path gave
+        // it, and why there was none.
+        this._traceRunModeDecision(runId, 0, decision);
       }
       this._flushAdapterMatchTraces(tabId, runId);
       const pendingVisionRoutes = this.pendingVisionRouteTraces.get(tabId) || [];
@@ -29603,8 +29772,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // turn starts read-only.
   async _routeAutoRunMode(tabId, question) {
     const startedAt = Date.now();
+    const diagnostics = {};
     try {
-      const verdict = await this._semanticDecision(tabId, 'run_mode', question, { mainModel: false, alongside: ['plan_need'] });
+      const verdict = await this._semanticDecision(tabId, 'run_mode', question, { mainModel: false, alongside: ['plan_need'], diagnostics });
       const tier = this._resolvePromptTier(this._activeProvider(tabId));
       const plan = autoModePlanForChoice(verdict.alongside?.plan_need);
       return {
@@ -29613,9 +29783,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         source: verdict.choice ? verdict.source : 'ask_first',
         latencyMs: Date.now() - startedAt,
         ...(plan ? { plan } : {}),
+        decision: runModeDecisionNote('route', verdict, diagnostics),
       };
     } catch {
-      return { mode: 'ask', choice: null, source: 'ask_first', latencyMs: Date.now() - startedAt };
+      return { mode: 'ask', choice: null, source: 'ask_first', latencyMs: Date.now() - startedAt,
+        decision: runModeDecisionNote('route', null, diagnostics) };
     }
   }
 
@@ -29643,7 +29815,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (routed.mode !== 'ask' && corrected()) {
       cdpClient.stopDialogHandling(tabId);
-      routed = { mode: 'ask', choice: null, source: 'route_corrected', latencyMs: routed.latencyMs };
+      routed = { mode: 'ask', choice: null, source: 'route_corrected', latencyMs: routed.latencyMs, decision: routed.decision };
     }
     const previousMode = runOptions?.autoModeRouting?.previousMode || null;
     const mode = routed.mode;
@@ -29670,6 +29842,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           choice: routed.choice ?? null,
           routeMs: Number.isFinite(routed.latencyMs) ? routed.latencyMs : null,
           waitedMs: Date.now() - waitStartedAt,
+          // Recorded as its own trace note (RUN_MODE_DECISION_NOTE). A late
+          // route has none: the turn went on without its answer.
+          ...(routed.decision ? { decision: routed.decision } : {}),
           // plan_need for an action turn (_routedDirectTask).
           ...(() => {
             const plan = mode === 'ask' ? null : this._routePlanSignal(routed.plan, {
@@ -29695,6 +29870,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }));
     const pending = (this._steeringRuns.get(tabId)?.messages || []).map(item => ({ id: String(item.id || ''), text: item.text }));
     return [...applied, ...pending].filter(item => item.id && String(item.text || '').trim());
+  }
+
+  // Records a `run_mode` answer of the route or a hand-off check as its own
+  // trace note (auto-mode.js runModeDecisionNote; trace/privacy.js decides
+  // what each trace tier keeps).
+  _traceRunModeDecision(runId, step, decision) {
+    if (!runId || !decision) return;
+    try { trace.recordNote(runId, step, RUN_MODE_DECISION_NOTE, decision); } catch {}
   }
 
   // Reads a `request_action_mode` call of a routed Ask turn. Its quote must
@@ -29724,15 +29907,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const asked = corrections.length ? { ...base, request: corrected(corrections) } : base;
     // A sure "answer" from routing settles it; an "unclear" one asks again.
     // plan_need rides along for the action run the hand-off restarts.
-    const verdict = await this._semanticDecision(tabId, 'run_mode', asked, { provider, retryChoices: ['unclear'], alongside: ['plan_need'] });
+    const diagnostics = {};
+    const verdict = await this._semanticDecision(tabId, 'run_mode', asked, { provider, retryChoices: ['unclear'], alongside: ['plan_need'], diagnostics });
+    // What the page-free check answered and how, for the trace (never the quote).
+    const decision = outcome => runModeDecisionNote('escalation', verdict, diagnostics, { requested: requested.mode, outcome });
     const latest = this._autoModeTurnCorrections(tabId, messages, snapshot);
     if (latest.length !== corrections.length || latest.some((item, index) => item.id !== corrections[index].id)) {
-      return { superseded: true };
+      return { superseded: true, decision: decision('superseded') };
     }
     const mode = confirmedEscalationMode(requested, verdict.choice, { tier });
-    if (!mode) return { refused: 'not_action' };
+    if (!mode) return { refused: 'not_action', decision: decision('not_action') };
     const plan = autoModePlanForChoice(verdict.alongside?.plan_need);
-    return { accepted: { mode, evidence: requested.evidence, ...(plan ? { plan } : {}) }, corrections };
+    return { accepted: { mode, evidence: requested.evidence, ...(plan ? { plan } : {}) }, corrections, decision: decision('accepted') };
   }
 
   // The conversation and per-tab turn state before a routed turn gathers its
@@ -55164,7 +55350,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             })()
           `);
           throwIfEarlyCdpAborted();
-          const focus = focusCheck?.result?.value;
+          let focus = focusCheck?.result?.value;
+          // Focus inside an embedded frame reads here as the frame element,
+          // while the inserted text reaches the element focused in the
+          // frame's own document: that element decides, as the focused
+          // signature and readbacks below read it (cdpClient
+          // _focusedFrameElement).
+          if (focus?.focused && /^(IFRAME|FRAME)$/i.test(String(focus.tag || ''))) {
+            focus = await cdpClient.describeFocusedFrameElement(tabId).catch(() => null) || focus;
+            throwIfEarlyCdpAborted();
+          }
 
           if (!focus?.focused || !focus?.editable) {
             return {
@@ -55173,6 +55368,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               noDispatch: true,
               error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text with no selector.',
               focusedElement: focus || null,
+            };
+          }
+          // This path has no content-script binding in the frame (the
+          // typing-target preflight binds a framed field only where
+          // WebBrain's content script runs in that frame). A dropdown or
+          // native date field there is set by the content action, which would
+          // reach the top document instead, and credential-not-provided reads
+          // fields through the content script, so it did not see a password
+          // field there: nothing is typed into them from here.
+          if (focus.inFrame === true && (focus.tag === 'SELECT'
+              || (focus.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(String(focus.type || '').toLowerCase()))
+              || String(focus.type || '').toLowerCase() === 'password'
+              || /(?:^|\s)(?:current|new)-password(?:\s|$)/i.test(String(focus.autocomplete || '')))) {
+            return {
+              success: false,
+              dispatched: false,
+              noDispatch: true,
+              retryable: false,
+              error: 'The focused field is a dropdown, date or password field inside an embedded frame, where WebBrain cannot check it, so nothing was typed. Ask the user to fill this field.',
+              focusedElement: { ...focus, value: '' },
             };
           }
           if (focus.tag === 'INPUT' && NATIVE_DATE_INPUT_TYPES.has(focus.type)) break trustedTypeText;
@@ -60092,6 +60307,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           && result.toolCalls?.some(call => call?.function?.name === REQUEST_ACTION_MODE_TOOL_NAME)) {
         const handoff = await this._autoModeEscalation(tabId, result.toolCalls, enriched, provider, autoModeQuestion, messages, autoModeTurnStart,
           runOptions?.autoModeRouting?.continuedTask);
+        // The page-free run_mode answer behind the outcome below, when one
+        // was asked: its choice, the model or path that gave it and why it did
+        // not count (live QA case A7 was refused without any of that).
+        this._traceRunModeDecision(runId, steps, handoff.decision);
         if (handoff.superseded) {
           // Like any response a pending correction supersedes: the next step
           // applies the correction and the model decides again, so a

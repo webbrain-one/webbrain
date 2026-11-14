@@ -181,6 +181,9 @@ export function createPageReadCoverage({ url = '', scope = null } = {}) {
     url: documentUrl(url),
     // 'whole_page' or 'part' once decided, 'unknown' when no sure answer came.
     scope: scope === 'whole_page' || scope === 'part' ? scope : null,
+    // True once a steering correction revised the request (agent.js), so the
+    // scope is decided again for the revised task.
+    steered: false,
     documents: new Map(),
     gap: null,
   };

@@ -13,6 +13,10 @@ const { ctx } = require('../app/main');
     assert(ctx.windows.length, 'browser should start');
     const temporary = process.env.MURSHID_TEST_TEMPORARY === '1';
     assert.equal(ctx.ses.isPersistent(), !temporary);
+    // The browser chrome and the address bar list load favicons themselves:
+    // while browser data is temporary they do it in memory too.
+    assert.equal(ctx.windows[0].ui.session.isPersistent(), !temporary);
+    assert.equal(ctx.windows[0].omniPopup.ensure().webContents.session.isPersistent(), !temporary);
     // WebBrain can create a window while its own startup is still in progress.
     await new Promise(r => setTimeout(r, 3000));
     const tab = ctx.windows[0].addTab({ url: process.env.MURSHID_TEST_URL });

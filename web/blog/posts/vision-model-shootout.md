@@ -103,7 +103,7 @@ Browser-agent screenshots fire frequently — once after every state-changing to
 
 ## What this changes in WebBrain
 
-Nothing in the code, but something in the recommended configuration. If you're setting up the dedicated vision model in **Settings → Assistive Models → Vision**:
+Nothing in the code, but something in the recommended configuration. If you're setting up the dedicated vision model in **Settings → Models → Vision**:
 
 - **If you have the VRAM (~20 GB for a decent quant):** Qwen3.6-35B-A3B is the new default recommendation.
 - **If you're VRAM-constrained or latency-sensitive:** Gemma 4-31B at 574 prompt tokens per image is attractive, but you probably want to tighten the prompt's section 6 wording — escalating it from *"say so"* to an explicit "if any text is a username, email, dollar amount, date, or ID and you are even slightly unsure of a single character, list it in Unknowns verbatim and leave it out of section 2" — so its identifier-OCR failure mode flags itself instead of confabulating.

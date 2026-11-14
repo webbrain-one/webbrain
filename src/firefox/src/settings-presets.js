@@ -8,10 +8,12 @@
 // "balanced" / "all", and a combination fine-tuned in Advanced that matches no
 // preset reads as PRESET_CUSTOM.
 //
-// Two rules every preset follows:
-//   - none turns action guards off (enforceActionGuards stays true), and
+// Rules every preset follows:
+//   - only the supervision group's "unsupervised" position turns action
+//     guards off (it is the one place that setting is offered as a preset);
+//     every other preset leaves enforceActionGuards on, and
 //   - none touches the permission gate (askBeforeConsequentialActions).
-// Those stay explicit, one-at-a-time choices in Advanced and Permissions.
+// The permission gate stays an explicit, one-at-a-time choice in Permissions.
 //
 // This file is shared verbatim by the Chrome and Firefox builds; keep both
 // copies byte-identical (test/settings-presets.mjs checks).
@@ -75,7 +77,8 @@ function group(defaultOption, options) {
 
 export const PRESET_GROUPS = Object.freeze({
   // How closely WebBrain checks the agent: planning before acting, plan
-  // review stops, and the checks around each action.
+  // review stops, and the checks around each action. Unsupervised is Fast
+  // with action guards off.
   supervision: group('balanced', {
     thorough: {
       enforceActionGuards: true,
@@ -93,6 +96,13 @@ export const PRESET_GROUPS = Object.freeze({
     },
     fast: {
       enforceActionGuards: true,
+      strictGuards: false,
+      leanMode: 'on',
+      planBeforeActMode: 'try',
+      planReviewMode: 'never',
+    },
+    unsupervised: {
+      enforceActionGuards: false,
       strictGuards: false,
       leanMode: 'on',
       planBeforeActMode: 'try',

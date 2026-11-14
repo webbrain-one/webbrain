@@ -20,7 +20,11 @@ const FIXTURE_ROUTE = '/test/fixtures/webmcp-page.html';
 const FRAME_FIXTURE_PATH = path.join(__dirname, 'fixtures', 'webmcp-frame.html');
 const FRAME_FIXTURE_ROUTE = '/test/fixtures/webmcp-frame.html';
 const EXTENSION_PATH = path.resolve(__dirname, '..', 'src', 'chrome');
-const FEATURE_FLAGS = 'WebMCPTesting,DevToolsWebMCPSupport';
+// Chrome 157 dropped the WebMCPTesting feature (document.modelContext then
+// never appears) and enables the API with WebMCP, which 156 accepts too.
+// Chrome ignores feature names it does not know, so both are listed for
+// older builds.
+const FEATURE_FLAGS = 'WebMCP,WebMCPTesting,DevToolsWebMCPSupport';
 const TOP_LEVEL_TOOL_NAMES = ['fail_predictably', 'lookup_inventory'];
 const EXPECTED_TOOL_NAMES = ['fail_predictably', 'lookup_inventory', 'read_frame_context'];
 const requestedPhaseTimeout = Number(process.env.WEBMCP_TIMEOUT_MS);
@@ -123,6 +127,25 @@ async function startFixtureServer() {
   };
 }
 
+// Waits until the fixture has registered its tools. When this Chrome does not
+// expose document.modelContext, the fixture reports "unsupported" at once and
+// the test says so instead of running into the phase timeout.
+async function waitForFixtureReady(page) {
+  await page.waitForFunction(() => window.webMCPFixture?.ready === true
+    || ['unsupported', 'registration-failed'].includes(document.querySelector('#status')?.textContent));
+  const state = await page.evaluate(() => ({
+    ready: window.webMCPFixture?.ready === true,
+    status: document.querySelector('#status')?.textContent,
+    errors: window.webMCPFixture?.errors || [],
+  }));
+  if (state.ready) return;
+  const chromeVersion = page.context().browser()?.version() || 'an unknown version';
+  assert.fail(state.status === 'unsupported'
+    ? `document.modelContext is unavailable in Chrome ${chromeVersion} launched with --enable-features=${FEATURE_FLAGS}; `
+      + 'Chrome may have renamed its WebMCP feature.'
+    : `The WebMCP fixture did not register its tools (status "${state.status}"): ${state.errors.join('; ') || 'no error recorded'}`);
+}
+
 async function waitForEntry(page, entries, predicate, label) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
@@ -159,7 +182,7 @@ async function runProtocolSmoke(context, fixtureUrl) {
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(String(error)));
     await page.goto(fixtureUrl, { waitUntil: 'networkidle' });
-    await page.waitForFunction(() => window.webMCPFixture?.ready === true);
+    await waitForFixtureReady(page);
     assert.equal(await page.locator('#status').innerText(), 'ready');
 
     const cdp = await context.newCDPSession(page);
@@ -378,7 +401,7 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
 
     fixture = await context.newPage();
     await fixture.goto(fixtureUrl, { waitUntil: 'networkidle' });
-    await fixture.waitForFunction(() => window.webMCPFixture?.ready === true);
+    await waitForFixtureReady(fixture);
     tabId = await waitForExtensionTabId(harness, fixtureUrl);
 
     const disabledCatalog = await initializeExtensionAgent(harness, tabId);

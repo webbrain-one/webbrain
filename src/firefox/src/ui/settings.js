@@ -16,7 +16,7 @@ import { initD1Settings } from './d1-settings.js';
 
 import { t, translationsForKey } from './i18n.js';
 import { escapeHtml } from './utils.js';
-import { MEDIA_PROVIDERS, mediaProvider, validateMediaConfig } from '../agent/media-config.js';
+import { MEDIA_PROVIDERS, mediaProvider, validateMediaConfig, falVideoResolution } from '../agent/media-config.js';
 import { RESEARCH_DATA_COLLECTION } from '../trace/research-consent.js';
 import { THEME_MODES, applyMode, loadMode, watch } from './theme.js';
 import { renderSkillMarkdown } from './skill-markdown.js';
@@ -92,7 +92,7 @@ const SUBSCRIPTION_GUIDE_PRODUCTS = Object.freeze({
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '48.1.0';
+const EXT_VERSION = '49.0.0';
 
 const providersContainer = document.getElementById('providers');
 const generalSearchInput = document.getElementById('input-general-search');
@@ -190,6 +190,7 @@ const imageGenParametersInput = document.getElementById('image-gen-parameters');
 const imageGenApiKeyInput = document.getElementById('image-gen-api-key');
 const imageGenModelInput = document.getElementById('image-gen-model');
 const imageGenVideoModelInput = document.getElementById('image-gen-video-model');
+const imageGenVideoResolutionInput = document.getElementById('image-gen-video-resolution');
 const imageGenVideoParametersInput = document.getElementById('image-gen-video-parameters');
 const imageGenVideoWorkflowInput = document.getElementById('image-gen-video-workflow');
 const btnSaveImageGen = document.getElementById('btn-save-image-gen');
@@ -260,8 +261,9 @@ function activeProviderIsCompass() {
   const config = providersData?.[activeProviderId];
   return !!activeProviderId && (providerDefinitionId(activeProviderId) === 'webbrain_cloud' || config?.providerName === 'webbrain-cloud');
 }
-// The Strict Secret Mode switch is on settings.html and the decision card on
-// providers.html, so the card follows the stored setting, not the switch.
+// The Strict Secret Mode switch and the decision card are in different
+// sections, and Settings may be open in another tab, so the card follows the
+// stored setting, not the switch.
 let strictSecretModeOn = false;
 if (globalThis.browser?.storage?.onChanged) {
   browser.storage.onChanged.addListener((changes, area) => {
@@ -618,6 +620,12 @@ async function init() {
   // UI, so purge any stale credentials left over from that flow.
   browser.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
+  // The side panel's "Manage site permissions" opens Permissions & privacy
+  // directly, so that section loads now rather than after the model, memory
+  // and skills sections below, which wait on the background.
+  const permissionsLoad = loadPermissionsSection();
+  permissionsLoad.catch(() => {}); // awaited further down
+
   // Load display settings
   const stored = await browser.storage.local.get([...DECISION_SETTINGS_KEYS, 'verboseMode', 'composerDeliveryMode', 'agentIndicatorStyle', 'selectionShortcutEnabled', AUTO_GROUP_TABS_KEY, 'helpImproveWebBrain', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'researchEscalationEnabled', 'researchEscalationEngine', 'voiceInputEnabled', 'alwaysAllowApiMutations', 'apiMutationObserverEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'completionFlashTab', 'tracingEnabled', 'feedbackDiagnosticsEnabled', 'strictSecretMode', 'enforceActionGuards', 'strictGuards', 'leanMode', 'visionMode', 'visionQuality', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'systemOneEnabled', 'systemOneWatchEnabled', 'systemOneCompletionEnabled', 'systemOneFastClassifications', 'systemOneFastBrowser', 'systemOneWatchThreshold', 'systemOneCompletionThreshold', 'typesafeApiKey', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'clarifyTimeoutPolicy', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'meteredProviderCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
   if (typeof stored.providerFilter === 'string' && ['all','active','local','cloud','router'].includes(stored.providerFilter)) {
@@ -781,10 +789,9 @@ async function init() {
 
   await loadCustomSkills();
 
-  // Load site permissions (capability × origin grants) + the master switch
-  await initPermissionGateToggle();
-  await renderPermissions();
-  await initScreenshotRedactionToggle();
+  // Site permissions (capability × origin grants) + the master switch,
+  // started at the top of init().
+  await permissionsLoad;
   await refreshApocalypseModeStatus();
 
   // Load providers. The decision card's Auto status reads the active one too.
@@ -805,6 +812,7 @@ async function init() {
 
 const PERMISSIONS_KEY = 'wb_permissions';
 const GATE_KEY = 'askBeforeConsequentialActions';
+const permissionGateToggle = document.getElementById('toggle-permission-gate');
 
 // Prompts are off when the stored setting is false or the side panel's skip
 // dialog turned them off until the browser closes (storage.session).
@@ -817,39 +825,52 @@ async function readAskBeforeConsequential() {
 }
 
 function renderPermissionGateToggle(askBefore) {
-  const toggle = document.getElementById('toggle-permission-gate');
   const warning = document.getElementById('permission-gate-warning');
-  if (toggle) toggle.checked = askBefore;
+  if (permissionGateToggle) permissionGateToggle.checked = askBefore;
   if (warning) warning.style.display = askBefore ? 'none' : '';
 }
 
-async function initPermissionGateToggle() {
-  const toggle = document.getElementById('toggle-permission-gate');
-  if (!toggle) return;
-  renderPermissionGateToggle(await readAskBeforeConsequential());
-  toggle.addEventListener('change', async () => {
-    await browser.storage.local.set({ [GATE_KEY]: toggle.checked });
-    // Turning prompts back on also ends a "this session only" skip.
-    if (toggle.checked) {
-      await Promise.resolve()
-        .then(() => browser.storage.session.remove(PERMISSION_GATE_SESSION_OFF_KEY))
-        .catch(() => {});
-    }
-    renderPermissionGateToggle(toggle.checked);
-  });
+// This section's switches are wired when the page loads, like strict secret
+// handling below, so they save from the first click. A click made before the
+// stored value has been read is already saved, and that read must not undo it.
+let permissionGateClicked = false;
+permissionGateToggle?.addEventListener('change', async () => {
+  permissionGateClicked = true;
+  await browser.storage.local.set({ [GATE_KEY]: permissionGateToggle.checked });
+  // Turning prompts back on also ends a "this session only" skip.
+  if (permissionGateToggle.checked) {
+    await Promise.resolve()
+      .then(() => browser.storage.session.remove(PERMISSION_GATE_SESSION_OFF_KEY))
+      .catch(() => {});
+  }
+  renderPermissionGateToggle(permissionGateToggle.checked);
+});
+
+async function loadPermissionGateToggle() {
+  if (!permissionGateToggle) return;
+  const askBefore = await readAskBeforeConsequential();
+  if (!permissionGateClicked) renderPermissionGateToggle(askBefore);
 }
 
 // Screenshot redaction (issue #312): local, best-effort PII blurring on
 // screenshots BEFORE they are sent to a vision model. OFF by default.
 const REDACTION_KEY = 'screenshotRedaction';
-async function initScreenshotRedactionToggle() {
-  const toggle = document.getElementById('toggle-screenshot-redaction');
-  if (!toggle) return;
+const screenshotRedactionToggle = document.getElementById('toggle-screenshot-redaction');
+let screenshotRedactionClicked = false;
+screenshotRedactionToggle?.addEventListener('change', async () => {
+  screenshotRedactionClicked = true;
+  await browser.storage.local.set({ [REDACTION_KEY]: screenshotRedactionToggle.checked });
+});
+
+async function loadScreenshotRedactionToggle() {
+  if (!screenshotRedactionToggle) return;
   const stored = await browser.storage.local.get(REDACTION_KEY);
-  toggle.checked = stored[REDACTION_KEY] === true; // OFF by default
-  toggle.addEventListener('change', async () => {
-    await browser.storage.local.set({ [REDACTION_KEY]: toggle.checked });
-  });
+  if (!screenshotRedactionClicked) screenshotRedactionToggle.checked = stored[REDACTION_KEY] === true; // OFF by default
+}
+
+// The master switch, the grants and the redaction switch; init() starts this first.
+function loadPermissionsSection() {
+  return Promise.all([loadPermissionGateToggle(), renderPermissions(), loadScreenshotRedactionToggle()]);
 }
 
 async function renderPermissions() {
@@ -1986,6 +2007,7 @@ function readImageGenForm() {
     model: imageGenModelInput.value.trim(),
     videoModel: imageGenVideoModelInput?.value.trim() || '',
   };
+  if (provider === 'fal') config.videoResolution = falVideoResolution({ videoResolution: imageGenVideoResolutionInput?.value });
   if (provider === 'comfyrouter') {
     config.parameters = imageGenParametersInput.value.trim() || '{}';
     config.videoParameters = imageGenVideoParametersInput?.value.trim() || '{}';
@@ -2000,6 +2022,7 @@ function updateImageGenProvider() {
   for (const [id, hidden] of [
     ['image-gen-key-field', local], ['image-gen-model-field', local], ['image-gen-video-model-field', local],
     ['image-gen-url-field', !local], ['image-gen-workflow-field', !local], ['image-gen-video-workflow-field', !local],
+    ['image-gen-video-resolution-field', provider !== 'fal'],
     ['image-gen-parameters-field', provider !== 'comfyrouter'], ['image-gen-video-parameters-field', provider !== 'comfyrouter'],
   ]) {
     const field = document.getElementById(id); if (field) field.hidden = hidden;
@@ -2019,6 +2042,7 @@ function renderImageGenConfig(config) {
   if (imageGenApiKeyInput) imageGenApiKeyInput.value = config.apiKey || '';
   if (imageGenModelInput) imageGenModelInput.value = config.model || '';
   if (imageGenVideoModelInput) imageGenVideoModelInput.value = config.videoModel || '';
+  if (imageGenVideoResolutionInput) imageGenVideoResolutionInput.value = falVideoResolution(config);
   if (imageGenBaseUrlInput) imageGenBaseUrlInput.value = config.baseUrl || MEDIA_PROVIDERS.comfyui.baseUrl;
   const jsonText = value => (typeof value === 'object' && value ? JSON.stringify(value, null, 2) : value || '');
   if (imageGenWorkflowInput) imageGenWorkflowInput.value = jsonText(config.workflow);
@@ -3539,10 +3563,13 @@ function renderProviders() {
         const optionsHTML = field.options
           .map(o => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.labelKey ? t(o.labelKey) : o.label)}</option>`)
           .join('');
+        // A tier already chosen (saved, or picked and kept through a
+        // re-render) stays chosen, so Save keeps sending promptTierChosen.
+        const tierChosenAttr = (field.key === 'promptTier' && config.promptTierChosen === true) ? ' data-tier-chosen="true"' : '';
         fieldHTML += `
           <div class="field">
             <label>${escapeHtml(label)}</label>
-            <select data-provider="${id}" data-key="${field.key}" data-type="select">${optionsHTML}</select>
+            <select data-provider="${id}" data-key="${field.key}" data-type="select"${tierChosenAttr}>${optionsHTML}</select>
           </div>
         `;
         if (VISION_UI_PROVIDER_IDS.has(definitionId) && field.key === 'visionMode') {
@@ -4383,6 +4410,9 @@ function syncInputsIntoProvidersData() {
     if (key === 'contextWindow') {
       providersData[id].manualContextWindow = input.dataset.manuallyEdited === 'true';
     }
+    // Keep an unsaved tier pick a choice: a local relay's tier counts only
+    // with promptTierChosen, so without it the rebuilt menu reads Full.
+    if (key === 'promptTier' && input.dataset.tierChosen === 'true') providersData[id].promptTierChosen = true;
   });
 }
 

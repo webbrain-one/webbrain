@@ -87,7 +87,7 @@ WebBrain her mesaj için modu seçer: mesajınız tarayıcıda bir işlem isteme
 
 **WebBrain Companion**, yerel modeller ve desteklenen abonelikler için ayrı
 masaüstü uygulamamızdır. [Windows, macOS veya Linux için indirin](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.2),
-ardından Sağlayıcılar sayfasındaki **WebBrain Companion** kartını seçin.
+ardından Ayarlar → Modeller → LLM bölümündeki **WebBrain Companion** kartını seçin.
 Varsayılan yerel adres `http://127.0.0.1:8327/v1`; aynı bilgisayardaki
 eklenti için API anahtarı gerekmez. **Load Models** ile model seçip bağlantıyı
 test edin. Ayrıntılar için [kurulum kılavuzuna](docs/providers-and-models.md#webbrain-companion)

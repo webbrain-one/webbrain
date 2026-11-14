@@ -1,6 +1,6 @@
 import { runFalGeneration, FAL_AUTH_PROBE_URL } from './fal-media.js';
-import { MAX_JOINED_VIDEO_BYTES, storeGeneratedMedia, storeGeneratedMediaBlob } from '../generated-media-store.js';
-import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt } from './media-config.js';
+import { KEPT_VIDEO_CLIP_MS, MAX_JOINED_VIDEO_BYTES, forgetVideoClips, keepVideoClips, storeGeneratedMedia, storeGeneratedMediaBlob, takeVideoClip } from '../generated-media-store.js';
+import { IMAGE_GEN_MODEL_KEY, MEDIA_PROVIDERS, mediaProvider, mediaSlot, normalizeMediaModel, comfyBaseUrl, parseMediaJson, validateMediaConfig, bindMediaPrompt, falVideoResolution } from './media-config.js';
 import { VideoJoinError, joinMp4Clips, mp4DurationSeconds } from './video-join.js';
 import { videoDurationTolerance } from './video-duration-contract.js';
 
@@ -17,8 +17,6 @@ const VIDEO_CLIP_RETRY_MS = 5000;
 const MAX_RETRY_WAIT_MS = 60000;
 // Downloads of a finished clip that may fail in a row for a passing reason.
 const CLIP_DOWNLOAD_ATTEMPTS = 3;
-// How long the finished clips of a video that failed part-way wait for a retry.
-const KEPT_CLIP_MS = 30 * 60 * 1000;
 const FALLBACK_VIDEO_CLIP_SECONDS = 8;
 const VIDEO_ARGUMENTS = ['duration', 'aspect_ratio', 'resolution', 'scenes', 'estimated_duration'];
 const INLINE_MEDIA = /^data:(image\/(?:png|jpeg|webp|gif)|audio\/(?:mpeg|wav|ogg)|video\/mp4);base64,[A-Za-z0-9+/=\s]+$/;
@@ -224,6 +222,16 @@ function videoShape(entry, video) {
     shape[name] = match;
   }
   return shape;
+}
+
+// The saved resolution, written as the model lists it ("480p" as "480P"), for
+// a request that names none. It is only a default: a model that takes no
+// resolution, or does not list this one, is asked for none, so the default can
+// never make a request fail.
+function defaultVideoShape(entry, resolution) {
+  if (entry?.inputs && !entry.inputs.includes('resolution')) return {};
+  const match = supportedValues(entry, 'supported_resolutions')?.find(value => String(value).toLowerCase() === resolution);
+  return match === undefined ? {} : { resolution: match };
 }
 
 // The JSON Schema types a value has.
@@ -435,9 +443,10 @@ export function planVideoClips(scenes, durations, { maxSeconds = MAX_VIDEO_SECON
 
 // What one generate_image call asks a video model for: one clip, or the
 // clips of its scenes.
-function planVideo(prompt, video, entry) {
+function planVideo(prompt, video, entry, shapeDefaults = {}) {
   const durations = clipDurations(entry);
-  const shape = videoShape(entry, video);
+  // What the call asks for replaces the saved default.
+  const shape = { ...shapeDefaults, ...videoShape(entry, video) };
   const scenes = Array.isArray(video?.scenes) ? video.scenes : null;
   const needsFallback = !durations && (scenes?.length || (video?.duration === undefined && video?.estimated_duration !== undefined));
   const fallbackSeconds = needsFallback ? fallbackVideoDuration(entry) : undefined;
@@ -595,35 +604,18 @@ async function mapWithConcurrency(items, limit, signal, task) {
   } finally { signal?.removeEventListener('abort', onAbort); }
 }
 
-// The finished clips of videos that failed part-way, oldest first, kept in
-// memory for a retry: each is paid for, and a retry asks the model for the
-// same clip again. A clip is named by what was asked of the model and handed
-// out once, so a video that succeeded is generated anew when asked for again.
-const keptClips = [];
-
-// `inputs` is the saved model input a provider sends with every clip (Comfy
-// Router's): a clip made with other settings is another clip.
+// The finished clips of videos that failed part-way are kept for a retry in
+// IndexedDB (keepVideoClips), which outlives the background worker: each is
+// paid for, and a retry asks the model for the same clip again. A clip is
+// named by what was asked of the model and handed out once, so a video that
+// succeeded is generated anew when asked for again. `inputs` is the saved
+// model input a provider sends with every clip (Comfy Router's): a clip made
+// with other settings is another clip.
 const clipKey = (provider, model, inputs, clip, shape) => JSON.stringify([provider, model, inputs ?? null, clip.prompt, clip.duration ?? null, shape]);
-
-function takeKeptClip(key) {
-  const index = keptClips.findIndex(kept => kept.key === key && Date.now() - kept.at <= KEPT_CLIP_MS);
-  return index < 0 ? null : keptClips.splice(index, 1)[0].bytes;
-}
-
-// Keeps clips ({ key, bytes }) for a retry. Together the kept clips weigh at
-// most what one video may; the oldest go first.
-function keepClips(clips) {
-  const now = Date.now();
-  const fresh = keptClips.filter(kept => now - kept.at <= KEPT_CLIP_MS);
-  fresh.push(...clips.map(clip => ({ ...clip, at: now })));
-  let total = fresh.reduce((sum, kept) => sum + kept.bytes.length, 0);
-  while (fresh.length && total > MAX_JOINED_VIDEO_BYTES) total -= fresh.shift().bytes.length;
-  keptClips.splice(0, keptClips.length, ...fresh);
-}
 
 /** Forgets the clips kept for a retry. */
 export function forgetKeptVideoClips() {
-  keptClips.length = 0;
+  return forgetVideoClips();
 }
 
 /**
@@ -636,8 +628,8 @@ export function forgetKeptVideoClips() {
  * clips (`provider`, model, saved model input `inputs`, prompt, length and
  * shape) uses them.
  */
-async function runVideo({ provider, model, inputs, entry, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
-  const plan = planVideo(text, video, entry);
+async function runVideo({ provider, model, inputs, entry, shapeDefaults, text, video, signal, onProgress, confirmVideoLength, retryDelayMs = VIDEO_CLIP_RETRY_MS, single, clip }) {
+  const plan = planVideo(text, video, entry, shapeDefaults);
   const fallback = plan.fallbackClipSeconds ? { fallbackClipSeconds: plan.fallbackClipSeconds } : {};
   if (!plan.scenes) return {
     ...(await single(plan.clips[0], plan.shape)), model,
@@ -659,8 +651,9 @@ async function runVideo({ provider, model, inputs, entry, text, video, signal, o
   }
   const keys = plan.clips.map(item => clipKey(provider, model, inputs, item, plan.shape));
   // Each clip's bytes, in scene order: those kept from a failed attempt, then
-  // those this run makes.
-  const clips = keys.map(takeKeptClip);
+  // those this run makes. One at a time, so two equal scenes take two clips.
+  const clips = [];
+  for (const key of keys) clips.push(await takeVideoClip(key));
   const missing = plan.clips.map((item, index) => ({ item, index })).filter(({ index }) => !clips[index]);
   const reused = plan.clips.length - missing.length;
   onProgress?.(reused
@@ -693,10 +686,11 @@ async function runVideo({ provider, model, inputs, entry, text, video, signal, o
     // The finished clips are paid for: a retry uses them instead of asking
     // the model again.
     const finished = clips.flatMap((bytes, index) => (bytes ? [{ key: keys[index], bytes }] : []));
-    keepClips(finished);
-    // Stop is reported as it is. Any other failure also says what a retry keeps.
-    if (!finished.length || signal?.aborted) throw error;
-    throw Object.assign(new Error(`${error?.message ?? error} ${finished.length} of ${plan.clips.length} clips are finished and kept for ${KEPT_CLIP_MS / 60000} minutes: a retry generates only the scenes that are missing or changed. Keep prompt, aspect_ratio, resolution and each finished scene's prompt and duration exactly as they were.`),
+    const kept = finished.length > 0 && await keepVideoClips(finished);
+    // Stop is reported as it is. Any other failure also says what a retry
+    // keeps, once the clips are saved.
+    if (!kept || signal?.aborted) throw error;
+    throw Object.assign(new Error(`${error?.message ?? error} ${finished.length} of ${plan.clips.length} clips are finished and kept for ${KEPT_VIDEO_CLIP_MS / 60000} minutes: a retry generates only the scenes that are missing or changed. Keep prompt, aspect_ratio, resolution and each finished scene's prompt and duration exactly as they were.`),
       { clipsKept: finished.length, cause: error });
   }
   return { clips, model, ...lengthDetails, ...fallback,
@@ -863,10 +857,13 @@ export async function runMediaGeneration({ prompt, config, media = null, video =
   if (provider === 'fal') {
     const job = (prompt, input, jobSignal) => runFalGeneration({ prompt, config: { ...config, model }, input, fetchImpl, signal: jobSignal, timeoutMs, pollMs });
     if (kind !== 'video') return job(text, {}, signal);
-    // The model's schema says what it accepts; a plain clip needs none of it.
-    const entry = video ? await falVideoEntry(model, config.apiKey, fetchImpl, signal, timeoutMs) : {};
+    // The model's schema says what it accepts: the length and shape a call
+    // asks for, and whether it takes the saved default resolution. A plain
+    // clip needs the schema only for that default, which must not stop it.
+    const lookup = () => falVideoEntry(model, config.apiKey, fetchImpl, signal, timeoutMs);
+    const entry = video ? await lookup() : await lookup().catch(() => { signal?.throwIfAborted?.(); return {}; });
     return runVideo({
-      ...videoRun, entry,
+      ...videoRun, entry, shapeDefaults: defaultVideoShape(entry, falVideoResolution(config)),
       single: async (clip, shape) => ({ url: (await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, signal)).url }),
       clip: async (clip, shape, groupSignal) => downloadClip((await job(clip.prompt, { ...clipLength(entry, clip), ...shape }, groupSignal)).url,
         { fetchImpl, signal: groupSignal, timeoutMs, label: 'fal.ai', retryMs: pollMs }),

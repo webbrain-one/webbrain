@@ -3564,9 +3564,11 @@ async function assertNativeSelectChoices(page, browserKind) {
     <label for="to">To</label><select id="to"><option value="">Choose a contact...</option>
       <option value="c1">Alex Kaya (test contact)</option><option value="c2">Alex Demir (test contact)</option>
       <option value="c3">Sam Yilmaz (test contact)</option></select>
+    <label for="ship">Shipping</label><select id="ship"><option value="">Choose...</option>
+      <option value="std">Standard</option><option value="std">Standard (gift wrap)</option><option value="exp">Express</option></select>
     <script>
       window.selectEvents = [];
-      for (const id of ['size', 'to']) for (const type of ['input', 'change']) {
+      for (const id of ['size', 'to', 'ship']) for (const type of ['input', 'change']) {
         document.getElementById(id).addEventListener(type, event => window.selectEvents.push(id + ':' + type + ':' + event.target.value));
       }
     </script>`;
@@ -3575,6 +3577,9 @@ async function assertNativeSelectChoices(page, browserKind) {
     { select: 'size', text: 'medium', value: 'Medium' },
     { select: 'to', text: 'Sam Yilmaz', value: 'c3' },
     { select: 'to', text: 'c2', value: 'c2' },
+    // Options that share a value: the label names which one is chosen.
+    { select: 'ship', text: 'Standard (gift wrap)', value: 'std', label: 'Standard (gift wrap)' },
+    { select: 'ship', text: 'Standard', value: 'std', label: 'Standard' },
     { select: 'to', text: 'Alex', error: /more than one option[\s\S]*Alex Kaya[\s\S]*Alex Demir/ },
     { select: 'size', text: 'Purple', error: /No option matches "Purple"[\s\S]*Options: Choose\.\.\., Small/ },
     { select: 'size', text: 'XX-Large', error: /disabled/ },
@@ -3591,7 +3596,11 @@ async function assertNativeSelectChoices(page, browserKind) {
     for (const item of cases) {
       await setupContentHtml(page, html, browserKind);
       const result = await choose(item.select, item.text);
-      const state = await page.evaluate(id => ({ value: document.getElementById(id).value, events: window.selectEvents }), item.select);
+      const state = await page.evaluate(id => ({
+        value: document.getElementById(id).value,
+        label: document.getElementById(id).selectedOptions[0]?.text,
+        events: window.selectEvents,
+      }), item.select);
       const detail = `${browserKind} ${pathName} "${item.text}": ${JSON.stringify({ result, state })}`;
       if (item.error) {
         if (result?.success !== false || result.noDispatch !== true || result.dispatched === true
@@ -3601,21 +3610,50 @@ async function assertNativeSelectChoices(page, browserKind) {
         continue;
       }
       if (result?.success !== true || result.verified !== true || state.value !== item.value
+          || (item.label && (state.label !== item.label || result.selectedText !== item.label))
           || JSON.stringify(state.events) !== JSON.stringify([`${item.select}:input:${item.value}`, `${item.select}:change:${item.value}`])) {
         throw new Error(`the named option must be chosen with one input and one change: ${detail}`);
       }
     }
   }
-  // Choosing the option already shown changes nothing.
-  await setupContentHtml(page, html, browserKind);
-  await page.selectOption('#size', 'Medium');
-  await page.evaluate(() => { window.selectEvents.length = 0; });
-  await page.focus('#size');
-  const same = await call(page, 'type', { text: 'Medium' });
-  const after = await page.evaluate(() => ({ value: document.getElementById('size').value, events: window.selectEvents }));
-  if (same?.success !== true || same.verified !== true || same.noop !== true || same.noDispatch !== true
-      || after.value !== 'Medium' || after.events.length) {
-    throw new Error(`${browserKind}: choosing the shown option must be a no-op: ${JSON.stringify({ same, after })}`);
+  // Choosing the option already shown changes nothing, on every path: no
+  // input or change, and an option that shares its value stays chosen.
+  for (const [pathName, choose] of Object.entries(paths)) {
+    for (const shown of [
+      { select: 'size', text: 'Medium', value: 'Medium' },
+      { select: 'ship', text: 'Standard (gift wrap)', value: 'std' },
+    ]) {
+      await setupContentHtml(page, html, browserKind);
+      await page.selectOption(`#${shown.select}`, { label: shown.text });
+      await page.evaluate(() => { window.selectEvents.length = 0; });
+      const same = await choose(shown.select, shown.text);
+      const after = await page.evaluate(id => ({
+        value: document.getElementById(id).value,
+        label: document.getElementById(id).selectedOptions[0]?.text,
+        events: window.selectEvents,
+      }), shown.select);
+      if (same?.success !== true || same.verified !== true || same.noop !== true || same.noDispatch !== true
+          || same.dispatched === true || same.selectedText !== shown.text
+          || after.value !== shown.value || after.label !== shown.text || after.events.length) {
+        throw new Error(`${browserKind} ${pathName} "${shown.text}": choosing the shown option must be a no-op: ${JSON.stringify({ same, after })}`);
+      }
+    }
+  }
+  // A page that sets the value again on change (a select controlled by its
+  // value) shows the first option with that value: not the one named.
+  const controlled = `<!doctype html>
+    <label for="ship">Shipping</label><select id="ship"><option value="">Choose...</option>
+      <option value="std">Standard</option><option value="std">Standard (gift wrap)</option></select>
+    <script>
+      document.getElementById('ship').addEventListener('change', event => { event.target.value = event.target.value; });
+    </script>`;
+  for (const [pathName, choose] of Object.entries(paths)) {
+    await setupContentHtml(page, controlled, browserKind);
+    const result = await choose('ship', 'Standard (gift wrap)');
+    const shownLabel = await page.evaluate(() => document.getElementById('ship').selectedOptions[0]?.text);
+    if (shownLabel !== 'Standard' || result?.verified === true || result?.selectedText !== 'Standard') {
+      throw new Error(`${browserKind} ${pathName}: a select showing another option with the same value must not verify: ${JSON.stringify({ result, shownLabel })}`);
+    }
   }
 }
 

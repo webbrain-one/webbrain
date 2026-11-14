@@ -1,7 +1,7 @@
-# Manual test: capability × origin permission gate + Permissions page
+# Manual test: capability × origin permission gate + Permissions & privacy settings
 
 These two paths can't be covered by `test/run.js` (they need a live browser —
-the 3-option permission card and the Permissions page are DOM/storage
+the 3-option permission card and Settings → Permissions & privacy are DOM/storage
 glue). Run this checklist after loading the unpacked extension before merging
 changes to the permission gate or its UI.
 
@@ -11,11 +11,11 @@ Load the unpacked extension your usual dev way:
 - **Chrome:** `chrome://extensions` → Developer mode → Load unpacked → `src/chrome`.
 
 Helpers you'll reuse (run in the background/service-worker console, or the
-Permissions page console):
+Settings page console):
 - **Inspect grants:** `await browser.storage.local.get('wb_permissions')`
   (Firefox) / `chrome.storage.local.get('wb_permissions')` (Chrome).
 - **Reset grants:** `browser.storage.local.remove('wb_permissions')`, or
-  Permissions page → Clear all.
+  Settings → Permissions & privacy → Clear all.
 
 ---
 
@@ -73,7 +73,7 @@ Confirms a grant is scoped to exactly one capability+host, not a blanket pass.
 
 **Setup:** grant 2–3 "Always allow" entries across different sites/capabilities.
 
-1. Open the Permissions page (**Manage site permissions** in the side panel's ⚠ menu).
+1. Open Settings → Permissions & privacy (**Manage site permissions** in the side panel's ⚠ menu opens it).
 2. **Expect** each grant on its own row — host as bold label,
    **"Allowed to \<verb\>"** beneath (or **"⛔ Blocked from \<verb\>"** for a deny),
    and a **Revoke** button; a **Clear all permissions** button at the bottom.
@@ -95,12 +95,12 @@ Confirms a grant is scoped to exactly one capability+host, not a blanket pass.
 ## Test 4 — Persistence across reload
 1. Grant an "Always allow."
 2. Reload the extension (or restart the browser).
-3. Agent acts on that host → **no prompt**; the Permissions page still lists it.
+3. Agent acts on that host → **no prompt**; Settings → Permissions & privacy still lists it.
 
 ---
 
 ## Test 5 — Master switch ("Ask before consequential actions")
-The toggle is at the **top** of the Permissions page, **on by default**.
+The toggle is at the **top** of Settings → Permissions & privacy, **on by default**.
 
 1. **On (default):** with the toggle on, trigger a gated action → the permission
    card appears (as in Test 1). The warning box is hidden.
@@ -123,7 +123,7 @@ The toggle is at the **top** of the Permissions page, **on by default**.
   non-English locales (1a.4).
 - Allow-once and Always **proceed**; Don't-allow **blocks** (1b–1d).
 - Grants are per-capability+host (Test 2).
-- The Permissions page lists/revokes/clears correctly; a revoke causes an immediate
+- Settings → Permissions & privacy lists/revokes/clears correctly; a revoke causes an immediate
   re-prompt (Test 3).
 - Grants persist across reload (Test 4).
 

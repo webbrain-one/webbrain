@@ -63,7 +63,7 @@ La regex : `pwd|password|passwd|secret|token|api[-_\s]?key|otp|2fa|mfa|credentia
 
 ### Mode Secret Strict
 
-Lorsqu'il est activé (Paramètres → "Gestion stricte des secrets"), l'agent :
+Lorsqu'il est activé (Paramètres → Autorisations et confidentialité → "Gestion stricte des secrets"), l'agent :
 
 - **Ne cite jamais les identifiants** dans les résumés, le texte de l'assistant, ou les arguments d'appel d'outil — même lorsque l'utilisateur le demande explicitement
 - La description de l'outil `done` est remplacée par `DONE_TOOL_STRICT`, qui ajoute une interdiction ferme
@@ -77,7 +77,7 @@ Lorsqu'il est désactivé (par défaut — c'est un outil pour ordinateur person
 
 ### Auto-Remplissage de Profil
 
-Les utilisateurs peuvent stocker un court profil (nom, email, mot de passe jetable) dans Paramètres → Profil. Ce texte est ajouté au prompt système lorsqu'il est activé. Avertissements dans l'interface :
+Les utilisateurs peuvent stocker un court profil (nom, email, mot de passe jetable) dans Paramètres → Mémoire. Ce texte est ajouté au prompt système lorsqu'il est activé. Avertissements dans l'interface :
 
 - Stocké en texte clair dans `chrome.storage.local`
 - Envoyé au fournisseur LLM à chaque tour dans le cadre du prompt système
@@ -100,7 +100,7 @@ La menace principale : une page malveillante conçoit un contenu qui, lorsqu'il 
 | **Exposition d'outils par niveau** | Les niveaux de fournisseur (`compact | mid | full`) limitent la surface d'agent navigateur normale pour les modèles plus petits. Compact obtient la surface d'action la plus petite ; Mid ajoute des outils de tâches courantes ; Full ajoute des solutions de repli UI/DOM avancées. Dev en Compact est bloqué. |
 | **Plan avant Act** | Lorsqu'il est activé, les exécutions en mode action produisent d'abord un plan structuré et attendent l'approbation du panneau latéral avant que tout outil navigateur ne s'exécute. Les exécutions planifiées peuvent auto-approuver le plan uniquement via la politique du planificateur. |
 | **Limite d'import de compétence** | Les compétences peuvent exposer des outils HTTP en lecture seule et des outils de téléchargement via un manifeste `webbrain-tools`. Importer ou garder la compétence activée est la décision de confiance pour le point de terminaison HTTPS déclaré ; les outils de compétence déclarés utilisent `credentials: "omit"` et doivent marquer les résultats tiers `resultPolicy: "untrusted"`. Les outils de compétence de téléchargement nécessitent toujours un mode action et la passerelle de permission Téléchargements normale avant d'enregistrer des fichiers. |
-| **Dérogation de mutation API** | Un indicateur `/allow-api` par conversation, ou le réglage persistant désactivé par défaut sous Général → Avancé, *supprime* la demande de permission pour les sorties réseau avec méthode d'écriture (`fetch_url`/`research_url` avec POST/PUT/PATCH/DELETE). Aucun des deux ne supprime la sortie GET ni aucune autre capacité. La réinitialisation n'efface que la dérogation de la commande. |
+| **Dérogation de mutation API** | Un indicateur `/allow-api` par conversation, ou le réglage persistant désactivé par défaut sous Paramètres → Avancé, *supprime* la demande de permission pour les sorties réseau avec méthode d'écriture (`fetch_url`/`research_url` avec POST/PUT/PATCH/DELETE). Aucun des deux ne supprime la sortie GET ni aucune autre capacité. La réinitialisation n'efface que la dérogation de la commande. |
 | **Blocage `done()`** | Avant d'accepter la complétion, l'agent vérifie la présence de dialogues/formulaires ouverts. Si le résumé prétend "créé"/"sauvegardé" mais qu'une modale est encore ouverte, l'agent est forcé de continuer. |
 | **Garde anti-soumission en double** | Les clics sur du texte de type soumission (créer/sauvegarder/soumettre/ajouter/poster/publier/envoyer/confirmer/s'inscrire/se connecter/payer/commander/checkout, etc.) sont bloqués pendant une fenêtre de 45 secondes par onglet+URL (Chrome). |
 | **Test d'occlusion CLICK** | Avant de cliquer, le résolveur appelle `elementFromPoint()`. Si un autre élément est visuellement au-dessus, le clic est refusé. |
@@ -123,7 +123,7 @@ La menace principale : une page malveillante conçoit un contenu qui, lorsqu'il 
 
 Défini par conversation via la commande `/allow-api` dans le panneau latéral,
 ou de façon persistante avec **Toujours autoriser les mutations API** sous
-**Paramètres → Général → Avancé**. Le réglage persistant est désactivé par
+**Paramètres → Avancé**. Le réglage persistant est désactivé par
 défaut. Lorsque l'une des options est active, elle supprime la demande de
 permission pour **les sorties réseau avec méthode d'écriture uniquement** :
 
@@ -151,7 +151,7 @@ ne modifie pas le réglage persistant, qui reste actif jusqu'à sa désactivatio
 
 ## Isolation des Données de Trace
 
-L'enregistreur de trace (`trace/recorder.js`) écrit dans IndexedDB sur la machine de l'utilisateur lorsqu'il est explicitement activé (Paramètres → Affichage → "Enregistrer les traces"). Les données ne quittent jamais le navigateur :
+L'enregistreur de trace (`trace/recorder.js`) écrit dans IndexedDB sur la machine de l'utilisateur lorsqu'il est explicitement activé (Paramètres → Avancé → "Enregistrer les traces"). Les données ne quittent jamais le navigateur :
 
 - Stockage `runs` : modèle, fournisseur, totaux de tokens, horodatages
 - Stockage `events` : requêtes/réponses LLM, appels d'outils, métadonnées de capture d'écran

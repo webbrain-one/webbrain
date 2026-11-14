@@ -320,4 +320,30 @@ for (const build of ['chrome', 'firefox']) {
       assert.equal(pageFeedbackCallPolicy(name, {}, { ...state, actionBinding: { snapshotToken: 'private', focusedTargetAvailable: true } }, page).kind, 'bound_target');
     }
   });
+  // OpenAI-compatible relays send "" for a call without arguments, and a
+  // streamed call that emits no argument chunk is "" too. The executor runs it
+  // with {}, so page churn must not discard a read-only call as unparsable.
+  test(`${build}: a read-only call without arguments survives passive churn like the executor reads it`, () => {
+    const bare = (name, text) => ({ id: name, function: { name, arguments: text } });
+    for (const name of ['take_screenshot', 'zoom', 'wait', 'read_page']) {
+      for (const text of ['', ' \n\t', undefined, null, {}]) {
+        assert.equal(canRetainPageFeedbackCalls([bare(name, text)], state, page, passive), true, `${name} ${JSON.stringify(text)}`);
+        assert.equal(canRetainPageFeedbackCalls([bare(name, text)], state, null, passive, { pending: true }), true,
+          `${name} ${JSON.stringify(text)} pending`);
+      }
+      // Text the executor refuses stays unretainable: malformed JSON and
+      // anything that is not one JSON object.
+      for (const text of ['{', '{"x":', 'undefined', 'null', '[]', '"{}"', '0', 'true', [], 0]) {
+        assert.equal(canRetainPageFeedbackCalls([bare(name, text)], state, page, passive), false, `${name} ${JSON.stringify(text)}`);
+      }
+    }
+    // Five empty-argument screenshots in one response are still one response.
+    assert.equal(canRetainPageFeedbackCalls(Array.from({ length: 5 }, () => bare('take_screenshot', '')), state, page, passive), true);
+    // The other fences are unchanged for an empty-argument call.
+    assert.equal(canRetainPageFeedbackCalls([bare('take_screenshot', '')], state, page,
+      [{ kind: 'click', source: 'user', frameId: 0, target: 'button' }]), false, 'User input still supersedes');
+    assert.equal(canRetainPageFeedbackCalls([bare('take_screenshot', ''), call('execute_js', { code: 'save()' })], state, page, passive), false,
+      'A fenced call in the same response is not carried along');
+    assert.equal(canRetainPageFeedbackCalls([bare('click', '')], state, page, passive), false, 'An argument-less click is not a read');
+  });
 }

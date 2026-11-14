@@ -8,7 +8,7 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
 
 ## Enforce action guards
 
-Settings → Advanced → **Enforce action guards** is on by default in Chrome and Firefox. Each run reads the switch when it starts. Switching it off gives the model control over browser actions such as sending, retrying, deleting and publishing. A Send click, Enter or `chat_send` can then reach the visible chat without WebBrain checking the recipient or blocking a possible duplicate. Only an observed delivery receipt confirms delivery.
+Settings → Advanced → **Enforce action guards** is on by default in Chrome and Firefox. Each run reads the switch when it starts. Switching it off gives the model control over browser actions such as sending, retrying, deleting and publishing. Settings → General → Agent supervision → **Unsupervised** turns it off with Fast's other settings; choosing Thorough, Balanced or Fast turns it back on. A Send click, Enter or `chat_send` can then reach the visible chat without WebBrain checking the recipient or blocking a possible duplicate. Only an observed delivery receipt confirms delivery.
 
 **Lean mode** independently controls how much of its work the model verifies itself. **Strict checks** controls how quality checks handle uncertainty while enforcement is on. Site permissions, explicit submit confirmation, browser access restrictions, Stop and run budgets apply with either setting. Scheduled jobs still reconcile an interrupted action before automatic replay, and managed bots still use the remote service’s action reservations.
 
@@ -180,7 +180,7 @@ missing relationship evidence count as verified publication.
 | `click-duplicate-submit` (hard) | A text click repeats a commit or publish caption clicked on the same URL within 45 seconds | The control's caption |
 | `deletion-guard-refusal` (hard) | A Delete or Remove control sits outside one identifiable record (toolbar, bulk, selection) | Nothing (check the page); the buttons are Delete / Don't delete |
 | `deletion-guard-refusal` (hard, on the deletion card) | After a correction, an identified item that an earlier attempt may already have deleted | The item, as on any deletion card |
-| `steer-prior-submission-unreconciled` (hard) | After a correction, a write WebBrain sends itself: an API mutation or `chrome_web_store_publish` | The request: method and address, and the body unless strict secret handling is on |
+| `steer-prior-submission-unreconciled` (hard) | After a correction, a write WebBrain sends itself: an API mutation or `chrome_web_store_publish` | The request: method and address, and the body it sends (for a `fetch_url` replay with no body of its own, the captured body) unless strict secret handling is on; a replay `fetch_url` would refuse gets no card |
 | `recipient-guard-refusal` (hard) | A text send whose recipient the page does not name, with a readable draft | The draft |
 
 ### Hard-class asks for dead ends

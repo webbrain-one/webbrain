@@ -275,6 +275,20 @@ export function modeEscalationRefusal(reason, { withdrawn = false } = {}) {
   return `request_action_mode was refused: ${detail} ${next}`;
 }
 
+// The trace note of a `run_mode` answer, asked by the route ('route') or by
+// a hand-off check ('escalation'): its choice, the plan_need answer asked
+// with it and how agent._semanticDecision reached it (`diagnostics`: the
+// path, the model asked last, what each model did, why no answer counted).
+// trace/privacy.js keeps codes, numbers and model ids in every trace, and
+// the reply excerpt, which already masks the user's words, only in content
+// traces; the hand-off's quote is never part of it.
+export const RUN_MODE_DECISION_NOTE = 'run_mode_decision';
+
+export function runModeDecisionNote(purpose, verdict, diagnostics = {}, extra = {}) {
+  const plan = verdict?.alongside?.plan_need;
+  return { purpose, choice: verdict?.choice ?? null, ...(plan ? { plan } : {}), ...diagnostics, ...extra };
+}
+
 // The mode a hand-off may use once the page-free `run_mode` answer is known:
 // null unless that answer is act or dev. Dev needs both to ask for Dev.
 export function confirmedEscalationMode(requested, choice, { tier = '' } = {}) {

@@ -94,7 +94,7 @@ try {
             runtime, commands: { getAll: async () => [] }, tabs: { create: async () => ({}) },
           };
         }, { build });
-        await page.goto(`${origin}/src/${build}/src/ui/providers.html#llm`);
+        await page.goto(`${origin}/src/${build}/src/ui/settings.html#llm`);
         const card = id => page.locator(`.provider-card[data-provider-id="${id}"]`);
         const rootCard = card('llamacpp');
         await rootCard.locator('input[data-key="label"]').waitFor();
@@ -116,6 +116,16 @@ try {
         assert.equal(await page.evaluate(() => testManager.providers.get('webbrain_companion').promptTier), 'full');
         await companionCard.locator('details.provider-companion-details > summary').click();
         await companionTier.selectOption('mid');
+        // The pick is a draft until Save. Rebuilding the list before then
+        // (provider search, opening and closing another card) must keep it,
+        // and Save must still record it as chosen: the relay's tier counts
+        // only with promptTierChosen, so it used to snap back to Full.
+        await page.locator('#input-provider-search').fill('companion');
+        await page.locator('#input-provider-search').fill('');
+        await card('ollama').locator('.provider-header').click();
+        await card('ollama').locator('.provider-header').click();
+        assert.equal(await companionTier.inputValue(), 'mid');
+        assert.equal(await companionTier.getAttribute('data-tier-chosen'), 'true');
         await companionCard.locator('.btn-save').click();
         await page.waitForFunction(() => testStore.providers.webbrain_companion.promptTierChosen === true);
         assert.equal(await page.evaluate(() => testStore.providers.webbrain_companion.promptTier), 'mid');

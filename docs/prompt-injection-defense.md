@@ -58,7 +58,7 @@ them in sync — the test suite asserts the pure modules are byte-identical.
      prepareBidiTarget`, the companion's point check). The explicit
      `iframe_click` / `iframe_type` tools charge the frame named by
      `urlFilter`.
-   - User control: the Permissions page (review/revoke grants + the master
+   - User control: Settings → Permissions & privacy (review/revoke grants + the master
      switch "Ask before consequential actions"). The warning button in the side panel's
      composer toolbar toggles the same master switch; it never answers a pending
      permission card.
@@ -206,7 +206,7 @@ booleans (verified, failed, credential field) beside the child's tool name and
 `ref_N` target, never result text.
 
 ### Don't weaken the boundary for "trusted sites"
-The master switch (Permissions page) disables **Layer 3 only** (the
+The master switch (Settings → Permissions & privacy) disables **Layer 3 only** (the
 prompts). Layers 1, 2, and 4 stay on always — they cost nothing and are what
 protect the user on the trusted sites where injected content actually lives
 (a reputable domain is *anti-correlated* with safe content). Never gate Layers
@@ -226,7 +226,7 @@ protect the user on the trusted sites where injected content actually lives
   - planner prompt parity / boundary checks, and the main agent's current
     page URL/title boundary, in `test/security/injection-corpus.mjs`.
 - `test/manual-permissions.md` — the in-browser checklist (the 3-option
-  permission card and the Permissions page) that the unit suite can't
+  permission card and Settings → Permissions & privacy) that the unit suite can't
   cover.
 
 **The guard checks that tools are *listed*, not that they're listed

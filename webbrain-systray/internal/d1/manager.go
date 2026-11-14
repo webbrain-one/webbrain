@@ -45,6 +45,9 @@ const (
 // ErrNotReady is returned when a decision is requested before the model is installed.
 var ErrNotReady = errors.New("the decision model is not installed; open the companion panel to install it")
 
+// ErrShuttingDown is returned for decisions refused or ended because the companion is quitting.
+var ErrShuttingDown = errors.New("the companion is shutting down")
+
 type file struct {
 	name string
 	size int64
@@ -155,10 +158,16 @@ type Manager struct {
 	verified    download.Verifier
 	requests    int64
 	latency     float64
+
+	// shutdown ends when BeginShutdown runs, which ends a running decision
+	// so Unload does not wait for it while the companion quits.
+	shutdown      context.Context
+	stopDecisions context.CancelFunc
 }
 
 func NewManager(store *settings.Store, onChange func()) *Manager {
-	return &Manager{store: store, onChange: onChange, phase: PhaseIdle}
+	shutdown, stop := context.WithCancel(context.Background())
+	return &Manager{store: store, onChange: onChange, phase: PhaseIdle, shutdown: shutdown, stopDecisions: stop}
 }
 
 func (m *Manager) changed() {
@@ -332,7 +341,7 @@ func (m *Manager) Install() error {
 	m.mu.Lock()
 	if m.closing {
 		m.mu.Unlock()
-		return errors.New("the companion is shutting down")
+		return ErrShuttingDown
 	}
 	if m.removing || m.phase == PhaseDownloading || m.phase == PhaseInstalling || m.phase == PhaseLoading {
 		m.mu.Unlock()
@@ -382,13 +391,15 @@ func (m *Manager) Cancel() {
 	}
 }
 
-// BeginShutdown cancels installation and waits for its worker to release
-// downloads and any newly loaded sessions before Unload runs.
+// BeginShutdown ends a running decision, cancels installation and waits for
+// the install worker to release downloads and any newly loaded sessions
+// before Unload runs.
 func (m *Manager) BeginShutdown() {
 	m.mu.Lock()
 	m.closing = true
 	cancel, done := m.cancel, m.installDone
 	m.mu.Unlock()
+	m.stopDecisions()
 	if cancel != nil {
 		cancel()
 	}
@@ -485,7 +496,7 @@ func (m *Manager) load() error {
 	closing := m.closing
 	m.mu.Unlock()
 	if closing {
-		return errors.New("the companion is shutting down")
+		return ErrShuttingDown
 	}
 	if !m.Installed() {
 		return ErrNotReady
@@ -631,8 +642,13 @@ func (m *Manager) RemoveModel(id string) error {
 func (m *Manager) engine() (evaluator, *modelSpec, error) {
 	spec := m.active()
 	m.mu.Lock()
-	eng, current := m.eng, m.engSpec
+	closing, eng, current := m.closing, m.eng, m.engSpec
 	m.mu.Unlock()
+	if closing {
+		// A decision that waited behind the one shutdown ended must not
+		// start on the sessions Unload is about to release.
+		return nil, nil, ErrShuttingDown
+	}
 	if eng != nil && current == spec {
 		return eng, spec, nil
 	}
@@ -650,12 +666,20 @@ func (m *Manager) engine() (evaluator, *modelSpec, error) {
 	return m.eng, m.engSpec, nil
 }
 
-// EvaluateJSON answers one {state, images, questions} request.
+// EvaluateJSON answers one {state, images, questions} request. The decision
+// ends early when ctx ends or the companion begins shutting down.
 func (m *Manager) EvaluateJSON(ctx context.Context, body []byte) (any, error) {
 	req, err := parseRequest(body)
 	if err != nil {
 		return nil, err
 	}
+	// The request context outlives shutdown (Unload runs before the server
+	// stops), so BeginShutdown ends the evaluation itself; ONNX Runtime
+	// stops a running session through its terminate flag.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(m.shutdown, cancel)
+	defer stop()
 	m.evalMu.Lock()
 	defer m.evalMu.Unlock()
 	eng, spec, err := m.engine()
@@ -665,6 +689,9 @@ func (m *Manager) EvaluateJSON(ctx context.Context, body []byte) (any, error) {
 	start := time.Now()
 	res, err := eng.evaluate(ctx, req, spec.name)
 	if err != nil {
+		if m.shutdown.Err() != nil {
+			return nil, ErrShuttingDown
+		}
 		return nil, err
 	}
 	m.mu.Lock()

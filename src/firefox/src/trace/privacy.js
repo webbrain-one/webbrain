@@ -1,4 +1,5 @@
 import { normalizeRejectedToolResponse } from '../agent/model-output-diagnostics.js';
+import { SEMANTIC_QUESTIONS, SEMANTIC_REPLY_FAILURES } from '../agent/semantic-decisions.js';
 
 /**
  * Privacy projection for durable trace records.
@@ -138,6 +139,49 @@ function projectPredispatchTiming(data) {
   const outcome = data?.extra?.outcome;
   if (['dispatched', 'not_dispatched', 'blocked'].includes(outcome)) extra.outcome = outcome;
   return { step: Number.isFinite(data?.step) ? data.step : 0, note: 'predispatch_timing', extra };
+}
+
+// Auto mode's `run_mode` answers (agent/auto-mode.js runModeDecisionNote):
+// closed codes, bounded numbers and model ids in every trace, so a refused
+// hand-off shows which model answered what and why it did not count. The
+// Only parsed structure is kept; reply prose may contain user data.
+const RUN_MODE_CHOICES = Object.keys(SEMANTIC_QUESTIONS.run_mode.choices);
+const RUN_MODE_DECISION_ENUMS = {
+  purpose: ['route', 'escalation'],
+  choice: RUN_MODE_CHOICES,
+  plan: Object.keys(SEMANTIC_QUESTIONS.plan_need.choices),
+  source: ['decision_model', 'main_model', 'cache', 'unavailable'],
+  answeredBy: ['decision_model', 'main_model'],
+  decisionModel: ['off', 'context_budget', 'unsure', 'not_settled', 'answered', 'failed'],
+  decisionModelChoice: RUN_MODE_CHOICES,
+  mainModel: ['not_asked', 'answered', 'rejected', 'failed'],
+  format: ['json', 'prose_wrapped'],
+  requested: ['act', 'dev'],
+  outcome: ['accepted', 'not_action', 'superseded'],
+  failure: [...SEMANTIC_REPLY_FAILURES, 'output_limit', 'reasoning_only', 'content_filter', 'provider_empty',
+    'truncated_response', 'not_object', 'choice_not_listed', 'evidence_not_quoted', 'timeout', 'request_failed'],
+  decisionModelFailure: ['invalid_response_json', 'invalid_usage', 'unexpected_model', 'invalid_answer_map',
+    'invalid_answer_type', 'invalid_probability', 'invalid_distribution', 'invalid_choice', 'invalid_score',
+    'model_loading', 'model_not_loaded', 'cancelled', 'state_too_long', 'authentication', 'rate_limit',
+    'service_overloaded', 'service_error', 'timeout', 'service_unavailable'],
+};
+const RUN_MODE_DECISION_NUMBERS = { rawChars: 1_000_000, latencyMs: 600_000, decisionModelConfidence: 1 };
+const MODEL_ID = /^[a-zA-Z0-9_.:-]{1,120}$/;
+
+function projectRunModeDecision(data, includeContent) {
+  const source = data?.extra && typeof data.extra === 'object' && !Array.isArray(data.extra) ? data.extra : {};
+  const extra = {};
+  for (const [key, allowed] of Object.entries(RUN_MODE_DECISION_ENUMS)) {
+    if (allowed.includes(source[key])) extra[key] = source[key];
+  }
+  // A choice that is not there is part of the reading: the answer was null.
+  if (source.choice === null) extra.choice = null;
+  for (const [key, max] of Object.entries(RUN_MODE_DECISION_NUMBERS)) {
+    const value = source[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) extra[key] = Math.min(value, max);
+  }
+  if (typeof source.model === 'string' && MODEL_ID.test(source.model)) extra.model = source.model;
+  return { step: Number.isFinite(data?.step) ? data.step : 0, note: 'run_mode_decision', extra };
 }
 
 function projectClickAxTiming(data) {
@@ -318,6 +362,9 @@ export function projectTraceEventData(kind, data, { includeContent = false } = {
   }
   if (kind === 'note' && data?.note === 'click_ax_timing') {
     return projectClickAxTiming(data);
+  }
+  if (kind === 'note' && data?.note === 'run_mode_decision') {
+    return projectRunModeDecision(data, includeContent);
   }
   if (kind === 'note' && data?.note === 'done_timing') {
     return projectDoneTiming(data);

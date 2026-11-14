@@ -53,6 +53,14 @@ function sseDataPayload(line) {
   return payload.trim() ? payload : null;
 }
 
+// The reset in an upstream quota message ("Resets in 43h56m18s."), in ms.
+function companionResetMs(reset) {
+  const match = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i.exec(reset || '');
+  if (!reset || !match) return null;
+  const [, hours = 0, minutes = 0, seconds = 0] = match;
+  return ((Number(hours) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1000;
+}
+
 /**
  * Provider for OpenAI-compatible APIs (ChatGPT, OpenRouter, any OpenAI-compatible endpoint).
  */
@@ -488,6 +496,17 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       const reset = typeof detail === 'string'
         ? detail.match(/\bResets in ((?:\d{1,6}h)?(?:\d{1,6}m)?(?:\d{1,6}s)?)\./i)?.[1] : null;
       const exhausted = typeof detail === 'string' && /\bIndividual quota reached\b/i.test(detail);
+      // model-retry waits out a cooldown only within its one-minute budget,
+      // so the reset decides: a quota that resets in hours fails at once and
+      // a short cooldown is retried after it ends. The longest of the
+      // Companion's reset_seconds (or Retry-After) and the upstream quota
+      // reset wins, since an earlier proxy retry cannot restore the quota. A
+      // value cut off by the bounded body read is ignored.
+      const resetSeconds = typeof parsed?.error?.reset_seconds === 'number' ? parsed.error.reset_seconds
+        : Number((body || '').match(/"reset_seconds"\s*:\s*(\d{1,9})\s*[,}]/)?.[1] ?? NaN);
+      const resets = [error.retryAfterMs, companionResetMs(reset),
+        resetSeconds >= 0 ? resetSeconds * 1000 : null].filter(Number.isFinite);
+      if (resets.length) error.retryAfterMs = Math.max(...resets);
       const wait = reset ? ` The provider reports a reset in ${reset}.` : '';
       error.modelUnavailableMessage = exhausted
         ? `WebBrain Companion's selected model has reached its provider quota.${wait} Switch to another model with available quota, or wait for the quota to reset.`

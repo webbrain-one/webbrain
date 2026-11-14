@@ -170,7 +170,7 @@ Copy the locale file to `src/firefox/src/ui/locales/<code>.js` and update `src/f
 | Prefix | Section |
 |---|---|
 | `sp.` | Side panel UI |
-| `st.` | Settings, Providers and Permissions pages |
+| `st.` | Settings page (`settings.html`), all sections |
 | `tr.` | Traces page |
 | `tool.` | Tool labels |
 | `ob.` | Onboarding flow |

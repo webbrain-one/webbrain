@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 48.1.0 · Manifest V3 · Service Worker background
+> Version 49.0.0 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -40,6 +40,7 @@ src/chrome/
 │   ├── background.js           # Service worker — message router
 │   ├── run-ui-journal.js       # Detached-run replay + streamed-text snapshots
 │   ├── cloud-runs.js           # cloud_* run controller + persistent bridge identity
+│   ├── settings-presets.js     # General's combined switches → existing settings
 │   ├── agent/
 │   │   ├── agent.js            # Core agent loop + tool dispatch
 │   │   ├── loop-detector.js     # Browser-free loop detection, directly unit-tested
@@ -79,12 +80,14 @@ src/chrome/
 │   └── ui/
 │       ├── sidepanel.html
 │       ├── sidepanel.js        # Chat UI, verbose mode, deep verbose
-│       ├── settings.html       # Settings: General, Budgets, Memory, Skills, CAPTCHA, Bridge, Advanced
-│       ├── providers.html      # Providers: LLM, Vision, Speech, Generative, Decision, SafeSocial
-│       ├── permissions.html    # Site permissions
-│       ├── settings.css        # Shared by the three settings pages
-│       ├── settings-tabs.js    # Tab bar, deep links and moved-tab redirects
-│       ├── settings.js         # One controller for all three settings pages
+│       ├── settings.html       # Settings: one page, a section per sidebar entry
+│       ├── providers.html      # Stub: forwards old links to settings.html#<section>
+│       ├── permissions.html    # Stub: forwards old links to settings.html#permissions
+│       ├── settings-redirect.js # The stubs' forwarding script
+│       ├── settings.css
+│       ├── settings-tabs.js    # Sidebar, deep links and old #hash aliases
+│       ├── settings-presets-ui.js # General's combined switches
+│       ├── settings.js         # Settings controller
 │       ├── traces.html
 │       └── traces.js           # Trace viewer / model comparison UI
 ├── skills/                     # Packaged default skills (removable after seeding)
@@ -791,18 +794,17 @@ advertise mutation availability and route still-missing required inputs through
 
 ---
 
-## Settings Pages
+## Settings Page
 
-Settings (`ui/settings.html`) has General, Budgets, Memory, Skills, CAPTCHA, Bridge and Advanced tabs. The chat provider and the assistive models live on `ui/providers.html` (LLM, Vision, Speech, Generative, Decision and SafeSocial tabs), and site permissions on `ui/permissions.html`. One controller, `ui/settings.js`, serves all three pages; each section wires itself only when its markup is on the page. Old `settings.html#providers`, `#multimodal` and `#permissions` links redirect to the new pages.
+Settings is one page, `ui/settings.html`, driven by `ui/settings.js`. Its sidebar (`ui/settings-tabs.js`) shows one section at a time: General; Models (LLM, Vision, Speech, Generative, Decision, SafeSocial); Permissions & privacy; Budgets; Memory; Skills; Integrations (CAPTCHA, Bridge); Offline (opens Apocalypse Mode); Advanced. `settings.html#<section>` opens a section, and the old `#providers`, `#multimodal` and `#apocalypse` hashes open LLM, Vision and Offline. `ui/providers.html` and `ui/permissions.html` are forwarding stubs (`ui/settings-redirect.js`) that send old links to `settings.html#<section>`; the side panel's **More…** opens `settings.html#llm` and **Manage site permissions** opens `settings.html#permissions` directly. General's combined switches (Agent supervision, Image quality, Completion alerts; `settings-presets.js`, `ui/settings-presets-ui.js`) store nothing of their own: each writes existing settings and reads its position back from them. The background accepts the local vision, D1, decision-fixture and SafeSocial controls only from `settings.html` (`set_webgpu_vision_choice` also from `apocalypse-mode.html`).
 
 Selected toggles (stored in `chrome.storage.local`):
 
 | Setting | Tab | Effect |
 |---|---|---|
 | Verbose mode | Advanced | Shows full tool args + JSON results in chat instead of compact labels. |
-| Screenshot fallback | Advanced | Capture a screenshot when DOM read fails or returns insufficient content. |
 | Site adapters | Advanced | Inject per-site guidance and expose validated app-owned workflow jobs to the planner (default on). |
-| Auto-screenshot | General | `off` / `navigation` (default) / `state_change` / `every_step`. |
+| Auto-screenshot | Advanced | `off` / `navigation` (default) / `state_change` / `every_step`. |
 | Record traces | Advanced | Enable the trace recorder with full request details (see above). |
 | Completion sound | Advanced | Play a chime in the side panel when the agent finishes. |
 | Max Agent Steps | Budgets | 5–195 finite steps or unlimited, default 130. |

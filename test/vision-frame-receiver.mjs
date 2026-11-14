@@ -27,7 +27,7 @@ const OTHER_SITE = 'https://wallet.frame-receiver-other.test';
 const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
 let page, session;
 const documents = new Map(); // Playwright frame -> { frameId, documentId }
-const hooks = { afterMove: null, preflight: null, holdFeedback: false };
+const hooks = { afterMove: null, afterKey: null, preflight: null, holdFeedback: false };
 const commands = [];
 // Monitor preparations and input commands, in the order they were sent.
 const sequence = [];
@@ -72,6 +72,11 @@ const api = {
     send(target, method, params).then(async result => {
       if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseMoved' && hooks.afterMove) {
         const intervene = hooks.afterMove; hooks.afterMove = null;
+        await intervene();
+      }
+      // After the first key of a typing sequence was pressed and released.
+      if (method === 'Input.dispatchKeyEvent' && params.type === 'keyUp' && hooks.afterKey) {
+        const intervene = hooks.afterKey; hooks.afterKey = null;
         await intervene();
       }
       return result;
@@ -198,7 +203,7 @@ async function fixture(browserInstance, script = '', { frameOrigin = ORIGIN } = 
     return { success: true, dispatched: true, method: 'cdp-insert-focused' };
   };
   commands.length = 0; sequence.length = 0;
-  Object.assign(hooks, { afterMove: null, preflight: null, holdFeedback: false });
+  Object.assign(hooks, { afterMove: null, afterKey: null, preflight: null, holdFeedback: false });
   // The field's centre in top-level viewport coordinates, as a screenshot shows it.
   const box = await (await inner.$('#city')).boundingBox();
   const point = { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
@@ -211,6 +216,11 @@ const clickAt = (agent, point) => agent.executeTool(TAB, 'click', { x: point.x, 
   { _vision: { tool: 'click_at', internalName: 'click', cssPoint: point } });
 const typeAfter = (agent, point, text) => agent.executeTool(TAB, 'type_text', { text, clear: true }, null,
   { _vision: { tool: 'type_text', internalName: 'type_text', focusFollowUp: point } });
+// A type_text the model sends in a later step than the click: no focus
+// follow-up, so the operation is prepared in the top document only and the
+// frame's monitor first meets it at its first key.
+const typeLater = (agent, text) => agent.executeTool(TAB, 'type_text', { text, clear: true }, null, {});
+const keysDown = () => commands.filter(command => command.method === 'Input.dispatchKeyEvent' && command.type === 'keyDown').length;
 const hoverAt = (agent, point) => agent.executeTool(TAB, 'hover_at', { x: point.x, y: point.y }, null,
   { _vision: { tool: 'hover_at', monitorPoint: point } });
 const scrollAt = (agent, point) => agent.executeTool(TAB, 'scroll_at', { direction: 'down', amount: 3, x: point.x, y: point.y }, null,
@@ -262,6 +272,56 @@ test('Chrome: a vision click inside an embedded frame is fenced by that frame, l
         const typed = await typeAfter(agent, point, 'Ankara');
         assert.equal(typed.success, true, JSON.stringify(typed));
         assert.equal(await inner.locator('#city').inputValue(), 'Ankara');
+      } finally { await context.close(); }
+    });
+
+    // Select all, Delete and the text are three commands into a frame whose
+    // monitor never prepared the operation. Before, the first went through
+    // and every later one was refused as a browser change (its operation had
+    // no prepared revision), so type_text { clear: true } after a click in an
+    // earlier step never replaced a framed field's value.
+    await t.test('typing in a later step than the click replaces the value of the frame field', async () => {
+      const { context, agent, inner, point } = await fixture(browserInstance, "city.value = 'Springfield';");
+      try {
+        assert.equal((await clickAt(agent, point)).success, true);
+        sequence.length = 0;
+        const typed = await typeLater(agent, 'Ankara');
+        assert.equal(typed.success, true, JSON.stringify(typed));
+        assert.equal(await inner.locator('#city').inputValue(), 'Ankara');
+        assert.equal(sequence.filter(entry => entry.input === 'Input.dispatchKeyEvent').length, 4, JSON.stringify(sequence));
+        assert.equal(sequence.some(entry => entry.prepare === 1), false, 'the frame was never prepared for it');
+      } finally { await context.close(); }
+    });
+
+    for (const type of ['text', 'password']) await t.test(`a clear that moves focus to a ${type} field refuses further input`, async () => {
+      const script = `city.value = 'Springfield'; const other = document.createElement('input'); other.id = 'other'; other.type = '${type}'; f.append(other); city.addEventListener('input', () => other.focus());`;
+      const { context, agent, inner, point } = await fixture(browserInstance, script);
+      try {
+        assert.equal((await clickAt(agent, point)).success, true);
+        const typed = await typeLater(agent, 'Ankara');
+        assert.equal(typed.success, false, JSON.stringify(typed));
+        assert.equal(await inner.locator('#other').inputValue(), '');
+        assert.equal(commands.some(command => command.method === 'Input.insertText'), false, JSON.stringify(commands));
+      } finally { await context.close(); }
+    });
+
+    await t.test("the frame's page script changing the form between its keys refuses the next key", async () => {
+      const { context, agent, inner, point } = await fixture(browserInstance, "city.value = 'Springfield';");
+      try {
+        assert.equal((await clickAt(agent, point)).success, true);
+        commands.length = 0;
+        // Held: only the frame's own monitor knows of the change.
+        hooks.holdFeedback = true;
+        hooks.afterKey = async () => {
+          await inner.evaluate(() => { document.getElementById('status').textContent = 'Address changed'; });
+          await page.waitForTimeout(300);
+        };
+        const typed = await typeLater(agent, 'Ankara');
+        assert.equal(typed.success, false, JSON.stringify(typed));
+        assert.equal(typed.preparationVeto?.cause, 'monitor_rejected', JSON.stringify(typed));
+        assert.equal(keysDown(), 1, JSON.stringify(commands));
+        assert.equal(commands.some(command => command.method === 'Input.insertText'), false, JSON.stringify(commands));
+        assert.notEqual(await inner.locator('#city').inputValue(), 'Ankara');
       } finally { await context.close(); }
     });
 

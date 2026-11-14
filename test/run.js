@@ -16157,6 +16157,186 @@ test('config transfer validates schema, size, containers, and unknown keys', () 
   assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
 });
 
+test('config transfer carries Cookie banners and the new tab switch in both builds', async () => {
+  const configWith = (settings) => JSON.stringify({ schema: 'webbrain-config/1', settings });
+  for (const [label, prefix, configTransfer] of [
+    ['chrome', 'src/chrome', ConfigTransferCh],
+    ['firefox', 'src/firefox', ConfigTransferFx],
+  ]) {
+    const cookieHost = await import(pathToFileURL(path.join(ROOT, prefix, 'src/agent/cookie-banner-host.js')).href);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes(cookieHost.COOKIE_BANNER_SETTING_KEY), `${label}: config export/import omitted Cookie banners`);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes('newTabEnabled'), `${label}: config export/import omitted the new tab switch`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.cookieBanners, cookieHost.DEFAULT_COOKIE_BANNER_MODE, `${label}: a file without Cookie banners should restore the host's default`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.newTabEnabled, false, `${label}: a file without the switch should leave the new tab opt-in`);
+    // Import accepts exactly the modes the host knows: no mode Settings can save
+    // is refused, and no mode the host would treat as the default is accepted.
+    assert.deepEqual(
+      [...configTransfer.CONFIG_COOKIE_BANNER_MODES].sort(),
+      [...cookieHost.COOKIE_BANNER_MODES].sort(),
+      `${label}: config import's Cookie banners modes should match the cookie-banner host's`,
+    );
+
+    for (const mode of cookieHost.COOKIE_BANNER_MODES) {
+      for (const newTabEnabled of [true, false]) {
+        const exported = configTransfer.createConfigExport({ cookieBanners: mode, newTabEnabled });
+        assert.equal(exported.settings.cookieBanners, mode, `${label}: export dropped Cookie banners ${mode}`);
+        assert.equal(exported.settings.newTabEnabled, newTabEnabled, `${label}: export dropped the new tab switch`);
+        const restored = configTransfer.parseConfigImport(JSON.stringify(exported));
+        assert.equal(restored.settings.cookieBanners, mode, `${label}: /import --replace lost Cookie banners ${mode}`);
+        assert.equal(restored.settings.newTabEnabled, newTabEnabled, `${label}: /import --replace lost the new tab switch`);
+        assert.deepEqual(restored.ignoredKeys, [], `${label}: a round trip should not ignore any key`);
+      }
+    }
+
+    const sparse = configTransfer.parseConfigPatchImport(configWith({ cookieBanners: 'off', newTabEnabled: true }));
+    assert.deepEqual(sparse.settings, { cookieBanners: 'off', newTabEnabled: true }, `${label}: /import should apply both settings`);
+    assert.deepEqual(sparse.ignoredKeys, [], `${label}: /import should not list them as unknown`);
+
+    const fresh = configTransfer.createConfigExport({});
+    assert.equal(fresh.settings.cookieBanners, 'agent', `${label}: an unset Cookie banners exports as Settings shows it`);
+    assert.equal(fresh.settings.newTabEnabled, false, `${label}: an unset new tab switch exports as off, as Settings shows it`);
+    assert.equal(configTransfer.createConfigExport({ cookieBanners: 'sometimes' }).settings.cookieBanners, 'agent', `${label}: an unknown stored mode exports as the default`);
+
+    for (const parse of [configTransfer.parseConfigImport, configTransfer.parseConfigPatchImport]) {
+      assert.throws(() => parse(configWith({ cookieBanners: 'sometimes' })), /cookieBanners/, `${label}: an unknown Cookie banners mode should be refused`);
+      assert.throws(() => parse(configWith({ cookieBanners: true })), /cookieBanners/, `${label}: a non-string Cookie banners value should be refused`);
+      assert.throws(() => parse(configWith({ newTabEnabled: 'true' })), /newTabEnabled/, `${label}: a non-boolean new tab switch should be refused`);
+    }
+  }
+});
+
+// Each storage key a Settings control writes should travel with
+// /export --config, or be listed here with why it stays on this device. This
+// reads the object literals passed to storage.local.set() by the Settings page's
+// scripts. It does not see writes of a prebuilt object (presets, pinned in
+// test/settings-presets.mjs; skills and the clarify-timeout migration, whose
+// keys are exported; the Cloud bridge pairing) or the CAPTCHA provider loop
+// (test/captcha-providers.mjs).
+test('every setting the Settings page writes is exported or deliberately device-local', () => {
+  const deviceLocal = {
+    // Derived from tracingEnabled when a file is imported (background.js import_config).
+    losslessTrace: ['chrome', 'firefox'],
+    // Accumulated spend; Settings only resets it.
+    meteredProviderCostSpentUsd: ['chrome', 'firefox'],
+    // The WebBrain Cloud bridge pairing of this browser.
+    webbrainCloudBridgeBrowserId: ['chrome', 'firefox'],
+    // Chrome's in-browser vision model: consent and downloaded weights belong to
+    // this device, and the choice must not reach Firefox.
+    webgpuVisionEnabled: ['chrome'],
+    webgpuVisionConsentVersion: ['chrome'],
+    // Firefox's connection to its own remote agent on this machine.
+    firefoxBidiEnabled: ['firefox'],
+    firefoxBidiPort: ['firefox'],
+  };
+  const skipString = (src, i) => {
+    for (let j = i + 1; j < src.length; j++) {
+      if (src[j] === '\\') { j++; continue; }
+      if (src[j] === src[i]) return j;
+    }
+    return src.length;
+  };
+  // Top-level keys of the object literal that opens at `open`: plain, quoted or
+  // computed ([NAME]); spreads are skipped.
+  const objectLiteralKeys = (src, open) => {
+    const keys = [];
+    let depth = 0;
+    let expectKey = true;
+    for (let i = open; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '\'' || ch === '"' || ch === '`') {
+        const end = skipString(src, i);
+        if (depth === 1 && expectKey) { keys.push({ name: src.slice(i + 1, end) }); expectKey = false; }
+        i = end;
+      } else if (ch === '/' && src[i + 1] === '/') {
+        i = src.indexOf('\n', i);
+      } else if (ch === '/' && src[i + 1] === '*') {
+        i = src.indexOf('*/', i) + 1;
+      } else if (depth === 1 && expectKey && ch === '[') {
+        const end = src.indexOf(']', i);
+        keys.push({ computed: src.slice(i + 1, end).trim() });
+        expectKey = false;
+        i = end;
+      } else if (ch === '{' || ch === '(' || ch === '[') {
+        depth++;
+      } else if (ch === '}' || ch === ')' || ch === ']') {
+        if (--depth === 0) return keys;
+      } else if (depth === 1 && ch === ',') {
+        expectKey = true;
+      } else if (depth === 1 && expectKey && !/\s/.test(ch)) {
+        if (src.startsWith('...', i)) { expectKey = false; i += 2; continue; }
+        const word = /^[A-Za-z_$][\w$]*/.exec(src.slice(i));
+        if (word) { keys.push({ name: word[0] }); expectKey = false; i += word[0].length - 1; }
+      }
+    }
+    return keys;
+  };
+  const sourceFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return ['vendor', 'locales'].includes(entry.name) ? [] : sourceFiles(full);
+    return entry.name.endsWith('.js') ? [full] : [];
+  });
+
+  for (const [label, configTransfer] of [['chrome', ConfigTransferCh], ['firefox', ConfigTransferFx]]) {
+    const srcDir = path.join(ROOT, 'src', label, 'src');
+    const allSource = sourceFiles(srcDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+    // Every value each string constant name has anywhere in the build. A name
+    // defined twice with different values cannot be resolved from source text
+    // alone, so the test refuses it instead of picking one.
+    const constants = new Map();
+    for (const m of allSource.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^'\n]+)'/g)) {
+      if (!constants.has(m[1])) constants.set(m[1], new Set());
+      constants.get(m[1]).add(m[2]);
+    }
+    const resolve = (expr) => {
+      if (constants.has(expr)) {
+        const values = [...constants.get(expr)];
+        assert.equal(values.length, 1, `${label}: [${expr}] has more than one value in the build (${values.join(', ')}); the scan cannot tell which one Settings writes`);
+        return values[0];
+      }
+      const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/.exec(expr);
+      if (!member) return null;
+      const values = new Set();
+      for (const block of allSource.matchAll(new RegExp(`\\bconst\\s+${member[1]}\\s*=\\s*\\{([^}]*)\\}`, 'g'))) {
+        const value = block[1].match(new RegExp(`\\b${member[2]}\\s*:\\s*'([^']+)'`))?.[1];
+        if (value) values.add(value);
+      }
+      assert.ok(values.size <= 1, `${label}: [${expr}] has more than one value in the build (${[...values].join(', ')}); the scan cannot tell which one Settings writes`);
+      return [...values][0] ?? null;
+    };
+
+    const settingsJs = fs.readFileSync(path.join(srcDir, 'ui/settings.js'), 'utf8');
+    const settingsHtml = fs.readFileSync(path.join(srcDir, 'ui/settings.html'), 'utf8');
+    const pageScripts = new Set(['settings.js']);
+    for (const m of settingsJs.matchAll(/from '\.\/([\w-]+\.js)'/g)) pageScripts.add(m[1]);
+    for (const m of settingsHtml.matchAll(/<script src="([\w-]+\.js)"/g)) pageScripts.add(m[1]);
+
+    const written = new Map();
+    for (const script of pageScripts) {
+      const src = fs.readFileSync(path.join(srcDir, 'ui', script), 'utf8');
+      for (const m of src.matchAll(/storage(?:\?\.|\.)local(?:\?\.|\.)set(?:\?\.)?\(\s*\{/g)) {
+        for (const key of objectLiteralKeys(src, m.index + m[0].length - 1)) {
+          const name = key.name ?? resolve(key.computed);
+          assert.ok(name, `${label}: ui/${script} writes a computed key the test cannot resolve: [${key.computed}]`);
+          written.set(name, script);
+        }
+      }
+    }
+    // The scan itself still works: it finds Settings controls the schema has long carried.
+    for (const key of ['verboseMode', 'themeMode', 'wbLocale', 'askBeforeConsequentialActions', 'safeSocialSettings', 'cookieBanners']) {
+      assert.ok(written.has(key), `${label}: the scan no longer sees the Settings write of ${key}`);
+    }
+
+    const exported = new Set(configTransfer.CONFIG_STORAGE_KEYS);
+    for (const [key, builds] of Object.entries(deviceLocal)) {
+      if (builds.includes(label)) assert.equal(exported.has(key), false, `${label}: ${key} is listed as device-local but is exported`);
+    }
+    const missing = [...written]
+      .filter(([key]) => !exported.has(key) && !deviceLocal[key]?.includes(label))
+      .map(([key, script]) => `${key} (ui/${script})`);
+    assert.deepEqual(missing, [], `${label}: Settings writes these keys but /export --config leaves them out`);
+  }
+});
+
 test('download directory routing is relative and uses each browser-supported path', async () => {
   for (const [label, downloadDirectory] of [
     ['chrome', DownloadDirectoryCh],
@@ -22763,6 +22943,31 @@ test('rejects *.internal and *.local regardless of allowLocal', () => {
   }
 });
 
+test('a trailing dot does not get a hostname past the fetch gate (both builds)', () => {
+  // URL.hostname keeps the trailing dot, and localhost. is the same DNS host
+  // as localhost.
+  for (const [label, validate] of [['chrome', validateFetchUrl], ['firefox', validateFetchUrlFx]]) {
+    for (const allowLocalNetwork of [false, true]) {
+      for (const url of [
+        'http://metadata.google.internal./computeMetadata/v1/',
+        'http://metadata.azure.com./metadata/instance',
+        'http://corp-jenkins.internal./',
+        'http://router.local../',
+      ]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+        assert.match(result.error, /Blocked hostname/, `${label}: ${url}`);
+      }
+    }
+    for (const url of ['http://localhost./', 'http://app.localhost.:3000/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+    assert.equal(validate('http://example.com./').ok, true, `${label}: public trailing-dot host`);
+    assert.equal(validate('http://./').ok, false, `${label}: a bare dot has no hostname`);
+  }
+});
+
 test('rejects 169.254.169.254 (cloud metadata IP) regardless of allowLocal', () => {
   for (const allowLocal of [false, true]) {
     expectReject('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: allowLocal });
@@ -22826,6 +23031,43 @@ test('IPv4-mapped IPv6 (::ffff:V4) is decoded and re-validated', () => {
   expectReject('http://[::ffff:169.254.169.254]/'); // metadata even when toggled
   expectReject('http://[::ffff:169.254.169.254]/', { allowLocalNetwork: true });
   expectAccept('http://[::ffff:8.8.8.8]/'); // public v4 mapped
+});
+
+test('IPv6 cloud metadata addresses stay blocked with local network access on (both builds)', () => {
+  // These sit inside unique-local fc00::/7, the range local-network access
+  // relaxes, so they need their own always-blocked check.
+  const metadataUrls = [
+    'http://[fd00:ec2::254]/latest/meta-data/iam/security-credentials/',
+    'http://[FD00:EC2:0:0:0:0:0:254]/latest/meta-data/', // uncompressed, upper-case
+    'http://[fd00:0ec2::0254]/',                          // leading zeros
+    'http://[fd00:ec2::23]/v1/credentials',               // AWS EKS Pod Identity agent
+    'http://[fd20:ce::254]/computeMetadata/v1/',          // Google Cloud
+    'http://[fd00:c1::a9fe:a9fe]/opc/v2/instance/',       // Oracle Cloud
+    'http://[fd00:c1::169.254.169.254]/opc/v1/',          // Oracle, dotted tail
+  ];
+  for (const [label, validate, validateResolved] of [
+    ['chrome', validateFetchUrl, validateResolvedAddressCh],
+    ['firefox', validateFetchUrlFx, validateResolvedAddressFx],
+  ]) {
+    for (const url of metadataUrls) {
+      for (const allowLocalNetwork of [false, true]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+      }
+      assert.match(validate(url, { allowLocalNetwork: true }).error, /cloud metadata/i, `${label}: ${url}`);
+    }
+    // A public hostname whose DNS answer is a metadata address.
+    for (const address of ['fd00:ec2::254', 'fd00:ec2:0:0:0:0:0:254', '[fd20:ce::254]', 'fd00:ec2::23', 'fd00:c1::a9fe:a9fe']) {
+      const result = validateResolved(address, { allowLocalNetwork: true });
+      assert.equal(result.ok, false, `${label}: resolved ${address} must be blocked`);
+      assert.match(result.error, /cloud metadata/i, `${label}: resolved ${address}`);
+    }
+    // Neighbouring unique-local addresses keep the local-network tier.
+    for (const url of ['http://[fd00:ec2::255]/', 'http://[fd20:ce::1]/', 'http://[fd12:3456::254]/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+  }
 });
 
 test('public hosts always accepted', () => {
@@ -23660,9 +23902,164 @@ test('case-insensitive — same registrable domain', () => {
 });
 
 test('firefox port registrableDomain matches chrome', () => {
-  const samples = ['github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1'];
+  const samples = [
+    'github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1',
+    'evil.appspot.com', 'bucket.s3.amazonaws.com', 'obs.uni1.edu.tr', 'shop.example.com.ua',
+    'appspot.com', 'example.com.', 'localhost', '[::1]',
+    'victim-space.github.dev', 'attacker-8080.app.github.dev', 'a.glitch.me', 'a.netlify.com',
+  ];
   for (const h of samples) {
     assert.equal(registrableDomainFx(h), registrableDomain(h), `mismatch on ${h}`);
+  }
+});
+
+const REGISTRABLE_DOMAIN_BUILDS = [['chrome', registrableDomain], ['firefox', registrableDomainFx]];
+
+test('Public Suffix List private section keeps tenants of shared hosts apart (both builds)', () => {
+  // Each pair used to reduce to the same "last two labels", so read_pdf,
+  // fetch_url and read_page_source sent one tenant's cookies on behalf of a
+  // page hosted by another.
+  const tenants = [
+    ['evil.appspot.com', 'victim.appspot.com'],
+    ['attacker.blogspot.com', 'victim.blogspot.com'],
+    ['attacker-bucket.s3.amazonaws.com', 'victim-bucket.s3.amazonaws.com'],
+    ['app-a.us-east-1.elb.amazonaws.com', 'app-b.us-east-1.elb.amazonaws.com'],
+    ['attacker.herokuapp.com', 'victim.herokuapp.com'],
+  ];
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const [a, b] of tenants) {
+      assert.equal(rd(a), a, `${label}: ${a} is its own registrable domain`);
+      assert.notEqual(rd(a), rd(b), `${label}: ${a} and ${b} are different sites`);
+    }
+    assert.equal(rd('www.victim.appspot.com'), 'victim.appspot.com', `${label}: subdomains stay with their tenant`);
+  }
+});
+
+test('second-level ccTLD registries are public suffixes (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    assert.equal(rd('kisi.uni2.edu.tr'), 'uni2.edu.tr', label);
+    assert.equal(rd('obs.uni1.edu.tr'), 'uni1.edu.tr', label);
+    assert.notEqual(rd('kisi.uni2.edu.tr'), rd('obs.uni1.edu.tr'), `${label}: different universities`);
+    assert.equal(rd('obs.uni1.edu.tr'), rd('www.uni1.edu.tr'), `${label}: one university is one site`);
+    assert.notEqual(rd('a.agency1.gov.tr'), rd('b.agency2.gov.tr'), `${label}: gov.tr`);
+    assert.notEqual(rd('a.assoc1.org.tr'), rd('b.assoc2.org.tr'), `${label}: org.tr`);
+    assert.notEqual(rd('shop.store1.com.ua'), rd('shop.store2.com.ua'), `${label}: com.ua`);
+    // co.uk and com.tr were on the old hard-coded list too.
+    assert.equal(rd('foo.bar.example.co.uk'), 'example.co.uk', label);
+    assert.equal(rd('shop.example.com.tr'), 'example.com.tr', label);
+  }
+});
+
+// The suffixes registrableDomain() hard-coded before it used the Public
+// Suffix List. Three of them (github.dev, glitch.me, netlify.com) are not on
+// the bundled list, so the code keeps the old list as a floor.
+const FORMER_HARD_CODED_SUFFIXES = [
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev',
+];
+
+test('every suffix on the former hard-coded list still keeps its tenants apart (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const suffix of FORMER_HARD_CODED_SUFFIXES) {
+      assert.equal(rd(`a.${suffix}`), `a.${suffix}`, `${label}: a.${suffix} is its own site`);
+      assert.equal(rd(`www.a.${suffix}`), `a.${suffix}`, `${label}: www.a.${suffix} stays with a.${suffix}`);
+      assert.notEqual(rd(`a.${suffix}`), rd(`b.${suffix}`), `${label}: a.${suffix} and b.${suffix} are different sites`);
+    }
+    // A public Codespaces forwarded port is attacker-controlled content on
+    // app.github.dev; it must not share a site with someone else's codespace.
+    assert.equal(rd('attacker-8080.app.github.dev'), 'attacker-8080.app.github.dev', label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space.github.dev'), label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space-3000.app.github.dev'), label);
+    assert.equal(rd('github.dev'), 'github.dev', `${label}: the editor host matches only itself`);
+    assert.notEqual(rd('github.dev'), rd('victim-space.github.dev'), label);
+    // Where the Public Suffix List is stricter than the old list, it wins.
+    assert.equal(rd('a.service.gov.uk'), 'a.service.gov.uk', label);
+    assert.notEqual(rd('a.service.gov.uk'), rd('b.service.gov.uk'), label);
+    assert.equal(rd('www.example.gov.uk'), 'example.gov.uk', label);
+  }
+});
+
+test('a host with no registrable domain matches only itself (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    // A public suffix itself: never the same site as one of its tenants.
+    assert.equal(rd('appspot.com'), 'appspot.com', label);
+    assert.notEqual(rd('appspot.com'), rd('victim.appspot.com'), label);
+    assert.equal(rd('github.io'), 'github.io', label);
+    assert.equal(rd('co.uk'), 'co.uk', label);
+    assert.equal(rd('localhost'), 'localhost', label);
+    assert.equal(rd('foo.localhost'), 'foo.localhost', label);
+    // A trailing dot names the same host; it must not collapse to the TLD.
+    assert.equal(rd('www.example.com.'), 'example.com', label);
+    assert.notEqual(rd('evil.com.'), rd('victim.com.'), `${label}: trailing-dot hosts stay distinct`);
+    assert.equal(rd('.'), '', `${label}: a bare dot has no registrable domain`);
+  }
+});
+
+test('vendored tldts (Public Suffix List) matches its pinned package in both builds', () => {
+  const pinned = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).devDependencies.tldts;
+  for (const build of ['chrome', 'firefox']) {
+    const dir = path.join(ROOT, 'src', build, 'vendor', 'tldts');
+    assert.equal(
+      createHash('sha256').update(fs.readFileSync(path.join(dir, 'index.esm.min.js'))).digest('hex'),
+      '1f4e2f0bfab5a01e51032948573cf2920366ea0f50addc4e69bd3fffb9aec536',
+      `${build}: vendored tldts does not match the published tldts@${pinned} dist/index.esm.min.js`,
+    );
+    const readme = fs.readFileSync(path.join(dir, 'README.webbrain.md'), 'utf8');
+    assert.match(readme, new RegExp(`Version: \`${escapeRegExpLiteral(pinned)}\``), `${build}: README names another version than package.json`);
+    assert.match(fs.readFileSync(path.join(dir, 'LICENSE'), 'utf8'), /Permission is hereby granted, free of charge/, `${build}: MIT license missing`);
+  }
+});
+
+test('fetch_url and read_page_source send cookies only within one registrable domain (both builds)', async () => {
+  const savedFetch = globalThis.fetch;
+  const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser;
+  try {
+    let activeUrl = '';
+    globalThis.chrome = globalThis.browser = { tabs: { get: async () => ({ url: activeUrl }) } };
+    const cases = [
+      ['https://attacker.appspot.com/page', 'https://victim.appspot.com/private', 'omit'],
+      ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/report', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni2.edu.tr/grades', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/grades', 'include'],
+      ['https://www.example.com/', 'https://api.example.com/data', 'include'],
+    ];
+    for (const [label, fetchUrl, readPageSource] of [
+      ['chrome', fetchUrlCh, readPageSourceCh],
+      ['firefox', fetchUrlFx, readPageSourceFx],
+    ]) {
+      for (const [tabUrl, target, expected] of cases) {
+        activeUrl = tabUrl;
+        for (const [tool, run] of [
+          ['fetch_url', () => fetchUrl(target, {}, { tabId: 7 })],
+          ['read_page_source', () => readPageSource(target, {}, { tabId: 7 })],
+        ]) {
+          const credentials = [];
+          globalThis.fetch = async (_url, init) => {
+            credentials.push(init.credentials);
+            return new Response('<!doctype html><title>ok</title><p>ok</p>', { headers: { 'Content-Type': 'text/html' } });
+          };
+          const result = await run();
+          assert.equal(result.success, true, `${label} ${tool}: ${JSON.stringify(result)}`);
+          assert.deepEqual(credentials, [expected], `${label} ${tool}: tab ${tabUrl} -> ${target}`);
+        }
+      }
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedChrome === undefined) delete globalThis.chrome; else globalThis.chrome = savedChrome;
+    if (savedBrowser === undefined) delete globalThis.browser; else globalThis.browser = savedBrowser;
   }
 });
 
@@ -49864,7 +50261,7 @@ test('sidepanel composer permission switch drives the Settings gate in both buil
     assert.match(block, /else addPersistentSlashMessage\(systemHtml\(t\('sp\.permissions\.disabled_html'\)\)\)/, `${label}: turning prompts off should post the command's persistent notice`);
     assert.doesNotMatch(block, /resolvePendingPermissionPrompt/, `${label}: the composer switch must never approve a pending permission card`);
     assert.match(block, /permissionGateWriteQueue = write\.catch\(\(\) => renderPermissionGateControl\(\)\)/, `${label}: a failed write should restore the stored state`);
-    assert.match(block, /runtime\.getURL\('src\/ui\/permissions\.html'\)/, `${label}: the popover should open the site permission page`);
+    assert.match(block, /runtime\.getURL\('src\/ui\/settings\.html#permissions'\)/, `${label}: the popover should open Settings → Permissions & privacy`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_KEY\]\) \{\s*permissionGateStoredOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: changes made in Settings or by the command should update the switch`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_SESSION_OFF_KEY\]\) \{\s*permissionGateSessionOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: a session skip should update the switch`);
     assert.match(panel, /function syncAskBeforeConsequential\(\) \{[^}]*renderPermissionGateControl\(\);/, `${label}: the gate sync should render the switch`);
@@ -51609,8 +52006,8 @@ test('provider picker exposes both managed Compass tiers, configured providers, 
     assert.match(panel, /get_providers', \{ includeSidepanelOnly: true \}/, `${label}: sidepanel should request its hidden managed provider`);
     assert.match(panel, /MORE_PROVIDERS_OPTION_VALUE = '__more_providers__'/, `${label}: More sentinel missing`);
     assert.match(panel, /providerSelect\.value = selectedProviderId;[\s\S]*?await openProvidersSettingsPage\(\);[\s\S]*?return;/, `${label}: More should restore the selection and stop before activation`);
-    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/providers\.html#llm'\);/, `${label}: More should open the LLM tab of the Providers page`);
-    assert.doesNotMatch(panel, /settings\.html#(?:providers|permissions|multimodal)/, `${label}: the side panel should not link to the old Settings tabs`);
+    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/settings\.html#llm'\);/, `${label}: More should open the LLM section of Settings`);
+    assert.doesNotMatch(panel, /settings\.html#(?:providers|multimodal)\b|src\/ui\/(?:providers|permissions)\.html/, `${label}: the side panel links to the current Settings sections, not old tab names or the forwarding pages`);
     assert.match(panel, /if \(changes\.providers \|\| changes\.activeProvider\) \{[\s\S]*?loadProviders\(\)/, `${label}: picker should refresh when provider storage changes`);
 
     assert.match(settings, /const isConfigured = id !== 'webbrain_cloud' && config\.configured === true/, `${label}: Settings should derive Active from configured state`);
@@ -85139,6 +85536,81 @@ function receivingFrameGateAgent(AgentClass, tabId, { frameUrls = [], choice = '
   return { agent, state };
 }
 
+// read_pdf fetches the document behind our own viewer page, so its card must
+// name that document's site, not the extension id in the viewer URL, and a
+// local file must not ride on the current page's grant.
+test('read_pdf permission is charged to the unwrapped document host in both builds', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  const inner = 'https://attacker.example/x.pdf?d=SECRET';
+  try {
+    for (const [label, AgentClass, apiName, scheme, extensionId, tabId] of [
+      ['chrome', AgentCh, 'chrome', 'chrome-extension', 'abcdefghijklmnopabcdefghijklmnop', 5131],
+      ['firefox', AgentFx, 'browser', 'moz-extension', '00000000-0000-4000-8000-000000000000', 5132],
+    ]) {
+      const viewer = `${scheme}://${extensionId}/src/ui/pdf-handler.html?url=${encodeURIComponent(inner)}&tabId=${tabId}`;
+      delete globalThis.chrome;
+      delete globalThis.browser;
+      globalThis[apiName] = {
+        runtime: {
+          id: extensionId,
+          getURL: urlPath => `${scheme}://${extensionId}/${urlPath}`,
+          getManifest: () => ({
+            mime_types_handler: { 'application/pdf': { handler_url: 'src/ui/pdf-handler.html' } },
+          }),
+        },
+      };
+      for (const { name, pageUrl, url, prompts, error } of [
+        { name: 'wrapped url from a site', pageUrl: 'https://news.example/article', url: viewer, prompts: ['attacker.example'] },
+        { name: 'wrapped url on the viewer tab', pageUrl: viewer, url: viewer, prompts: ['attacker.example'] },
+        { name: 'plain document url', pageUrl: 'https://news.example/article', url: 'https://papers.example/report.pdf', prompts: ['papers.example'] },
+        { name: 'local file from a site', pageUrl: 'https://news.example/article', url: 'file:///C:/Users/test/report.pdf', prompts: [], error: /file: url[\s\S]*without url/ },
+        { name: 'unsupported scheme', pageUrl: 'https://news.example/article', url: 'data:application/pdf;base64,JVBERi0=', prompts: [], error: /must use http:, https:, or file:/ },
+      ]) {
+        const agent = new AgentClass({ getVisionProvider: async () => null });
+        const executed = [];
+        const asked = [];
+        agent._ensureGateSetting = async () => false;
+        agent._skipPermissionGate = false;
+        agent._currentUrl = async () => pageUrl;
+        agent._recordProgressObservation = async () => null;
+        agent._autoRecordProgressAction = () => null;
+        agent._progressWarningForAction = () => '';
+        agent._persist = () => { };
+        agent._detectLikelySubmitAction = async () => null;
+        agent.permissions.hydrate = async () => { };
+        // The current site and the extension id already hold "always" grants.
+        agent.permissions.check = host => host === 'news.example' || host === extensionId
+          ? { allowed: true, needsPrompt: false }
+          : { allowed: false, needsPrompt: true };
+        agent.permissions.record = async () => { };
+        agent._promptPermission = async (_tabId, capability, host) => {
+          asked.push({ capability, host });
+          return 'deny';
+        };
+        agent.executeTool = async (_tabId, toolName) => {
+          executed.push(toolName);
+          return { success: true };
+        };
+        const messages = [];
+        await agent._executeToolBatch(tabId, [{ id: `pdf_${tabId}`, function: { name: 'read_pdf', arguments: JSON.stringify({ url }) } }],
+          messages, () => { }, { supportsVision: false }, '', new Set(['read_pdf']), 1);
+        assert.deepEqual(asked, prompts.map(host => ({ capability: Capability.NETWORK, host })), `${label}: ${name}: wrong permission host`);
+        assert.deepEqual(executed, [], `${label}: ${name}: read_pdf ran without the document host's permission`);
+        const result = JSON.parse(messages[0].content);
+        assert.equal(result.denied, true, `${label}: ${name}`);
+        if (error) assert.match(result.error, error, `${label}: ${name}`);
+        else assert.match(result.error, new RegExp(`denied permission to .* ${prompts[0].replace(/\./g, '\\.')}`), `${label}: ${name}`);
+      }
+    }
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = previousBrowser;
+  }
+});
+
 const RECEIVING_FRAME_CALLS = [
   ['click', { x: 120, y: 80, coordinate_space: 'css' }, 'click'],
   ['type_text', { text: '4242 4242 4242 4242' }, 'type'],
@@ -115406,6 +115878,38 @@ test('requiredHosts: download_files gates EVERY distinct host in urls[]', () => 
   assert.deepEqual(requiredHosts(Capability.CLICK, {}, top, 'iframe_click'), []);
 });
 
+test('requiredHosts: read_pdf names only the http(s) document it fetches, never the page or the viewer', () => {
+  for (const [label, Cap, reqHosts, classify] of [
+    ['firefox', Capability, requiredHosts, capabilityFor],
+    ['chrome', CapabilityCh, requiredHostsCh, capabilityForCh],
+  ]) {
+    const page = 'https://news.example/article';
+    const inner = encodeURIComponent('https://attacker.example/x.pdf?d=SECRET');
+    for (const [url, expected] of [
+      ['https://papers.example/report.pdf', ['papers.example']],
+      ['https://www.papers.example/report.pdf', ['papers.example']],
+      ['  http://papers.example/report.pdf  ', ['papers.example']],
+      // A local file has no site; it must not be charged to the page's grant.
+      ['file:///C:/Users/test/report.pdf', []],
+      ['file://fileserver/share/report.pdf', []],
+      // agent.js unwraps our own viewer first. A viewer URL reaching the gate
+      // must not be charged to the extension id the card would show.
+      [`chrome-extension://abcdefghijklmnopabcdefghijklmnop/src/ui/pdf-handler.html?url=${inner}`, []],
+      [`moz-extension://00000000-0000-4000-8000-000000000000/src/ui/pdf-handler.html?url=${inner}`, []],
+      // read_pdf never resolves against the page, so neither does its gate.
+      ['/files/report.pdf', []],
+      ['//papers.example/report.pdf', []],
+      ['not a url', []],
+    ]) {
+      assert.deepEqual(reqHosts(Cap.NETWORK, { url }, page, 'read_pdf'), expected, `${label}: read_pdf ${url}`);
+    }
+    // fetch_url keeps resolving against the page.
+    assert.deepEqual(reqHosts(Cap.NETWORK, { url: '/api/data' }, page, 'fetch_url'), ['news.example'], `${label}: fetch_url`);
+    // A blank url reads the active tab, as the handler does after trimming.
+    assert.equal(classify('read_pdf', { url: '   ' }), null, `${label}: blank url is the active-tab read`);
+  }
+});
+
 test('hydrateFrom replaces always-grants but keeps once-grants (live revoke)', async () => {
   const pm = new PermissionManager();
   await pm.record('a.com', Capability.CLICK, 'allow', 'always');
@@ -121587,12 +122091,17 @@ test('page Stop WebBrain clears stale indicators without stopping recordings', (
     const indicator = fs.readFileSync(path.join(ROOT, prefix, 'src/content/agent-visual-indicator.js'), 'utf8');
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
 
-    const clickStart = indicator.indexOf("button.addEventListener('click', async () => {");
+    const clickStart = indicator.indexOf("button.addEventListener('click', async (event) => {");
     const clickEnd = indicator.indexOf('\n    });', clickStart);
     assert.notEqual(clickStart, -1, `${label}: page Stop handler missing`);
     assert.notEqual(clickEnd, -1, `${label}: page Stop handler boundary missing`);
     const clickBody = indicator.slice(clickStart, clickEnd);
     const localHideIdx = clickBody.indexOf('hide();');
+    // A page script's click() or dispatched click is not a person's: it
+    // neither hides the indicator nor stops the run.
+    const trustedIdx = clickBody.indexOf('if (!event.isTrusted) return;');
+    assert.notEqual(trustedIdx, -1, `${label}: page Stop must ignore untrusted clicks`);
+    assert.equal(trustedIdx < localHideIdx, true, `${label}: an untrusted click must return before hiding the indicator`);
     const abortMessageIdx = clickBody.indexOf(`${runtimeApi}.runtime.sendMessage({ type: 'WB_STOP_AGENT' })`);
     assert.notEqual(localHideIdx, -1, `${label}: page Stop should immediately hide its local indicator`);
     assert.notEqual(abortMessageIdx, -1, `${label}: page Stop should still request agent abort`);
@@ -127938,6 +128447,57 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     const prompt = build({ url: 'https://github.com/o/r/pull/7', title: 'x' }).find((a) => a.id === 'review-pull-request').prompt;
     assert.match(prompt, /Files changed/);
     assert.match(prompt, /\/pull\/7\/files/);
+  });
+
+  // Both suggestions run in read-only Ask mode: no navigate or click, and
+  // read_page reads only the current tab. A prompt that sends the model to
+  // "open the Files changed tab" from the Conversation tab cannot be followed,
+  // so every read it names has to be one an Ask run can make from that tab.
+  test(`recommended-actions (${label}): GitHub pull-request prompts only name reads Ask mode can make`, () => {
+    const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
+    const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
+    const prompts = (url) => {
+      const actions = build({ url, title: 'Pull Request #7 · o/r' });
+      return ['review-pull-request', 'summarize-pull-request'].map((id) => {
+        const action = actions.find((a) => a.id === id);
+        assert.ok(action, `${id} should be offered on ${url}`);
+        assert.equal(action.mode, 'ask', `${id} stays read-only`);
+        return action.prompt;
+      });
+    };
+    const diffUrl = 'https://patch-diff.githubusercontent.com/raw/o/r/pull/7.diff';
+    const views = {
+      conversation: ['https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/', 'https://github.com/o/r/pull/7#issuecomment-1'],
+      files: ['https://github.com/o/r/pull/7/files', 'https://github.com/o/r/pull/7/files/', 'https://github.com/o/r/pull/7/changes'],
+      other: ['https://github.com/o/r/pull/7/commits', 'https://github.com/o/r/pull/7/checks', 'https://github.com/o/r/pull/7/files/abc123..def456'],
+    };
+    for (const [view, urls] of Object.entries(views)) {
+      for (const url of urls) {
+        for (const prompt of prompts(url)) {
+          const named = [...new Set(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) || [])].filter((name) => allTools.has(name));
+          assert.ok(named.length > 0, `${url}: prompt names its read tools`);
+          for (const name of named) assert.ok(askTools.has(name), `${url}: ${name} is not available in Ask mode`);
+          assert.doesNotMatch(prompt, /\bopen the Files changed tab \(|\bnavigate to\b/i, `${url}: Ask mode cannot open another tab`);
+          assert.match(prompt, /read-only Ask run: you cannot navigate or click/);
+          // github.com/<o>/<r>/pull/<n>.diff answers with a redirect, which
+          // fetch_url never follows.
+          assert.doesNotMatch(prompt, /https:\/\/github\.com\/\S*\.diff/, `${url}: the github.com .diff URL redirects`);
+          if (view === 'files') {
+            assert.match(prompt, /read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true/);
+            assert.ok(!prompt.includes(diffUrl), `${url}: the diff is already on this tab`);
+          } else {
+            assert.ok(prompt.includes(`fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true`), `${url}: diff comes from fetch_url`);
+            assert.ok(prompt.includes('research_url on https://github.com/o/r/pull/7/files'), `${url}: private repositories fall back to research_url`);
+            assert.doesNotMatch(prompt, /continuationArgs/, `${url}: read_page cannot page a diff this tab does not show`);
+          }
+          if (view === 'conversation') {
+            assert.match(prompt, /Use read_page on this tab to read the description, conversation, and status checks\./);
+          } else {
+            assert.ok(prompt.includes('fetch_url on https://github.com/o/r/pull/7, continuing with offset set to nextOffset'), `${url}: the conversation is fetched, not read from this tab`);
+          }
+        }
+      }
+    }
   });
 }
 

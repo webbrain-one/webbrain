@@ -58,10 +58,10 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(new Set(PRESET_SETTING_KEYS).size, PRESET_SETTING_KEYS.length, 'no setting belongs to two groups');
   });
 
-  test(`${build}: no preset turns action guards off or touches a permission or privacy switch`, () => {
+  test(`${build}: only Unsupervised turns action guards off, and no preset touches a permission or privacy switch`, () => {
     for (const [group, option] of options) {
       const patch = presetPatch(group, option);
-      assert.notEqual(patch.enforceActionGuards, false, `${group}.${option}`);
+      assert.equal(patch.enforceActionGuards === false, group === 'supervision' && option === 'unsupervised', `${group}.${option}`);
       for (const key of [
         'askBeforeConsequentialActions', 'wb_permissions', 'scheduledRequireConsequentialConfirmation',
         'alwaysAllowApiMutations', 'agentAllowLocalNetwork', 'strictSecretMode', 'screenshotRedaction',
@@ -69,7 +69,9 @@ for (const build of ['chrome', 'firefox']) {
         assert.ok(!Object.hasOwn(patch, key), `${group}.${option} leaves ${key} alone`);
       }
     }
-    for (const values of Object.values(PRESET_GROUPS.supervision.options)) assert.equal(values.enforceActionGuards, true);
+    for (const [option, values] of Object.entries(PRESET_GROUPS.supervision.options)) {
+      assert.equal(values.enforceActionGuards, option !== 'unsupervised', option);
+    }
   });
 
   test(`${build}: fine-tuned settings read as Custom, and Custom is never applied`, () => {
