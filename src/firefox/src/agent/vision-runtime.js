@@ -983,6 +983,67 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     return zooms;
   };
 
+  // Count the images that will actually survive request pruning, including
+  // attachments and zooms. A patch chain must be replaced as a whole when a
+  // provider cannot carry its next update alongside the current full frame.
+  proto._visionImageBudget = function _visionImageBudget(tabId, messages) {
+    const provider = this._activeProvider?.(tabId);
+    const limit = provider?.maxImagesPerRequest;
+    if (!Number.isInteger(limit) || limit <= 0) return null;
+    const retained = typeof this._pruneOldImages === 'function'
+      ? this._pruneOldImages(messages, provider) : pruneVisionImages(messages).messages;
+    let count = 0;
+    let nonVisionCount = 0;
+    for (const message of retained || []) {
+      const images = Array.isArray(message?.content) ? message.content.filter(isImageBlock).length : 0;
+      count += images;
+      if (!visionFrameTag(message)) nonVisionCount += images;
+    }
+    return { limit, count, nonVisionCount };
+  };
+
+  proto._visionLimitZooms = function _visionLimitZooms(tabId, messages, session) {
+    const budget = this._visionImageBudget(tabId, messages);
+    if (!budget) return;
+    // Reserve the full viewport and user attachments. Limiting only after
+    // capture would repeatedly discard a batch of four zooms on a provider
+    // that accepts four images in total.
+    const keep = Math.min(VISION_MAX_LIVE_ZOOMS, Math.max(0, budget.limit - budget.nonVisionCount - 1));
+    const ids = [];
+    for (const message of messages) {
+      const tag = visionFrameTag(message);
+      if (tag?.epoch === session.epoch) ids.push(...(tag.ids || []).filter(id => /^z\d+$/.test(id)));
+    }
+    ids.push(...(session.pendingZooms || []).map(zoom => zoom.id));
+    const ordered = [...new Set(ids)];
+    const dropped = new Set(ordered.slice(0, Math.max(0, ordered.length - keep)));
+    if (!dropped.size) return;
+    const omission = id => `[zoom ${id} omitted — the provider accepts ${budget.limit} images per request; ${keep
+      ? 'zoom again if needed' : 'reduce image attachments or use a provider that accepts more images to zoom'}]`;
+    for (let index = 0; index < messages.length; index++) {
+      const message = messages[index];
+      const tag = visionFrameTag(message);
+      if (tag?.epoch !== session.epoch || !Array.isArray(message.content) || !tag.ids?.some(id => dropped.has(id))) continue;
+      let imageIndex = 0;
+      const content = message.content.map(block => {
+        if (!isImageBlock(block)) return block;
+        const id = tag.ids[imageIndex++];
+        return dropped.has(id) ? { type: 'text', text: omission(id) } : block;
+      });
+      messages[index] = { ...message, content, webbrainVisionFrame: { ...tag, ids: tag.ids.filter(id => !dropped.has(id)) } };
+    }
+    const pendingDropped = (session.pendingZooms || []).filter(zoom => dropped.has(zoom.id));
+    session.pendingZooms = (session.pendingZooms || []).filter(zoom => !dropped.has(zoom.id));
+    if (pendingDropped.length) messages.push(visionUserMessage(pendingDropped.map(zoom => omission(zoom.id)).join('\n'),
+      { epoch: session.epoch, kind: 'none' }));
+    for (const id of dropped) {
+      const zoom = session.images.get(id);
+      if (!zoom) continue;
+      session.images.delete(id);
+      session.retired.set(id, { epoch: zoom.epoch, replacedBy: null, zoomLimit: true, providerImageLimit: budget.limit });
+    }
+  };
+
   /**
    * After a tool batch: show the model what changed. `toolCalls` are the
    * calls the batch ran (translated or not).
@@ -1013,11 +1074,14 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
 
   proto._visionObserveAfterBatchOnce = async function _visionObserveAfterBatchOnce(tabId, messages, onUpdate, { state, toolCalls = [], force = false } = {}) {
     const session = this._visionSessionFor(tabId, state);
+    this._visionLimitZooms(tabId, messages, session);
+    const budget = this._visionImageBudget(tabId, messages);
     const names = toolCalls.map(call => call?._vision?.tool || call?.function?.name).filter(Boolean);
     // An accepted done ends the run before this point, so a batch with done
     // only gets here when done was refused: the model is told to look again,
     // and gets a screen to look at.
     const observe = force || session.forceKeyframe
+      || (budget && budget.count + (session.pendingZooms?.length || 0) > budget.limit)
       || names.some(name => !VISION_NO_OBSERVE_TOOLS.has(name) || name === 'done' || name === 'done_json');
     const zoomsOnly = !observe && session.pendingZooms?.length;
     if (zoomsOnly) {
@@ -1099,6 +1163,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (plan.kind === 'keyframe') {
       await this._visionPushKeyframe(tabId, messages, onUpdate, { state, frame, lookedOnly, reason: plan.reason === 'large_change' ? 'large change' : plan.reason.replace(/_/g, ' ') });
       return { kind: 'keyframe', reason: plan.reason };
+    }
+    const budget = this._visionImageBudget(tabId, messages);
+    const newImages = (plan.kind === 'patch' ? plan.regions.length : 0) + (session.pendingZooms?.length || 0);
+    if (budget && budget.count + newImages > budget.limit) {
+      const unchanged = plan.kind === 'none';
+      await this._visionPushKeyframe(tabId, messages, onUpdate, {
+        state, frame, lookedOnly, unchanged, reason: 'provider image limit',
+      });
+      return { kind: 'keyframe', reason: 'provider_image_limit', ...(unchanged ? { unchanged: true } : {}) };
     }
     const zooms = this._visionTakePendingZooms(tabId);
     if (plan.kind === 'none') {

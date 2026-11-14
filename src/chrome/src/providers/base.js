@@ -146,6 +146,28 @@ export class BaseLLMProvider {
     return false;
   }
 
+  /** Total image blocks accepted across one request, including attachments. */
+  get maxImagesPerRequest() {
+    const limit = Number(this.config.maxImagesPerRequest);
+    return Number.isInteger(limit) && limit > 0 ? limit : null;
+  }
+
+  _assertImageLimit(messages) {
+    const limit = this.maxImagesPerRequest;
+    if (!limit) return;
+    const imageTypes = new Set(['image_url', 'image', 'input_image']);
+    const count = (Array.isArray(messages) ? messages : []).reduce((total, message) => total
+      + (Array.isArray(message?.content) ? message.content.filter(block => imageTypes.has(block?.type)).length : 0), 0);
+    if (count <= limit) return;
+    // Vision compacts its own frame/patch chain before building a request.
+    // Attachments are user evidence: reject excess instead of silently losing it.
+    const error = new Error(`${this.config.label || this.name} accepts at most ${limit} images per request; this request contains ${count}. Reduce the images in this conversation or choose a provider with a higher image limit.`);
+    error.code = 'provider_image_limit';
+    error.imageCount = count;
+    error.maxImagesPerRequest = limit;
+    throw error;
+  }
+
   /**
    * Check if this provider supports document inputs (e.g. PDF passthrough
    * as a {type:'document'} content block). See pdf-tools.js.

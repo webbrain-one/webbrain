@@ -540,16 +540,16 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 87 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 88 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **121 built-in providers on Chromium** and **120 on Firefox**; the
+Settings → Models → LLM lists **122 built-in providers on Chromium** and **121 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
+| `api-route`, `302ai`, `abacus`, `abliteration`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
 | `freebuff2api`, `google-vertex`, `google-vertex-anthropic`, `helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`, `kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`, `meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`, `modelscope`, `morph`                       |
 | `nano-gpt`, `nearai`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `opper`, `orcarouter`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `pollinations`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `runcrate`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`        |
 | `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`                                                                                                                       |
@@ -646,6 +646,33 @@ Interactive Ask streaming, tool calls, and vision work through the existing
 OpenAI-compatible path. The 32768-token context setting is a conservative
 application budget, not an advertised model context limit; adjust it to a limit
 verified for your selected model and account.
+
+#### Abliteration.ai
+
+[Abliteration.ai](https://abliteration.ai) uses the OpenAI-compatible
+`https://api.abliteration.ai/v1` endpoint with bearer API keys. Open **Settings
+→ Models → LLM → Abliteration.ai**, create a key in the
+[console](https://abliteration.ai/console), save it, test the connection, and
+select the provider for chat.
+
+The default is **Abliterated Large Flash** (`abliterated-model-large-flash`),
+with text and image inputs, tool calling, and streaming. Its documented context
+window is 1,048,576 tokens and its output ceiling is 262,144 tokens. The initial
+cost estimates per million tokens are $1 input, $0.10 cached input, and $2 output.
+See the [model specifications](https://docs.abliteration.ai/models),
+[OpenAI API compatibility](https://docs.abliteration.ai/api/openai-compatibility),
+and [pricing](https://abliteration.ai/pricing).
+
+The card starts disabled until configured. If you enter another model manually,
+update the context/output limits and vision setting to match it; Large v2 is
+text-only. Its [image API](https://docs.abliteration.ai/capabilities/images)
+currently accepts at most four images across the request history. WebBrain
+declares this as `maxImagesPerRequest: 4`: vision mode refreshes the full frame
+before another patch would exceed the budget, and retained zooms share that
+budget with the frame and user attachments. Attachments are never silently
+dropped; if they leave no room for the required frame, or an Ask request has
+too many images, WebBrain reports the limit before making an API request.
+Providers without this capability keep their existing image-history behavior.
 
 #### Atlas Cloud
 
