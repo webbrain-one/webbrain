@@ -9,7 +9,7 @@ export const WEBBRAIN_COMPANION_DEFAULT_BASE_URL = 'http://127.0.0.1:8327/v1';
 
 // The tray app's current release. Settings and the install page both link to
 // these files, so a new release only changes them here.
-export const WEBBRAIN_COMPANION_VERSION = '0.1.2';
+export const WEBBRAIN_COMPANION_VERSION = '0.1.4';
 export const WEBBRAIN_COMPANION_SITE_URL = 'https://webbrain.one/companion/#download';
 export const WEBBRAIN_COMPANION_DOWNLOAD_BASE = `https://github.com/webbrain-one/webbrain/releases/download/systray-v${WEBBRAIN_COMPANION_VERSION}/WebBrain-Companion-${WEBBRAIN_COMPANION_VERSION}-`;
 export const WEBBRAIN_COMPANION_DOWNLOADS = Object.freeze({
