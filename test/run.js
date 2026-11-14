@@ -77498,7 +77498,7 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
 
 test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
   const expectedIds = `
-    api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
+    api-route 302ai abacus abliteration aihubmix alibaba-coding-plan alibaba-coding-plan-cn
     atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
     cloudgpu
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
@@ -77514,7 +77514,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 87);
+  assert.equal(expectedIds.length, 88);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77529,8 +77529,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 121/120 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 122 : 121;
+    // deliberately omitted from the 122/121 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 123 : 122;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,

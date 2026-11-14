@@ -692,6 +692,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       body.tool_stream = true;
     }
     if (stream) this._addStreamUsageOptions(body);
+    this._assertImageLimit(body.messages);
     return body;
   }
 
@@ -882,6 +883,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       };
     }
     delete body.response_format;
+    this._assertImageLimit(body.input);
     return body;
   }
 
