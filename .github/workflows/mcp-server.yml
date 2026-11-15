@@ -1,0 +1,44 @@
+name: MCP Server
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mcp-server.yml"
+      - "mcp-server/**"
+      - "web/docs/mcp/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mcp-server.yml"
+      - "mcp-server/**"
+      - "web/docs/mcp/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build, test, and verify release tarball
+        run: npm test

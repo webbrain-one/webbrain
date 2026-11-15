@@ -29,13 +29,22 @@ cd mcp-server && npm install && npm run build
 The MCP server hosts the listener; the extension dials out to it. A Manifest V3 extension cannot listen on a socket, so the direction is fixed.
 
 1. Install the [WebBrain extension](https://webbrain.one) and open your browser.
-2. Print the pairing key:
+2. Print the pairing key (requires `@webbrain/mcp-server` **0.1.2+**):
 
    ```bash
    npx -y @webbrain/mcp-server pairing-key
    ```
 
    The first run creates it in `~/.webbrain/bridge-key` (`%USERPROFILE%\.webbrain\bridge-key` on Windows), readable only by you. You can also open that file and copy its contents.
+
+   > **If `pairing-key` starts the server instead of printing a key:** your environment resolved `@webbrain/mcp-server@0.1.0` (which predates `pairing-key` and the HMAC pairing handshake). Until the `0.1.2+` package is live on your npm mirror, build and run from a source checkout instead:
+   >
+   > ```bash
+   > cd mcp-server && npm install && npm run build
+   > node dist/index.js pairing-key
+   > ```
+   >
+   > and register `node /absolute/path/to/webbrain/mcp-server/dist/index.js` as the MCP command in your client.
 3. In **WebBrain → Settings → Bridge**, set the URL to `ws://127.0.0.1:17374/extension`, paste the key into **Pairing key**, and enable the bridge.
 4. Ask your MCP client to call `webbrain_connection` to confirm.
 
