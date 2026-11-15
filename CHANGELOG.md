@@ -6,6 +6,19 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [49.1.0] - 2026-11-15
+
+### Added
+- The PDF toolbar now has a native-viewer switch and a one-click control to disable the extension's PDF viewer.
+- The vision stability check now measures changes in the target's cells, with added coverage for that geometry.
+- Added a release-pack smoke check and documented the MCP server's 0.1.2+ pairing fallback.
+
+### Changed
+- The CLI entry point now runs from an extracted tarball with its declared dependencies isolated.
+
+### Fixed
+- Falling back to the browser's native PDF viewer from the explicit viewer no longer triggers MIME re-interception.
+
 ## [49.0.1] - 2026-11-14
 
 ### Added
