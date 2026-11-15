@@ -66,6 +66,44 @@ function createScene({ cssWidth = 1440, cssHeight = 900, devicePixelRatio = 2 } 
 for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
 
+  test(`${build}: stability measures changed cells globally and keeps target and stale-screen checks`, async () => {
+    const width = 960; const height = 480;
+    const blank = () => new Uint8ClampedArray(width * height * 4).fill(255);
+    const seen = blank(); const sparse = blank();
+    for (let y = 0; y < height; y += 48) for (let x = 0; x < 720; x += 48) {
+      for (let dy = 0; dy < 6; dy++) for (let dx = 0; dx < 6; dx++) {
+        const i = ((y + dy) * width + x + dx) * 4;
+        sparse[i] = sparse[i + 1] = sparse[i + 2] = 0;
+      }
+    }
+    const { diffFrames } = await import(`../src/${build}/src/agent/vision-diff.js`);
+    const d = diffFrames(seen, sparse, width, height);
+    assert.ok(d.regionAreaRatio > 0.6, `merged patch covers ${d.regionAreaRatio}`);
+    assert.ok(d.changedRatio < 0.2, `changed cells cover ${d.changedRatio}`);
+    const agent = Object.create(Agent.prototype);
+    const session = { keyframe: { url: PAGE, width, height }, seenPixels: seen, cssToKeyframe: (x, y) => ({ x, y }) };
+    let frame = { probe: { url: PAGE }, size: { width, height }, raster: { pixels: sparse } };
+    agent._visionRunState = () => ({ active: true });
+    agent._visionSessions = new Map([[1, session]]);
+    agent._visionCaptureFrame = async () => frame;
+    const check = point => agent._visionStabilityBlock(1, point);
+    assert.equal(await check({ x: 900, y: 240 }), null, 'a distant point is not rejected by patch area');
+    assert.match((await check({ x: 100, y: 100 })).error, /changed near/, 'merged target region remains conservative');
+    assert.match((await check([{ x: 900, y: 240 }, { x: 100, y: 100, label: "the drag's end point" }])).error, /drag's end point/);
+    frame = { ...frame, raster: { pixels: new Uint8ClampedArray(seen.length) } };
+    assert.match((await check({ x: 900, y: 240 })).error, /most of the screen changed/);
+    frame = { ...frame, raster: { pixels: new Uint8ClampedArray(1) } };
+    assert.match((await check({ x: 900, y: 240 })).error, /most of the screen changed/, 'incomparable frames fail closed');
+    frame = { ...frame, probe: { url: 'https://elsewhere.test/' } };
+    assert.match((await check({ x: 900, y: 240 })).error, /page navigated/);
+    frame = { ...frame, probe: { url: PAGE }, size: { width: width - 1, height } };
+    assert.match((await check({ x: 900, y: 240 })).error, /viewport changed/);
+    agent._visionCaptureFrame = async () => { throw new Error('capture failed'); };
+    assert.match((await check({ x: 900, y: 240 })).error, /could not re-check/);
+    assert.equal(session.forceKeyframe, true);
+    assert.equal(session.observationFailed, true);
+  });
+
   function runAgent(next, { visionMode = 'auto', provider = VISION, scene = createScene(), maxSteps = 8, onDispatch = null } = {}) {
     const requests = [];
     const scripted = {
