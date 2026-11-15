@@ -1417,7 +1417,10 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (frame.probe.url !== session.keyframe.url) return refuse(`the page navigated since you read ${which}`);
     if (frame.size.width !== session.keyframe.width || frame.size.height !== session.keyframe.height) return refuse(`the viewport changed since you read ${which}`);
     const d = diffFrames(session.seenPixels, frame.raster.pixels, frame.size.width, frame.size.height);
-    if (d.regionAreaRatio > 0.6) return refuse(`most of the screen changed since you read ${which}`);
+    // Patch rectangles can span unchanged gaps after merging. Count changed
+    // cells for the whole-screen test; keep the conservative patch regions
+    // and margin for each target below. Incomparable frames still refuse.
+    if (!d.comparable || d.changedRatio > 0.6) return refuse(`most of the screen changed since you read ${which}`);
     for (const point of points) {
       const kfPoint = session.cssToKeyframe(point.x, point.y);
       if (pointTouchesRegions(kfPoint, d.regions, STABILITY_MARGIN_PX)) {
