@@ -15,9 +15,9 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -60,12 +60,26 @@ test("packed @webbrain/mcp-server tarball matches pairing-key CLI, pairing proto
   assert.match(bridgeJs, /pairing_proof/);
   assert.match(pairingJs, /webbrain-bridge-pairing-v1:/);
 
-  // Execute the packed CLI entry point with `pairing-key` using an isolated key file.
+  // Expose only the runtime dependencies declared in the packed package.json
+  // inside the extracted package's node_modules so executing the extracted CLI
+  // entry point tests the unpacked tarball in isolation from the repo checkout.
+  const packedNodeModules = join(packedRoot, "node_modules");
+  mkdirSync(packedNodeModules, { recursive: true });
+  for (const dep of Object.keys(packedPkg.dependencies || {})) {
+    const target = join(packageDir, "node_modules", ...dep.split("/"));
+    const linkPath = join(packedNodeModules, ...dep.split("/"));
+    mkdirSync(dirname(linkPath), { recursive: true });
+    symlinkSync(target, linkPath, process.platform === "win32" ? "junction" : "dir");
+  }
+
+  // Execute the extracted CLI entry point (`packedRoot/dist/index.js`) with
+  // `pairing-key` using an isolated key file.
   const keyFile = join(scratchDir, "home", ".webbrain", "bridge-key");
   const env = { ...process.env, WEBBRAIN_BRIDGE_KEY_FILE: keyFile };
   delete env.WEBBRAIN_BRIDGE_KEY;
 
-  const cliRun = spawnSync(process.execPath, [join(packageDir, "dist", "index.js"), "pairing-key"], {
+  const packedBin = join(packedRoot, packedPkg.bin["webbrain-mcp"]);
+  const cliRun = spawnSync(process.execPath, [packedBin, "pairing-key"], {
     cwd: packedRoot,
     env,
     input: "",
