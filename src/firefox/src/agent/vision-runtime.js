@@ -16,7 +16,7 @@
 
 import { resolveVisionMode, normalizeVisionModeSetting } from './vision-mode.js';
 import { VisionSession, VISION_MAX_LIVE_ZOOMS } from './vision-session.js';
-import { diffFrames, planFrameUpdate, pointTouchesRegions } from './vision-diff.js';
+import { diffFrames, planFrameUpdate, pointTouchesChangedCells } from './vision-diff.js';
 import {
   VISION_PROFILES, planVisionImageSize, planZoomImageSize, estimateVisionTokens, visionEncodingFor,
   normalizeVisionQuality,
@@ -1417,13 +1417,13 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (frame.probe.url !== session.keyframe.url) return refuse(`the page navigated since you read ${which}`);
     if (frame.size.width !== session.keyframe.width || frame.size.height !== session.keyframe.height) return refuse(`the viewport changed since you read ${which}`);
     const d = diffFrames(session.seenPixels, frame.raster.pixels, frame.size.width, frame.size.height);
-    // Patch rectangles can span unchanged gaps after merging. Count changed
-    // cells for the whole-screen test; keep the conservative patch regions
-    // and margin for each target below. Incomparable frames still refuse.
+    // Patch rectangles can span unchanged gaps after merging, padding, or
+    // maxRegions reduction. Test both whole-screen coverage and each target
+    // against the changed cell grid itself; incomparable frames still refuse.
     if (!d.comparable || d.changedRatio > 0.6) return refuse(`most of the screen changed since you read ${which}`);
     for (const point of points) {
       const kfPoint = session.cssToKeyframe(point.x, point.y);
-      if (pointTouchesRegions(kfPoint, d.regions, STABILITY_MARGIN_PX)) {
+      if (pointTouchesChangedCells(kfPoint, d, STABILITY_MARGIN_PX)) {
         return refuse(`the screen changed near ${point.label || 'this point'} since you read it`);
       }
     }

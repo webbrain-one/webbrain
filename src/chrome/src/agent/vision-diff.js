@@ -95,7 +95,20 @@ export function diffFrames(previous, next, width, height, options = {}) {
   }
   const totalCells = cols * rows;
   if (!changedCells) {
-    return { comparable: true, regions: [], changedCells: 0, totalCells, changedRatio: 0, regionAreaRatio: 0, cols, rows, cellSize: cell };
+    return {
+      comparable: true,
+      regions: [],
+      changedCells: 0,
+      totalCells,
+      changedRatio: 0,
+      regionAreaRatio: 0,
+      cols,
+      rows,
+      cellSize: cell,
+      width: w,
+      height: h,
+      changed,
+    };
   }
   const boxes = connectedCellBoxes(changed, cols, rows, Math.max(0, Math.floor(opts.mergeGapCells)));
   let regions = boxes.map(box => ({
@@ -122,6 +135,9 @@ export function diffFrames(previous, next, width, height, options = {}) {
     cols,
     rows,
     cellSize: cell,
+    width: w,
+    height: h,
+    changed,
   };
 }
 
@@ -311,6 +327,48 @@ export function pointTouchesRegions(point, regions, margin = 0) {
   if (!point || !Array.isArray(regions)) return false;
   return regions.some(region => point.x >= region.x - margin && point.x <= region.x + region.width + margin
     && point.y >= region.y - margin && point.y <= region.y + region.height + margin);
+}
+
+/**
+ * True when a point (image px) lies in, or within `margin` of, any changed
+ * cell in a `diffFrames()` result. Unlike `pointTouchesRegions(point, diff.regions, margin)`,
+ * this tests the actual changed cell grid (with edge cells clipped to the
+ * frame dimensions) rather than padded/merged/reduced patch bounding boxes,
+ * so unchanged gaps bridged for screenshot cropping are not treated as changed.
+ */
+export function pointTouchesChangedCells(point, diff, margin = 0) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !diff || diff.comparable !== true) {
+    return false;
+  }
+  const cell = Number(diff.cellSize);
+  const cols = Number(diff.cols);
+  const rows = Number(diff.rows);
+  if (!(diff.changed instanceof Uint8Array) || !Number.isInteger(cols) || !Number.isInteger(rows)
+      || cols <= 0 || rows <= 0 || !(cell > 0) || diff.changed.length < cols * rows) {
+    return pointTouchesRegions(point, diff.regions, margin);
+  }
+  if (!diff.changedCells) return false;
+  const m = Math.max(0, Number(margin) || 0);
+  const w = Number.isFinite(diff.width) && diff.width > 0 ? Math.floor(diff.width) : cols * cell;
+  const h = Number.isFinite(diff.height) && diff.height > 0 ? Math.floor(diff.height) : rows * cell;
+  if (point.x < -m || point.y < -m || point.x > w + m || point.y > h + m) return false;
+  const cx0 = clamp(Math.floor((point.x - m) / cell) - 1, 0, cols - 1);
+  const cx1 = clamp(Math.floor((point.x + m) / cell), 0, cols - 1);
+  const cy0 = clamp(Math.floor((point.y - m) / cell) - 1, 0, rows - 1);
+  const cy1 = clamp(Math.floor((point.y + m) / cell), 0, rows - 1);
+  for (let cy = cy0; cy <= cy1; cy++) {
+    const y0 = cy * cell;
+    const y1 = Math.min(h, (cy + 1) * cell);
+    if (y1 <= y0 || point.y < y0 - m || point.y > y1 + m) continue;
+    const rowOffset = cy * cols;
+    for (let cx = cx0; cx <= cx1; cx++) {
+      if (!diff.changed[rowOffset + cx]) continue;
+      const x0 = cx * cell;
+      const x1 = Math.min(w, (cx + 1) * cell);
+      if (x1 > x0 && point.x >= x0 - m && point.x <= x1 + m) return true;
+    }
+  }
+  return false;
 }
 
 /**

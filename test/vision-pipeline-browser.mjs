@@ -1625,3 +1625,115 @@ customElements.define('my-pay', class extends HTMLElement {
     await browser.close();
   }
 });
+
+test('dynamic page with updating badges around a static button permits clicking the static button while refusing a changed target', async () => {
+  const browser = await chromium.launch({ channel: 'chromium', args: ['--window-size=1000,700'] });
+  try {
+    const context = await browser.newContext({ viewport: null });
+    const page = await context.newPage();
+    await page.goto(`${origin}/fixture`);
+    await page.setContent(`<!doctype html><meta charset="utf-8"><style>
+      body { margin: 0; font: 14px sans-serif; background: #fff; }
+      .badge { position: absolute; width: 14px; height: 14px; background: #e8eef7; }
+      #apply { position: absolute; left: 200px; top: 180px; width: 120px; height: 40px; background: rgb(10, 102, 194); color: #fff; border: 0; font-weight: 600; }
+      #moving { position: absolute; left: 560px; top: 420px; width: 120px; height: 40px; background: rgb(40, 140, 80); color: #fff; border: 0; }
+    </style>
+    <div id="b1" class="badge" style="left: 80px; top: 192px"></div>
+    <div id="b2" class="badge" style="left: 400px; top: 192px"></div>
+    <div id="b3" class="badge" style="left: 40px; top: 20px"></div>
+    <div id="b4" class="badge" style="left: 880px; top: 20px"></div>
+    <div id="b5" class="badge" style="left: 40px; top: 580px"></div>
+    <button id="apply" type="button">Easy Apply</button>
+    <button id="moving" type="button">Volatile</button>
+    <script>
+      window.clicked = [];
+      for (const id of ['apply', 'moving']) {
+        document.getElementById(id).addEventListener('click', () => window.clicked.push(id));
+      }
+    </script>`);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const cdp = await context.newCDPSession(page);
+    const { cssVisualViewport: vv } = await cdp.send('Page.getLayoutMetrics');
+    const dpr = await page.evaluate(() => devicePixelRatio);
+    const probe = { cssWidth: vv.clientWidth, cssHeight: vv.clientHeight, scrollX: vv.pageX, scrollY: vv.pageY, devicePixelRatio: dpr, url: page.url() };
+    const plan = { width: probe.cssWidth, height: probe.cssHeight };
+
+    const capturePixels = async () => {
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+      return page.evaluate(async ({ data, plan, probe }) => {
+        const encoder = await import('/agent/vision-encoder.js');
+        const cropped = await encoder.cropImage(
+          `data:image/png;base64,${data}`,
+          { x: 0, y: 0, width: probe.cssWidth * probe.devicePixelRatio, height: probe.cssHeight * probe.devicePixelRatio },
+          plan.width,
+          plan.height,
+        );
+        const raster = await encoder.rasterizeFrame(cropped, plan.width, plan.height);
+        return Array.from(raster.pixels);
+      }, { data: shot.data, plan, probe });
+    };
+
+    const seenPixels = new Uint8ClampedArray(await capturePixels());
+
+    // Flip 5 disconnected small badges around #apply (so reduceRegions merges the
+    // four corners around #apply into a single crop box covering #apply) and also
+    // mutate #moving itself.
+    await page.evaluate(() => {
+      for (const id of ['b1', 'b2', 'b3', 'b4', 'b5']) {
+        document.getElementById(id).style.background = 'rgb(220, 30, 30)';
+      }
+      const moving = document.getElementById('moving');
+      moving.style.top = '500px';
+      moving.style.background = 'rgb(180, 40, 140)';
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+    const livePixels = new Uint8ClampedArray(await capturePixels());
+    const targets = await page.evaluate(() => {
+      const rect = id => {
+        const r = document.getElementById(id).getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      };
+      return { apply: rect('apply'), staleMoving: { x: 620, y: 440 }, newMoving: rect('moving') };
+    });
+
+    for (const build of ['chrome', 'firefox']) {
+      const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+      const { diffFrames, pointTouchesRegions, pointTouchesChangedCells } = await import(`../src/${build}/src/agent/vision-diff.js`);
+      const d = diffFrames(seenPixels, livePixels, plan.width, plan.height);
+      assert.equal(pointTouchesRegions(targets.apply, d.regions, 12), true, `${build}: merged patch region spans across static #apply button`);
+      assert.equal(pointTouchesChangedCells(targets.apply, d, 12), false, `${build}: changed-cell geometry knows #apply did not change`);
+      assert.equal(pointTouchesChangedCells(targets.staleMoving, d, 12), true, `${build}: changed-cell geometry catches moved button`);
+
+      const agent = Object.create(Agent.prototype);
+      const session = {
+        keyframe: { url: probe.url, width: plan.width, height: plan.height },
+        seenPixels,
+        cssToKeyframe: (x, y) => ({ x, y }),
+      };
+      agent._visionRunState = () => ({ active: true });
+      agent._visionSessions = new Map([[1, session]]);
+      agent._visionCaptureFrame = async () => ({
+        probe: { url: probe.url },
+        size: { width: plan.width, height: plan.height },
+        raster: { pixels: livePixels },
+      });
+
+      // Clicking the static #apply button is permitted and lands on the button.
+      assert.equal(await agent._visionStabilityBlock(1, targets.apply), null, `${build}: static button is not blocked`);
+      // Clicking the stale coordinates of #moving is refused.
+      const refused = await agent._visionStabilityBlock(1, targets.staleMoving);
+      assert.match(refused?.error || '', /screen changed near/, `${build}: moved button is refused`);
+
+      // Once the next observation updates seenPixels, retrying #moving at its new position succeeds.
+      session.seenPixels = livePixels;
+      assert.equal(await agent._visionStabilityBlock(1, targets.newMoving), null, `${build}: retry after fresh observation is permitted`);
+    }
+
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: targets.apply.x, y: targets.apply.y, button: 'left', buttons: 1, clickCount: 1 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: targets.apply.x, y: targets.apply.y, button: 'left', buttons: 0, clickCount: 1 });
+    assert.deepEqual(await page.evaluate(() => window.clicked), ['apply']);
+  } finally {
+    await browser.close();
+  }
+});

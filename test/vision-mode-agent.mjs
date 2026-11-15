@@ -66,7 +66,7 @@ function createScene({ cssWidth = 1440, cssHeight = 900, devicePixelRatio = 2 } 
 for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
 
-  test(`${build}: stability measures changed cells globally and keeps target and stale-screen checks`, async () => {
+  test(`${build}: stability measures changed cells globally and per-target while keeping margin, scaling, and stale-screen checks`, async () => {
     const width = 960; const height = 480;
     const blank = () => new Uint8ClampedArray(width * height * 4).fill(255);
     const seen = blank(); const sparse = blank();
@@ -76,10 +76,15 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
         sparse[i] = sparse[i + 1] = sparse[i + 2] = 0;
       }
     }
-    const { diffFrames } = await import(`../src/${build}/src/agent/vision-diff.js`);
+    const { diffFrames, pointTouchesRegions, pointTouchesChangedCells } = await import(`../src/${build}/src/agent/vision-diff.js`);
     const d = diffFrames(seen, sparse, width, height);
     assert.ok(d.regionAreaRatio > 0.6, `merged patch covers ${d.regionAreaRatio}`);
     assert.ok(d.changedRatio < 0.2, `changed cells cover ${d.changedRatio}`);
+    // (124, 124) sits in the 32px unchanged gap between changed cells at 96..112 and 144..160:
+    // the merged crop region covers it, but the nearest changed cell is 12px away at x/y=112 or 144.
+    // (125, 125) is 13px from [96,112] and 19px from [144,160], so outside the 12px cell margin.
+    assert.equal(pointTouchesRegions({ x: 125, y: 125 }, d.regions, 12), true, 'merged crop box covers unchanged gap');
+    assert.equal(pointTouchesChangedCells({ x: 125, y: 125 }, d, 12), false, 'changed-cell check spares unchanged gap');
     const agent = Object.create(Agent.prototype);
     const session = { keyframe: { url: PAGE, width, height }, seenPixels: seen, cssToKeyframe: (x, y) => ({ x, y }) };
     let frame = { probe: { url: PAGE }, size: { width, height }, raster: { pixels: sparse } };
@@ -88,8 +93,18 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
     agent._visionCaptureFrame = async () => frame;
     const check = point => agent._visionStabilityBlock(1, point);
     assert.equal(await check({ x: 900, y: 240 }), null, 'a distant point is not rejected by patch area');
-    assert.match((await check({ x: 100, y: 100 })).error, /changed near/, 'merged target region remains conservative');
-    assert.match((await check([{ x: 900, y: 240 }, { x: 100, y: 100, label: "the drag's end point" }])).error, /drag's end point/);
+    assert.equal(await check({ x: 125, y: 125 }), null, 'an unchanged target inside a bridged crop gap is not rejected');
+    assert.match((await check({ x: 124, y: 104 })).error, /changed near/, 'a point exactly 12px from changed cell [96..112, 96..112] is refused');
+    assert.equal(await check({ x: 124.01, y: 104 }), null, 'a point 12.01px from the changed cell is accepted');
+    assert.match((await check({ x: 100, y: 100 })).error, /changed near/, 'a point inside a changed cell is refused');
+    assert.match((await check([{ x: 125, y: 125, label: "the drag's start point" }, { x: 100, y: 100, label: "the drag's end point" }])).error, /drag's end point/);
+    assert.match((await check([{ x: 100, y: 100, label: "the drag's start point" }, { x: 125, y: 125, label: "the drag's end point" }])).error, /drag's start point/);
+    // CSS-to-keyframe scaling (e.g. CSS viewport 1920x960 downscaled 2x to 960x480 keyframe)
+    // maps CSS coordinates into keyframe space before applying the 12-image-px margin.
+    session.cssToKeyframe = (x, y) => ({ x: x / 2, y: y / 2 });
+    assert.equal(await check({ x: 250, y: 250 }), null, 'CSS (250,250) -> keyframe (125,125) in unchanged gap is accepted');
+    assert.match((await check({ x: 248, y: 208 })).error, /changed near/, 'CSS (248,208) -> keyframe (124,104) at 12px margin is refused');
+    session.cssToKeyframe = (x, y) => ({ x, y });
     frame = { ...frame, raster: { pixels: new Uint8ClampedArray(seen.length) } };
     assert.match((await check({ x: 900, y: 240 })).error, /most of the screen changed/);
     frame = { ...frame, raster: { pixels: new Uint8ClampedArray(1) } };
