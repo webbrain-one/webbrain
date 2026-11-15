@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-15",
+  "startedAt": "2026-11-15T03:31:18.171Z",
+  "stage": "full",
+  "base": "http://192.168.1.51:8010",
+  "model": "ternary-bonsai-2-27b",
+  "quantization": "PTQ1_0",
+  "candidate": "bonsai",
+  "contextCheck": {
+    "checkedAt": "2026-11-15T03:31:17.936Z",
+    "model": "ternary-bonsai-2-27b",
+    "case": "001",
+    "inputTokens": 17366,
+    "maxOutputTokens": 4096,
+    "neededContext": 21462,
+    "contextPerSlot": 32768,
+    "promptSha256": "941a0242751bcccd9aca7e21efc2b188f5e6d0b8bd80a56ab38d66028be80a31"
+  },
+  "chatTemplateSha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+  "protocol": "Exact per-case May 23 request replay; only model changes. No browser actions are executed.",
+  "thinking": "Thinking uses the model template default; no disabling or reasoning-effort override is sent. Raw response evidence is retained.",
+  "source": "test/llm/results/2026-05-23T18-47-31-246Z_chrome_anthropic_claude-sonnet-4.6",
+  "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+  "toolCount": 41,
+  "concurrency": 4,
+  "timeoutMs": 600000,
+  "temperature": 0.15,
+  "maxTokens": 4096,
+  "resumed": true,
+  "successfulCasesPreserved": 95,
+  "campaignStartedAt": "2026-11-15T03:20:39.761Z",
+  "finishedAt": "2026-11-15T03:31:55.620Z",
+  "complete": true,
+  "cases": 100,
+  "errors": 0,
+  "runMetadataFiles": [
+    "run-metadata.json",
+    "resume-001-metadata.json",
+    "resume-002-metadata.json",
+    "resume-003-metadata.json"
+  ],
+  "failedAttemptFiles": [
+    "test/llm/results/2026-11-15-ternary-bonsai2-27b-may23-replay_chrome_ternary-bonsai-2-27b_frozen/018.failed-attempt-1.json",
+    "test/llm/results/2026-11-15-ternary-bonsai2-27b-may23-replay_chrome_ternary-bonsai-2-27b_frozen/079.failed-attempt-1.json"
+  ],
+  "transportFailures": 2,
+  "withToolCall": 96,
+  "withToolCallFromContent": 0,
+  "lengthLimited": 0
+}
