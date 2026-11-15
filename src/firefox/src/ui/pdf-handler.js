@@ -79,7 +79,14 @@ async function fallbackToNative(message = '') {
     const tabIdValue = params.get('tabId');
     const tabId = tabIdValue == null ? NaN : Number(tabIdValue);
     if (['http:', 'https:'].includes(url.protocol) && Number.isInteger(tabId) && tabId >= 0) {
-      await api?.tabs?.update?.(tabId, { url: url.href });
+      let targetTabId = tabId;
+      try {
+        const currentTab = await api?.tabs?.getCurrent?.();
+        if (Number.isInteger(currentTab?.id) && currentTab.id >= 0) {
+          targetTabId = currentTab.id;
+        }
+      } catch {}
+      await api?.tabs?.update?.(targetTabId, { url: url.href });
       return;
     }
   } catch {

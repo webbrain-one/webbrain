@@ -121,6 +121,9 @@ async function testPdfHandlerProvidesCompleteViewerControls() {
   assert.match(source, /elements\['native-viewer'\]\?\.addEventListener\('click'/);
   assert.match(source, /elements\['disable-pdf-viewer'\]\?\.addEventListener\('click'/);
   assert.match(source, /async function disablePdfViewerAndFallback\(\)/);
+  assert.match(source, /async function markNativeBypassForTab\(tabId\)/);
+  assert.match(source, /async function consumeNativeBypassForTab\(tabId\)/);
+  assert.match(source, /if \(await consumeNativeBypassForTab\(streamInfo\?\.tabId\)\)/);
   assert.match(source, /api\?\.storage\?\.local\?\.set\?\.\(\{ \[PDF_VIEWER_ENABLED_KEY\]: false \}\)/);
   assert.match(source, /api\?\.storage\?\.onChanged\?\.addListener\?\.\(\(changes, areaName\) =>/);
   assert.match(i18nSource, /pdfViewerTranslations/);

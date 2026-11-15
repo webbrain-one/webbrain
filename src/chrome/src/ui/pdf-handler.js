@@ -14,6 +14,8 @@ const MIN_SCALE = .5;
 const MAX_SCALE = 3;
 const SCALE_STEP = .15;
 const PDF_VIEWER_ENABLED_KEY = 'pdfViewerEnabled';
+const PDF_NATIVE_BYPASS_KEY_PREFIX = 'pdfNativeBypassTab:';
+const PDF_NATIVE_BYPASS_TTL_MS = 30_000;
 const MAX_PDF_BYTES = 64 * 1024 * 1024;
 const MAX_PDF_PAGES = 500;
 // Render every page upfront only for small documents. Larger documents get
@@ -55,6 +57,29 @@ function setStatus(message, kind = '') {
   elements['pdf-status'].dataset.kind = kind;
 }
 
+async function markNativeBypassForTab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return;
+  try {
+    await api?.storage?.local?.set?.({ [`${PDF_NATIVE_BYPASS_KEY_PREFIX}${tabId}`]: Date.now() });
+  } catch {
+    // Best-effort per-tab bypass marker before navigating back to the PDF URL.
+  }
+}
+
+async function consumeNativeBypassForTab(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return false;
+  const key = `${PDF_NATIVE_BYPASS_KEY_PREFIX}${tabId}`;
+  try {
+    const stored = await api?.storage?.local?.get?.(key);
+    const timestamp = Number(stored?.[key]);
+    if (!Number.isFinite(timestamp)) return false;
+    await api?.storage?.local?.remove?.(key);
+    return Date.now() - timestamp <= PDF_NATIVE_BYPASS_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
 async function fallbackToNative(message = '') {
   if (message) setStatus(message, 'error');
   try {
@@ -63,7 +88,15 @@ async function fallbackToNative(message = '') {
     const tabIdValue = params.get('tabId');
     const tabId = tabIdValue == null ? NaN : Number(tabIdValue);
     if (['http:', 'https:'].includes(url.protocol) && Number.isInteger(tabId) && tabId >= 0) {
-      await api?.tabs?.update?.(tabId, { url: url.href });
+      let targetTabId = tabId;
+      try {
+        const currentTab = await api?.tabs?.getCurrent?.();
+        if (Number.isInteger(currentTab?.id) && currentTab.id >= 0) {
+          targetTabId = currentTab.id;
+        }
+      } catch {}
+      await markNativeBypassForTab(targetTabId);
+      await api?.tabs?.update?.(targetTabId, { url: url.href });
       return;
     }
   } catch {
@@ -712,6 +745,10 @@ async function initialize() {
     ? { streamUrl: explicitUrl, tabId: explicitTabId, originalUrl: explicitUrl, embedded: false }
     : await api.mimeHandler.getStreamInfo();
   if (!explicitViewer) {
+    if (await consumeNativeBypassForTab(streamInfo?.tabId)) {
+      await fallbackToNative();
+      return;
+    }
     if (elements['disable-pdf-viewer']) elements['disable-pdf-viewer'].hidden = false;
     api?.storage?.onChanged?.addListener?.((changes, areaName) => {
       if (areaName !== 'local' || !changes?.[PDF_VIEWER_ENABLED_KEY]) return;
