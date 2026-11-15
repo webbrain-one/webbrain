@@ -102,12 +102,33 @@ async function testPdfPreferencesRejectMalformedValues() {
 async function testPdfHandlerProvidesCompleteViewerControls() {
   const html = await readFile(handlerHtmlPath, 'utf8');
   const source = await readFile(handlerJsPath, 'utf8');
+  const firefoxHtml = await readFile(path.join(root, 'src', 'firefox', 'src', 'ui', 'pdf-handler.html'), 'utf8');
+  const firefoxSource = await readFile(path.join(root, 'src', 'firefox', 'src', 'ui', 'pdf-handler.js'), 'utf8');
+  const i18nSource = await readFile(path.join(root, 'src', 'chrome', 'src', 'ui', 'i18n.js'), 'utf8');
+  const { pdfViewerEnglish, pdfViewerTranslations } = await import(
+    pathToFileURL(path.join(root, 'src', 'chrome', 'src', 'ui', 'locales', 'pdf-viewer-copy.mjs')).href
+  );
   for (const id of [
     'previous-page', 'page-number', 'page-count', 'next-page',
     'zoom-out', 'fit-width', 'zoom-in', 'rotate-page',
     'document-search', 'download-pdf', 'print-pdf',
+    'native-viewer', 'disable-pdf-viewer',
   ]) {
     assert.match(html, new RegExp(`id="${id}"`), `viewer control ${id} is missing`);
+  }
+  assert.match(firefoxHtml, /id="native-viewer"/, 'Firefox viewer control native-viewer is missing');
+  assert.match(firefoxSource, /elements\['native-viewer'\]\?\.addEventListener\('click'/);
+  assert.match(source, /elements\['native-viewer'\]\?\.addEventListener\('click'/);
+  assert.match(source, /elements\['disable-pdf-viewer'\]\?\.addEventListener\('click'/);
+  assert.match(source, /async function disablePdfViewerAndFallback\(\)/);
+  assert.match(source, /api\?\.storage\?\.local\?\.set\?\.\(\{ \[PDF_VIEWER_ENABLED_KEY\]: false \}\)/);
+  assert.match(source, /api\?\.storage\?\.onChanged\?\.addListener\?\.\(\(changes, areaName\) =>/);
+  assert.match(i18nSource, /pdfViewerTranslations/);
+  assert.ok(pdfViewerEnglish['st.display.pdf_viewer.label']);
+  assert.ok(pdfViewerEnglish['st.display.pdf_viewer.desc']);
+  for (const locale of ['es', 'fr', 'tr', 'zh', 'ru', 'uk', 'ar', 'ja', 'ko', 'id', 'th', 'ms', 'tl', 'pl', 'he', 'hi', 'pt', 'vi', 'bn', 'fa', 'nl', 'de']) {
+    assert.ok(pdfViewerTranslations[locale]?.['st.display.pdf_viewer.label'], `missing PDF viewer label translation for ${locale}`);
+    assert.ok(pdfViewerTranslations[locale]?.['st.display.pdf_viewer.desc'], `missing PDF viewer desc translation for ${locale}`);
   }
   assert.match(source, /for \(let pageNumber = 1; pageNumber <= (?:state\.)?pdf\.numPages; pageNumber\+\+\)/);
   assert.match(source, /getTextContent\(\)/);

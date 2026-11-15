@@ -401,6 +401,49 @@ async function main() {
     const enabledByDefaultRouting = await inspectPdfRouting(context, `${fixture.url}?mode=enabled-by-default`, extensionId);
     assert.equal(enabledByDefaultRouting.sawWebBrainHandler, true, `Default PDF handling did not enter WebBrain: ${enabledByDefaultRouting.urls.join(', ')}`);
 
+    // Verify that clicking "Always use Chrome viewer" (#disable-pdf-viewer) inside
+    // an open WebBrain PDF viewer tab turns off pdfViewerEnabled, disables the
+    // MIME handler, and immediately falls back to Chrome's native PDF viewer.
+    {
+      const pdfPage = await context.newPage();
+      const handlerPrefix = `chrome-extension://${extensionId}/src/ui/pdf-handler.html`;
+      try {
+        await pdfPage.goto(`${fixture.url}?mode=disable-from-toolbar`, { waitUntil: 'commit', timeout: 30_000 });
+        await pdfPage.waitForTimeout(2000);
+        const handlerFrame = pdfPage.frames().find(frame => frame.url().startsWith(handlerPrefix));
+        assert.ok(handlerFrame, 'WebBrain PDF handler frame did not load before toolbar disable test.');
+        const disableButtonVisible = await handlerFrame.evaluate(() => {
+          const btn = document.getElementById('disable-pdf-viewer');
+          const nativeBtn = document.getElementById('native-viewer');
+          return Boolean(btn && !btn.hidden && nativeBtn && !nativeBtn.disabled);
+        });
+        assert.equal(disableButtonVisible, true, 'Toolbar native/disable buttons were not visible in MIME-handled PDF viewer.');
+        await handlerFrame.click('#disable-pdf-viewer');
+        await waitForNativeHandlerOption(settings, false);
+        const deadline = Date.now() + 10_000;
+        let switchedToNative = false;
+        while (Date.now() < deadline) {
+          const frameUrls = pdfPage.frames().map(frame => frame.url());
+          const hasWebBrainFrame = frameUrls.some(url => url.startsWith(handlerPrefix));
+          const hasNativeFrame = frameUrls.some(
+            url => url.startsWith('chrome-extension://') && !url.startsWith(`chrome-extension://${extensionId}/`),
+          );
+          if (!hasWebBrainFrame && hasNativeFrame) {
+            switchedToNative = true;
+            break;
+          }
+          await pdfPage.waitForTimeout(100);
+        }
+        assert.equal(switchedToNative, true, `Toolbar disable button did not switch open PDF tab to native viewer: ${pdfPage.frames().map(f => f.url()).join(', ')}`);
+        const storedAfterDisable = await settings.evaluate(async () => chrome.storage.local.get(['pdfViewerEnabled']));
+        assert.equal(storedAfterDisable.pdfViewerEnabled, false, 'Toolbar disable button did not persist pdfViewerEnabled: false.');
+      } finally {
+        await pdfPage.close();
+      }
+    }
+
+    await setPdfViewerToggle(settings, true);
+    await waitForNativeHandlerOption(settings, true);
     await setPdfViewerToggle(settings, false);
     await waitForNativeHandlerOption(settings, false);
     const disabledAgainRouting = await inspectPdfRouting(context, `${fixture.url}?mode=disabled-again`, extensionId);

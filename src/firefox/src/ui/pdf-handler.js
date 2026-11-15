@@ -5,6 +5,7 @@ const elements = Object.fromEntries([
   'pdf-title', 'pdf-stage', 'pdf-status', 'pdf-pages', 'previous-page', 'page-number',
   'page-count', 'next-page', 'zoom-out', 'fit-width', 'zoom-in', 'rotate-page',
   'search-form', 'document-search', 'search-submit', 'download-pdf', 'print-pdf', 'ocr-page', 'cancel-ocr-page',
+  'native-viewer',
 ].map(id => [id, document.getElementById(id)]));
 
 const MIN_SCALE = .5;
@@ -662,6 +663,9 @@ elements['print-pdf'].addEventListener('click', () => {
 });
 elements['ocr-page'].addEventListener('click', () => ocrCurrentPage());
 elements['cancel-ocr-page'].addEventListener('click', () => cancelOcrRequest());
+elements['native-viewer']?.addEventListener('click', () => {
+  fallbackToNative();
+});
 elements['pdf-stage'].addEventListener('scroll', updateCurrentPageFromScroll, { passive: true });
 globalThis.addEventListener('resize', () => {
   if (!state.pdf || !state.fitWidth || state.printing) return;

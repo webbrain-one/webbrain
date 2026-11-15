@@ -37,7 +37,7 @@ import fa from './locales/fa.js';
 import nl from './locales/nl.js';
 import de from './locales/de.js';
 import { providerGuideEnglish, providerGuideTranslations } from './locales/provider-guide-copy.mjs';
-import { pdfViewerEnglish } from './locales/pdf-viewer-copy.mjs';
+import { pdfViewerEnglish, pdfViewerTranslations } from './locales/pdf-viewer-copy.mjs';
 
 const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa, nl, de })
   .map(([code, dict]) => [code, {
@@ -62,6 +62,7 @@ const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar
     ...(settingsLayoutTranslations[code] || {}),
     ...(safeSocialTranslations[code] || {}),
     ...(providerGuideTranslations[code] || {}),
+    ...(pdfViewerTranslations[code] || {}),
   }]));
 const LS_KEY = 'wbLocale';
 const RTL_LOCALES = new Set(['ar', 'he', 'fa']);

@@ -7,6 +7,7 @@ const elements = Object.fromEntries([
   'pdf-title', 'pdf-stage', 'pdf-status', 'pdf-pages', 'previous-page', 'page-number',
   'page-count', 'next-page', 'zoom-out', 'fit-width', 'zoom-in', 'rotate-page',
   'search-form', 'document-search', 'search-submit', 'download-pdf', 'print-pdf', 'ocr-page', 'cancel-ocr-page',
+  'native-viewer', 'disable-pdf-viewer',
 ].map(id => [id, document.getElementById(id)]));
 
 const MIN_SCALE = .5;
@@ -75,6 +76,21 @@ async function fallbackToNative(message = '') {
   } catch {
     // Keep the actionable error visible if native fallback is unavailable.
   }
+}
+
+async function disablePdfViewerAndFallback() {
+  if (elements['disable-pdf-viewer']) elements['disable-pdf-viewer'].disabled = true;
+  try {
+    await api?.storage?.local?.set?.({ [PDF_VIEWER_ENABLED_KEY]: false });
+  } catch {
+    // Continue with runtime disable and fallback even if storage write fails.
+  }
+  try {
+    await api?.mimeHandler?.setMimeHandlerOptions?.('application/pdf', { enabled: false });
+  } catch {
+    // Background storage listener also reconciles mimeHandler options.
+  }
+  await fallbackToNative();
 }
 
 function clampScale(value) {
@@ -646,6 +662,12 @@ elements['print-pdf'].addEventListener('click', () => {
 });
 elements['ocr-page'].addEventListener('click', () => ocrCurrentPage());
 elements['cancel-ocr-page'].addEventListener('click', () => cancelOcrRequest());
+elements['native-viewer']?.addEventListener('click', () => {
+  fallbackToNative();
+});
+elements['disable-pdf-viewer']?.addEventListener('click', () => {
+  disablePdfViewerAndFallback();
+});
 elements['pdf-stage'].addEventListener('scroll', updateCurrentPageFromScroll, { passive: true });
 globalThis.addEventListener('resize', () => {
   if (!state.pdf || !state.fitWidth || state.printing) return;
@@ -689,6 +711,16 @@ async function initialize() {
   const streamInfo = explicitViewer
     ? { streamUrl: explicitUrl, tabId: explicitTabId, originalUrl: explicitUrl, embedded: false }
     : await api.mimeHandler.getStreamInfo();
+  if (!explicitViewer) {
+    if (elements['disable-pdf-viewer']) elements['disable-pdf-viewer'].hidden = false;
+    api?.storage?.onChanged?.addListener?.((changes, areaName) => {
+      if (areaName !== 'local' || !changes?.[PDF_VIEWER_ENABLED_KEY]) return;
+      const nextValue = changes[PDF_VIEWER_ENABLED_KEY].newValue;
+      if (nextValue !== undefined && nextValue !== true) {
+        fallbackToNative();
+      }
+    });
+  }
   if (!streamInfo?.streamUrl || !Number.isInteger(streamInfo.tabId)) {
     throw new Error('No readable PDF stream was provided. Open an online PDF or use the explicit WebBrain PDF viewer link.');
   }
