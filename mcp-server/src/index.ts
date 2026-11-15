@@ -22,6 +22,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 
 import { BridgeError, WebBrainBridge, type CloudSnapshot } from "./bridge.js";
@@ -30,11 +31,18 @@ import { loadPairingKey } from "./pairing.js";
 import { abort, awaitSettled, describeSnapshot, getStatus, respond, startRun } from "./runs.js";
 import { taskMemorySchema } from "./task-memory.js";
 
+const packageJson = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version?: string };
+const SERVER_VERSION = typeof packageJson.version === "string" && packageJson.version.trim()
+  ? packageJson.version.trim()
+  : "0.1.2";
+
 const bridge = new WebBrainBridge();
 
 const server = new McpServer({
   name: "webbrain",
-  version: "0.1.0",
+  version: SERVER_VERSION,
 });
 
 type TextResult = {
