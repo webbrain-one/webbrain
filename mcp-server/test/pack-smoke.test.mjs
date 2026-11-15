@@ -17,20 +17,48 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
+function resolveNpmCliJs() {
+  const fromEnv = process.env.npm_execpath;
+  if (fromEnv && /\.[cm]?js$/i.test(fromEnv) && existsSync(fromEnv)) {
+    return fromEnv;
+  }
+  const nodeDir = dirname(process.execPath);
+  const candidates = [
+    join(nodeDir, "node_modules", "npm", "bin", "npm-cli.js"),
+    join(nodeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    join(nodeDir, "..", "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  for (const dir of (process.env.PATH || "").split(delimiter).filter(Boolean)) {
+    candidates.push(
+      join(dir, "node_modules", "npm", "bin", "npm-cli.js"),
+      join(dir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    );
+  }
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    `Unable to locate npm-cli.js (npm_execpath=${JSON.stringify(fromEnv)}, execPath=${process.execPath})`,
+  );
+}
+
 test("packed @webbrain/mcp-server tarball matches pairing-key CLI, pairing protocol, and setup guide", (t) => {
   const scratchDir = mkdtempSync(join(tmpdir(), "webbrain-mcp-pack-"));
   t.after(() => rmSync(scratchDir, { recursive: true, force: true }));
 
+  const npmCliJs = resolveNpmCliJs();
   const packOut = execFileSync(
-    process.platform === "win32" ? "npm.cmd" : "npm",
-    ["pack", "--ignore-scripts", "--pack-destination", scratchDir],
+    process.execPath,
+    [npmCliJs, "pack", "--ignore-scripts", "--pack-destination", scratchDir],
     { cwd: packageDir, encoding: "utf8" },
   ).trim();
   const tarballName = packOut.split(/\r?\n/).pop()?.trim();
@@ -38,8 +66,7 @@ test("packed @webbrain/mcp-server tarball matches pairing-key CLI, pairing proto
   const tarballPath = join(scratchDir, tarballName);
   assert.ok(existsSync(tarballPath), `missing packed tarball at ${tarballPath}`);
 
-  const unpackDir = join(scratchDir, "unpacked");
-  execFileSync("tar", ["-xzf", tarballPath, "-C", scratchDir]);
+  execFileSync("tar", ["-xzf", tarballName], { cwd: scratchDir });
   const packedRoot = join(scratchDir, "package");
   assert.ok(existsSync(packedRoot), "tarball did not extract a package/ root");
 
