@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-11-15T03:31:17.936Z",
+  "model": "ternary-bonsai-2-27b",
+  "case": "001",
+  "inputTokens": 17366,
+  "maxOutputTokens": 4096,
+  "neededContext": 21462,
+  "contextPerSlot": 32768,
+  "promptSha256": "941a0242751bcccd9aca7e21efc2b188f5e6d0b8bd80a56ab38d66028be80a31"
+}
