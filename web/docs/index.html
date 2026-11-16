@@ -105,24 +105,26 @@
 
         <section class="walkthrough-card" id="settings-walkthrough" aria-labelledby="settings-walkthrough-title">
           <div class="walkthrough-copy">
-            <div class="eyebrow">Watch first · 12 min 40 sec</div>
+            <div class="eyebrow">Watch first · 14 min 18 sec</div>
             <h2 id="settings-walkthrough-title">Settings, from the useful defaults to the advanced controls.</h2>
-            <p>Start with the few choices most people need, then follow Settings through providers, supporting models, memory, skills, permissions, and the advanced controls. The video shows an older layout: Providers and Permissions now have pages of their own, the supporting models are tabs on the Providers page, and Budgets, CAPTCHA and Advanced are Settings tabs.</p>
+            <p>Follow the new Settings sidebar from General and its combined switches through Models, Permissions &amp; privacy, Budgets, Memory, Skills, integrations, Offline, and Advanced. Start with the useful defaults, then explore the controls you need, with narration and English captions.</p>
           </div>
           <div class="walkthrough-player">
-            <video controls preload="metadata" playsinline poster="/assets/webbrain-settings-walkthrough-poster.jpg">
-              <source src="/assets/webbrain-settings-walkthrough-1080p.mp4" type="video/mp4">
-              Your browser does not support embedded video. <a href="/assets/webbrain-settings-walkthrough-1080p.mp4">Open the walkthrough video</a>.
+            <video controls preload="metadata" playsinline poster="/assets/webbrain-settings-walkthrough-poster.jpg?v=49.0.0" aria-label="WebBrain Settings walkthrough">
+              <source src="/assets/webbrain-settings-walkthrough-1080p.mp4?v=49.0.0" type="video/mp4">
+              <track kind="captions" src="/assets/webbrain-settings-walkthrough-en.vtt?v=49.0.0" srclang="en" label="English">
+              <track kind="chapters" src="/assets/webbrain-settings-walkthrough-chapters.vtt?v=49.0.0" srclang="en" label="Chapters">
+              Your browser does not support embedded video. <a href="/assets/webbrain-settings-walkthrough-1080p.mp4?v=49.0.0">Open the walkthrough video</a>.
             </video>
           </div>
           <div class="walkthrough-actions">
-            <span class="walkthrough-meta">WebBrain 22.3.1 · 1080p · humane narration</span>
+            <span class="walkthrough-meta">WebBrain 49.0.0 · 1080p · humane narration</span>
           </div>
         </section>
 
         <div class="path-grid">
           <a class="path-card" href="#first-run"><span class="tab-key">New here</span><h2>Get a useful result</h2><p>Open the panel, pick the right mode, and complete a first task without changing settings.</p><span class="arrow">First 10 minutes →</span></a>
-          <a class="path-card" href="/docs/settings/"><span class="tab-key">Control the agent</span><h2>Understand Settings</h2><p>What each tab changes, which defaults are sensible, and what new users can safely ignore.</p><span class="arrow">Open the settings guide →</span></a>
+          <a class="path-card" href="/docs/settings/"><span class="tab-key">Control the agent</span><h2>Understand Settings</h2><p>What each section changes, which defaults are sensible, and what new users can safely ignore.</p><span class="arrow">Open the settings guide →</span></a>
           <a class="path-card" href="/docs/providers/"><span class="tab-key">Bring a model</span><h2>Choose a provider</h2><p>Use WebBrain Compass, a cloud API, a router, or a local model—and know what the fields mean.</p><span class="arrow">Choose a model →</span></a>
           <a class="path-card" href="/docs/safety/"><span class="tab-key">Stay in control</span><h2>Use Act mode safely</h2><p>Learn Ask, Act, Dev, site permissions, memory boundaries, and the two dangerous overrides.</p><span class="arrow">Review safety →</span></a>
           <a class="path-card" href="/docs/apocalypse-mode/"><span class="tab-key">Prepare for offline</span><h2>Set up Apocalypse Mode</h2><p>Keep local text and vision models, offline Wikipedia, textbooks, health references, and field manuals in your browser.</p><span class="arrow">Build your offline kit →</span></a>
@@ -160,17 +162,17 @@
       <section class="doc-section" id="settings-map">
         <div class="eyebrow">A map, not a checklist</div>
         <h2>Settings at a glance</h2>
-        <p>You do not need to configure everything. Providers and Permissions are pages of their own; the rest are Settings tabs, along with Skills, CAPTCHA and Bridge for specific add-ons. The color at the bottom of each block shows how often a typical person needs it.</p>
+        <p>You do not need to configure everything. Settings is one page with a sidebar; besides the sections below it holds Skills, CAPTCHA and Bridge for specific add-ons, and Offline for Apocalypse Mode. The color at the bottom of each block shows how often a typical person needs it.</p>
         <div class="settings-map" aria-label="Settings depth map">
           <div class="setting-node everyday"><strong>General</strong><span>behavior & comfort</span></div>
-          <div class="setting-node everyday"><strong>Providers</strong><span>the model & its helpers</span></div>
-          <div class="setting-node everyday"><strong>Permissions</strong><span>where it may act</span></div>
+          <div class="setting-node everyday"><strong>Models</strong><span>the model & its helpers</span></div>
+          <div class="setting-node everyday"><strong>Permissions & privacy</strong><span>where it may act</span></div>
           <div class="setting-node sometimes"><strong>Budgets</strong><span>spend, time & steps</span></div>
           <div class="setting-node sometimes"><strong>Memory</strong><span>what persists</span></div>
           <div class="setting-node expert"><strong>Advanced</strong><span>expert switches</span></div>
         </div>
         <div class="depth-legend"><span>Everyday control</span><span class="sometimes">When you need it</span><span class="expert">Advanced trust decision</span></div>
-        <div class="callout"><strong class="callout-title">The safe baseline</strong><p>Keep <strong>Plan before Act</strong> on Try, <strong>plan review</strong> on the confidence threshold, <strong>scheduled confirmations</strong> on, and <strong>Ask before consequential actions</strong> on. You can get very far without changing anything else.</p></div>
+        <div class="callout"><strong class="callout-title">The safe baseline</strong><p>Keep <strong>Agent supervision</strong> on Balanced, <strong>scheduled confirmations</strong> on, and <strong>Ask before consequential actions</strong> on. You can get very far without changing anything else.</p></div>
       </section>
 
       <section class="doc-section" id="technical-docs">

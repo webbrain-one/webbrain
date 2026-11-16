@@ -175,7 +175,7 @@ function popupTabMenu(ctx, w, tab, { x, y }) {
   const menu = Menu.buildFromTemplate([
     { label: t('tabMenu.newTabRight'), click: () => w.addTab({ after: tab }) },
     { type: 'separator' },
-    { label: t('tabMenu.reload'), click: () => tab.wc.reload() },
+    { label: t('tabMenu.reload'), click: () => tab.reload() },
     { label: t('tabMenu.duplicate'), click: () => w.addTab({ url: tab.url, after: tab }) },
     { label: t(tab.wc.isAudioMuted() ? 'tabMenu.unmute' : 'tabMenu.mute'), click: () => { tab.wc.setAudioMuted(!tab.wc.isAudioMuted()); w.scheduleState(); } },
     { label: t('tabMenu.openWebBrain'), click: () => { w.selectTab(tab); ctx.crx.clickAction(w); } },

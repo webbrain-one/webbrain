@@ -15,6 +15,9 @@ const page = { tabUrl: 'https://www.linkedin.com/messaging/thread/owned/', tabTi
 for (const browser of ['chrome', 'firefox']) {
   const { OpenAICompatibleProvider } = await import(`../src/${browser}/src/providers/openai.js`);
   const { Agent } = await import(`../src/${browser}/src/agent/agent.js`);
+  const { retryModelCall, retryModelStream } = await import(`../src/${browser}/src/providers/model-retry.js`);
+  const cooldownBody = fields => JSON.stringify({ error: { code: 'model_cooldown',
+    message: 'All credentials for model gemini-3.8-flash-high are cooling down', ...fields } });
   const makeProvider = () => new OpenAICompatibleProvider({ providerName: 'webbrain-companion',
     baseUrl: 'http://127.0.0.1:8327/v1', model: 'gemini-3.8-flash-high', apiKey: 'test-only' });
   const cooldown = () => makeProvider()._httpError(429, body, 'webbrain-companion error 429');
@@ -83,7 +86,70 @@ for (const browser of ['chrome', 'firefox']) {
     const provider = new OpenAICompatibleProvider({ providerName: 'openrouter', model: 'test' });
     const error = provider._httpError(429, body, 'router error');
     assert.equal(error.modelUnavailableMessage, undefined);
+    assert.equal(error.retryAfterMs, null);
     assert.match(error.message, /last_upstream_error/);
+  });
+
+  // QA 2026-11-13 A1: a quota that resets in hours was retried three times
+  // over a minute before the same message was shown.
+  test(`${browser}: a quota reset hours away fails at once instead of being retried as a rate limit`, async () => {
+    const error = cooldown();
+    assert.equal(error.retryAfterMs, (38 * 3600 + 52 * 60 + 48) * 1000);
+    await assert.rejects(retryModelCall(error, async () => assert.fail('Do not ask again before the reset'), {
+      onRetry: async () => assert.fail('No retry is announced'),
+      sleep: async () => assert.fail('Do not wait for a reset hours away'),
+    }), value => value === error);
+  });
+
+  test(`${browser}: a streamed quota error whose outer JSON was cut off sends one request`, async () => {
+    const original = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = async () => { requests++; return new Response(body, { status: 429 }); };
+    try {
+      await assert.rejects(async () => {
+        const stream = retryModelStream(() => makeProvider().chatStream([{ role: 'user', content: 'Read this' }]),
+          { sleep: async () => assert.fail('Do not wait for a reset hours away') });
+        for await (const chunk of stream) assert.fail(JSON.stringify(chunk));
+      }, error => {
+        assert.equal(error.code, 'model_cooldown');
+        assert.ok(error.retryAfterMs > 60000, `retryAfterMs ${error.retryAfterMs}`);
+        assert.match(error.message, /38h52m48s/);
+        return true;
+      });
+    } finally { globalThis.fetch = original; }
+    assert.equal(requests, 1);
+  });
+
+  test(`${browser}: short Companion cooldowns stay retryable after the reported reset`, async () => {
+    for (const [fields, expected] of [
+      [{ reset_seconds: 12, reset_time: '12s' }, 12000],
+      [{ last_upstream_error: JSON.stringify({ error: { message: 'Individual quota reached. Resets in 20s.' } }) }, 20000],
+    ]) {
+      const error = makeProvider()._httpError(429, cooldownBody(fields), 'companion error');
+      assert.equal(error.retryAfterMs, expected);
+      const waits = [];
+      assert.equal(await retryModelCall(error, async () => 'OK', { random: () => 0, sleep: async ms => waits.push(ms) }), 'OK');
+      assert.deepEqual(waits, [expected]);
+    }
+  });
+
+  test(`${browser}: the longest reset the Companion or the upstream quota reports decides`, async () => {
+    const hours = (38 * 3600 + 52 * 60 + 48) * 1000;
+    // A proxy backoff or Retry-After shorter than the upstream quota reset
+    // cannot restore the quota.
+    assert.equal(makeProvider()._httpError(429, cooldownBody({ reset_seconds: 1,
+      last_upstream_error: JSON.stringify(upstream) }), 'companion error', '1').retryAfterMs, hours);
+    // A credential cooldown with no upstream text uses the Companion's reset.
+    const far = makeProvider()._httpError(429, cooldownBody({ reset_seconds: 7200, reset_time: '2h0m0s' }), 'companion error');
+    assert.equal(far.retryAfterMs, 7200000);
+    assert.match(far.message, /no available credentials/);
+    await assert.rejects(retryModelCall(far, async () => assert.fail('Do not ask again before the reset'),
+      { sleep: async () => assert.fail('Do not wait') }), value => value === far);
+    assert.equal(makeProvider()._httpError(429, cooldownBody({}), 'companion error', '45').retryAfterMs, 45000);
+    // A reset cut off by the bounded body read is not a reset.
+    for (const cut of ['{"error":{"code":"model_cooldown","reset_seconds":158', '{"error":{"code":"model_cooldown","message":"Individual quota reached. Resets in 43h5']) {
+      assert.equal(makeProvider()._httpError(429, cut, 'companion error').retryAfterMs, null, cut);
+    }
   });
 
   test(`${browser}: scope errors show readable text after the existing recovery attempts`, async () => {

@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
+import WebSocket from "ws";
 
 const allocator = createServer();
 allocator.listen(0, "127.0.0.1");

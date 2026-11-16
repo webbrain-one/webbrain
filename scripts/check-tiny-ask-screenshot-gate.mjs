@@ -193,8 +193,8 @@ try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 30000 });
   const id = new URL(worker.url()).host;
   const harness = await context.newPage();
-  // Decision fixtures and D1 controls answer only the Providers page.
-  await harness.goto(`chrome-extension://${id}/src/ui/providers.html`);
+  // Decision fixtures and D1 controls answer only the Settings page.
+  await harness.goto(`chrome-extension://${id}/src/ui/settings.html#decision`);
   const message = (action, data = {}) => harness.evaluate(({ action, data }) => chrome.runtime.sendMessage({ target: 'background', action, ...data }), { action, data });
   await harness.evaluate(() => chrome.storage.local.set({ onboardingComplete: true, wbLocale: 'en', helpImproveWebBrain: false }));
   result.extensionVersion = await harness.evaluate(() => chrome.runtime.getManifest().version);

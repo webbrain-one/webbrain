@@ -70,7 +70,8 @@ type Settings struct {
 	Local               Local    `json:"local"`
 	Decision            Decision `json:"decision"`
 	// Welcomed is set after the first panel opening so it is not repeated.
-	Welcomed bool `json:"welcomed"`
+	Welcomed     bool `json:"welcomed"`
+	ShowAllUsage bool `json:"show_all_usage,omitempty"`
 	// ManualUpdates turns off automatic updates: new versions are still
 	// reported, and install only when asked.
 	ManualUpdates bool `json:"manual_updates,omitempty"`

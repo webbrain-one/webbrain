@@ -251,6 +251,92 @@ for (const [build, Agent] of [['chrome', ChromeAgent], ['firefox', FirefoxAgent]
     } finally { await f.browser.close(); }
   });
 
+  // recipient-guard-refusal: the page names no recipient, but the user can
+  // see who the conversation is with. The tool batch (recipientCard) asks
+  // them on WebBrain's hard card; "Go ahead" binds this one send to the
+  // composer and the draft they saw, in the page itself.
+  test(`${build}: a send whose recipient the page does not name goes out once after the user's answer, bound to the draft`, async () => {
+    const draft = 'Hi Bob, sending the invoice now';
+    const start = async () => {
+      const f = await fixture(build, Agent, { url: CHAT_URL, html: chatPage(), recipients: ['alice@example.com'] });
+      Object.assign(f.agent._planExecutionGuards.get(71), { enabled: true, taskKey: 'recipient-task' });
+      f.agent._taskTokens.set(71, 'task-71');
+      f.check = async (context = {}) => ({ context,
+        blocked: await f.agent._messageRecipientGuardBlock(71, 'click', sendArgs, f.page.url(), context, { recipientCard: true }) });
+      f.answer = (value, before = async () => {}) => (type, data) => {
+        if (type === 'clarify') before().then(() => f.agent.submitClarifyResponse(71, data.clarifyId, value, 'option'));
+      };
+      return f;
+    };
+    const f = await start();
+    try {
+      const { blocked, context } = await f.check();
+      assert.equal(blocked?.reasonCode, 'recipient_identity_unavailable', JSON.stringify(blocked));
+      const { stepKey, ...ask } = blocked.unverifiedStepConfirmation;
+      assert.deepEqual(ask, { guardId: 'recipient-guard-refusal', hard: true, action: 'send', reason: 'recipient_unreadable',
+        host: 'example.test', contentLabel: 'composer', text: draft });
+      assert.ok(stepKey);
+      assert.equal(context.messageRecipientDispatchBinding, undefined, 'nothing is bound before the user answers');
+      // Go ahead.
+      f.agent._beginUnverifiedStepScope(71);
+      const approved = {};
+      assert.equal(await f.agent._resolveUnverifiedStepConfirmation(71, blocked, f.answer('once'), async () => (await f.check(approved)).blocked, []), null);
+      assert.ok(approved.messageRecipientDispatchBinding?.token, 'the page bound a send without a recipient');
+      assert.equal(approved.messageRecipientBody, draft);
+      const sent = await call(f.page, 'click', { ...sendArgs, ...approved });
+      assert.equal(sent.success, true, JSON.stringify(sent));
+      assert.equal(await f.page.evaluate(() => window.sent), 1);
+      // The binding was for that one send.
+      const replay = await call(f.page, 'click', { ...sendArgs, ...approved });
+      assert.equal(replay.success, false, JSON.stringify(replay));
+      assert.equal(await f.page.evaluate(() => window.sent), 1);
+      f.agent._settleUnverifiedStepScope(71);
+      const next = await f.check();
+      assert.ok(next.blocked?.unverifiedStepConfirmation, 'the next send asks again');
+      assert.equal(next.context.messageRecipientDispatchBinding, undefined);
+    } finally { await f.browser.close(); }
+
+    // A recipient that appears before the click is sent stops it.
+    const named = await start();
+    try {
+      named.agent._beginUnverifiedStepScope(71);
+      const approved = {};
+      assert.equal(await named.agent._resolveUnverifiedStepConfirmation(71, (await named.check()).blocked, named.answer('once'),
+        async () => (await named.check(approved)).blocked, []), null);
+      await named.page.evaluate(() => document.querySelector('#main').insertAdjacentHTML('afterbegin',
+        '<header><a href="mailto:casey@example.com">Casey</a></header>'));
+      const stopped = await call(named.page, 'click', { ...sendArgs, ...approved });
+      assert.equal(stopped.success, false, JSON.stringify(stopped));
+      assert.equal(stopped.reasonCode, 'active_recipient_changed_before_dispatch');
+      assert.equal(await named.page.evaluate(() => window.sent), 0);
+    } finally { await named.browser.close(); }
+
+    // A draft edited while the card waits was not what the user approved.
+    const edited = await start();
+    try {
+      const approved = {};
+      const result = await edited.agent._resolveUnverifiedStepConfirmation(71, (await edited.check()).blocked,
+        edited.answer('once', () => edited.page.evaluate(() => { document.querySelector('#body').textContent = 'Hi Bob, here is my card number'; })),
+        async () => (await edited.check(approved)).blocked, []);
+      assert.match(result.error, /changed while the user was being asked/);
+      assert.equal(approved.messageRecipientGuardRequired, undefined);
+      assert.equal(await edited.page.evaluate(() => window.sent), 0);
+    } finally { await edited.browser.close(); }
+
+    // Don't: the refusal stands, and nothing is bound.
+    const declined = await start();
+    try {
+      const result = await declined.agent._resolveUnverifiedStepConfirmation(71, (await declined.check()).blocked, declined.answer('deny'),
+        async () => (await declined.check()).blocked, []);
+      assert.equal(result.unverifiedStepDeclined, true);
+      assert.equal(result.reasonCode, 'recipient_identity_unavailable');
+      assert.match(result.error, /The user chose not to go ahead with sending this message/);
+      const unbound = await call(declined.page, 'click', { ...sendArgs, messageRecipientGuardRequired: true });
+      assert.equal(unbound.success, false, JSON.stringify(unbound));
+      assert.equal(await declined.page.evaluate(() => window.sent), 0);
+    } finally { await declined.browser.close(); }
+  });
+
   test(`${build}: two addresses in a conversation header identify no one`, async () => {
     const f = await fixture(build, Agent, { url: HELPDESK_URL, recipients: ['casey@example.com'], html: chatPage({
       header: '<header><a href="mailto:casey@example.com">Casey</a><span data-email="dana@example.com">Dana</span></header>' }) });

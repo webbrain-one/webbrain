@@ -16,7 +16,7 @@
 
 import { resolveVisionMode, normalizeVisionModeSetting } from './vision-mode.js';
 import { VisionSession, VISION_MAX_LIVE_ZOOMS } from './vision-session.js';
-import { diffFrames, planFrameUpdate, pointTouchesRegions } from './vision-diff.js';
+import { diffFrames, planFrameUpdate, pointTouchesChangedCells } from './vision-diff.js';
 import {
   VISION_PROFILES, planVisionImageSize, planZoomImageSize, estimateVisionTokens, visionEncodingFor,
   normalizeVisionQuality,
@@ -29,7 +29,7 @@ import {
   visionFilePickerBlockedResult,
 } from './vision-tools.js';
 import {
-  VISION_MIN_DRAG_CSS_PX, visionMultiClickRefusal, visionDragRefusal, visionWheelRefusal,
+  VISION_MIN_DRAG_CSS_PX, visionMultiClickRefusal, visionDragRefusal, visionWheelRefusal, visionClickedControl,
 } from './vision-dom-probe.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -519,10 +519,16 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     }
   };
 
-  /** What is under CSS points (vision-dom-probe.js); null when it cannot be read. */
+  /**
+   * What is under CSS points (vision-dom-probe.js); null when it cannot be
+   * read. The points are where input is about to go: the page's Stop button
+   * moves out of their way first (agent _clearAgentStopButton), so the probe
+   * reads the page the model saw there, not the button.
+   */
   proto._visionDomProbe = async function _visionDomProbe(tabId, request) {
     if (typeof this._visionPlatformDomProbe !== 'function') return null;
     try {
+      await this._clearAgentStopButton?.(tabId, request?.points);
       return await this._visionPlatformDomProbe(tabId, request);
     } catch (error) {
       if (isControlFlowError(error)) throw error;
@@ -534,12 +540,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
    * Checks right before a vision click is dispatched, in both builds: a
    * native <select> is focused for type_text (its popup never shows in a
    * screenshot), and a double/triple click that would repeat a control's
-   * action is refused. Returns { refusal } or { target }.
+   * action is refused. Returns { refusal } or { target, control? }, where
+   * `control` is the role and name of the control the click activates
+   * (vision-dom-probe.js visionClickedControl), read before the click
+   * changes the page.
    */
   proto._visionClickPreflight = async function _visionClickPreflight(tabId, {
     x, y, button = 'left', clickCount = 1, recipientGuarded = false, submitDetected = false,
   } = {}) {
-    const probe = await this._visionDomProbe(tabId, { points: [{ x, y }], focusSelect: button === 'left' });
+    const probe = await this._visionDomProbe(tabId, { points: [{ x, y }], focusSelect: button === 'left', describeControl: true });
     const point = probe?.points?.[0] || null;
     if (point?.select && button === 'left') {
       return {
@@ -553,9 +562,11 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     const refusal = visionMultiClickRefusal(probe, { clickCount, recipientGuarded, submitDetected });
     if (refusal) return { refusal };
     const background = ['backdrop', 'empty'].includes(point?.dialogBackground) ? point.dialogBackground : '';
+    const control = visionClickedControl(point, { redaction: this.screenshotRedaction === true });
     return {
       target: point?.found ? { tag: point.tag, ...(point.role ? { role: point.role } : {}),
         ...(background ? { dialogBackground: background } : {}) } : null,
+      ...(control ? { control } : {}),
       // The click still goes: outside a dialog may be how it closes. The
       // model is told the point is on no control, which a bare
       // {tag:'div', role:'dialog'} target did not make plain enough.
@@ -566,23 +577,29 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
   /**
    * A vision click that the deletion guard, or the check of a publish or
    * commit after a correction, authorized is bound to the control the submit
-   * probe read at its point (agent _resourceMutationActionKey). A ref click
-   * cannot land anywhere else; a point can, if the page changed since. So
-   * right before input goes out the point is read again, and a different
-   * control there (or one that cannot be read) is refused.
+   * probe read at its point (agent _resourceMutationActionKey). So is one the
+   * user approved on WebBrain's publication or submission card, whose answer
+   * covers the action they saw. A ref click cannot land anywhere else; a
+   * point can, if the page changed since. So right before input goes out the
+   * point is read again, and a different control there (or one that cannot
+   * be read) is refused.
    */
   proto._visionMutationBindingBlock = async function _visionMutationBindingBlock(tabId, args, detected) {
     if (!detected || typeof this._resourceMutationActionKey !== 'function') return null;
     const key = this._resourceMutationActionKey(tabId, 'click', args, detected);
     const authorization = this._planExecutionGuards?.get?.(tabId)?.resourceMutationAuthorization;
-    if (!key || authorization?.key !== key) return null;
+    const override = key ? this._publicationGuardOverrideRequest?.(tabId, 'click', args, detected) : null;
+    const approved = !!override
+      && this._unverifiedStepApproval?.(tabId, override.guardId, override.stepKey, { peek: true })?.source === 'user';
+    if (!key || (authorization?.key !== key && !approved)) return null;
     let fresh = null;
     try {
       fresh = await this._detectLikelySubmitAction(tabId, 'click', args, { mutationReconciliation: true });
     } catch (error) {
       if (isControlFlowError(error)) throw error;
     }
-    if (fresh && this._resourceMutationActionKey(tabId, 'click', args, fresh) === key) return null;
+    if (fresh && this._resourceMutationActionKey(tabId, 'click', args, fresh) === key
+        && (!approved || this._publicationGuardOverrideRequest(tabId, 'click', args, fresh)?.stepKey === override.stepKey)) return null;
     const classification = detected.mutationKind === 'delete' ? 'delete' : detected.publicationControl === true ? 'publish' : 'submit';
     return {
       success: false, dispatched: false, noDispatch: true, visionScreenChanged: true,
@@ -966,6 +983,67 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     return zooms;
   };
 
+  // Count the images that will actually survive request pruning, including
+  // attachments and zooms. A patch chain must be replaced as a whole when a
+  // provider cannot carry its next update alongside the current full frame.
+  proto._visionImageBudget = function _visionImageBudget(tabId, messages) {
+    const provider = this._activeProvider?.(tabId);
+    const limit = provider?.maxImagesPerRequest;
+    if (!Number.isInteger(limit) || limit <= 0) return null;
+    const retained = typeof this._pruneOldImages === 'function'
+      ? this._pruneOldImages(messages, provider) : pruneVisionImages(messages).messages;
+    let count = 0;
+    let nonVisionCount = 0;
+    for (const message of retained || []) {
+      const images = Array.isArray(message?.content) ? message.content.filter(isImageBlock).length : 0;
+      count += images;
+      if (!visionFrameTag(message)) nonVisionCount += images;
+    }
+    return { limit, count, nonVisionCount };
+  };
+
+  proto._visionLimitZooms = function _visionLimitZooms(tabId, messages, session) {
+    const budget = this._visionImageBudget(tabId, messages);
+    if (!budget) return;
+    // Reserve the full viewport and user attachments. Limiting only after
+    // capture would repeatedly discard a batch of four zooms on a provider
+    // that accepts four images in total.
+    const keep = Math.min(VISION_MAX_LIVE_ZOOMS, Math.max(0, budget.limit - budget.nonVisionCount - 1));
+    const ids = [];
+    for (const message of messages) {
+      const tag = visionFrameTag(message);
+      if (tag?.epoch === session.epoch) ids.push(...(tag.ids || []).filter(id => /^z\d+$/.test(id)));
+    }
+    ids.push(...(session.pendingZooms || []).map(zoom => zoom.id));
+    const ordered = [...new Set(ids)];
+    const dropped = new Set(ordered.slice(0, Math.max(0, ordered.length - keep)));
+    if (!dropped.size) return;
+    const omission = id => `[zoom ${id} omitted — the provider accepts ${budget.limit} images per request; ${keep
+      ? 'zoom again if needed' : 'reduce image attachments or use a provider that accepts more images to zoom'}]`;
+    for (let index = 0; index < messages.length; index++) {
+      const message = messages[index];
+      const tag = visionFrameTag(message);
+      if (tag?.epoch !== session.epoch || !Array.isArray(message.content) || !tag.ids?.some(id => dropped.has(id))) continue;
+      let imageIndex = 0;
+      const content = message.content.map(block => {
+        if (!isImageBlock(block)) return block;
+        const id = tag.ids[imageIndex++];
+        return dropped.has(id) ? { type: 'text', text: omission(id) } : block;
+      });
+      messages[index] = { ...message, content, webbrainVisionFrame: { ...tag, ids: tag.ids.filter(id => !dropped.has(id)) } };
+    }
+    const pendingDropped = (session.pendingZooms || []).filter(zoom => dropped.has(zoom.id));
+    session.pendingZooms = (session.pendingZooms || []).filter(zoom => !dropped.has(zoom.id));
+    if (pendingDropped.length) messages.push(visionUserMessage(pendingDropped.map(zoom => omission(zoom.id)).join('\n'),
+      { epoch: session.epoch, kind: 'none' }));
+    for (const id of dropped) {
+      const zoom = session.images.get(id);
+      if (!zoom) continue;
+      session.images.delete(id);
+      session.retired.set(id, { epoch: zoom.epoch, replacedBy: null, zoomLimit: true, providerImageLimit: budget.limit });
+    }
+  };
+
   /**
    * After a tool batch: show the model what changed. `toolCalls` are the
    * calls the batch ran (translated or not).
@@ -996,11 +1074,14 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
 
   proto._visionObserveAfterBatchOnce = async function _visionObserveAfterBatchOnce(tabId, messages, onUpdate, { state, toolCalls = [], force = false } = {}) {
     const session = this._visionSessionFor(tabId, state);
+    this._visionLimitZooms(tabId, messages, session);
+    const budget = this._visionImageBudget(tabId, messages);
     const names = toolCalls.map(call => call?._vision?.tool || call?.function?.name).filter(Boolean);
     // An accepted done ends the run before this point, so a batch with done
     // only gets here when done was refused: the model is told to look again,
     // and gets a screen to look at.
     const observe = force || session.forceKeyframe
+      || (budget && budget.count + (session.pendingZooms?.length || 0) > budget.limit)
       || names.some(name => !VISION_NO_OBSERVE_TOOLS.has(name) || name === 'done' || name === 'done_json');
     const zoomsOnly = !observe && session.pendingZooms?.length;
     if (zoomsOnly) {
@@ -1082,6 +1163,15 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (plan.kind === 'keyframe') {
       await this._visionPushKeyframe(tabId, messages, onUpdate, { state, frame, lookedOnly, reason: plan.reason === 'large_change' ? 'large change' : plan.reason.replace(/_/g, ' ') });
       return { kind: 'keyframe', reason: plan.reason };
+    }
+    const budget = this._visionImageBudget(tabId, messages);
+    const newImages = (plan.kind === 'patch' ? plan.regions.length : 0) + (session.pendingZooms?.length || 0);
+    if (budget && budget.count + newImages > budget.limit) {
+      const unchanged = plan.kind === 'none';
+      await this._visionPushKeyframe(tabId, messages, onUpdate, {
+        state, frame, lookedOnly, unchanged, reason: 'provider image limit',
+      });
+      return { kind: 'keyframe', reason: 'provider_image_limit', ...(unchanged ? { unchanged: true } : {}) };
     }
     const zooms = this._visionTakePendingZooms(tabId);
     if (plan.kind === 'none') {
@@ -1327,10 +1417,13 @@ export function installVisionRuntime(AgentClass, { trace = null } = {}) {
     if (frame.probe.url !== session.keyframe.url) return refuse(`the page navigated since you read ${which}`);
     if (frame.size.width !== session.keyframe.width || frame.size.height !== session.keyframe.height) return refuse(`the viewport changed since you read ${which}`);
     const d = diffFrames(session.seenPixels, frame.raster.pixels, frame.size.width, frame.size.height);
-    if (d.regionAreaRatio > 0.6) return refuse(`most of the screen changed since you read ${which}`);
+    // Patch rectangles can span unchanged gaps after merging, padding, or
+    // maxRegions reduction. Test both whole-screen coverage and each target
+    // against the changed cell grid itself; incomparable frames still refuse.
+    if (!d.comparable || d.changedRatio > 0.6) return refuse(`most of the screen changed since you read ${which}`);
     for (const point of points) {
       const kfPoint = session.cssToKeyframe(point.x, point.y);
-      if (pointTouchesRegions(kfPoint, d.regions, STABILITY_MARGIN_PX)) {
+      if (pointTouchesChangedCells(kfPoint, d, STABILITY_MARGIN_PX)) {
         return refuse(`the screen changed near ${point.label || 'this point'} since you read it`);
       }
     }

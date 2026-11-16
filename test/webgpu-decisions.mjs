@@ -100,8 +100,8 @@ test('the worker routes decisions through the offscreen host and provider', asyn
   assert.match(host, /message\.type === 'webgpu-decide'[\s\S]*?'multimodal-decide'/);
   const background = await readFile(new URL('../src/chrome/src/background.js', import.meta.url), 'utf8');
   const branch = background.slice(background.indexOf("case 'webgpu_decide_fixture':"), background.indexOf("case 'd1_control':"));
-  assert.match(branch, /src\/ui\/providers\.html/, 'decision fixtures run only from the Providers page');
-  assert.doesNotMatch(branch, /src\/ui\/settings\.html/, 'decision fixtures moved off the Settings page');
+  assert.match(branch, /src\/ui\/settings\.html/, 'decision fixtures run only from the Settings page');
+  assert.doesNotMatch(branch, /src\/ui\/providers\.html/, 'the Providers page only forwards to Settings now');
   assert.match(branch, /strictSecretMode/);
 });
 
@@ -260,9 +260,9 @@ test('the agent judge asks Compass VLD in the offscreen worker, and Firefox refu
   }
 });
 
-test('Providers offers the in-browser chat model in Chrome only', async () => {
-  const chromeHtml = await readFile(new URL('../src/chrome/src/ui/providers.html', import.meta.url), 'utf8');
-  const firefoxHtml = await readFile(new URL('../src/firefox/src/ui/providers.html', import.meta.url), 'utf8');
+test('Settings offers the in-browser chat model in Chrome only', async () => {
+  const chromeHtml = await readFile(new URL('../src/chrome/src/ui/settings.html', import.meta.url), 'utf8');
+  const firefoxHtml = await readFile(new URL('../src/firefox/src/ui/settings.html', import.meta.url), 'utf8');
   assert.match(chromeHtml, /<option value="webgpu_chat" data-i18n="st\.decision\.webgpu_chat"><\/option>/);
   assert.match(chromeHtml, /id="webgpu-decision-note" hidden data-i18n="st\.decision\.webgpu_chat_note"/);
   assert.doesNotMatch(firefoxHtml, /webgpu_chat/);
@@ -385,10 +385,10 @@ test('Settings locks the model and key fields for both fixed in-browser provider
     "D1's change listener is registered first, so this one runs last");
 });
 
-test('Providers asks one Auto / On / Off question and shows provider fields and switches only for On', async () => {
+test('Settings asks one Auto / On / Off question and shows provider fields and switches only for On', async () => {
   const { decisionEnglish, decisionTranslations } = await import('../src/chrome/src/ui/locales/decision-copy.mjs');
   for (const build of ['chrome', 'firefox']) {
-    const html = await readFile(new URL(`../src/${build}/src/ui/providers.html`, import.meta.url), 'utf8');
+    const html = await readFile(new URL(`../src/${build}/src/ui/settings.html`, import.meta.url), 'utf8');
     const card = html.slice(html.indexOf('id="system-one-card"'), html.indexOf('id="safesocial-heading"'));
     assert.deepEqual([...card.matchAll(/name="decision-mode" value="(\w+)"( checked)?/g)].map(m => m[1] + (m[2] ? '*' : '')), ['auto*', 'on', 'off'], build);
     assert.ok(card.indexOf('data-i18n="st.decision.intro"') < card.indexOf('id="decision-mode"'), 'the explanation comes first');
@@ -429,8 +429,8 @@ test('Providers asks one Auto / On / Off question and shows provider fields and 
     const source = await readFile(new URL(`../src/${build}/src/ui/settings.js`, import.meta.url), 'utf8');
     const start = source.indexOf('function syncDecisionStatus');
     const fn = source.slice(start, source.indexOf('\nfor (const input of decisionModeInputs) {', start));
-    // The switch is on settings.html and the card on providers.html, so the card
-    // follows the stored setting.
+    // The switch and the card are in different Settings sections (and the page
+    // may be open twice), so the card follows the stored setting.
     assert.match(fn, /const strict = strictSecretModeOn;/, `${build} reads the stored Strict Secret Mode`);
     assert.match(source, /changes\.strictSecretMode[\s\S]{0,160}strictSecretModeOn = changes\.strictSecretMode\.newValue === true;\s*(?:void )?syncDecisionStatus\(\);/, `${build} follows Strict Secret Mode changed on the Settings page`);
     assert.match(source, /strictSecretModeOn = stored\.strictSecretMode === true;/, `${build} starts from the stored Strict Secret Mode`);

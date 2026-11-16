@@ -73,9 +73,16 @@ test('both builds share the unverified-step card module', async () => {
   assert.equal(clipped, `${'a'.repeat(UNVERIFIED_STEP_CONTENT_LIMIT - 1)}…`, 'cut before a split emoji, with an ellipsis');
   assert.equal(clipUnverifiedStepContent(clipped), clipped, 'clipping twice changes nothing');
   assert.equal(clipUnverifiedStepContent('a\r\nb'), 'a\nb');
-  assert.deepEqual(normalizeUnverifiedStepConfirmation({ guardId: 'x', action: 'delete', reason: '<b>', host: 'h',
+  assert.deepEqual(normalizeUnverifiedStepConfirmation({ guardId: 'x', action: 'purchase', reason: '<b>', host: 'h',
     content: 'c', contentLabel: 'nope', hard: 'yes', extra: 1 }),
   { guardId: 'x', hard: false, action: 'submit', host: 'h', reason: 'step_unverified', content: 'c', contentLabel: 'page' });
+  // The hard-class asks for dead ends keep their vocabulary too.
+  for (const step of [
+    { guardId: 'deletion-guard-refusal', hard: true, action: 'delete', host: 'mail.example', reason: 'delete_unbound', content: '', contentLabel: 'page' },
+    { guardId: 'recipient-guard-refusal', hard: true, action: 'send', host: 'example.test', reason: 'recipient_unreadable', content: 'Hi', contentLabel: 'composer' },
+    { guardId: 'steer-prior-submission-unreconciled', hard: true, action: 'submit', host: 'cms.example',
+      reason: 'prior_submission_unreconciled', content: 'POST https://cms.example/api', contentLabel: 'request' },
+  ]) assert.deepEqual(normalizeUnverifiedStepConfirmation(step), step);
   // The sign-in password card (credential-not-provided) keeps its vocabulary,
   // so a scheduled run's card is restored as it was shown.
   const typing = { guardId: 'credential-not-provided', hard: true, action: 'type', host: 'localhost',
@@ -1208,6 +1215,510 @@ test('chrome: a click two guards ask about is asked once per guard and sent once
   assert.deepEqual(dispatched, ['ref_buy', 'ref_buy']);
 });
 
+// ── hard-class asks for dead ends ────────────────────────────────────────
+// Refusals that ended a run where the user could have settled it by looking
+// at the page. Each now asks on WebBrain's hard card: it never answers
+// itself, an unattended run is refused, and one answer covers one tool call.
+for (const { build, Agent } of builds) {
+  const planned = (request, plan = { requestKind: 'execute', requiresStateChange: true, requiresSubmission: true }) => {
+    const provider = { name: 'dead end test', model: 'test', promptTier: 'full', contextWindow: 128000,
+      supportsTools: true, supportsVision: false, chat: async () => { provider.chats += 1; return { content: '' }; }, chats: 0 };
+    const agent = new Agent({ getActive: () => provider, getProvider: () => provider, getVisionProvider: async () => null });
+    const tab = nextTab++;
+    agent._persist = () => {};
+    agent._persistNow = async () => ({ ok: true });
+    agent._taskTokens.set(tab, `task-${tab}`);
+    agent.conversations.set(tab, [{ role: 'system', content: 'System' }, { role: 'user', content: request }]);
+    const guard = agent._startPlanExecutionGuard(tab, 'act', plan);
+    return { agent, tab, guard, provider };
+  };
+  const answering = (agent, tab, value, cards = []) => (type, data) => {
+    if (type !== 'clarify') return;
+    cards.push(data);
+    agent.submitClarifyResponse(tab, data.clarifyId, value, 'option');
+  };
+  const shape = ask => ({ ...ask, stepKey: !!ask?.stepKey });
+
+  // ── the publication override card for a vision click ───────────────────
+  const visionFixture = () => {
+    const f = planned('Post this reply.');
+    f.vision = true;
+    f.agent._visionRunState = () => ({ active: f.vision });
+    f.args = { x: 320.5, y: 410.5, coordinate_space: 'css' };
+    f.detected = { isSubmit: true, publicationControl: true, frameDocumentIdentity: 'doc-1', url: 'https://x.com/compose/post',
+      frameId: 0, submissionIdentity: 'composer|post',
+      publicationSnapshot: { complete: true, account: 'twitter:alice', posts: [{ complete: true, bodyText: 'Hello', attachments: [],
+        context: { kind: 'reply', target: 'https://x.com/bob/status/123' } }] } };
+    f.agent._detectLikelySubmitAction = async () => structuredClone(f.detected);
+    f.ask = () => f.agent._publicationGuardOverrideRequest(f.tab, 'click', f.args, f.detected);
+    // What the publication checks do with the card's answer.
+    f.check = async () => (await f.agent._publicationGuardOverrideApproval(f.tab, 'click', f.args, f.detected) ? null
+      : { success: false, dispatched: false, noDispatch: true, error: 'This publication is not authorized.',
+        unverifiedStepConfirmation: f.ask() });
+    return f;
+  };
+
+  test(`${build}: a vision click gets the publication override card, bound to the control at its point`, async () => {
+    const f = visionFixture();
+    assert.deepEqual(shape(f.ask()), { guardId: 'social-publication-authorization-guard', hard: true, action: 'publish',
+      reason: 'step_unverified', host: 'x.com', contentLabel: 'composer',
+      text: 'Account: twitter:alice\n\nreply: https://x.com/bob/status/123\nHello', stepKey: true });
+    assert.notEqual(f.agent._publicationGuardOverrideRequest(f.tab, 'click', { ...f.args, x: 12.5 }, f.detected).stepKey, f.ask().stepKey,
+      'another point is another step');
+    f.vision = false;
+    assert.equal(f.ask(), null, 'a coordinate click outside a vision run has a ref or selector alternative and stays unbound');
+    f.vision = true;
+    assert.equal(f.agent._publicationGuardOverrideRequest(f.tab, 'click', { x: 320.5, y: 410.5, coordinate_space: 'screenshot' }, f.detected), null);
+    // Go ahead: the answer covers this call, and the point is read again when the click is sent.
+    f.agent._beginUnverifiedStepScope(f.tab);
+    const cards = [];
+    assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, await f.check(), answering(f.agent, f.tab, 'once', cards), f.check, []), null);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].unverifiedStepConfirmation.hard, true);
+    assert.match(cards[0].unverifiedStepConfirmation.content, /twitter:alice[\s\S]*Hello/);
+    assert.equal(cards[0].timeoutAnswer, undefined, 'a hard card has no countdown');
+    assert.equal(await f.agent._visionMutationBindingBlock(f.tab, f.args, f.detected), null, 'the control the user approved is still at the point');
+    const approved = f.detected;
+    f.detected = { ...approved, submissionIdentity: 'composer|post-all' };
+    const moved = await f.agent._visionMutationBindingBlock(f.tab, f.args, approved);
+    assert.equal(moved.actionGuard.reason, 'resource_changed_before_dispatch', 'another control at the point is not clicked');
+    assert.equal(moved.noDispatch, true);
+    f.detected = approved;
+    f.agent._settleUnverifiedStepScope(f.tab);
+    assert.ok((await f.check()).unverifiedStepConfirmation, 'the next click asks again');
+  });
+
+  test(`${build}: "Don't" on a vision click's override card keeps the refusal, and an unattended run is not asked`, async () => {
+    const f = visionFixture();
+    const cards = [];
+    const declined = await f.agent._resolveUnverifiedStepConfirmation(f.tab, await f.check(), answering(f.agent, f.tab, 'deny', cards), f.check, []);
+    assert.equal(cards.length, 1);
+    assert.equal(declined.unverifiedStepDeclined, true);
+    assert.equal(declined.retryable, false);
+    assert.match(declined.error, /The user chose not to go ahead with this step/);
+    assert.equal(await f.agent._publicationGuardOverrideApproval(f.tab, 'click', f.args, f.detected), null);
+    const unattended = visionFixture();
+    unattended.agent.scheduledRunPolicies.set(unattended.tab, { requireConsequentialConfirmation: false });
+    const refused = await unattended.agent._resolveUnverifiedStepConfirmation(unattended.tab, await unattended.check(),
+      () => assert.fail('an unattended run shows no card'), unattended.check, []);
+    assert.match(refused.error, /This unattended run cannot ask the user about this step/);
+  });
+
+  // ── steer-post-correction-commit-guard: a commit whose resource is unresolved ──
+  const commitFixture = () => {
+    const f = planned('Save my display name as Ada.');
+    f.guard.steeringPriorSubmission = { actionSequence: 1, dispatched: true, mutationKind: 'submit' };
+    f.args = { ref_id: 'ref_9' };
+    f.detected = { isSubmit: true, validationSubmitEvidence: 'strong', url: 'https://app.example/settings', frameId: 0,
+      frameDocumentIdentity: 'settings-doc', submissionIdentity: 'form|save', method: 'POST', actionUrl: '',
+      fields: [{ label: 'Display name', type: 'text', value: 'Ada', changed: true }] };
+    f.agent._detectLikelySubmitAction = async () => structuredClone(f.detected);
+    f.check = () => f.agent._resourceMutationPreSubmitBlock(f.tab, 'click_ax', f.args, f.detected, f.provider);
+    return f;
+  };
+
+  test(`${build}: after a correction, a commit whose resource cannot be resolved asks on the override card`, async () => {
+    const f = commitFixture();
+    const block = await f.check();
+    assert.equal(block.actionGuard.reason, 'resource_unresolved');
+    const ask = block.unverifiedStepConfirmation;
+    assert.deepEqual({ guardId: ask.guardId, hard: ask.hard, action: ask.action, host: ask.host, contentLabel: ask.contentLabel },
+      { guardId: 'steer-post-correction-commit-guard', hard: true, action: 'submit', host: 'app.example', contentLabel: 'page' });
+    assert.match(ask.text, /^Destination: https:\/\/app\.example\/settings\n.*Ada/);
+    // A key press cannot be bound to a control, so it still has no card.
+    const keyboard = await f.agent._resourceMutationPreSubmitBlock(f.tab, 'press_keys', { key: 'Enter' }, f.detected, f.provider);
+    assert.equal(keyboard.actionGuard.reason, 'click_required');
+    assert.equal(keyboard.unverifiedStepConfirmation, undefined);
+    f.agent._beginUnverifiedStepScope(f.tab);
+    const cards = [];
+    assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards), f.check, []), null);
+    assert.equal(cards.length, 1);
+    assert.equal(f.guard.resourceMutationAuthorization.userOverride, true);
+    assert.equal(f.agent._steeringPriorSubmissionBlock(f.tab, 'click_ax', f.args, f.detected), null, 'the answer also passes the earlier-submission check');
+    assert.equal(f.provider.chats, 0, 'no model judged the user\'s answer');
+    f.agent._settleUnverifiedStepScope(f.tab);
+    assert.equal((await f.check()).actionGuard.reason, 'resource_unresolved', 'the next commit asks again');
+    const declined = commitFixture();
+    const refused = await declined.agent._resolveUnverifiedStepConfirmation(declined.tab, await declined.check(),
+      answering(declined.agent, declined.tab, 'deny'), declined.check, []);
+    assert.equal(refused.unverifiedStepDeclined, true);
+    assert.match(refused.error, /The user chose not to go ahead/);
+    assert.equal(declined.guard.resourceMutationAuthorization, undefined);
+  });
+
+  // ── deletion-guard-refusal: a Delete control outside one record ────────
+  const toolbarDeleteFixture = () => {
+    const f = planned('Delete the selected messages.');
+    f.agent._beginCompletionInvariant(f.tab);
+    f.args = { ref_id: 'ref_trash' };
+    f.detected = { isSubmit: true, mutationKind: 'delete', publicationControl: false, url: 'https://mail.example/inbox',
+      frameDocumentIdentity: 'inbox-doc', reconciliationResources: [], reconciliationResourceScanComplete: false };
+    f.agent._detectLikelySubmitAction = async () => structuredClone(f.detected);
+    f.check = () => f.agent._resourceMutationPreSubmitBlock(f.tab, 'click_ax', f.args, f.detected, f.provider);
+    return f;
+  };
+
+  test(`${build}: a Delete control outside one record asks on a hard card that names no item`, async () => {
+    for (const strict of [false, true]) {
+      const f = toolbarDeleteFixture();
+      f.agent.strictGuards = strict;
+      const block = await f.check();
+      assert.equal(block.actionGuard.reason, 'resource_unresolved');
+      assert.deepEqual(shape(block.unverifiedStepConfirmation), { guardId: 'deletion-guard-refusal', hard: true, action: 'delete',
+        reason: 'delete_unbound', host: 'mail.example', contentLabel: 'page', stepKey: true });
+      // A key press or a script still cannot be bound to the control.
+      const keyboard = await f.agent._resourceMutationPreSubmitBlock(f.tab, 'press_keys', { key: 'Enter' }, f.detected, f.provider);
+      assert.equal(keyboard.actionGuard.reason, 'click_required');
+      assert.equal(keyboard.unverifiedStepConfirmation, undefined);
+      f.agent._beginUnverifiedStepScope(f.tab);
+      const cards = [];
+      const advisories = [];
+      assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards), f.check, advisories), null);
+      assert.equal(cards.length, 1);
+      assert.equal(cards[0].question, 'Click this delete control on mail.example?');
+      assert.equal(cards[0].unverifiedStepConfirmation.content, '', 'no item was identified, so none is shown');
+      assert.equal(cards[0].timeoutAnswer, undefined);
+      assert.deepEqual({ deletion: f.guard.resourceMutationAuthorization.deletion, taskKey: f.guard.resourceMutationAuthorization.taskKey },
+        { deletion: true, taskKey: f.guard.taskKey });
+      assert.match(advisories[0].note, /WebBrain could not tell which items this control deletes; the user approved it/);
+      assert.equal(f.provider.chats, 0, 'no model decided which items the request means');
+      assert.equal(await f.check(), null, 'the call\'s later checks see the same answer');
+      f.agent._settleUnverifiedStepScope(f.tab);
+      assert.ok((await f.check()).unverifiedStepConfirmation, 'one answer covers one click; the next asks again');
+    }
+  });
+
+  test(`${build}: "Don't delete", a changed page and an unattended run keep an unbound deletion from going out`, async () => {
+    const declined = toolbarDeleteFixture();
+    const cards = [];
+    const refused = await declined.agent._resolveUnverifiedStepConfirmation(declined.tab, await declined.check(),
+      answering(declined.agent, declined.tab, 'deny', cards), declined.check, []);
+    assert.equal(refused.unverifiedStepDeclined, true);
+    assert.equal(refused.retryable, false);
+    assert.match(refused.error, /The user chose not to go ahead with this Delete or Remove control/);
+    assert.equal(declined.guard.resourceMutationAuthorization, undefined);
+    const again = await declined.agent._resolveUnverifiedStepConfirmation(declined.tab, await declined.check(),
+      answering(declined.agent, declined.tab, 'once', cards), declined.check, []);
+    assert.equal(cards.length, 1, 'a declined deletion is not asked about again');
+    assert.match(again.error, /already chose not to go ahead/);
+    // The page changes while the card waits: another document, another control.
+    const changed = toolbarDeleteFixture();
+    const before = await changed.check();
+    const moved = await changed.agent._resolveUnverifiedStepConfirmation(changed.tab, before, (type, data) => {
+      if (type !== 'clarify') return;
+      changed.detected = { ...changed.detected, frameDocumentIdentity: 'another-doc' };
+      changed.agent.submitClarifyResponse(changed.tab, data.clarifyId, 'once', 'option');
+    }, changed.check, []);
+    assert.match(moved.error, /changed while the user was being asked/);
+    assert.equal(changed.guard.resourceMutationAuthorization, undefined);
+    const unattended = toolbarDeleteFixture();
+    unattended.agent.scheduledRunPolicies.set(unattended.tab, { requireConsequentialConfirmation: false });
+    const silent = await unattended.agent._resolveUnverifiedStepConfirmation(unattended.tab, await unattended.check(),
+      () => assert.fail('an unattended run shows no card'), unattended.check, []);
+    assert.match(silent.error, /This unattended run cannot ask the user about this Delete or Remove control/);
+  });
+
+  // ── steer-prior-submission-unreconciled: a write WebBrain sends itself ──
+  const writeFixture = () => {
+    const f = planned('Publish the post through the CMS API.');
+    f.guard.steeringPriorSubmission = { actionSequence: 3, dispatched: true };
+    f.args = { url: 'https://cms.example/api/posts?draft=0', method: 'POST', body: '{"title":"Hello"}' };
+    f.check = (args = f.args, name = 'fetch_url') => f.agent._steeringPriorSubmissionBlock(f.tab, name, args, null);
+    return f;
+  };
+
+  test(`${build}: after a correction, an API write asks on a hard card that shows the request`, async () => {
+    const f = writeFixture();
+    const block = f.check();
+    assert.equal(block.actionGuard.reason, 'prior_effect_unreconciled');
+    assert.deepEqual(shape(block.unverifiedStepConfirmation), { guardId: 'steer-prior-submission-unreconciled', hard: true,
+      action: 'submit', reason: 'prior_submission_unreconciled', host: 'cms.example', contentLabel: 'request',
+      text: 'POST https://cms.example/api/posts?draft=0\n\n{"title":"Hello"}', stepKey: true });
+    assert.equal(f.check({ url: 'https://cms.example/api/posts', method: 'GET' }), null, 'a read is not held');
+    assert.equal(f.check({ ...f.args, url: 'https://user:secret@cms.example/api/posts' }).unverifiedStepConfirmation, undefined,
+      'an address with credentials is refused without a card');
+    f.agent.strictSecretMode = true;
+    assert.equal(f.check().unverifiedStepConfirmation.text, 'POST https://cms.example/api/posts?draft=0', 'strict secret handling hides the body');
+    f.agent.strictSecretMode = false;
+    f.agent._beginUnverifiedStepScope(f.tab);
+    const cards = [];
+    const advisories = [];
+    assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards), async () => f.check(), advisories), null);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].question, 'Submit this on cms.example?');
+    assert.equal(cards[0].unverifiedStepConfirmation.content, 'POST https://cms.example/api/posts?draft=0\n\n{"title":"Hello"}');
+    assert.equal(cards[0].timeoutAnswer, undefined);
+    assert.match(advisories[0].note, /the user approved it on WebBrain's card for this one step/);
+    assert.ok(f.check({ ...f.args, body: '{"title":"Another"}' }).unverifiedStepConfirmation, 'another body is another question');
+    f.agent._settleUnverifiedStepScope(f.tab);
+    assert.ok(f.check().unverifiedStepConfirmation, 'one answer covers one call; the same write asks again');
+  });
+
+  test(`${build}: a fetch_url replay with no body of its own shows the captured body it sends`, async () => {
+    const previous = globalThis.__webbrainApiRequestReplay;
+    const CAPTURED = '{"id":"A","status":"archived"}';
+    // What background.js captured from the page's own requests, as
+    // network-tools.js apiReplayOptionsForFetch reads it.
+    const capture = tab => new Map([
+      ['api_items', { tabId: tab, url: 'https://cms.example/api/items/A', method: 'POST', body: CAPTURED,
+        headers: { 'content-type': 'application/json', 'x-csrf-token': 'csrf-placeholder' } }],
+      ['api_bodyless', { tabId: tab, url: 'https://cms.example/api/items/A', method: 'DELETE', body: null, headers: {} }],
+      ['api_other_tab', { tabId: tab + 1000, url: 'https://cms.example/api/items/A', method: 'POST', body: CAPTURED, headers: {} }],
+      ['api_other_origin', { tabId: tab, url: 'https://other.example/api/items/A', method: 'POST', body: CAPTURED, headers: {} }],
+    ]);
+    const replayArgs = { url: 'https://cms.example/api/items/B', method: 'POST', replayRequestId: 'api_items' };
+    try {
+      const f = writeFixture();
+      globalThis.__webbrainApiRequestReplay = capture(f.tab);
+      const block = f.check(replayArgs);
+      assert.equal(block.unverifiedStepConfirmation.text, `POST https://cms.example/api/items/B\n\n${CAPTURED}`,
+        'the card shows the captured body that fetch_url sends');
+      assert.doesNotMatch(block.unverifiedStepConfirmation.text, /csrf-placeholder/, 'captured headers stay off the card');
+      assert.equal(f.check({ url: replayArgs.url, method: 'POST', apiReplayRequestId: 'api_items' }).unverifiedStepConfirmation.text,
+        `POST https://cms.example/api/items/B\n\n${CAPTURED}`, 'the older argument name reads the same capture');
+      assert.equal(f.check({ ...replayArgs, body: '{"id":"B"}' }).unverifiedStepConfirmation.text,
+        'POST https://cms.example/api/items/B\n\n{"id":"B"}', 'a body of its own is what goes out');
+      assert.equal(f.check({ url: replayArgs.url, method: 'DELETE', replayRequestId: 'api_bodyless' }).unverifiedStepConfirmation.text,
+        'DELETE https://cms.example/api/items/B', 'a capture without a body sends none');
+      for (const replayRequestId of ['api_unknown', 'api_other_tab', 'api_other_origin']) {
+        const refused = f.check({ ...replayArgs, replayRequestId });
+        assert.equal(refused.blocked, true);
+        assert.equal(refused.unverifiedStepConfirmation, undefined, `${replayRequestId}: a replay fetch_url refuses is not asked about`);
+      }
+      f.agent.strictSecretMode = true;
+      assert.equal(f.check(replayArgs).unverifiedStepConfirmation.text, 'POST https://cms.example/api/items/B',
+        'strict secret handling hides the captured body too');
+      f.agent.strictSecretMode = false;
+      f.agent._beginUnverifiedStepScope(f.tab);
+      const cards = [];
+      assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards),
+        async () => f.check(replayArgs), []), null);
+      assert.equal(cards[0].unverifiedStepConfirmation.content, `POST https://cms.example/api/items/B\n\n${CAPTURED}`);
+      f.agent._settleUnverifiedStepScope(f.tab);
+
+      // The capture changes while the card waits: the answer covered the body shown.
+      const changed = writeFixture();
+      globalThis.__webbrainApiRequestReplay = capture(changed.tab);
+      const moved = await changed.agent._resolveUnverifiedStepConfirmation(changed.tab, changed.check(replayArgs), (type, data) => {
+        if (type !== 'clarify') return;
+        globalThis.__webbrainApiRequestReplay.get('api_items').body = '{"id":"C","status":"archived"}';
+        changed.agent.submitClarifyResponse(changed.tab, data.clarifyId, 'once', 'option');
+      }, async () => changed.check(replayArgs), []);
+      assert.match(moved.error, /changed while the user was being asked/);
+    } finally {
+      if (previous === undefined) delete globalThis.__webbrainApiRequestReplay;
+      else globalThis.__webbrainApiRequestReplay = previous;
+    }
+  });
+
+  test(`${build}: "Don't" keeps an API write refused, and chrome_web_store_publish asks instead of asking for a click`, async () => {
+    const f = writeFixture();
+    const cards = [];
+    const refused = await f.agent._resolveUnverifiedStepConfirmation(f.tab, f.check(), answering(f.agent, f.tab, 'deny', cards), async () => f.check(), []);
+    assert.equal(refused.unverifiedStepDeclined, true);
+    assert.match(refused.error, /The user chose not to go ahead with this request, so it was not performed\. Do not repeat it unchanged; report what was not sent\./);
+    await f.agent._resolveUnverifiedStepConfirmation(f.tab, f.check(), answering(f.agent, f.tab, 'once', cards), async () => f.check(), []);
+    assert.equal(cards.length, 1, 'a declined request is not asked about again');
+    const store = writeFixture();
+    const detected = { isSubmit: true, host: 'chromewebstore.googleapis.com', reason: 'submit the configured Chrome Web Store release for review' };
+    assert.equal(await store.agent._resourceMutationPreSubmitBlock(store.tab, 'chrome_web_store_publish', { publish_type: 'default' }, detected, store.provider),
+      null, 'a tool with no page control is not told to use a ref or selector click');
+    const block = store.agent._steeringPriorSubmissionBlock(store.tab, 'chrome_web_store_publish', { publish_type: 'default' }, detected);
+    assert.deepEqual(shape(block.unverifiedStepConfirmation), { guardId: 'steer-prior-submission-unreconciled', hard: true,
+      action: 'publish', reason: 'prior_submission_unreconciled', host: 'chromewebstore.googleapis.com', contentLabel: 'request',
+      text: 'chrome_web_store_publish {"publish_type":"default"}', stepKey: true });
+    const unattended = writeFixture();
+    unattended.agent.scheduledRunPolicies.set(unattended.tab, { requireConsequentialConfirmation: false });
+    const silent = await unattended.agent._resolveUnverifiedStepConfirmation(unattended.tab, unattended.check(),
+      () => assert.fail('an unattended run shows no card'), async () => unattended.check(), []);
+    assert.match(silent.error, /This unattended run cannot ask the user about this request/);
+  });
+
+  // ── recipient-guard-refusal: a recipient the page does not name ────────
+  const CHAT_URL = 'https://example.test/chat/rooms/one';
+  const recipientFixture = () => {
+    const f = planned('Send Bob the invoice note.');
+    f.guard.messaging = { target_kind: 'named', recipients: [{ identity: 'bob@example.com', role: 'to' }] };
+    f.draft = 'Hi Bob, sending the invoice now';
+    f.probes = [];
+    f.agent._currentUrl = async () => CHAT_URL;
+    // The page: a send with a readable draft and no recipient it names. It
+    // binds a send without a recipient only when asked to.
+    f.agent._messageRecipientGuardProbe = async (_tab, params) => {
+      f.probes.push(params);
+      return { success: true, conclusive: true, messageSend: true, composerAvailable: true, messageBody: f.draft,
+        messageBodyBaselineCount: 0, identityCandidates: [], strongIdentityCandidates: [], strongRecipientCandidates: [],
+        observedRecipientCandidates: [],
+        ...(params.allowUnidentifiedRecipient === true ? { messageRecipientDispatchBinding: { token: 'wbmr_test_token' } } : {}) };
+    };
+    f.args = { ref_id: 'ref_send' };
+    // The tool batch runs the guard with the card; a handler runs it without.
+    f.bind = async (context = {}, options = { recipientCard: true }) => ({ context,
+      block: await f.agent._messageRecipientGuardBlock(f.tab, 'click_ax', f.args, CHAT_URL, context, options) });
+    return f;
+  };
+
+  test(`${build}: a send whose recipient the page does not name asks on a hard card that shows the draft`, async () => {
+    const f = recipientFixture();
+    const { block, context } = await f.bind();
+    assert.equal(block.reasonCode, 'recipient_identity_unavailable');
+    assert.deepEqual(shape(block.unverifiedStepConfirmation), { guardId: 'recipient-guard-refusal', hard: true, action: 'send',
+      reason: 'recipient_unreadable', host: 'example.test', contentLabel: 'composer', text: f.draft, stepKey: true });
+    assert.equal(context.messageRecipientDispatchBinding, undefined);
+    assert.equal(f.probes[0].allowUnidentifiedRecipient, undefined, 'nothing is bound without the user\'s answer');
+    // A caller without the card (chat_send, the upload handler) keeps the
+    // refusal, also when it copies the batch's context; an upload never asks.
+    const plain = await f.bind({ ...context }, {});
+    assert.equal(plain.block.reasonCode, 'recipient_identity_unavailable');
+    assert.equal(plain.block.unverifiedStepConfirmation, undefined);
+    assert.equal((await f.agent._messageRecipientGuardBlock(f.tab, 'upload_file', { selector: '#file', filePath: 'C:\\invoice.pdf' }, CHAT_URL,
+      {}, { recipientCard: true }))?.unverifiedStepConfirmation, undefined);
+    // Go ahead: the same draft is bound to the send, once.
+    f.agent._beginUnverifiedStepScope(f.tab);
+    const cards = [];
+    const advisories = [];
+    const approved = {};
+    assert.equal(await f.agent._resolveUnverifiedStepConfirmation(f.tab, block, answering(f.agent, f.tab, 'once', cards),
+      async () => (await f.bind(approved)).block, advisories), null);
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].question, 'Send this message on example.test?');
+    assert.equal(cards[0].unverifiedStepConfirmation.content, f.draft);
+    assert.equal(cards[0].timeoutAnswer, undefined, 'a hard card has no countdown');
+    assert.equal(f.probes.at(-1).allowUnidentifiedRecipient, true);
+    assert.deepEqual({ required: approved.messageRecipientGuardRequired, binding: approved.messageRecipientDispatchBinding,
+      body: approved.messageRecipientBody, baseline: approved.messageRecipientBodyBaselineCount },
+    { required: true, binding: { token: 'wbmr_test_token' }, body: f.draft, baseline: 0 });
+    assert.equal(f.guard.messageRecipientTechnicalBlock, undefined);
+    assert.match(advisories[0].note, /WebBrain could not read who this message goes to; the user approved it/);
+    f.agent._settleUnverifiedStepScope(f.tab);
+    const next = await f.bind();
+    assert.ok(next.block.unverifiedStepConfirmation, 'the next send asks again');
+    assert.equal(next.context.messageRecipientDispatchBinding, undefined);
+  });
+
+  test(`${build}: "Don't", a changed draft and an unattended run keep a send without a readable recipient from going out`, async () => {
+    const declined = recipientFixture();
+    const first = await declined.bind();
+    const cards = [];
+    const refused = await declined.agent._resolveUnverifiedStepConfirmation(declined.tab, first.block,
+      answering(declined.agent, declined.tab, 'deny', cards), async () => (await declined.bind()).block, []);
+    assert.equal(refused.unverifiedStepDeclined, true);
+    assert.equal(refused.retryable, false);
+    assert.equal(refused.reasonCode, 'recipient_identity_unavailable');
+    assert.match(refused.error, /The user chose not to go ahead with sending this message, so it was not performed/);
+    assert.equal(first.context.messageRecipientDispatchBinding, undefined);
+    const again = await declined.agent._resolveUnverifiedStepConfirmation(declined.tab, (await declined.bind()).block,
+      answering(declined.agent, declined.tab, 'once', cards), async () => (await declined.bind()).block, []);
+    assert.equal(cards.length, 1, 'the same draft is not asked about again');
+    assert.match(again.error, /already chose not to go ahead/);
+    // The draft changes while the card waits: the answer covered other text.
+    const changed = recipientFixture();
+    const context = {};
+    const moved = await changed.agent._resolveUnverifiedStepConfirmation(changed.tab, (await changed.bind()).block, (type, data) => {
+      if (type !== 'clarify') return;
+      changed.draft = 'Hi Bob, here is my card number';
+      changed.agent.submitClarifyResponse(changed.tab, data.clarifyId, 'once', 'option');
+    }, async () => (await changed.bind(context)).block, []);
+    assert.match(moved.error, /changed while the user was being asked/);
+    assert.equal(context.messageRecipientDispatchBinding, undefined);
+    const unattended = recipientFixture();
+    unattended.agent.scheduledRunPolicies.set(unattended.tab, { requireConsequentialConfirmation: false });
+    const silent = await unattended.agent._resolveUnverifiedStepConfirmation(unattended.tab, (await unattended.bind()).block,
+      () => assert.fail('an unattended run shows no card'), async () => (await unattended.bind()).block, []);
+    assert.match(silent.error, /This unattended run cannot ask the user about sending this message/);
+    // A draft WebBrain cannot read leaves nothing to show: no card.
+    const unreadable = recipientFixture();
+    unreadable.draft = '';
+    assert.equal((await unreadable.bind()).block.unverifiedStepConfirmation, undefined);
+  });
+
+  // ── click-duplicate-submit, through the tool batch ─────────────────────
+  test(`${build}: a repeated commit click asks on a hard card before it is sent`, async () => {
+    const provider = { name: 'repeat test', model: 'test', promptTier: 'full', contextWindow: 128000,
+      supportsTools: true, supportsVision: false, chat: async () => ({ content: '' }) };
+    const agent = new Agent({ getActive: () => provider, getProvider: () => provider, getVisionProvider: async () => null });
+    agent.clarifyTimeoutSec = 0;
+    agent._persist = () => {};
+    agent._persistNow = async () => ({ ok: true });
+    const tab = nextTab++;
+    agent._taskTokens.set(tab, `task-${tab}`);
+    agent._planExecutionGuards.set(tab, { enabled: false, taskKey: `key-${tab}` });
+    agent._lastAxScopes.set(tab, { documentToken: 'doc-1', pageUrl: EDIT_URL });
+    agent._currentUrl = async () => EDIT_URL;
+    agent._skipPermissionGate = true;
+    agent._ensureGateSetting = async () => true;
+    for (const name of ['_chromeProtectedPageFailure', '_captchaMutationPreflight', '_messageRecipientGuardBlock',
+      '_detectLikelySubmitAction', '_socialPublicationPreSubmitBlock']) agent[name] = async () => null;
+    agent._adoptLiveSocialPublishWorkflow = async () => false;
+    agent._captureFormValidationState = async () => [];
+    agent._waitForFormValidationFailure = async () => null;
+    agent._auditRichTextToolbarTarget = async () => {};
+    agent._shouldAutoScreenshot = () => false;
+    agent._refreshPageFeedbackForCall = async () => false;
+    // What each caption does, as a model read it.
+    const readings = { Publish: 'publish', Save: 'commit', Next: 'other' };
+    agent._controlEffectReading = caption => readings[caption] || null;
+    agent._readControlEffect = async caption => readings[caption] || null;
+    const clickedAt = Date.now() - 5_000;
+    agent._recentSubmitClicks.set(tab, ['Publish', 'Save', 'Next', 'Send'].map(text => (
+      { key: `${text.toLowerCase()}|${EDIT_URL}`, ts: clickedAt, url: EDIT_URL, text })));
+    // The click handler itself is stubbed: what reaches it is what is checked
+    // here (its own check of an approved repeat is in control-effect-readings).
+    const dispatched = [];
+    let notes = [];
+    agent.executeTool = async (_tab, name, args, _onUpdate, context) => {
+      dispatched.push({ text: args.text, approved: context.duplicateSubmitApproved });
+      notes = [...(context.guardAdvisories || [])];
+      return { success: true, dispatched: true, verified: true };
+    };
+    const cards = [];
+    const run = async (id, text, answer) => {
+      const messages = [];
+      await agent._executeToolBatch(tab, [call(id, 'click', { text })], messages, (type, data) => {
+        if (type !== 'clarify') return;
+        cards.push(data);
+        setTimeout(() => agent.submitClarifyResponse(tab, data.clarifyId, answer, 'option'), 20);
+      }, provider, null, new Set(['click', 'done']), 1, {});
+      return resultFor(messages, id);
+    };
+    // A caption that commits nothing repeats without a question.
+    const ordinary = await run('next', 'Next', 'deny');
+    assert.equal(ordinary.success, true, JSON.stringify(ordinary));
+    assert.equal(cards.length, 0);
+    assert.deepEqual(dispatched, [{ text: 'Next', approved: false }]);
+    // Don't: nothing is clicked, and the same repeat is not asked about again.
+    const denied = await run('publish-1', 'Publish', 'deny');
+    assert.equal(cards.length, 1);
+    assert.deepEqual({ ...cards[0].unverifiedStepConfirmation }, { guardId: 'click-duplicate-submit', hard: true, action: 'click',
+      host: 'github.com', reason: 'repeat_unverified', content: 'Publish', contentLabel: 'page' });
+    assert.equal(cards[0].timeoutAnswer, undefined, 'Instant does not answer a hard card');
+    assert.equal(denied.unverifiedStepDeclined, true);
+    assert.equal(denied.blockedDuplicateSubmit, true);
+    assert.match(denied.error, /The user chose not to go ahead with clicking this control again so soon/);
+    assert.doesNotMatch(JSON.stringify(denied), /_allowResubmit/);
+    assert.equal(dispatched.length, 1);
+    const again = await run('publish-2', 'Publish', 'once');
+    assert.equal(cards.length, 1);
+    assert.match(again.error, /already chose not to go ahead/);
+    // Go ahead: this one click is sent with the approval the click handler's own check honours.
+    const approved = await run('save-1', 'Save', 'once');
+    assert.equal(cards.length, 2);
+    assert.equal(approved.success, true, JSON.stringify(approved));
+    assert.deepEqual(dispatched.at(-1), { text: 'Save', approved: true });
+    assert.match(notes.find(item => item.guard === 'click-duplicate-submit').note,
+      /This control was already clicked on this page moments ago; the user approved it/);
+    await run('save-2', 'Save', 'once');
+    assert.equal(cards.length, 3, 'one answer covers one click; the next repeat asks again');
+    // An unattended run cannot ask: refused without a card.
+    agent.scheduledRunPolicies.set(tab, { requireConsequentialConfirmation: false });
+    readings.Send = 'commit';
+    const unattended = await run('send', 'Send', 'once');
+    assert.equal(cards.length, 3);
+    assert.match(unattended.error, /This unattended run cannot ask the user about clicking this control again so soon/);
+    assert.equal(dispatched.filter(item => item.text === 'Send').length, 0);
+  });
+}
+
 // ── side panel ───────────────────────────────────────────────────────────
 let chromiumBrowser;
 before(async () => { chromiumBrowser = await chromium.launch({ headless: true }); });
@@ -1383,16 +1894,85 @@ for (const build of ['chrome', 'firefox']) {
       await page.close();
     }
   });
+
+  // The hard-class asks for dead ends: a Delete control whose items WebBrain
+  // cannot identify, a message whose recipient it cannot read, a request it
+  // would send itself, and an item an earlier attempt may have deleted.
+  test(`${build}: the side panel shows the cards for a Delete control, an unreadable recipient, a request and a repeated deletion`, async () => {
+    const page = await panel(build);
+    try {
+      const hardCard = (clarifyId, step) => stepCard({ clarifyId, timeoutSec: 0, deadlineTs: undefined, timeoutAnswer: undefined },
+        { hard: true, content: '', contentLabel: 'page', ...step });
+      const view = async clarifyId => page.evaluate(id => {
+        const card = document.querySelector(`.clarify-card[data-clarify-id="${id}"]`);
+        return { question: card.querySelector('.clarify-question').textContent,
+          reasons: [...card.querySelectorAll('.clarify-reason')].map(node => node.textContent),
+          content: card.querySelector('.clarify-content')?.textContent ?? null,
+          subject: card.querySelector('.clarify-subject')?.textContent ?? null,
+          markup: card.querySelectorAll('img, b').length,
+          buttons: [...card.querySelectorAll('.clarify-option')].map(button => [button.dataset.value, button.textContent]),
+          input: !!card.querySelector('input, textarea'), countdown: !!card.querySelector('.clarify-timeout') };
+      }, clarifyId);
+      await page.evaluate(data => window.panel.render(data), hardCard('unverified_delete',
+        { guardId: 'deletion-guard-refusal', action: 'delete', reason: 'delete_unbound', host: 'mail.example' }));
+      const deletion = await view('unverified_delete');
+      assert.equal(deletion.question, 'Click this delete control on mail.example?');
+      assert.deepEqual(deletion.reasons, ['WebBrain can’t tell which items this control would delete.', 'Check the page before you answer.']);
+      assert.equal(deletion.content, null, 'no item was identified, so none is shown');
+      assert.deepEqual(deletion.buttons, [['once', 'Delete'], ['deny', 'Don’t delete']]);
+      assert.equal(deletion.countdown, false, 'a hard card has no countdown');
+      assert.equal(deletion.input, false);
+      await page.evaluate(data => window.panel.render(data), hardCard('unverified_send', { guardId: 'recipient-guard-refusal',
+        action: 'send', reason: 'recipient_unreadable', host: 'example.test', contentLabel: 'composer',
+        content: 'Hi Bob <b>now</b><img src=x onerror="window.injected=1">' }));
+      const send = await view('unverified_send');
+      assert.equal(send.question, 'Send this message on example.test?');
+      assert.deepEqual(send.reasons, ['WebBrain couldn’t read who this message goes to.', 'In the composer now:']);
+      assert.equal(send.content, 'Hi Bob <b>now</b><img src=x onerror="window.injected=1">', 'the draft is shown as text');
+      assert.equal(send.markup, 0);
+      assert.equal(await page.evaluate(() => window.injected === 1), false);
+      assert.deepEqual(send.buttons, [['once', 'Go ahead'], ['deny', 'Don’t']]);
+      assert.equal(send.countdown, false);
+      await page.evaluate(data => window.panel.render(data), hardCard('unverified_request', { guardId: 'steer-prior-submission-unreconciled',
+        action: 'submit', reason: 'prior_submission_unreconciled', host: 'cms.example', contentLabel: 'request',
+        content: 'POST https://cms.example/api/posts\n\n{"title":"Hello"}' }));
+      const request = await view('unverified_request');
+      assert.equal(request.question, 'Submit this on cms.example?');
+      assert.deepEqual(request.reasons, ['Something was already submitted before your correction, and WebBrain couldn’t check what it did.',
+        'The request WebBrain would send:']);
+      assert.equal(request.content, 'POST https://cms.example/api/posts\n\n{"title":"Hello"}');
+      // The deletion card's own reason for an item an earlier attempt may have deleted.
+      await page.evaluate(data => window.panel.render(data), { clarifyId: 'deletion_repeat', tabId: 9, promptKind: 'mutationConfirmation',
+        question: 'Delete this item on mastoturk.org?', options: ['once', 'deny'],
+        mutationConfirmation: { kind: 'delete', reason: 'repeat', host: 'mastoturk.org', item: 'WebBrain test post', url: '', dialog: '' } });
+      const repeat = await view('deletion_repeat');
+      assert.equal(repeat.question, 'Delete this item on mastoturk.org?');
+      assert.deepEqual(repeat.reasons, ['An earlier attempt may already have deleted this item, and WebBrain couldn’t check.']);
+      assert.equal(repeat.subject, 'WebBrain test post');
+      assert.deepEqual(repeat.buttons, [['once', 'Delete'], ['deny', 'Don’t delete']]);
+      await page.click('.clarify-card[data-clarify-id="unverified_delete"] button[data-value="once"]');
+      const answered = await page.evaluate(() => ({ sent: window.panel.sent.at(-1),
+        label: document.querySelector('.clarify-card[data-clarify-id="unverified_delete"] .clarify-your-answer')?.textContent }));
+      assert.deepEqual(answered.sent, ['clarify_response', { tabId: 9, clarifyId: 'unverified_delete', answer: 'once', source: 'option' }]);
+      assert.equal(answered.label, 'Your answer: Delete');
+    } finally {
+      await page.close();
+    }
+  });
 }
 
 test('every locale of both builds translates the card', async () => {
   const keys = ['question.commit', 'question.submit', 'question.publish', 'question.click', 'question.type',
+    'question.delete', 'question.send',
     'reason.editor_unverified', 'reason.draft_unverified', 'reason.draft_unobserved',
     'reason.submit_unclear', 'reason.target_unresolved', 'reason.repeat_unverified', 'reason.step_unverified',
     'reason.credential_not_provided',
-    'content.editor', 'content.composer', 'content.page', 'content.masked', 'content.hidden', 'check_page',
+    'reason.delete_unbound', 'reason.prior_submission_unreconciled', 'reason.recipient_unreadable',
+    'content.editor', 'content.composer', 'content.page', 'content.masked', 'content.hidden', 'content.request', 'check_page',
     'go_ahead', 'dont', 'type_it', 'dont_type']
     .map(key => `sp.unverified.${key}`);
+  // The deletion card's reason for an item an earlier attempt may have deleted.
+  keys.push('sp.delete.reason_repeat');
   for (const build of ['chrome', 'firefox']) {
     const directory = new URL(`../src/${build}/src/ui/locales/`, import.meta.url);
     const files = (await fs.readdir(directory)).filter(name => /^[a-z]{2}\.js$/.test(name));

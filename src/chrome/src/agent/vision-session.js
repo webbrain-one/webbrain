@@ -378,7 +378,7 @@ export class VisionSession {
     if (!lookup.image) {
       if (lookup.retired) {
         return { ok: false, code: 'stale_image', error: lookup.retired.zoomLimit
-          ? `Zoom ${lookup.id} is no longer shown: only the newest ${VISION_MAX_LIVE_ZOOMS} zooms are kept. Read the point from the current frame ${this.keyframe.id}, or zoom again.`
+          ? `Zoom ${lookup.id} is no longer shown: ${lookup.retired.providerImageLimit ? `the provider accepts ${lookup.retired.providerImageLimit} images per request, including the full viewport and attachments` : `only the newest ${VISION_MAX_LIVE_ZOOMS} zooms are kept`}. Read the point from the current frame ${this.keyframe.id}, or zoom again.`
           : `Image ${lookup.id} is from an earlier screen. The current full frame is ${this.keyframe.id}; read the point from it or from a later patch.` };
       }
       return { ok: false, code: 'unknown_image', error: `Unknown image "${lookup.id}". Name an image exactly as labeled (valid now: ${[...this.images.keys()].join(', ')}), or omit image for the current screen.` };

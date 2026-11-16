@@ -5,6 +5,7 @@ const elements = Object.fromEntries([
   'pdf-title', 'pdf-stage', 'pdf-status', 'pdf-pages', 'previous-page', 'page-number',
   'page-count', 'next-page', 'zoom-out', 'fit-width', 'zoom-in', 'rotate-page',
   'search-form', 'document-search', 'search-submit', 'download-pdf', 'print-pdf', 'ocr-page', 'cancel-ocr-page',
+  'native-viewer',
 ].map(id => [id, document.getElementById(id)]));
 
 const MIN_SCALE = .5;
@@ -78,7 +79,14 @@ async function fallbackToNative(message = '') {
     const tabIdValue = params.get('tabId');
     const tabId = tabIdValue == null ? NaN : Number(tabIdValue);
     if (['http:', 'https:'].includes(url.protocol) && Number.isInteger(tabId) && tabId >= 0) {
-      await api?.tabs?.update?.(tabId, { url: url.href });
+      let targetTabId = tabId;
+      try {
+        const currentTab = await api?.tabs?.getCurrent?.();
+        if (Number.isInteger(currentTab?.id) && currentTab.id >= 0) {
+          targetTabId = currentTab.id;
+        }
+      } catch {}
+      await api?.tabs?.update?.(targetTabId, { url: url.href });
       return;
     }
   } catch {
@@ -662,6 +670,9 @@ elements['print-pdf'].addEventListener('click', () => {
 });
 elements['ocr-page'].addEventListener('click', () => ocrCurrentPage());
 elements['cancel-ocr-page'].addEventListener('click', () => cancelOcrRequest());
+elements['native-viewer']?.addEventListener('click', () => {
+  fallbackToNative();
+});
 elements['pdf-stage'].addEventListener('scroll', updateCurrentPageFromScroll, { passive: true });
 globalThis.addEventListener('resize', () => {
   if (!state.pdf || !state.fitWidth || state.printing) return;

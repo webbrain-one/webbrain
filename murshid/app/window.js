@@ -10,6 +10,7 @@ const { Tab } = require('./tab');
 const { OmniboxPopup } = require('./omnibox-popup');
 const { displayUrl } = require('./url');
 const i18n = require('./i18n');
+const { initialWindowBounds, displayWorkAreas } = require('./window-bounds');
 
 const DEFAULT_CHROME_HEIGHT = 80;
 const PANEL_HEADER_HEIGHT = 40;
@@ -47,14 +48,9 @@ class MurshidWindow {
     const isMac = process.platform === 'darwin';
     const colors = themeColors();
     const saved = bounds || this.ctx.settings.get('windowBounds');
-    const area = screen.getPrimaryDisplay().workArea;
-    const width = Math.min(saved?.width || 1360, area.width);
-    const height = Math.min(saved?.height || 880, area.height);
 
     this.win = new BrowserWindow({
-      width,
-      height,
-      ...(saved && Number.isFinite(saved.x) ? { x: saved.x, y: saved.y } : {}),
+      ...initialWindowBounds(saved, displayWorkAreas(screen)),
       minWidth: 520,
       minHeight: 380,
       show: false,
@@ -71,6 +67,7 @@ class MurshidWindow {
         sandbox: true,
         nodeIntegration: false,
         spellcheck: false,
+        ...(ctx.uiPartition ? { partition: ctx.uiPartition } : {}),
       },
     });
     this.id = this.win.id;

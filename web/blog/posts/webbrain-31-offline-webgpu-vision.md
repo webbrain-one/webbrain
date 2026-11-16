@@ -51,7 +51,7 @@ In other words, WebBrain supplies the eyes while the model you chose remains the
 
 ## What it looks like in WebBrain 31
 
-In current versions, the setting is under **Settings → Assistive Models → Vision**. The tab was named Multimodal in WebBrain 31.0.0. Enable **LFM2.5-VL local fallback** to run the ONNX model on your GPU. The active provider continues to handle planning and tool calls; the in-browser fallback reads screenshots locally.
+In current versions, the setting is under **Settings → Models → Vision**. The tab was named Multimodal in WebBrain 31.0.0. Enable **LFM2.5-VL local fallback** to run the ONNX model on your GPU. The active provider continues to handle planning and tool calls; the in-browser fallback reads screenshots locally.
 
 <figure>
   <img src="/assets/webbrain-31-lfm25-vl-local-fallback-settings.png" alt="WebBrain 31.0.0 Multimodal Vision settings with the LFM2.5-VL local fallback enabled" width="1586" height="1384" loading="lazy">
@@ -92,7 +92,7 @@ This is also a more sustainable way to improve WebBrain. A lightweight visual la
 
 ## Available now in WebBrain 31.0.0
 
-Offline WebGPU vision is optional in WebBrain 31.0.0. Users with compatible browser and device support can enable the local model under **Settings → Assistive Models → Vision**, while existing local and hosted vision configurations remain available for people who prefer them or need a different capability profile.
+Offline WebGPU vision is optional in WebBrain 31.0.0. Users with compatible browser and device support can enable the local model under **Settings → Models → Vision**, while existing local and hosted vision configurations remain available for people who prefer them or need a different capability profile.
 
 We will continue sharing compatibility notes and real WebBrain vision results as more people use the local fallback.
 

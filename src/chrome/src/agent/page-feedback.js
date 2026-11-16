@@ -1,4 +1,4 @@
-import { acceptCalculationAnswerForm, calculationAnswerFormMessages, canRetainPageFeedbackCalls, isAutomaticPageFeedback, isAutomaticPageFeedbackEvent, isLiteralCalculationTask, isPageIndependentCalculationCompletion, isPassivePageFeedback, literalCalculationCandidate, literalCalculationOutputRequirements, literalCalculationTaskExpression, pageFeedbackCallPolicy } from './page-feedback-policy.js';
+import { acceptCalculationAnswerForm, calculationAnswerFormMessages, canRetainPageFeedbackCalls, isAutomaticPageFeedback, isAutomaticPageFeedbackEvent, isLiteralCalculationTask, isPageIndependentCalculationCompletion, isPassivePageFeedback, literalCalculationCandidate, literalCalculationOutputRequirements, literalCalculationTaskExpression, pageFeedbackCallArgs, pageFeedbackCallPolicy } from './page-feedback-policy.js';
 import { accountFeedbackSupersession, resetFeedbackSupersession } from './page-feedback-recovery.js';
 import { captureMediaDownloadStateInPage } from './media-download-binding.js';
 import * as trace from '../trace/recorder.js';
@@ -1868,8 +1868,10 @@ export const pageFeedbackMethods = {
     }
     const currentRun = this._pageFeedbackRuns.get(tabId) === run;
     const rootScopedCalls = !!responseToolCalls?.length && responseToolCalls.every(call => {
-      try { return ['request', 'scroll'].includes(pageFeedbackCallPolicy(call.function?.name, JSON.parse(call.function.arguments)).kind); }
-      catch { return false; }
+      try {
+        const args = pageFeedbackCallArgs(call);
+        return !!args && ['request', 'scroll'].includes(pageFeedbackCallPolicy(call.function?.name, args).kind);
+      } catch { return false; }
     });
     const stateCurrent = documentMatches && currentRun
       ? this._pageFeedbackStateCurrent(tabId, run, state, url, { rootOnly: rootScopedCalls }) : null;
@@ -1897,7 +1899,8 @@ export const pageFeedbackMethods = {
     let retained = sameDocument && canRetain(events)
       && (!pending.length || canRetain(pending, { pending: true }));
     if (retained) for (const call of responseToolCalls) {
-      const args = JSON.parse(call.function.arguments);
+      // Retention parsed every call the same way: "" is {} here as well.
+      const args = pageFeedbackCallArgs(call);
       if (pageFeedbackCallPolicy(call.function.name, args, state, page, events).kind === 'bound_target'
           && await this._validatePageFeedbackAction(tabId, call.function.name, args, state, call._browserBatch?.parentId) !== true) {
         // A target the certificate cannot bind (a selector naming several
@@ -2009,8 +2012,8 @@ export const pageFeedbackMethods = {
     if (accepted) {
       for (const call of responseToolCalls) {
         try {
-          const args = JSON.parse(call.function.arguments);
-          if (pageFeedbackCallPolicy(call.function.name, args, state, page, events).kind === 'target') {
+          const args = pageFeedbackCallArgs(call);
+          if (args && pageFeedbackCallPolicy(call.function.name, args, state, page, events).kind === 'target') {
             run.validatedTargets ??= new Map();
             run.validatedTargets.set(`${call.function.name}:${JSON.stringify(args)}`, run.revision);
           }
@@ -2030,8 +2033,9 @@ export const pageFeedbackMethods = {
       toolPolicies: (responseToolCalls || []).flatMap(call => {
         try {
           const name = call.function?.name;
-          if (!/^[a-z][a-z0-9_]{0,63}$/.test(name || '')) return [];
-          const policy = pageFeedbackCallPolicy(name, JSON.parse(call.function.arguments), state, page, events);
+          const args = pageFeedbackCallArgs(call);
+          if (!/^[a-z][a-z0-9_]{0,63}$/.test(name || '') || !args) return [];
+          const policy = pageFeedbackCallPolicy(name, args, state, page, events);
           return [{ name, kind: policy.kind, ...(policy.reason ? { reason: policy.reason } : {}) }];
         } catch { return []; }
       }).slice(0, 16),

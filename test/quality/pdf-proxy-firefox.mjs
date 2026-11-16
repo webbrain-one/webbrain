@@ -5,6 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { BidiSession } from '../../firefox-companion/session.mjs';
+import { firefoxBinary } from '../firefox-binary.mjs';
 
 // Install the real PDF modules in a disposable Firefox profile behind a local
 // HTTP proxy. Firefox reports that proxy's socket IP in webRequest; destination
@@ -89,8 +90,7 @@ const prefs = {
 };
 await fs.writeFile(path.join(profile, 'user.js'), Object.entries(prefs)
   .map(([key, value]) => `user_pref(${JSON.stringify(key)}, ${JSON.stringify(value)});`).join('\n'));
-const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin'
-  ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'), [
+const firefox = spawn((await firefoxBinary()).binary, [
   '--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0',
 ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' } });
 let session;
@@ -137,20 +137,30 @@ try {
       if ((await browser.tabs.get(tab.id)).url?.includes('pdf-handler.html?')) break;
       await new Promise(resolve => setTimeout(resolve, 25));
     }
-    const read = async url => {
-      try { return await pdf.extractPdfText(url, {}, { tabId: tab.id }); }
+    const read = async (url, options = {}) => {
+      try { return await pdf.extractPdfText(url, options, { tabId: tab.id }); }
       catch (error) { return { success: false, error: error.message }; }
     };
-    const sameSite = await read('http://example.com/auth.pdf');
+    // Ask for the Claude document copy: PDF.js hands the fetched buffer to
+    // its real Worker here, which detaches the original array.
+    const sameSite = await read('http://example.com/auth.pdf', { includeDocument: true });
+    const documentBytes = sameSite._pdfBytes;
     const crossSite = await read(viewer('http://example.org/auth.pdf'));
     const blocked = await read('http://private.rebind.test/private.pdf');
     return JSON.stringify({
-      sameSite: { success: sameSite.success, pages: sameSite.pages, error: sameSite.error },
+      sameSite: {
+        success: sameSite.success, pages: sameSite.pages, error: sameSite.error, byteLength: sameSite.byteLength,
+        documentLength: documentBytes?.length ?? null,
+        documentMatches: !!documentBytes && new TextDecoder().decode(documentBytes) === ${JSON.stringify(pdfBytes)},
+      },
       crossSite, blocked, addresses: background.fixtureAddresses,
     });
   })()`);
   assert.equal(result.sameSite.success, true, result.sameSite.error);
   assert.match(result.sameSite.pages.join(' '), new RegExp(secret));
+  assert.equal(result.sameSite.byteLength, pdfBytes.length, 'byteLength must survive PDF.js detaching the fetched bytes.');
+  assert.equal(result.sameSite.documentLength, pdfBytes.length, 'The Claude document copy must not be a detached, empty array.');
+  assert.equal(result.sameSite.documentMatches, true, 'The Claude document copy must be the fetched PDF.');
   assert.equal(result.crossSite.success, false);
   assert.match(result.crossSite.error, /HTTP 401/);
   assert.equal(result.blocked.success, false);

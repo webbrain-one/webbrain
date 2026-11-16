@@ -184,6 +184,13 @@ try {
   context = await chromium.launchPersistentContext(profile, { headless: true, channel: 'chromium', viewport: { width: 1280, height: 900 },
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
       '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'] });
+  const fromSettingsPage = request => {
+    try {
+      if (request.serviceWorker()) return false;
+      const page = new URL(request.frame().url());
+      return page.protocol === 'chrome-extension:' && page.pathname === '/src/ui/settings.html';
+    } catch { return false; }
+  };
   await context.route('**/*', route => {
     const url = new URL(route.request().url());
     if (url.origin === origin || url.protocol === 'chrome-extension:') return route.continue();
@@ -198,6 +205,14 @@ try {
       // Supply wholly owned inert data so startup has no external contact.
       startupIntercepts.push(url.href); return route.fulfill({ contentType: 'text/html', body: '<title>Owned startup placeholder</title>' });
     }
+    if (url.origin === 'https://api.webbrain.one' && url.pathname === '/v1/billing/status'
+        && route.request().method() === 'GET' && fromSettingsPage(route.request())) {
+      // Providers now live on the Settings page this fixture uses as its
+      // message bridge, and it checks the selected WebBrain Compass
+      // provider's billing status while it loads. Answer only that page,
+      // with an inert status, so startup has no external contact.
+      startupIntercepts.push(url.href); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"subscription_status":"active"}' });
+    }
     blocked.push({ origin: url.origin, path: url.pathname, type: route.request().resourceType(), method: route.request().method() }); return route.abort('blockedbyclient');
   });
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 30000 });
@@ -211,6 +226,9 @@ try {
   });
   const harness = await context.newPage();
   await harness.goto(`chrome-extension://${new URL(worker.url()).host}/src/ui/settings.html`);
+  // Let Settings finish loading before the fixture changes storage and the
+  // active provider, so its startup requests do not race the setup below.
+  await harness.waitForFunction(() => document.documentElement.dataset.settingsReady === 'true');
   const message = (action, data = {}) => harness.evaluate(({ action, data }) => chrome.runtime.sendMessage({ target: 'background', action, ...data }), { action, data });
   await harness.evaluate(() => chrome.storage.local.set({ helpImproveWebBrain: false, tracingEnabled: false,
     autoScreenshot: false, screenshotFallback: false, planBeforeActMode: 'off', planBeforeAct: false, planReviewMode: 'never',

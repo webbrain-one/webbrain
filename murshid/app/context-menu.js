@@ -59,7 +59,7 @@ function buildContextMenu(ctx, tab, params, contents) {
     const history = wc.navigationHistory;
     add({ label: t('context.back'), enabled: history.canGoBack(), click: () => history.goBack() });
     add({ label: t('context.forward'), enabled: history.canGoForward(), click: () => history.goForward() });
-    add({ label: t('context.reload'), click: () => wc.reload() });
+    add({ label: t('context.reload'), click: () => tab.reload() });
     sep();
     add({ label: t('context.print'), click: () => wc.print() });
     add({ label: t('context.viewSource'), enabled: /^https?:/i.test(tab.url), click: () => w?.addTab({ url: `view-source:${tab.url}`, after: tab }) });

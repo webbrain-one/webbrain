@@ -14,6 +14,11 @@
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- The panel window loads http://127.0.0.1:<port>/companion/ -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key><true/>
+  </dict>
   <key>NSHumanReadableCopyright</key><string>© 2026 Emre Sokullu. GPL-3.0-or-later.</string>
 </dict>
 </plist>

@@ -8,19 +8,51 @@ function extract(source, name) {
   assert.ok(start >= 0, name);
   return source.slice(start, source.indexOf('\n}', start) + 2);
 }
+
+// The extracted product functions run next to hand-written stubs. When the
+// product starts calling a helper that has no stub, the ReferenceError lands in
+// an async listener or a catch block that only logs it, and the test then fails
+// on an assertion that does not name the cause. Record those errors in the page
+// (console text alone does not show an Error argument in Firefox) so the
+// failure names the missing stub.
+const RECORD_PAGE_ERRORS = `window.pageErrors = [];
+window.addEventListener('error', event => window.pageErrors.push(String(event.error || event.message)));
+window.addEventListener('unhandledrejection', event => window.pageErrors.push('Unhandled rejection: ' + event.reason));
+for (const level of ['warn', 'error']) {
+  const log = console[level];
+  console[level] = (...args) => {
+    if (args.some(arg => arg instanceof ReferenceError)) window.pageErrors.push(args.map(String).join(' '));
+    return log.apply(console, args);
+  };
+}`;
+function watchPageErrors(page) {
+  const uncaught = [];
+  // Also catches a script that fails to parse, before it can record anything.
+  page.on('pageerror', error => uncaught.push(String(error)));
+  return async () => {
+    // A rejected async listener reports on a later task; let it arrive first.
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 0)));
+    const recorded = await page.evaluate(() => window.pageErrors || []);
+    assert.deepEqual([...new Set([...recorded, ...uncaught])], [], 'The extracted product code threw; a stub is probably missing');
+  };
+}
+
 for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
   test(`${build}: Escape dismisses History without cancelling the active task`, async () => {
     const browser = await engine.launch({ headless: true });
     try {
       const page = await browser.newPage();
+      const assertNoPageErrors = watchPageErrors(page);
       const source = await readFile(`src/${build}/src/ui/sidepanel.js`, 'utf8');
       await page.setContent('<button id="history">History</button><div id="popover" popover="auto"><button>Recover</button></div><textarea></textarea>');
       await page.addScriptTag({ content: `
+        ${RECORD_PAGE_ERRORS}
         const historyBtn = document.querySelector('#history');
         const historyPopover = document.querySelector('#popover');
         const inputEl = document.querySelector('textarea');
         const uiScaleShortcutAction = () => null;
         const closeUiScalePopover = () => false;
+        const closePermissionGatePopover = () => false;
         const slashCommandMenuEl = null, selectionAskActionEl = null, providerPickerMenu = null, languagePickerMenu = null;
         const isProcessing = true;
         window.aborts = 0;
@@ -34,6 +66,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.equal(await page.evaluate(() => document.querySelector('#popover').matches(':popover-open')), false);
       assert.equal(await page.evaluate(() => window.aborts), 0);
       await page.keyboard.press('Escape');
+      await assertNoPageErrors();
       assert.equal(await page.evaluate(() => window.aborts), 1, 'Escape still aborts after dismissal');
     } finally { await browser.close(); }
   });
@@ -42,11 +75,13 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     const browser = await engine.launch({ headless: true });
     try {
       const page = await browser.newPage();
+      const assertNoPageErrors = watchPageErrors(page);
       const source = await readFile(`src/${build}/src/ui/sidepanel.js`, 'utf8');
       const listenerStart = source.lastIndexOf(`${build === 'firefox' ? 'browser' : 'chrome'}.runtime.onMessage.addListener(`, source.indexOf("|| msg.action !== 'tab_chat_handoff_request'"));
       const listener = source.slice(listenerStart, source.indexOf('\n});', listenerStart) + 4);
       await page.setContent('<div id="messages">old dialog</div>');
       await page.addScriptTag({ content: `
+        ${RECORD_PAGE_ERRORS}
         let hidden = false;
         Object.defineProperty(document, 'visibilityState', { get: () => hidden ? 'hidden' : 'visible' });
         const messagesEl = document.querySelector('#messages');
@@ -77,6 +112,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         const setApiMutationsAllowedForTab = () => {}, clearPendingAttachmentsForTab = () => {};
         const clearQueuedComposerMessagesForTab = () => {}, resetComposerHistoryNavigation = () => {};
         const resetChatNavigation = () => {}, applyConversationScopeState = () => {}, setMode = () => {};
+        const setComposerModePinForTab = () => {};
         const flushPendingStreamedAssistantMarkdownRenders = () => {}, historyRecoveryMetadata = () => ({});
         const t = value => value;
         const showComposerToast = message => { window.failure = message; };
@@ -112,6 +148,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.equal(await page.evaluate(() => window.handoffPending), true);
       assert.equal(await page.evaluate(() => window.ack), undefined);
       await page.evaluate(async () => { window.finish(); await window.recovery; });
+      await assertNoPageErrors();
       await page.waitForFunction(() => window.ack);
       assert.match(await page.evaluate(() => window.persisted), /recovered dialog/);
       assert.equal(await page.evaluate(() => window.ack.ok), false, 'An acknowledgement from the old generation cannot overwrite the committed transcript');
@@ -142,6 +179,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
       assert.deepEqual(await page.evaluate(() => window.cacheAfterLostResponse), {snapshot:null, id:undefined, html:undefined, generation:undefined});
       assert.equal(await page.evaluate(() => window.lostResponseAck.ok), false);
       assert.equal(await page.evaluate(() => window.failure), undefined, 'An ambiguous response cannot report the committed recovery as failed');
+      await assertNoPageErrors();
     } finally { await browser.close(); }
   });
 }

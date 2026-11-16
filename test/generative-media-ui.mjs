@@ -21,9 +21,15 @@ const workflow = JSON.stringify({ '6': { class_type: 'CLIPTextEncode', inputs: {
 try {
   for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
     const backgroundSource = await readFile(`src/${build}/src/background.js`, 'utf8');
-    const sendStart = backgroundSource.indexOf('function sendAgentUpdate(');
-    const sendSource = backgroundSource.slice(sendStart, backgroundSource.indexOf('\nfunction ', sendStart + 1));
+    const sendStart = backgroundSource.indexOf('\nfunction sendAgentUpdate(') + 1;
+    assert.ok(sendStart > 0);
+    // End at the function's own closing brace: module-scope declarations
+    // follow it, not necessarily another plain `function`.
+    const sendSource = backgroundSource.slice(sendStart, backgroundSource.indexOf('\n}\n', sendStart) + 2);
     const panelSource = await readFile(`src/${build}/src/ui/sidepanel.js`, 'utf8');
+    const terminalStart = panelSource.indexOf('\nfunction isTerminalDoneTool(') + 1;
+    assert.ok(terminalStart > 0);
+    const terminalSource = panelSource.slice(terminalStart, panelSource.indexOf('\n}\n', terminalStart) + 2);
     const handleStart = panelSource.indexOf('function handleAgentUpdateMessage(');
     const handleEnd = panelSource.slice(handleStart).search(/\n(?:chrome|browser)\.runtime\.onMessage\.addListener/);
     assert.ok(handleStart >= 0 && handleEnd > 0);
@@ -58,8 +64,22 @@ try {
         assert.equal(await page.locator('#image-gen-heading').innerText(), lang === 'en' ? 'Generative Media' : 'Üretken medya');
         const provider = page.locator('#image-gen-provider');
         assert.equal(await provider.inputValue(), 'fal', 'legacy config defaults to fal.ai');
+        // fal.ai videos default to 480p; 720p is a saved choice.
+        const resolution = page.locator('#image-gen-video-resolution');
+        assert.equal(await resolution.isVisible(), true);
+        assert.deepEqual(await resolution.locator('option').evaluateAll(options => options.map(option => option.value)), ['480p', '720p']);
+        assert.equal(await resolution.inputValue(), '480p', 'a legacy config uses the 480p default');
+        await resolution.selectOption('720p');
+        await page.locator('#btn-save-image-gen').click();
+        await page.waitForFunction(() => testStore.imageGenModel?.videoResolution === '720p');
+        await page.reload();
+        await page.waitForFunction(() => document.querySelector('#image-gen-video-resolution').value === '720p');
+        await resolution.selectOption('480p');
+        await page.locator('#btn-save-image-gen').click();
+        await page.waitForFunction(() => testStore.imageGenModel?.videoResolution === '480p');
         assert.deepEqual(await provider.locator('option').evaluateAll(options => options.map(option => option.value)), ['fal', 'openrouter', 'comfyrouter', 'comfyui']);
         await provider.selectOption('openrouter');
+        assert.equal(await page.locator('#image-gen-video-resolution-field').isVisible(), false, 'resolution is a fal.ai setting');
         assert.equal(await page.locator('#image-gen-api-key').inputValue(), '', 'keys do not cross providers');
         await page.locator('#image-gen-api-key').fill('synthetic-or-key');
         await page.locator('#image-gen-model').fill('google/gemini-2.5-flash-image');
@@ -88,6 +108,7 @@ try {
         assert.equal(await page.locator('#image-gen-model-field').isVisible(), false);
         assert.equal(await page.locator('#image-gen-url-field').isVisible(), true);
         assert.equal(await page.locator('#image-gen-parameters-field').isVisible(), false);
+        assert.equal(await page.locator('#image-gen-video-resolution-field').isVisible(), false);
         assert.equal(await page.locator('#image-gen-base-url').inputValue(), 'http://127.0.0.1:8188');
         await page.locator('#image-gen-workflow').fill(workflow);
         await page.locator('#btn-save-image-gen').click();
@@ -106,13 +127,14 @@ try {
         for (const value of ['fal', 'openrouter', 'comfyrouter', 'comfyui']) {
           await provider.selectOption(value);
           assert.equal(await page.locator('#image-gen-api-key').inputValue(), '');
+          if (value === 'fal') assert.equal(await page.locator('#image-gen-video-resolution').inputValue(), '480p', 'Clear returns to the default');
           await page.locator('#image-gen-heading').scrollIntoViewIfNeeded();
           await page.screenshot({ animations: 'disabled', path: `${output}/${build}-${lang}-${width}-${value}.png` });
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${value}: fits viewport`);
         }
         // Exercise the real journal/broadcast/panel handler rather than handing
         // a raw result straight to the renderer (which hid the original bug).
-        const transport = await page.evaluate(async ({ build, sendSource, handleSource }) => {
+        const transport = await page.evaluate(async ({ build, sendSource, handleSource, terminalSource }) => {
           const { generateImage } = await import(`/src/${build}/src/agent/generative-media.js`);
           const { appendGeneratedMedia } = await import(`/src/${build}/src/ui/generated-media-view.js`);
           const { RunUiJournal, compactRunUiSnapshotForPersist, RUN_UI_PERSIST_RETRY_BUDGET } = await import(`/src/${build}/src/run-ui-journal.js`);
@@ -137,27 +159,38 @@ try {
             const localRunRequestIds = new Map();
             const ensureCurrentRunAssistant = () => currentAssistantEl;
             const markLastStepDone = () => {};
+            const clearThinkingActivityTimers = () => {};
+            const beginThinkingActivity = () => {};
+            ${terminalSource}
             const appendVerboseToolResult = () => {};
             const scrollToBottom = () => {};
             const schedulePersist = () => context.persistCalls++;
             return (${handleSource});
           `)(appendGeneratedMedia, { messagesEl: div, currentAssistantEl: div.firstElementChild, currentTabId: 11, verboseMode: false, persistCalls: 0 });
           const journal = new RunUiJournal(); journal.begin(11, 'media-run');
-          const sent = [];
-          const api = { runtime: { sendMessage: async message => { sent.push(message); handler(message); } } };
-          const send = new Function('recordRunUiEvent', 'agent', 'chrome', 'browser', `return (${sendSource});`)(
-            (...args) => journal.record(...args), { currentRunId: new Map() }, api, api,
+          const sent = [], handlerErrors = [];
+          // sendAgentUpdate drops a rejected sendMessage, so a handler that
+          // throws (say, on a helper this test does not provide) would only
+          // show up later as a missing preview. Record it instead.
+          const api = { runtime: { sendMessage: async message => {
+            sent.push(message);
+            try { handler(message); } catch (error) { handlerErrors.push(String(error)); }
+          } } };
+          // Module-scope state sendAgentUpdate reads for plan-review attention.
+          const send = new Function('recordRunUiEvent', 'agent', 'chrome', 'browser', 'planReviewAttentionByTab', 'notifyPlanReview', 'clearPlanReviewAttention', `return (${sendSource});`)(
+            (...args) => journal.record(...args), { currentRunId: new Map() }, api, api, new Map(), () => {}, () => {},
           );
           send(11, 'media-run', 'tool_result', { name: 'generate_image', result });
           // Hosted videos must also reach the media element, not their thumbnail.
           send(11, 'media-run', 'tool_result', { name: 'generate_image', result: { success: true, provider: 'comfyrouter', url: 'https://cdn.example/final.mp4' } });
+          if (handlerErrors.length) throw new Error(`The extracted side panel handler threw: ${handlerErrors.join('; ')}`);
           appendGeneratedMedia(div, { success: true, url: 'javascript:alert(1)' }, key => key);
           const snapshot = compactRunUiSnapshotForPersist(journal.get(11), { tight: true });
           localStorage.setItem('media-replay-snapshot', JSON.stringify(snapshot));
           localStorage.setItem('media-asset-id', result.mediaId);
           const blob = await loadGeneratedMedia(result.mediaId);
           return { sentHandle: sent[0].data.result.mediaId, mediaId: result.mediaId, url: result.url, blobSize: blob.size, snapshotSize: JSON.stringify(snapshot).length, budget: RUN_UI_PERSIST_RETRY_BUDGET, discarded: snapshot.discardedBeforeSeq };
-        }, { build, sendSource, handleSource });
+        }, { build, sendSource, handleSource, terminalSource });
         assert.equal(transport.sentHandle, transport.mediaId);
         assert.equal(transport.url, undefined, 'inline bytes travel as an asset handle');
         assert.ok(transport.blobSize > 512 * 1024, 'real inline image exceeds journal budget');

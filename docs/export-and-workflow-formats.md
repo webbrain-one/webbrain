@@ -211,7 +211,9 @@ distributed context propagation.
 The snapshot includes provider, vision, transcription, and CapSolver API keys;
 profile data; user memory; custom skills; and permission choices. It excludes
 conversations, traces, schedules, usage counters, accumulated spend, and
-device-bound WebBrain Compass or Cloud Sync identity and session data.
+device-bound WebBrain Compass or Cloud Sync identity and session data. Settings
+tied to the device stay out as well: the WebBrain Cloud bridge pairing, Chrome's
+in-browser vision model consent and Firefox's local BiDi connection.
 
 Import with `/import <json>` or `/import --file`. Import validates known setting
 types and ignores unknown setting keys. It merges: only the settings present in

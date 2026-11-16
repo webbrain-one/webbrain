@@ -1191,7 +1191,8 @@ function normalizePlanReviewMode(stored = {}) {
 
 function normalizePlanReviewConfidenceThreshold(stored = {}) {
   let threshold = Number(stored.planReviewConfidenceThreshold);
-  if (!Number.isFinite(threshold)) threshold = 0.9;
+  // Unset reads as the product default the Settings slider shows (75%).
+  if (!Number.isFinite(threshold)) threshold = 0.75;
   if (threshold > 1 && threshold <= 100) threshold /= 100;
   // Match the settings slider's [50%, 99%] range so an out-of-band stored
   // value can't disable the review gate while the UI shows an in-range value.
@@ -4450,15 +4451,15 @@ async function handleMessage(msg, sender) {
     }
 
     case 'd1_control': {
-      // The D1 controls are on the Decision tab of the Providers page.
+      // The D1 controls are in the Decision section of Settings.
       const api = globalThis.browser || globalThis.chrome;
       const page = sender.id === api.runtime.id ? String(sender.url || '').split(/[?#]/)[0] : '';
       // The install guide downloads D1 next to its local chat model: it reads
       // D1's status, checks the GPU, and starts or stops that download. Every
-      // other control stays on the Providers page.
+      // other control stays in Settings.
       const fromInstall = page === api.runtime.getURL('src/ui/install.html')
         && ['status', 'probe', 'download', 'stop'].includes(msg.command);
-      if (page !== api.runtime.getURL('src/ui/providers.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Providers page.' };
+      if (page !== api.runtime.getURL('src/ui/settings.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Settings page.' };
       try {
         await strictSecretModeReady;
         await visionModeReady;

@@ -21,14 +21,30 @@ func TestTightest(t *testing.T) {
 		t.Fatalf("plan-wide windows come first, got %+v", r)
 	}
 	google := []quota.Row{
-		{Window: "5h", Scope: "Gemini Pro", Remaining: pct(90)},
-		{Window: "5h", Scope: "Claude", Remaining: pct(20)},
+		{Window: "week", Scope: "Gemini Models", Remaining: pct(84)},
+		{Window: "5h", Scope: "Gemini Models", Remaining: pct(99)},
+		{Window: "week", Scope: "Claude and GPT models", Remaining: pct(2)},
+		{Window: "5h", Scope: "Claude and GPT models", Remaining: pct(100)},
+		{Window: "week", Scope: "Gemini 4 Argon", Remaining: pct(64)},
 	}
-	if r := Tightest(google); r == nil || r.Scope != "Claude" {
-		t.Fatalf("scoped windows count when nothing else is reported, got %+v", r)
+	if r := Tightest(google); r == nil || r.Scope != "Gemini Models" || r.Window != "week" || *r.Remaining != 84 {
+		t.Fatalf("scoped-only plans use each scope's bottleneck, then the healthiest scope, got %+v", r)
+	}
+	scopedMixed := []quota.Row{
+		{Window: "5h", Scope: "Gemini Models", Remaining: pct(30)},
+		{Window: "week", Scope: "Gemini Models", Remaining: pct(80)},
+		{Window: "5h", Scope: "Claude", Remaining: pct(100)},
+		{Window: "week", Scope: "Claude", Remaining: pct(2)},
+		{Window: "custom", Scope: "Credits", Detail: "$4"},
+	}
+	if r := Tightest(scopedMixed); r == nil || r.Scope != "Gemini Models" || r.Window != "5h" || *r.Remaining != 30 {
+		t.Fatalf("within a scope the tighter window still wins before comparing scopes, got %+v", r)
 	}
 	if r := Tightest([]quota.Row{{Window: "custom", Scope: "Credits", Detail: "$4"}}); r != nil {
 		t.Fatalf("rows without a percentage are skipped, got %+v", r)
+	}
+	if r := Tightest(nil); r != nil {
+		t.Fatalf("empty rows should return nil, got %+v", r)
 	}
 }
 
@@ -75,5 +91,25 @@ func TestPlanLineSharedProvider(t *testing.T) {
 	}
 	if got := planLine(accs[2], shared["ChatGPT"]); strings.Contains(got, "@") {
 		t.Fatalf("a provider with one login keeps the short line, got %q", got)
+	}
+}
+
+func TestUsageLinePreservesScopedWindows(t *testing.T) {
+	i18n.Set("en")
+	rows := []quota.Row{
+		{Window: "5h", Scope: "Code review", Label: "5h · Code review", Remaining: pct(64)},
+		{Window: "week", Scope: "Code review", Label: "Week · Code review", Remaining: pct(83)},
+	}
+	for _, row := range rows {
+		line := usageLine(row)
+		if !strings.Contains(line, row.Label) || !strings.Contains(line, percent(*row.Remaining)) {
+			t.Errorf("usage line %q does not preserve label and percentage", line)
+		}
+	}
+	if usageLine(rows[0]) == usageLine(rows[1]) {
+		t.Fatal("different windows must have different tray lines")
+	}
+	if got := usageLine(quota.Row{Scope: "Credits", Detail: "$4"}); !strings.Contains(got, "Credits") || !strings.Contains(got, "$4") {
+		t.Fatalf("missing fallback scope or detail: %q", got)
 	}
 }

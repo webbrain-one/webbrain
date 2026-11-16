@@ -3,6 +3,7 @@ import { createRequestDeadline, readResponseText, responseAbortError } from './r
 import { prepareAuthenticatedDownload, createAuthenticatedDownloadJobs, createDiskDownloadStore } from './download-staging.js';
 import { isMastodonPublicMediaUrl } from '../agent/public-media-url.js';
 import { isKnownMastodonHost } from '../agent/adapters.js';
+import { getDomain as publicSuffixListDomain } from '../../vendor/tldts/index.esm.min.js';
 /**
  * Network & download tools for the WebBrain agent.
  *
@@ -224,7 +225,8 @@ function safeFetchResponseMetadata(headers) {
  * Returns { ok: true } if the URL is safe, or { ok: false, error } otherwise.
  *
  * Two tiers of blocks:
- *   - ALWAYS-BLOCKED: non-http schemes, cloud-metadata IPs/hostnames,
+ *   - ALWAYS-BLOCKED: non-http schemes, cloud-metadata IPs/hostnames
+ *     (including the IPv6 metadata addresses inside fc00::/7),
  *     link-local IPv6, multicast/reserved, *.internal/*.local. These are
  *     never relaxed.
  *   - LOCAL-NETWORK: loopback, RFC1918, unique-local IPv6, `localhost`,
@@ -245,6 +247,9 @@ export function validateFetchUrl(rawUrl, opts = {}) {
   // URL.hostname keeps the [..] around IPv6 literals — strip them.
   let host = (u.hostname || '').toLowerCase();
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  // A trailing dot names the same DNS host (localhost. is localhost), and
+  // URL.hostname keeps it, so drop it before the hostname checks.
+  host = host.replace(/\.+$/, '');
   if (!host) return { ok: false, error: 'URL has no hostname.' };
 
   // Always-blocked hostnames (cloud metadata aliases + intranet TLDs).
@@ -295,6 +300,19 @@ export function validateFetchUrl(rawUrl, opts = {}) {
     // Always-blocked unspecified ::.
     if (host === '::') {
       return { ok: false, error: `Blocked unspecified IPv6: ${host}` };
+    }
+    // Always-blocked IPv6 cloud metadata. These addresses sit inside
+    // unique-local fc00::/7, which local-network access relaxes below.
+    // URL.hostname has already compressed and lowercased the address, so
+    // one spelling per endpoint matches every way of writing it.
+    const CLOUD_METADATA_IPV6 = new Set([
+      'fd00:ec2::254', // AWS instance metadata (IMDS)
+      'fd00:ec2::23',  // AWS EKS Pod Identity agent
+      'fd20:ce::254',  // Google Cloud metadata server
+      'fd00:c1::a9fe:a9fe', // Oracle Cloud metadata (cloud-init's Oracle datasource)
+    ]);
+    if (CLOUD_METADATA_IPV6.has(host)) {
+      return { ok: false, error: `Blocked cloud metadata IPv6: ${host}` };
     }
     // Local-network IPv6 — relaxable.
     if (!allowLocal) {
@@ -438,7 +456,7 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false } 
 // ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
 
 /**
- * Best-effort registrable-domain extractor (a.k.a. eTLD+1).
+ * Registrable-domain extractor (a.k.a. eTLD+1).
  *
  * Used to decide whether an agent-driven fetch should attach the user's
  * cookies: we attach cookies only when the fetch target shares the
@@ -446,13 +464,23 @@ export function watchFetchAddresses(url, allowLocal, { requireAddress = false } 
  * way, a prompt-injected page on news.example.com can't steer the agent
  * into a cookied read of mail.google.com.
  *
- * This is NOT the full Public Suffix List — it covers common ccTLD
- * patterns and well-known multi-tenant hosts. For unknown multi-label
- * suffixes it falls back to "last 2 labels", which over-matches on rare
- * ccTLDs. If you need PSL-perfect accuracy, swap in a vetted PSL.
+ * The lookup uses the Public Suffix List bundled in vendor/tldts, with its
+ * private section, so tenants of shared hosts (evil.appspot.com and
+ * victim.appspot.com, buckets under s3.amazonaws.com, universities under
+ * edu.tr) are separate sites, as they are for the browser's own cookies.
+ * A host the list gives no registrable domain for (a public suffix itself,
+ * a single label, or an invalid name) is returned whole, so it matches only
+ * itself. IP literals are returned as-is.
+ *
+ * SUPPLEMENTAL_PUBLIC_SUFFIXES is a floor under the list: the suffixes this
+ * function hard-coded before it used the Public Suffix List, plus
+ * app.github.dev. The result is whichever of the two gives the longer
+ * registrable domain, so moving to the list never puts a host on the same
+ * site as more hosts than the old rules did. The bundled snapshot lacks
+ * github.dev, glitch.me and netlify.com.
  */
-const KNOWN_MULTI_LABEL_TLDS = new Set([
-  // ccTLD patterns
+const SUPPLEMENTAL_PUBLIC_SUFFIXES = new Set([
+  // ccTLD patterns (all on the Public Suffix List too)
   'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
   'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
   'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
@@ -460,27 +488,37 @@ const KNOWN_MULTI_LABEL_TLDS = new Set([
   'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
   'org.uk', 'org.au', 'org.nz',
   'net.au', 'net.uk',
-  // Known multi-tenant hosting (PSL "private" section)
+  // Multi-tenant hosting. app.github.dev holds Codespaces forwarded ports,
+  // one per codespace.
   'github.io', 'gitlab.io',
   'netlify.app', 'netlify.com',
   'vercel.app',
   'pages.dev', 'workers.dev',
   'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
   'cloudfront.net', 'azurewebsites.net',
-  'r2.dev', 'github.dev',
+  'r2.dev', 'github.dev', 'app.github.dev',
 ]);
+
+function supplementalRegistrableDomain(lower) {
+  const labels = lower.split('.');
+  // Longest listed suffix first, so x.app.github.dev is its own site.
+  for (let i = 1; i < labels.length; i++) {
+    if (SUPPLEMENTAL_PUBLIC_SUFFIXES.has(labels.slice(i).join('.'))) return labels.slice(i - 1).join('.');
+  }
+  return '';
+}
 
 export function registrableDomain(host) {
   if (!host) return host;
-  const lower = String(host).toLowerCase();
+  let lower = String(host).toLowerCase();
+  // A trailing dot names the same DNS host. Left on, the lookup would reduce
+  // example.com. and other.com. alike to "com.".
+  while (lower.endsWith('.')) lower = lower.slice(0, -1);
   if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower; // IP literal
-  const parts = lower.split('.');
-  if (parts.length < 2) return lower;
-  const last2 = parts.slice(-2).join('.');
-  if (parts.length >= 3 && KNOWN_MULTI_LABEL_TLDS.has(last2)) {
-    return parts.slice(-3).join('.');
-  }
-  return last2;
+  const fromList = publicSuffixListDomain(lower, { allowPrivateDomains: true, extractHostname: false }) || lower;
+  const fromFloor = supplementalRegistrableDomain(lower);
+  // Both are label suffixes of the host, so the longer one is the stricter.
+  return fromFloor.length > fromList.length ? fromFloor : fromList;
 }
 
 // ─── Allow-local-network setting (cached) ───────────────────────────────

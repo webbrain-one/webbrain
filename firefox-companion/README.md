@@ -14,7 +14,7 @@ Requires Node.js 22 or newer with the built-in WebSocket API, and a current Fire
 
    Use a separate profile if desired. An already running Firefox process may ignore startup flags. Keep the debugging endpoint on loopback; it grants browser control to local clients.
 3. Load this branch's `src/firefox/manifest.json` from `about:debugging` → This Firefox → Load Temporary Add-on (or install a build containing these changes).
-4. In WebBrain Settings → Advanced, enable **Firefox trusted automation**, keep the port at 9222 (or match your startup port), and select **Test connection**.
+4. In WebBrain Settings → Bridge, enable **Firefox trusted automation**, keep the port at 9222 (or match your startup port), and select **Test connection**.
 5. Use `/screenshot --full-page` to capture a complete web page, or start a new Act or Dev task. Connection failures fail the task rather than silently falling back. Ask mode does not open an automation run. Tasks can start on blank/internal tabs; document binding is deferred until authorized navigation reaches a web page.
 
 The connection test checks the real BiDi session. It does not submit forms or send input. Disabling the setting or changing the port disconnects the helper; restart any active task afterward.

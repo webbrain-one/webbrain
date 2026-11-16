@@ -33,7 +33,7 @@ import {
 import {
   PDF_EXTRACTION_MESSAGE,
   PDF_EXTRACTION_READY_MESSAGE,
-  PDF_FETCH_VERDICT_MESSAGE,
+  createPdfVerdictListener,
   normalizePdfUrl,
   PDF_PASSTHROUGH_MAX_BYTES,
   bytesToBase64,
@@ -143,19 +143,7 @@ export async function extractPdfText(url, opts = {}, ctx = {}) {
   const addresses = isNetwork ? watchFetchAddresses(normalizedUrl, allowLocal, { requireAddress: true }) : null;
   if (isNetwork && !addresses) throw new Error('PDF response address verification is unavailable.');
   const requestId = crypto.randomUUID();
-  const verdictListener = (message, sender, sendResponse) => {
-    if (message?.type !== PDF_FETCH_VERDICT_MESSAGE || message.requestId !== requestId) return false;
-    if (sender?.id !== chrome.runtime.id || sender?.tab != null
-      || sender?.url !== chrome.runtime.getURL('src/offscreen/offscreen.html')) {
-      sendResponse({ ok: false, error: 'Unauthorized PDF response verification sender.' });
-      return false;
-    }
-    (async () => {
-      const error = await addresses?.settledFailure('fetch');
-      sendResponse(error ? { ok: false, error } : { ok: true });
-    })().catch(error => sendResponse({ ok: false, error: error.message }));
-    return true;
-  };
+  const verdictListener = createPdfVerdictListener(requestId, addresses);
   try {
     chrome.runtime.onMessage.addListener(verdictListener);
     const response = await chrome.runtime.sendMessage({

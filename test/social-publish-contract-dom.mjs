@@ -17,8 +17,10 @@ try {
     const source=fs.readFileSync(`src/${build}/src/agent/agent.js`,'utf8');
     const marker=source.indexOf('const publicationRecordRoot = ${publicationResourceRecordRoot.toString()};');
     const raw=source.slice(source.lastIndexOf('`',marker)+1,source.indexOf('`',marker+1));
-    const completionProbe=vm.runInNewContext('`'+raw+'`',{...invariant});
-    const readPublished=()=>page.evaluate(code=>Function('return ('+code+')')(),completionProbe);
+    // The agent fills in its own run fact (formsUntouchedByRun, agent.js) when it
+    // builds this probe; pass the value the fixture agent would compute.
+    const completionProbeFor=formsUntouchedByRun=>vm.runInNewContext('`'+raw+'`',{...invariant,formsUntouchedByRun});
+    const readPublished=(formsUntouchedByRun=false)=>page.evaluate(code=>Function('return ('+code+')')(),completionProbeFor(formsUntouchedByRun));
 
     // Compare preflight with the real content-script click handler, plus the
     // Chrome CDP resolver and pointer dispatch. A competing ARIA name must not
@@ -71,10 +73,11 @@ try {
           }),retryArgs);
           assert.equal(retry.success,true,JSON.stringify(retry));
         } else {
-          const start = source.indexOf('const result = await cdpClient.evaluate(tabId, `', source.indexOf('// Text-based click with auto-fallback matching.'));
-          assert(start >= 0);
+          // The scan is built once and evaluated again after the cursor glide.
+          const start = source.indexOf('const textTargetScript = `', source.indexOf('// Text-based click with auto-fallback matching.'));
+          assert(start >= 0, 'CDP text-click target script not found');
           const templateStart = source.indexOf('`', start);
-          const templateEnd = source.indexOf('`);', templateStart + 1);
+          const templateEnd = source.indexOf('`;', templateStart + 1);
           // The scan tags the elements it reports with a per-call nonce so their
           // model-facing names can be resolved in the content-script world.
           const code = vm.runInNewContext(source.slice(templateStart, templateEnd + 1), {args, modelNameNonce: 'wbmn_contract'});
@@ -449,6 +452,8 @@ try {
       let published=(await readPublished()).workflowResourceRecords[0];
       assert.equal(published.attachments.length,13,'attachments beyond twelve must not disappear');
       assert.equal(published.attachmentsComplete,true);checked++;
+      // The forms run fact never changes what a published record reads as.
+      assert.deepEqual((await readPublished(true)).workflowResourceRecords[0],published);checked++;
       await page.locator('#published').evaluate(el=>{for(let i=0;i<8;i++)el.append(el.querySelector('img').cloneNode());});
       published=(await readPublished()).workflowResourceRecords[0];
       assert.equal(published.attachmentsComplete,false,'overflow cannot prove an exact media count');checked++;
@@ -497,7 +502,7 @@ try {
           agent._recordCompletionSubmitAttempt(tab,detected,'click',{selector:'#publish'},origin,origin,dispatchResult);
           await page.evaluate(url => history.replaceState({}, '', url), url);
           await page.setContent(html);
-          const state=await readPublished();
+          const state=await readPublished(agent._completionFormsUntouchedByRun(tab));
           agent._recordCompletionToolResult(tab,'read_page',{}, {success:true,url:page.url(),content:'Observed published post.'});
           const terminal=agent._workflowTerminalEvidenceFromDone(tab,state,page.url(),agent._completionSubmissionEvidence(tab,state,page.url()));
           if (terminal) guard.workflowTerminalEvidence=terminal;
@@ -714,7 +719,7 @@ try {
       agent._recordCompletionSubmitAttempt(tabId,detected,'click',{selector:'#publish'},parent,parent,{success:true,dispatched:true});
       await page.setContent(threadHtml(parentItem+replyItem));
       const verify=async()=>{
-        const state=await readPublished();
+        const state=await readPublished(agent._completionFormsUntouchedByRun(tabId));
         agent._recordCompletionToolResult(tabId,'read_page',{}, {success:true,url:page.url(),content:'Observed thread.'});
         return {state,record:state.workflowResourceRecords.find(r=>r.url===permalink),terminal:agent._workflowTerminalEvidenceFromDone(tabId,state,page.url(),agent._completionSubmissionEvidence(tabId,state,page.url()))};
       };

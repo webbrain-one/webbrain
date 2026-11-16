@@ -24,7 +24,7 @@
 
 ### 哪个提供商接收数据？
 
-用户在提供商页面中选择他们的提供商。选项包括：
+用户在“设置 → 模型 → LLM”中选择他们的提供商。选项包括：
 
 - **WebBrain Compass**：请求会经过 `api.webbrain.one`；“帮助改进 WebBrain”默认启用，在其保持启用期间，部分交互可能会被保留并用于评估、改进、微调和训练
 - **用户自带的云提供商**：OpenAI、Anthropic、Google Gemini、Mistral、DeepSeek、xAI、Groq、OpenRouter 等——请求使用用户凭据直接发送给提供商，WebBrain 不会收集这些请求

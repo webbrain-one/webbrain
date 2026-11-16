@@ -55,6 +55,7 @@ type Snapshot struct {
 	OS            string              `json:"os"`
 	QuotaBusy     bool                `json:"quota_busy"`
 	Welcomed      bool                `json:"welcomed"`
+	ShowAllUsage  bool                `json:"show_all_usage"`
 	LocalContext  int                 `json:"local_context"`
 	Update        UpdateStatus        `json:"update"`
 }
@@ -86,6 +87,7 @@ func (a *App) Snapshot() Snapshot {
 		LogPath:      logx.Path(),
 		OS:           runtime.GOOS,
 		Welcomed:     s.Welcomed,
+		ShowAllUsage: s.ShowAllUsage,
 		LocalContext: s.Local.Context,
 		Update:       a.UpdateStatus(),
 	}

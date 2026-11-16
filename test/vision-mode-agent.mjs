@@ -66,6 +66,59 @@ function createScene({ cssWidth = 1440, cssHeight = 900, devicePixelRatio = 2 } 
 for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
 
+  test(`${build}: stability measures changed cells globally and per-target while keeping margin, scaling, and stale-screen checks`, async () => {
+    const width = 960; const height = 480;
+    const blank = () => new Uint8ClampedArray(width * height * 4).fill(255);
+    const seen = blank(); const sparse = blank();
+    for (let y = 0; y < height; y += 48) for (let x = 0; x < 720; x += 48) {
+      for (let dy = 0; dy < 6; dy++) for (let dx = 0; dx < 6; dx++) {
+        const i = ((y + dy) * width + x + dx) * 4;
+        sparse[i] = sparse[i + 1] = sparse[i + 2] = 0;
+      }
+    }
+    const { diffFrames, pointTouchesRegions, pointTouchesChangedCells } = await import(`../src/${build}/src/agent/vision-diff.js`);
+    const d = diffFrames(seen, sparse, width, height);
+    assert.ok(d.regionAreaRatio > 0.6, `merged patch covers ${d.regionAreaRatio}`);
+    assert.ok(d.changedRatio < 0.2, `changed cells cover ${d.changedRatio}`);
+    // (124, 124) sits in the 32px unchanged gap between changed cells at 96..112 and 144..160:
+    // the merged crop region covers it, but the nearest changed cell is 12px away at x/y=112 or 144.
+    // (125, 125) is 13px from [96,112] and 19px from [144,160], so outside the 12px cell margin.
+    assert.equal(pointTouchesRegions({ x: 125, y: 125 }, d.regions, 12), true, 'merged crop box covers unchanged gap');
+    assert.equal(pointTouchesChangedCells({ x: 125, y: 125 }, d, 12), false, 'changed-cell check spares unchanged gap');
+    const agent = Object.create(Agent.prototype);
+    const session = { keyframe: { url: PAGE, width, height }, seenPixels: seen, cssToKeyframe: (x, y) => ({ x, y }) };
+    let frame = { probe: { url: PAGE }, size: { width, height }, raster: { pixels: sparse } };
+    agent._visionRunState = () => ({ active: true });
+    agent._visionSessions = new Map([[1, session]]);
+    agent._visionCaptureFrame = async () => frame;
+    const check = point => agent._visionStabilityBlock(1, point);
+    assert.equal(await check({ x: 900, y: 240 }), null, 'a distant point is not rejected by patch area');
+    assert.equal(await check({ x: 125, y: 125 }), null, 'an unchanged target inside a bridged crop gap is not rejected');
+    assert.match((await check({ x: 124, y: 104 })).error, /changed near/, 'a point exactly 12px from changed cell [96..112, 96..112] is refused');
+    assert.equal(await check({ x: 124.01, y: 104 }), null, 'a point 12.01px from the changed cell is accepted');
+    assert.match((await check({ x: 100, y: 100 })).error, /changed near/, 'a point inside a changed cell is refused');
+    assert.match((await check([{ x: 125, y: 125, label: "the drag's start point" }, { x: 100, y: 100, label: "the drag's end point" }])).error, /drag's end point/);
+    assert.match((await check([{ x: 100, y: 100, label: "the drag's start point" }, { x: 125, y: 125, label: "the drag's end point" }])).error, /drag's start point/);
+    // CSS-to-keyframe scaling (e.g. CSS viewport 1920x960 downscaled 2x to 960x480 keyframe)
+    // maps CSS coordinates into keyframe space before applying the 12-image-px margin.
+    session.cssToKeyframe = (x, y) => ({ x: x / 2, y: y / 2 });
+    assert.equal(await check({ x: 250, y: 250 }), null, 'CSS (250,250) -> keyframe (125,125) in unchanged gap is accepted');
+    assert.match((await check({ x: 248, y: 208 })).error, /changed near/, 'CSS (248,208) -> keyframe (124,104) at 12px margin is refused');
+    session.cssToKeyframe = (x, y) => ({ x, y });
+    frame = { ...frame, raster: { pixels: new Uint8ClampedArray(seen.length) } };
+    assert.match((await check({ x: 900, y: 240 })).error, /most of the screen changed/);
+    frame = { ...frame, raster: { pixels: new Uint8ClampedArray(1) } };
+    assert.match((await check({ x: 900, y: 240 })).error, /most of the screen changed/, 'incomparable frames fail closed');
+    frame = { ...frame, probe: { url: 'https://elsewhere.test/' } };
+    assert.match((await check({ x: 900, y: 240 })).error, /page navigated/);
+    frame = { ...frame, probe: { url: PAGE }, size: { width: width - 1, height } };
+    assert.match((await check({ x: 900, y: 240 })).error, /viewport changed/);
+    agent._visionCaptureFrame = async () => { throw new Error('capture failed'); };
+    assert.match((await check({ x: 900, y: 240 })).error, /could not re-check/);
+    assert.equal(session.forceKeyframe, true);
+    assert.equal(session.observationFailed, true);
+  });
+
   function runAgent(next, { visionMode = 'auto', provider = VISION, scene = createScene(), maxSteps = 8, onDispatch = null } = {}) {
     const requests = [];
     const scripted = {
@@ -911,6 +964,39 @@ for (const build of (process.env.VISION_BUILDS || 'chrome,firefox').split(',')) 
     assert.equal(ctx.platform.filter(entry => entry.kind === 'drag').length, 0);
     assert.ok(toolTexts(ctx.requests[1]).some(text => /never gets the confirmation a click gets/.test(text)), toolTexts(ctx.requests[1]).join('\n'));
     assert.deepEqual(probed.at(-1), { name: 'click', args: { x: 333.3, y: 333.3, coordinate_space: 'css' } });
+  });
+
+  // The page's Stop button is hidden in every screenshot, so a point under it
+  // is the page's to the model. It must be out of the way before the first
+  // check that reads the point (the submit probe, the DOM probe, the page
+  // monitor's binding), not only when the input goes out.
+  test(`${build}: the Stop button moves out of a vision point before any check reads it`, async () => {
+    const events = [];
+    const ctx = runAgent(step => {
+      if (step === 1) return { toolCalls: [call('click_at', { x: 648, y: 405 })] };
+      if (step === 2) return { toolCalls: [call('drag_at', { start_x: 300, start_y: 300, end_x: 500, end_y: 300 })] };
+      if (step === 3) return { toolCalls: [call('scroll_at', { direction: 'down', x: 648, y: 405 })] };
+      if (step === 4) return { toolCalls: [call('done', { summary: 'Done.', outcome: 'success' })] };
+      return { content: 'done' };
+    }, { onDispatch: name => events.push(['dispatch', name]) });
+    const round = points => points.map(point => [Math.round(point.x), Math.round(point.y)]);
+    // A call with no point (done) asks nothing: the helper returns at once.
+    ctx.agent._clearAgentStopButton = async (_tab, points) => { if (points?.length) events.push(['clear', round(points)]); return false; };
+    ctx.agent._detectLikelySubmitAction = async (_tab, name) => { events.push(['submit probe', name]); return null; };
+    const probe = ctx.scene.probe.bind(ctx.scene);
+    ctx.scene.probe = request => { events.push(['dom probe', round(request.points)]); return probe(request); };
+    for (const kind of ['Drag', 'Wheel']) {
+      const platform = ctx.agent[`_visionPlatform${kind}`];
+      ctx.agent[`_visionPlatform${kind}`] = async (...args) => { events.push(['dispatch', kind.toLowerCase()]); return platform(...args); };
+    }
+    await runLoop(ctx.agent, nextTab++, false);
+    assert.deepEqual(events, [
+      ['clear', [[720, 450]]], ['dispatch', 'click'],
+      // A drag's start is cleared before its batch checks, both ends before its probe.
+      ['clear', [[333, 333]]], ['clear', [[333, 333], [556, 333]]], ['dom probe', [[333, 333], [556, 333]]],
+      ['submit probe', 'click'], ['dispatch', 'drag'],
+      ['clear', [[720, 450]]], ['clear', [[720, 450]]], ['dom probe', [[720, 450]]], ['dispatch', 'wheel'],
+    ]);
   });
 
   test(`${build}: scroll_at over a focused number field is refused`, async () => {

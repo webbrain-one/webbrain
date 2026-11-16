@@ -9,6 +9,8 @@ import { quotaTranslations } from './locales/compass-quota-copy.mjs';
 import { memcodeEnglish } from './locales/memcode-copy.mjs';
 import { captchaEnglish, captchaTranslations } from './locales/captcha-copy.mjs';
 import { composerDeliveryTranslations } from './locales/composer-delivery-copy.mjs';
+import { settingsPresetsEnglish, settingsPresetsTranslations } from './locales/settings-presets-copy.mjs';
+import { settingsLayoutEnglish, settingsLayoutTranslations } from './locales/settings-layout-copy.mjs';
 import { permissionSkipTranslations } from './locales/permission-skip-copy.mjs';
 import { cloudBridgeTranslations } from './locales/cloud-bridge-copy.mjs';
 import { safeSocialEnglish, safeSocialTranslations } from './locales/safesocial-copy.mjs';
@@ -35,7 +37,7 @@ import fa from './locales/fa.js';
 import nl from './locales/nl.js';
 import de from './locales/de.js';
 import { providerGuideEnglish, providerGuideTranslations } from './locales/provider-guide-copy.mjs';
-import { pdfViewerEnglish } from './locales/pdf-viewer-copy.mjs';
+import { pdfViewerEnglish, pdfViewerTranslations } from './locales/pdf-viewer-copy.mjs';
 
 const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa, nl, de })
   .map(([code, dict]) => [code, {
@@ -51,11 +53,16 @@ const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar
     ...pdfViewerEnglish,
     ...safeSocialEnglish,
     ...captchaEnglish,
+    ...settingsPresetsEnglish,
+    ...settingsLayoutEnglish,
     ...decisionEnglish,
     ...(decisionTranslations[code] || {}),
     ...(captchaTranslations[code] || {}),
+    ...(settingsPresetsTranslations[code] || {}),
+    ...(settingsLayoutTranslations[code] || {}),
     ...(safeSocialTranslations[code] || {}),
     ...(providerGuideTranslations[code] || {}),
+    ...(pdfViewerTranslations[code] || {}),
   }]));
 const LS_KEY = 'wbLocale';
 const RTL_LOCALES = new Set(['ar', 'he', 'fa']);

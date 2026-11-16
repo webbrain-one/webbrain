@@ -94,9 +94,9 @@ flowchart TD
      download caches that repository.
    - Local vision never downloads on its own. Ternary Bonsai 2 2B Vision
      (1.45 GB) is the chat preset's download, started by a click on its
-     Download button here, on the Providers page or in the Text Model picker; the separate
+     Download button here, on the WebGPU card in Settings -> Models -> LLM or in the Text Model picker; the separate
      810 MB WebBrain VL 2 450M is downloaded only after the user consents to it
-     in **Providers -> Vision**.
+     in **Settings -> Models -> Vision**.
 
 ---
 

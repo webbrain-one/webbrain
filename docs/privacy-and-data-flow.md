@@ -49,7 +49,7 @@ inference stay on-device.
 
 ### Which provider receives the data?
 
-The user chooses their provider on the Providers page (side panel provider picker → More…). Options include:
+The user chooses their provider in Settings → Models → LLM (side panel provider picker → More…). Options include:
 
 - **WebBrain Compass**: requests go through `api.webbrain.one`; selected interactions may be retained and used for evaluation, improvement, fine-tuning, and training while Help Improve WebBrain is enabled
 - **Bring-your-own cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — requests go directly to the provider using the user's credentials; WebBrain receives a separate research copy only if the user enables that provider's **Share queries for research** switch
@@ -110,10 +110,10 @@ requests.
 
 ### Decision models and completion verification
 
-Providers → Decision has three decision-model modes. **Auto** (the
+Settings → Models → Decision has three decision-model modes. **Auto** (the
 default) sends nothing anywhere new: it uses D1 on the device once D1 is
-downloaded (with its explicit consent, on the Providers page or from the Chrome
-install guide), for completion and scheduled checks only, whatever the
+downloaded (with its explicit consent, in Settings → Models → Decision or from
+the Chrome install guide), for completion and scheduled checks only, whatever the
 conversation provider. While Compass is the conversation provider, Compass's
 managed Cloud decision route answers semantic decisions as before, and
 completion checks too until D1 is downloaded. With neither, no decision model
@@ -762,8 +762,8 @@ key and does not send unrelated browsing content. POST requests keep WebBrain's
 existing API-mutation permission gate; merely enabling the skill does not dial.
 
 The packaged Wikipedia skill does not silently create an offline corpus.
-Apocalypse Mode is disabled by default and requires a separate opt-in under
-Settings → Advanced. Catalog browsing sends the selected archive language to
+Apocalypse Mode is disabled by default and requires a separate opt-in in
+Apocalypse Mode itself (Settings → Offline → Open Apocalypse Mode). Catalog browsing sends the selected archive language to
 Kiwix; resolving an archive fetches its Metalink. Archive bytes are downloaded
 only after a second confirmation that displays the exact size, date, source,
 license notice, integrity pieces, and reported storage availability.
@@ -887,7 +887,6 @@ CDP capture → JPEG/PNG data URL
 | Ask / Act / Dev mode | Choose read-only, normal action, or developer/page-inspection mode |
 | Tracing toggle | Controls ordinary local trace recording; a separately opted-in provider research share records a run for metadata-only diagnostic upload even when this toggle is off |
 | Local feedback diagnostics | Keeps bounded metadata locally when ordinary tracing is off; disabling it clears automatic history. Uploading a feedback attachment requires separate confirmation. |
-| Screenshot fallback | Controls whether page images are sent to the LLM |
 | Auto-screenshot mode | Controls how frequently viewport captures are sent |
 | Strict secret handling | Keeps credentials out of assistant text and completion summaries: an instruction to the model and the planner, exact-match redaction of credentials it filled into sensitive fields from its scratchpad, approved plan and progress-ledger notes, plus exact-match redaction in cloud runs of anything it typed, sent, or read from a labelled field |
 | Profile auto-fill | Controls whether user profile text is sent to the LLM |

@@ -98,7 +98,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 LM Studio (`:1234/v1`), Osaurus (`:1337/v1`), Jan (`:1337/v1`), LocalAI (`:8080/v1`), और GPT4All
 (`:4891/v1`) इसी तरह काम करते हैं। **WebBrain Companion** लोकल मॉडल्स और समर्थित
 अकाउंट सब्सक्रिप्शन के लिए हमारा अलग डेस्कटॉप ऐप है। [इसे
-Windows, macOS या Linux के लिए डाउनलोड करें](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.2),
+Windows, macOS या Linux के लिए डाउनलोड करें](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5),
 फिर **WebBrain Companion** प्रोवाइडर कार्ड चुनें, **Load Models** पर क्लिक करें,
 एक मॉडल चुनें, और कनेक्शन जाँचें। लोकल एंडपॉइंट डिफ़ॉल्ट रूप से
 `http://127.0.0.1:8327/v1` है और इस कंप्यूटर पर API key नहीं माँगता। देखें
@@ -119,7 +119,7 @@ Mid और Full हिस्ट्री जमा होने से पहल
 WebBrain llama.cpp, Ollama और LM
 Studio के लिए वास्तविक विंडो अपने आप पहचानता है, और बातचीत भरने पर उसे अपने आप
 संपीडित (compact) करता है। Ollama, llama.cpp, LM Studio और LocalAI के लिए,
-स्क्रीनशॉट जोड़ने से पहले यह नेटिव सर्वर मेटाडेटा भी पढ़ता है; Providers पेज पर
+स्क्रीनशॉट जोड़ने से पहले यह नेटिव सर्वर मेटाडेटा भी पढ़ता है; Settings → Models → LLM में
 Auto, Force on और Off ओवरराइड्स उपलब्ध हैं। जब वैकल्पिक Model फ़ील्ड खाली हो,
 तो हर उपयोगकर्ता टर्न पर लोडेड-मॉडल की क्षमता दोबारा जाँची जाती है, जिससे सर्वर-साइड
 हॉट स्वैप असर दिखाए। एक प्रीव्यू `ollama launch webbrain --model <model>`
@@ -129,7 +129,7 @@ Auto, Force on और Off ओवरराइड्स उपलब्ध है�
 **क्लाउड APIs** — OpenAI, Anthropic Claude, Google Gemini, Azure OpenAI, AWS
 Bedrock, Mistral, DeepSeek, xAI Grok, MiniMax, Kimi, Qwen, z.ai GLM, Groq,
 Together, Cloudflare, Nvidia NIM, Hugging Face, Fireworks, OpenRouter और भी बहुत कुछ।
-Providers पेज पर **Chromium पर 119 बिल्ट-इन प्रोवाइडर कार्ड्स** (Firefox पर 118)
+Settings → Models → LLM में **Chromium पर 119 बिल्ट-इन प्रोवाइडर कार्ड्स** (Firefox पर 118)
 शामिल हैं, जिनमें एंडपॉइंट-मुक्त लोकल WebGPU विकल्प भी है — परीक्षित LFM2.5 2.6B
 प्रीसेट और एक प्रायोगिक कस्टम Hugging Face ONNX रिपॉज़िटरी विकल्प के साथ —
 देखें [पूरी कैटलॉग](docs/providers-and-models.md#extended-provider-catalog)।

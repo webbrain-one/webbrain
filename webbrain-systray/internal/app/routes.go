@@ -220,7 +220,7 @@ func (a *App) routes(e *gin.Engine) {
 		res, err := a.D1.EvaluateJSON(c.Request.Context(), body)
 		if err != nil {
 			status := http.StatusBadRequest
-			if errors.Is(err, d1.ErrNotReady) {
+			if errors.Is(err, d1.ErrNotReady) || errors.Is(err, d1.ErrShuttingDown) {
 				status = http.StatusServiceUnavailable
 			}
 			fail(c, status, err)
@@ -510,11 +510,12 @@ func (a *App) routes(e *gin.Engine) {
 
 	api.PATCH("/settings", func(c *gin.Context) {
 		var req struct {
-			Autostart *bool   `json:"autostart"`
-			Port      *int    `json:"port"`
-			Language  *string `json:"language"`
-			Welcomed  *bool   `json:"welcomed"`
-			Network   *bool   `json:"network"`
+			Autostart    *bool   `json:"autostart"`
+			Port         *int    `json:"port"`
+			Language     *string `json:"language"`
+			Welcomed     *bool   `json:"welcomed"`
+			ShowAllUsage *bool   `json:"show_all_usage"`
+			Network      *bool   `json:"network"`
 			// AutoUpdate installs new versions by themselves when idle.
 			AutoUpdate *bool `json:"auto_update"`
 		}
@@ -543,6 +544,13 @@ func (a *App) routes(e *gin.Engine) {
 				fail(c, http.StatusInternalServerError, err)
 				return
 			}
+		}
+		if req.ShowAllUsage != nil {
+			if _, err := a.Store.Update(func(s *settings.Settings) { s.ShowAllUsage = *req.ShowAllUsage }); err != nil {
+				fail(c, http.StatusInternalServerError, err)
+				return
+			}
+			a.changed()
 		}
 		if req.Welcomed != nil {
 			if _, err := a.Store.Update(func(s *settings.Settings) { s.Welcomed = *req.Welcomed }); err != nil {
@@ -610,6 +618,16 @@ func (a *App) routes(e *gin.Engine) {
 	})
 	api.POST("/key/rotate", func(c *gin.Context) {
 		a.queueRestart("rotate key", a.RotateKey)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	// Opening the app again while it runs: the new process asks for the
+	// panel here, so it shows up in this companion's window.
+	api.POST("/panel", func(c *gin.Context) {
+		if a.OpenPanel == nil || a.Headless {
+			fail(c, http.StatusConflict, errors.New("this companion shows no panel window"))
+			return
+		}
+		go a.OpenPanel("")
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 	api.POST("/open", func(c *gin.Context) {

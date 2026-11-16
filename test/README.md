@@ -130,7 +130,8 @@ npm run test:webmcp
 
 Set `WEBMCP_CHROME_PATH` when Chrome is installed outside its standard Windows,
 macOS, or Linux location. The test launches Chrome headlessly with
-`WebMCPTesting,DevToolsWebMCPSupport` enabled. It remains separate from
+`WebMCP,WebMCPTesting,DevToolsWebMCPSupport` enabled (Chrome 157 removed
+`WebMCPTesting`; Chrome ignores feature names it does not know). It remains separate from
 `npm test` because the browser API and CDP domain are experimental. Each browser
 phase has a 30-second timeout; set `WEBMCP_TIMEOUT_MS` to override it or
 `WEBMCP_DEBUG=1` to print phase progress while diagnosing a failure. The
@@ -144,7 +145,7 @@ workflow itself.
 
 ### First run
 
-No providers are configured yet. The runner opens the Providers page; add a provider + API key there, close the browser, re-run. Or run `npm run test:anonymous -- --setup` just to open the Providers page without trying to execute.
+No providers are configured yet. The runner opens Settings → Models → LLM; add a provider + API key there, close the browser, re-run. Or run `npm run test:anonymous -- --setup` just to open that section without trying to execute.
 
 ### Scenarios
 
@@ -160,7 +161,7 @@ Only anonymous/public sites here. Signed-in scenarios (Gmail, GitHub issue filin
 ```bash
 npm run test:anonymous                              # all scenarios
 npm run test:anonymous -- --scenario=arxiv-attention-title  # just one
-npm run test:anonymous -- --setup                   # open the Providers page only
+npm run test:anonymous -- --setup                   # open Settings → Models → LLM only
 ```
 
 Headed by default so you can watch runs and intervene. Budget ≈ 10–30 seconds per scenario + LLM tokens per the configured provider.

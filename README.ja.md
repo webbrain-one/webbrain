@@ -99,7 +99,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 LM Studio（`:1234/v1`）、Osaurus（`:1337/v1`）、Jan（`:1337/v1`）、LocalAI（`:8080/v1`）、GPT4All
 （`:4891/v1`）も同じように使えます。**WebBrain Companion** は、ローカルモデルと対応するアカウントの
 サブスクリプションのための、別のデスクトップアプリです。[Windows、macOS、Linux 向けに
-ダウンロード](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.2)したら、
+ダウンロード](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5)したら、
 **WebBrain Companion** のプロバイダーカードを選び、**モデルを読み込み** をクリックして、
 モデルを選択し、接続をテストします。ローカルのエンドポイントのデフォルトは
 `http://127.0.0.1:8327/v1` で、このコンピューター上では API キーは不要です。
@@ -120,7 +120,7 @@ Mid と Full は、履歴がたまる前でも 16k を超えることがあり�
 WebBrain は、llama.cpp、Ollama、LM Studio の実際のウィンドウを自動で検出し、
 会話がいっぱいになるにつれて自動でコンパクションします。Ollama、
 llama.cpp、LM Studio、LocalAI では、スクリーンショットを追加する前に、サーバーのネイティブのメタデータも読み取ります。
-プロバイダーのページでは、自動、強制的にオン、オフで上書きできます。
+設定 → モデル → LLM では、自動、強制的にオン、オフで上書きできます。
 モデル（任意）の欄が空の場合は、ユーザーのターンごとに読み込まれたモデルの能力を
 再確認するため、サーバー側でのホットスワップが反映されます。また、
 プレビュー版の `ollama launch webbrain --model <model>` の引き継ぎもあります。詳細：
@@ -129,7 +129,7 @@ llama.cpp、LM Studio、LocalAI では、スクリーンショットを追加す
 **クラウド API** — OpenAI、Anthropic Claude、Google Gemini、Azure OpenAI、AWS
 Bedrock、Mistral、DeepSeek、xAI Grok、MiniMax、Kimi、Qwen、z.ai GLM、Groq、
 Together、Cloudflare、Nvidia NIM、Hugging Face、Fireworks、OpenRouter など。
-プロバイダーのページには、**Chromium では 119 の組み込みのプロバイダーカード**（Firefox では 118）があり、
+設定 → モデル → LLM には、**Chromium では 119 の組み込みのプロバイダーカード**（Firefox では 118）があり、
 テスト済みの LFM2.5 2.6B のプリセットを備えたエンドポイント不要のローカルの WebGPU の選択肢と、
 実験的なカスタムの Hugging Face ONNX リポジトリの選択肢も含まれています。
 [カタログの全体](docs/providers-and-models.md#extended-provider-catalog)をご覧ください。

@@ -9,13 +9,12 @@ model or a reachable model provider.
 
 The feature is disabled by default. Enabling the packaged Wikipedia skill does
 not enable Apocalypse Mode, query the Kiwix catalog, or store article text.
-Open the **☢ Apocalypse Mode** link beside **Support** in the Settings header to
-opt in.
+Open Settings → **Offline** and select **Open Apocalypse Mode** to opt in.
 
 On supported Chromium browsers, local vision is optional and has three
 in-browser models: Compass VLD (v6 2B, or Tiny v5 where it is the only one
 downloaded), Ternary Bonsai 2 2B Vision and
-WebBrain VL 2 450M. The **Vision Model** card here and **Providers → Vision**
+WebBrain VL 2 450M. The **Vision Model** card here and **Settings → Models → Vision**
 share one choice: **Auto** (the default), one of the models, or **Off**. Auto
 uses Compass VLD once v6 2B or Tiny v5 is downloaded (v6 2B when both are;
 Ternary Bonsai 2 2B Vision when only that one is) and is off until then. When
@@ -26,8 +25,8 @@ never enables or downloads a vision model of its own: enabling it downloads
 the selected Text Model, and once that is a Compass VLD build, Auto also uses
 it to read screenshots and answer decisions. Otherwise a Compass VLD or Bonsai download is
 the chat preset's own transfer and starts only from a click on **Download**
-(here or on the Providers page). WebBrain VL 2 450M first needs the explicit consent step in
-Providers → Vision, which checks WebGPU support, records consent and
+(here or on the WebGPU card in Settings → Models → LLM). WebBrain VL 2 450M first needs the explicit consent step in
+Settings → Models → Vision, which checks WebGPU support, records consent and
 starts caching the approximately 810 MB model from Hugging Face. Downloads
 continue in the background, but screenshot operations report their status and
 never wait for them. Wikipedia archives still require their own confirmation.
@@ -43,7 +42,7 @@ Ternary Bonsai 2 2B Vision. The other
 Bonsai 2 presets ship but are hidden from the pickers for now. The selected model's download starts automatically when Apocalypse
 Mode is enabled. Once downloaded,
 the model works without Apocalypse Mode enabled: it is selectable as a chat
-provider on the Providers page and through the standalone chat control.
+provider in Settings → Models → LLM and through the standalone chat control.
 Turning local vision off (or leaving WebBrain VL 2 450M for another choice)
 preserves its cache and any configured remote vision provider.
 

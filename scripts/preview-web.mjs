@@ -57,6 +57,7 @@ const MIME_TYPES = {
   '.txt': 'text/plain; charset=utf-8',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  '.vtt': 'text/vtt; charset=utf-8',
   '.map': 'application/json; charset=utf-8',
 };
 

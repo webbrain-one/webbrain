@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { BidiSession } from '../firefox-companion/session.mjs';
 import { nativeReplyMessages } from '../firefox-companion/native-messages.mjs';
+import { firefoxBinary } from './firefox-binary.mjs';
 const temporaryRoot = await realpath(tmpdir());
 const profilePrefix = 'webbrain-firefox-test-';
 const profile = await mkdtemp(join(temporaryRoot, profilePrefix));
@@ -60,7 +61,8 @@ const server = createServer(async (_req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}/`;
-const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin' ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'), ['--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0'], {
+const firefoxBuild = await firefoxBinary();
+const firefox = spawn(firefoxBuild.binary, ['--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0'], {
   env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
 });
 let session;
@@ -69,12 +71,16 @@ try {
     const timer = setTimeout(() => reject(new Error('Firefox did not start BiDi')), 20000);
     let output = '';
     firefox.stderr.on('data', data => { output += data; const match = output.match(/WebDriver BiDi listening on ws:\/\/127\.0\.0\.1:(\d+)/); if (match) { clearTimeout(timer); resolve(Number(match[1])); } });
-    firefox.on('error', reject);
+    firefox.on('error', error => { clearTimeout(timer); reject(error); });
   });
   session = new BidiSession();
   await session.connect(port);
   await session.send('webExtension.install', { extensionData: { type: 'path', path: fileURLToPath(new URL('../src/firefox/', import.meta.url)) } });
-  const { context } = await session.send('browsingContext.create', { type: 'tab' });
+  const { context } = await session.send('browsingContext.create', { type: 'tab' }).catch(error => {
+    // This suite opens tabs over BiDi, which Playwright's Firefox build does not support.
+    if (firefoxBuild.source !== 'playwright') throw error;
+    throw new Error(`${error.message}. Playwright's Firefox cannot open a tab over WebDriver BiDi; set FIREFOX_BINARY to a Firefox release to run this suite.`);
+  });
   await session.send('browsingContext.navigate', { context, url, wait: 'complete' });
   const evaluate = async expression => (await session.send('script.evaluate', { target: { context }, expression, awaitPromise: true })).result;
   const mark = async selector => {

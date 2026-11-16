@@ -1,7 +1,7 @@
 # Fournisseurs et Modèles
 
 **WebBrain Companion** est une application de bureau distincte. [Téléchargez
-la version Windows, macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.2),
+la version Windows, macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5),
 puis choisissez la carte **WebBrain Companion**. Son adresse par défaut est
 `http://127.0.0.1:8327/v1` ; l'extension sur le même ordinateur n'a pas besoin
 de clé API. Chargez un modèle, enregistrez la carte et testez la connexion.
@@ -134,7 +134,7 @@ Settings accepte aussi un dépôt Hugging Face personnalisé. Les autres
 préréglages Bonsai 2 sont livrés mais masqués des sélecteurs pour l’instant.
 Le modèle choisi est téléchargé à l’activation d’Apocalypse ; une fois en
 cache, il fonctionne sans qu’Apocalypse soit activé. Sur les GPU limités,
-réduisez la fenêtre de contexte dans la page Providers si nécessaire.
+réduisez la fenêtre de contexte dans la carte WebGPU de Paramètres → Modèles → LLM si nécessaire.
 Firefox n’expose pas cette carte.
 
 Les modèles dans le navigateur répondent seulement aux questions. Dans le

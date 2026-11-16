@@ -77,7 +77,7 @@ Model tiering is separate from mode: `compact | mid | full` controls how many no
 2. Otherwise the decision model answers the fixed-choice `run_mode` question (`semantic-decisions.js`) about the user's own words, the previous turn's mode and the earlier task. It never sees page text, title or address. The question starts as soon as the turn's cost state exists and is awaited after `_enrichUserMessageWithCurrentPage`, so it overlaps page capture; after capture the turn waits at most `AUTO_MODE_ROUTE_GRACE_MS` (250 ms). Only a sure `act` or `dev` answer (the choices are `authorizing`) selects an action mode; Compact maps Dev to Act. The same decision request also asks `plan_need` about the same words (`direct`, `plan` or `unclear`); a sure answer travels with an action route as `modeRoute.plan`, which lets Try skip the full planner for a direct task ([Step 4](#step-4-plan-before-act-gate)). It adds no request and no data. The routed mode replaces the provisional Ask setup: run mode, system prompt, the turn's trusted runtime line and dialog handling (Chrome) or the BiDi run (Firefox).
 3. Without a sure answer, or with no decision model, the turn starts in Ask at once. So does a turn whose user sent a correction while the route ran or while the action run's browser setup started (`route_corrected`): the route did not read it, so an action answer is not trusted. That check follows the setup's last await, so nothing arrives between it and the committed mode. Its tools add `request_action_mode`, and its system prompt adds `AUTO_MODE_ASK_NOTE`. The tool is never dispatched. Page updates that arrive while the model decides (a timeline's counters and relative times, page-script focus) do not discard the call (`page-feedback-policy.js` treats it like the other page-independent tools): it never runs on the page, and the action run reads the page again before acting. The person's own input on the page, a navigation or a correction still makes the model decide again. The loop accepts the call only when its `evidence` quotes the user's own words (the request, or a correction sent during the turn): word for word, though quotation marks around it, a trailing full stop, letter case and curly versus straight quotes and apostrophes do not count against it (`readModeEscalation`), and the hand-off carries the matched words as the user wrote them. Because the calling model has read the page, it also needs the same `run_mode` question, about the request with its corrections and asked again without any page content (decision model, then the active model with a quoted reason; a sure routing answer is reused from the semantic-decision cache) to answer act or dev. A correction sent while that check runs supersedes the call like any pending correction: the next step applies it and the model asks again, so a correction that needs Dev gets a Dev hand-off. Corrections sent during the read-only pass, applied or still pending, go with the hand-off: they stay journaled under the same request, and the action run queues them before its first model or tool boundary, so it never acts on the uncorrected request. A correction that arrives after the check (while the hand-off is saved) marks the escalation `reroute`: the background then restarts the request in Automatic again, and that route reads the request with its carried corrections; a third such restart runs read-only (`reroute_limit`, without the hand-off tool): it applies the corrections and answers, and never runs in a mode chosen before the latest correction. An accepted hand-off restores the conversation and per-tab turn state captured before the turn gathered its context (approved plans, site-adapter and API notes, the follow-up allowance, the durable-turn marker) and returns; the background's `chat` handler then restarts the same request with `modeEscalation` in the requested mode, under the same request ID, so Stop still cancels it. The page-free check asks `plan_need` alongside `run_mode` too, and a sure answer rides along as `modeEscalation.plan`. The action run's planner gate reads the request again before any action. A refused call gets a tool result with the reason (`modeEscalationRefusal`: a bad mode, an empty, unmatched or too short quote, or a page-free answer that does not confirm it) and whether it may call again; a second refusal withdraws the tool and says so. Traces record a `mode_escalation_refused` note with the reason code, the attempt and whether the tool was withdrawn, never the quote. Chrome drains Dev diagnostics only when a routed turn after Dev ends without handing itself to Dev.
 
-The agent reports the routed mode with a `run_mode` update (`{ mode, source }`), which the run journal stores as the snapshot's mode and the panel stores on the assistant message for Retry, Continue and recovery. Traces record a `mode_route` note with the source, the decision latency and the time the turn waited. Slash commands and the Ctrl+Shift+A/X/D shortcuts choose a mode for one message only, also while a mode is kept; the shortcuts write the slash command in front of the draft. Context-menu and selection prompts stay Ask either way. The Ask system prompt, shared by chosen and automatic Ask turns, defers to `AUTO_MODE_ASK_NOTE` wherever it would tell the user to switch to Act mode, and the note says it replaces those instructions. An automatically routed Ask answer gets no one-click "Switch to Act & retry" offer (`ask_mode_handoff`): the turn could hand itself off, and the user's next message, a "yes" to an offer included, is routed again. A chosen Ask turn keeps the offer.
+The agent reports the routed mode with a `run_mode` update (`{ mode, source }`), which the run journal stores as the snapshot's mode and the panel stores on the assistant message for Retry, Continue and recovery. Traces record a `mode_route` note with the source, the decision latency and the time the turn waited, and a `run_mode_decision` note for the route's `run_mode` answer and for each hand-off check (`purpose` `route` or `escalation`): the choice, the path that gave it (`decision_model`, `main_model`, `cache` or `unavailable`), the model asked last, what the decision model and the active model each did, and why an answer did not count (such as `malformed_or_multiple_json_objects` or `evidence_not_quoted`); a hand-off check adds the requested mode and its outcome. Metadata traces keep these codes and model ids only (`trace/privacy.js`). Lossless traces add a short excerpt of the active model's reply in which quoted strings and the request's own words are masked; no trace keeps the quote. Slash commands and the Ctrl+Shift+A/X/D shortcuts choose a mode for one message only, also while a mode is kept; the shortcuts write the slash command in front of the draft. Context-menu and selection prompts stay Ask either way. The Ask system prompt, shared by chosen and automatic Ask turns, defers to `AUTO_MODE_ASK_NOTE` wherever it would tell the user to switch to Act mode, and the note says it replaces those instructions. An automatically routed Ask answer gets no one-click "Switch to Act & retry" offer (`ask_mode_handoff`): the turn could hand itself off, and the user's next message, a "yes" to an offer included, is routed again. A chosen Ask turn keeps the offer.
 
 The user types a message, the panel sends a detached `{action: 'chat_start', text, mode, tabId, requestId}` request, then reconnects to the background-owned run journal for `agent_update` events. The acknowledged start becomes the existing `chat` handler and `agent.processMessage()` lifecycle; closing or reloading the panel does not transfer ownership or start the run again. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
 
@@ -270,6 +270,25 @@ device-bound Cloud Sync credentials and device IDs, conversation/runtime data,
 scheduled jobs, usage counters, and spend history are intentionally excluded.
 If a run activates another tab, the screenshot finalizer reactivates the
 originating run tab before capturing its after state.
+
+### Settings page (`src/ui/settings.html`)
+
+One page, driven by `settings.js`, with a sidebar (`settings-tabs.js`) that
+shows one section at a time: General; Models (LLM, Vision, Speech, Generative,
+Decision, SafeSocial); Permissions & privacy; Budgets; Memory; Skills;
+Integrations (CAPTCHA, Bridge); Offline; Advanced. `settings.html#<section>`
+opens a section, and the old `#providers`, `#multimodal` and `#apocalypse`
+hashes open LLM, Vision and Offline. `providers.html` and `permissions.html`
+are forwarding stubs (`settings-redirect.js`) that send old links to
+`settings.html#<section>`; the side panel's **More…** opens
+`settings.html#llm` directly. General's combined switches (Agent supervision, Image
+quality, Completion alerts; `settings-presets.js`) store nothing of their own:
+each writes existing settings and reads its position back from them. The
+background accepts the local vision, D1, decision-fixture and SafeSocial
+controls (`enable_webgpu_vision`, `set_webgpu_vision_choice`, `d1_control`,
+`webgpu_decide_fixture`) only from `settings.html`;
+`set_webgpu_vision_choice` also accepts `apocalypse-mode.html`, and
+`d1_control` the install guide's status, probe, download and stop.
 
 ### Background Script (`src/chrome/src/background.js`)
 
@@ -816,7 +835,7 @@ instruction bundle for several related capabilities.
 The packaged Wikipedia skill keeps its existing `search_wikipedia` and
 `get_wikipedia_summary` interface. When a live request fails, the exact
 built-in tool may query archives that the user explicitly installed through
-the ☢ Apocalypse Mode link in the Settings header. `apocalypse-mode.js` owns catalog
+Apocalypse Mode (Settings → Offline). `apocalypse-mode.js` owns catalog
 metadata, resumable piece verification, durable lifecycle state, OPFS or
 user-selected archive bytes, and the local openZIM reader. IndexedDB contains only configuration,
 archive metadata, and restart cursors—not multi-gigabyte archive bodies.
@@ -986,7 +1005,11 @@ is enabled in settings and sure enough (0.85 for a choice that lets an action
 go ahead without asking, 0.7 otherwise); otherwise the active model answers
 and must quote the request for a choice that lets an action go ahead. Choices
 outside the list, a missing quotation and failed calls count as no answer, and
-every caller treats no answer as "ask the user" or "do nothing". Identical
+every caller treats no answer as "ask the user" or "do nothing". The active
+model is told to reply with the JSON alone, whatever the language, and to quote
+without translating. A reply that wraps one JSON object in text still counts
+(a model explained a Turkish request before answering it, live QA case A7); a
+reply with no object, several or a repeated field does not. Identical
 questions are answered once. Stop or a correction during a decision cancels
 it. The questions are: does the request ask to delete this item; does a
 correction ask to delete the earlier post first; does the request say not to
@@ -1071,7 +1094,13 @@ as the next read_page window in the largest windows read_page returns. A
 recommended action decides it by construction: Summarize this page is the
 whole page, and an action whose first read is not of the page text (a video's
 transcript) is not. An answer given again without reading on is accepted as
-partial with the note that only part of the page was read. Short pages, a
+partial with the note that only part of the page was read. A steering
+correction replaces that decision, a recommended action's included: the
+question reads the revised task (the request and its corrections in order)
+the next time an answer arrives over an unread rest, and the guard may send
+one answer back under it, so a summary steered to "just tell me who wrote it"
+ends without the note, and a question widened to the whole article is read on.
+What the run read before the correction still counts. Short pages, a
 question about one part of the page, unsure readings, requests about selected
 text, pages whose content was read through a reader of its own source (the
 open video's transcript, the tab's PDF, the framed documents, the page's own
@@ -1650,7 +1679,7 @@ src/
 │   ├── manifest.json
 │   ├── skills/       # Packaged default skills
 │   └── src/          # Same structure, minus cdp/, offscreen/, recorder/
-└── vendor/           # Third-party libs (pdfjs, katex)
+└── vendor/           # Third-party libs (pdfjs, katex, tldts Public Suffix List)
 ```
 
 Both builds share the same adapter set, provider implementations, accessibility tree, and most tool code. The `src/shared/` pattern is intentionally avoided — files are duplicated between `chrome/` and `firefox/` so each build is self-contained and can be loaded directly without a build step for development.
@@ -1684,10 +1713,10 @@ from before modes with `systemOneEnabled` reads as On) to a configuration whose
 one thing Auto needs at run time, whether Ternary Bonsai 2 2B Vision is
 downloaded (Chrome only; Firefox's copy never finds it).
 
-The static decision-models card lives on the Decision tab of the Providers page
-(`ui/providers.html#decision`), outside the dynamic provider list on the LLM tab.
+The static decision-models card lives in Settings → Models → Decision
+(`ui/settings.html#decision`), outside the dynamic provider list in the LLM section.
 It never participates in chat model selection. Old `settings.html#multimodal`
-links open the Vision tab of the Providers page. `systemone-judge.js` owns the pinned HTTP contract,
+links open Settings → Models → Vision. `systemone-judge.js` owns the pinned HTTP contract,
 strict typed responses and a shared deadline for retries. `systemone-evidence.js`
 collects bounded allowlisted observations and invalidates them on page changes.
 Scheduler evaluation returns keep/downgrade/skip plus metadata, revalidates the

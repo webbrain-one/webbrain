@@ -6,9 +6,91 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [49.1.0] - 2026-11-15
+
+### Added
+- The PDF toolbar now has a native-viewer switch and a one-click control to disable the extension's PDF viewer.
+- The vision stability check now measures changes in the target's cells, with added coverage for that geometry.
+- Added a release-pack smoke check and documented the MCP server's 0.1.2+ pairing fallback.
+
+### Changed
+- The CLI entry point now runs from an extracted tarball with its declared dependencies isolated.
+
+### Fixed
+- Falling back to the browser's native PDF viewer from the explicit viewer no longer triggers MIME re-interception.
+
+## [49.0.1] - 2026-11-14
+
+### Added
+- Added Abliteration.ai to the LLM provider catalog in Chrome and Firefox. Its image limit is respected in vision mode and Ask requests, with a clear error when attachments leave insufficient room.
+
+### Changed
+- WebBrain Companion download links now point to version 0.1.4.
+- The websites page shows Gmail and Grok as examples of embedded AI, and the Settings walkthrough reflects the unified Settings interface.
+
+## [49.0.0] - 2026-11-14
+
+### Added
+- Settings → General → Agent supervision has a fourth position, **Unsupervised**: Fast with Enforce action guards off, for runs where you accept that the model decides by itself whether to send, retry, delete or publish. Permission prompts and site permissions still apply. Chrome and Firefox.
+
+### Changed
+- fal.ai videos are made at 480p by default, which costs less than 720p. **Settings → Models → Generative** has a **Video resolution** choice (480p or 720p) for fal.ai. A request that names a resolution still wins, and a model that does not offer the chosen resolution makes the video at its own default.
+- The side panel's **More…** and **Manage site permissions** open Settings → Models → LLM and Settings → Permissions & privacy directly instead of going through the forwarding pages.
+- The user guide, FAQ, repository docs and their translations describe the one-page Settings layout, with new screenshots.
+
+### Fixed
+- In Auto mode, an action asked for in another language, such as the Turkish "Bu sayfadaki bültene kaydol." ("Sign up for the newsletter on this page."), is handed from Ask to Act again. The model's check had answered "act", but it explained the request before its answer, and WebBrain discarded that reply and refused the hand-off. Traces now show each of these run-mode checks: the answer, whether the decision model, the main model or an earlier answer gave it, and why an answer did not count. Content traces add a short excerpt of the model's reply with your own words masked.
+- Settings labels that were broken in three languages: German "Planung versuchen", French "Diffuser les réponses en mode Ask" and its description, and Hindi "मैन्युअल" for manual archive updates in Apocalypse Mode.
+- In vision mode, each click now tells the model which control it clicked (for example the Delete button), so it can confirm an action it took after the screenshot of that step has left its memory. Before, a run that had deleted the right post could end as partial because the model could no longer show what it had clicked. The name is shortened to one line and treated as page content. A name that holds an e-mail address is left out, and so is a phone number when screenshot redaction is on.
+- In vision mode in Chrome, WebBrain can now type into a text field inside an embedded frame, such as a shipping form shown in an iframe. After clicking the field, it types the text and checks the result instead of reporting that nothing is focused, and replacing such a field's value no longer stops after the first key.
+- A screenshot or other read-only step that a model relayed through WebBrain Companion or another OpenAI-compatible proxy sends with empty arguments is no longer thrown away while the page keeps updating in the background. Such runs, for example writing a post in X's compose window, stopped with "WebBrain could not validate the next action after repeated browser updates". Chrome and Firefox.
+- Choosing an option in a dropdown through the accessibility tree now selects the exact option you named, even when two options share the same value, and re-choosing the option already shown no longer re-triggers the page's change handlers (which could clear fields that depend on the dropdown). Chrome and Firefox.
+- The on-page Stop WebBrain button no longer catches WebBrain's own clicks. When the agent clicks, scrolls or drags where the button sits (a cookie banner's button, a chat box or a footer button at the bottom centre of the page), the button moves to the top edge first, so the click reaches the page instead of stopping the run. A page's own script can no longer stop a run by clicking the button. Chrome and Firefox.
+- Ask mode: after you steer a running answer, WebBrain now reads the corrected request to decide whether it needs the whole page. A "Summarize this page" steered to "just tell me who wrote it" is no longer sent back to read the rest of the page, and it no longer ends with "Only part of the page was read". A question widened to a summary of the whole article is now read to the end. Chrome and Firefox.
+- WebBrain Companion: when the selected model's quota is used up and resets hours from now, WebBrain shows the quota message right away instead of retrying for about a minute first. Short Companion cooldowns are still waited out for the time the Companion reports. Chrome and Firefox.
+- Firefox: when you use Claude, read_pdf now sends Claude the actual PDF again. Before, Claude got an empty document and the tool reported the file as 0 bytes, because the PDF reader consumed the file before it could be attached.
+- Apocalypse Mode works again in Firefox. Its page loaded a file that only the Chrome build includes, so nothing on the page ran: the Enabled switch, the download controls and the offline answer engine status did nothing, and there was no other way to turn the mode on.
+- read_pdf now asks permission for the site the PDF actually comes from. Before, when the address was WebBrain's own PDF viewer page, the card named the extension's id instead. Reading a local file: PDF by address is no longer charged to the current site's permission. With prompts on, it is refused, and the PDF open in the tab can still be read. Chrome and Firefox.
+- The agent's background reads (fetch_url, read_page_source, read_pdf) now use the full Public Suffix List to decide whether to send your cookies. A page on a shared host such as appspot.com, blogspot.com, an S3 bucket or a Codespaces port, or under a registry such as edu.tr or com.ua, can no longer get the agent to read another tenant's pages with your session. Cloud metadata stays blocked even with "Allow agent to access local network" on: this now covers the AWS, Google Cloud and Oracle Cloud IPv6 metadata addresses and hostnames written with a trailing dot (such as metadata.google.internal.), in Chrome and Firefox.
+- After a correction, the card that asks before an API write now shows the body the request will actually send, in Chrome and Firefox. When WebBrain replays a request it captured from the page, the card shows the captured body (still hidden under strict secret handling) instead of just the method and address.
+- The "Review this pull request" and "Summarize this pull request" suggestions on GitHub can now read a pull request's diff from the Conversation tab in Chrome and Firefox. Before, they told WebBrain to open the Files changed tab, which a read-only Ask run cannot do. When the diff of a private repository cannot be loaded from another tab, WebBrain now says which files it could not read and asks you to run the suggestion again from the Files changed tab.
+- Settings no longer loses work done while it is loading or after switching tabs. In Chrome, coming back to Settings from another tab or window kept the stored Vision endpoint over a base URL, key or model you had typed but not saved, so Save stored the old one. In Chrome and Firefox, the permission-prompt and screenshot-redaction switches under Permissions & privacy show their saved state and save from the first click, instead of after every other section has loaded.
+- In Settings → Models → LLM, a prompt tier picked for WebBrain Companion or the Local OpenAI-compatible Proxy is no longer lost when you search providers, switch filters or open another card before pressing Save. Before this fix the menu went back to Full and Save stored Full. Fixed in Chrome and Firefox.
+- `/export --config` now includes the Cookie banners setting, and `/import` restores it in Chrome and Firefox. In Chrome the export also includes the New tab switch. Before, a snapshot restored on another profile or computer left Cookie banners at "Tabs WebBrain works in" and the WebBrain new tab off.
+- When a long video fails part-way, the finished clips really are kept for 30 minutes now. Before, Chrome could lose them a few seconds after the run ended, so a retry generated, and paid for, every scene again. If the clips cannot be saved, the error no longer says they were kept. Chrome and Firefox.
+- An IPv6 address typed alone in the new tab, such as `[2001:db8::1]` or `[fe80::1]:8080`, now opens. Before, it went to the AI, became an agent task, or turned into a web search; only `[::1]` worked. Local addresses open over http and public ones over https, the same as IPv4. Chrome and Firefox, and Murshid's new tab.
+- Murshid: read_pdf can read web PDFs again. Murshid now gives WebBrain the address a PDF download reached, and WebBrain now recognizes Murshid's hidden PDF reader page when it asks to read the response. Before this, every web PDF failed with "Cannot verify the PDF response resolved address."
+- Murshid asks again when a site wants to open a different kind of app link (for example a meeting link after a mail link), instead of letting one Allow open any app. The prompt now shows the link. Links Chrome never hands to the system, such as shell: and vbscript:, are refused. With "Keep browser data between sessions" off, the favicons shown in the tab strip and address bar are no longer kept on disk.
+- Murshid: Back now leaves the "page didn't load" screen instead of trying the broken address again and landing on the same screen, and trying again while a site is still down no longer piles up extra Back steps. Reload from the page menu, the tab menu or the ad-block shield now tries the failed site again, and popups that warn about unsaved changes ask before closing instead of refusing to close and blocking Murshid from quitting.
+- Murshid no longer opens off-screen after a monitor is unplugged. A window saved on a display that is gone, or left mostly off-screen, now opens on a connected display. The WebBrain button in the toolbar and the side panel header now show the WebBrain icon even when WebBrain is not loaded, instead of an empty space.
+- WebBrain Companion now quits right away when you quit it during an on-device decision, instead of waiting for the decision to finish, which could take minutes with Compass on the CPU. The interrupted decision fails with "the companion is shutting down".
+
+## [48.1.0] - 2026-11-12
+
+### Changed
+- Settings is one wider page with a sidebar. The Providers and Permissions pages are now sections of it: the models (LLM, Vision, Speech, Generative, Decision, SafeSocial) sit under **Models**, and CAPTCHA and Bridge under **Integrations**. The search box tops the sidebar and searches every section. Below 880px the sidebar becomes a scrolling strip.
+- **Permissions & privacy** holds the permission prompts and site permissions together with screenshot redaction, strict secret handling and local network access, which moved there from Advanced. Firefox's trusted automation card moved from Advanced to Bridge.
+- A new **Offline** section shows Apocalypse Mode's archive status and opens Apocalypse Mode, which keeps its own switch and downloads. Its link left the Settings header.
+- Old links keep working: `providers.html` and `permissions.html` forward to the matching Settings section with their `#section`, and `settings.html#providers`, `#multimodal` and `#apocalypse` open the section that holds them now.
+- Seven guard refusals that used to end an attended run now ask you on WebBrain's own card instead: a publish or submit click in vision mode that a publication check held; a form submission after a correction whose target WebBrain could not resolve; a second click on a commit or publish button within 45 seconds; a toolbar, bulk or selection Delete; deleting an item an earlier attempt may already have deleted; an API write or Chrome Web Store publish after a correction; and sending a message whose recipient WebBrain cannot read. Each card covers one action, never times out and never goes ahead on its own. Unattended scheduled runs still refuse. See `docs/guards.md`.
+
+## [48.0.0] - 2026-11-12
+
 ### Added
 - Murshid 0.1.3 checks for application updates at startup and daily, with an Updates page, menu entry and toolbar notification. Signed macOS builds can download a verified update and restart to install it; Windows and Linux open their platform's published installer. Automatic checks can be disabled in Settings. All ten interface languages are supported. Older Murshid versions require one manual installation to gain update support.
 - Murshid 0.1.4 for macOS, Windows and Linux adds a shield next to the address bar: it shows whether ads and trackers are blocked on the site in the tab, and one click allows them there (for sites that refuse to work with a blocker) or blocks them again. The universal macOS build bundles WebBrain 47.1.1 and WebBrain Companion 0.1.2 for Apple Silicon and Intel.
+- Settings → General has three combined switches: **Agent supervision** (Thorough, Balanced, Fast), **Image quality** (Economy, Balanced, Sharp) and **Completion alerts** (All, Quiet, Off). Each one sets a group of existing settings together and shows **Custom** when those settings were fine-tuned in Advanced. Nothing new is stored and an upgrade changes no setting. No switch turns action guards off or changes permission prompts.
+
+### Changed
+- Settings → Advanced is sorted under headings. The planning controls, Auto-screenshot and the image budget moved there from General and Budgets, next to the other settings the combined switches stand for.
+- A setting that only matters while another is on is greyed out with it: the scheduled-task confirmation, and the user-memory learning and prompt-size options.
+- Config export and import now include the image budget (image detail, screenshots per turn, maximum image dimension).
+
+### Fixed
+- A profile that never moved the plan-review slider now uses the 75% threshold Settings shows. The background had been falling back to 90%, so plans scored between 75% and 90% stopped for review when they should have run.
+
+### Removed
+- The **Screenshot Fallback** switch in Settings → Advanced. Nothing read the setting, so it had no effect.
 
 ## [47.1.1] - 2026-11-10
 

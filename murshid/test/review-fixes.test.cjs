@@ -50,10 +50,100 @@ test('permissions isolate opaque origins and microphone and camera decisions', a
   assert.equal(await new Promise(resolve => display({frame, securityOrigin:'https://example.com', videoRequested:true}, resolve)), null);
 });
 
+test('app links are allowed per site and scheme, the prompt shows the link, and denied schemes never open', async () => {
+  let check, request;
+  const prompts = [];
+  const responses = [];
+  const ctx = { ses: {
+    setPermissionCheckHandler(fn) { check = fn; }, setPermissionRequestHandler(fn) { request = fn; }, setDisplayMediaRequestHandler() {},
+  }, windowForContents() {}, lastFocusedWindow() {} };
+  const electron = { dialog: { showMessageBox(_parent, opts) { prompts.push(opts); return Promise.resolve({ response: responses.shift() }); } },
+    desktopCapturer: {}, webContents: {} };
+  const { installPermissions } = loadWithElectron('../app/permissions', electron);
+  installPermissions(ctx);
+  const open = (page, externalURL) => new Promise(resolve => request({getURL: () => page}, 'openExternal', resolve, {requestingUrl: page, externalURL}));
+  responses.push(0);
+  assert.equal(await open('https://example.com/a', 'mailto:someone@example.com'), true);
+  assert.match(prompts[0].message, /^example\.com wants to open an app/);
+  assert.match(prompts[0].detail, /^mailto:someone@example\.com\n\nYour choice is remembered/);
+  // The same kind of link is not asked about again, whatever the case of its scheme.
+  assert.equal(await open('https://example.com/b', 'MAILTO:other@example.com'), true);
+  assert.equal(prompts.length, 1);
+  // One Allow is not every app: another scheme is asked about, with its link.
+  responses.push(1);
+  assert.equal(await open('https://example.com/a', 'search-ms:query=report'), false);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1].detail, /^search-ms:query=report\n/);
+  assert.equal(check(null, 'openExternal', 'https://example.com', {}), false);
+  // After a Block the site can't ask again with new schemes; what it was allowed still opens.
+  assert.equal(await open('https://example.com/a', 'zoommtg://example.com/join'), false);
+  assert.equal(await open('https://example.com/a', 'mailto:someone@example.com'), true);
+  assert.equal(prompts.length, 2);
+  // Other sites are asked on their own.
+  responses.push(0);
+  assert.equal(await open('https://example.org/', 'zoommtg://example.org/join'), true);
+  assert.equal(prompts.length, 3);
+  // Schemes Chrome never hands to the system, and links that aren't URLs, are refused without asking.
+  for (const link of ['shell:startup', 'VBScript:msgbox(1)', 'file:///C:/Windows/notepad.exe', 'ms-help://topic', 'not a link', undefined]) {
+    assert.equal(await open('https://example.org/', link), false, String(link));
+  }
+  assert.equal(prompts.length, 3);
+  // Murshid's own pages open app links without asking, but not the denied schemes.
+  assert.equal(await open('murshid://downloads/', 'mailto:someone@example.com'), true);
+  assert.equal(await open('murshid://downloads/', 'shell:startup'), false);
+  assert.equal(check(null, 'openExternal', 'murshid://downloads', { externalURL: 'shell:startup' }), false);
+  assert.equal(prompts.length, 3);
+  // A long link shows its start and its end.
+  responses.push(1);
+  const long = `zoommtg://example.net/join?${'x'.repeat(500)}&end=1`;
+  assert.equal(await open('https://example.net/', long), false);
+  const shown = prompts[3].detail.split('\n')[0];
+  assert.equal(shown, `${long.slice(0, 140)}…${long.slice(-60)}`);
+  // The URL parser keeps the spaces of an opaque path. They are encoded, so a
+  // page can't pad its link to put words of its own on a line in the dialog.
+  responses.push(1);
+  const padded = `ms-msdt:${' '.repeat(60)}Trusted by Example`;
+  assert.equal(new URL(padded).href, padded);
+  assert.equal(await open('https://example.edu/', padded), false);
+  const paddedShown = prompts[4].detail.split('\n\n')[0];
+  assert.doesNotMatch(paddedShown, /\s/);
+  const encoded = padded.replaceAll(' ', '%20');
+  assert.equal(paddedShown, `${encoded.slice(0, 140)}…${encoded.slice(-60)}`);
+  assert.ok(paddedShown.startsWith('ms-msdt:%20') && paddedShown.endsWith('%20Trusted%20by%20Example'), paddedShown);
+  // A local file is asked every time.
+  responses.push(0, 0);
+  assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
+  assert.equal(await open('file:///page.html', 'mailto:someone@example.com'), true);
+  assert.equal(prompts.length, 7);
+  assert.match(prompts[6].detail, /^mailto:someone@example\.com\n\nThis choice applies only to this request/);
+});
+
+test('with browser data kept off, the browser chrome and the address bar list load favicons in their own session', () => {
+  const made = [];
+  const contents = () => ({ on() {}, loadFile() {}, setWindowOpenHandler() {}, send() {} });
+  class BrowserWindow { constructor(options) { made.push(options); this.id = made.length; this.webContents = contents(); } once() {} on() {} }
+  class WebContentsView { constructor(options) { made.push(options); this.webContents = contents(); } setBackgroundColor() {} }
+  const electron = { BrowserWindow, WebContentsView, dialog: {}, nativeTheme: { shouldUseDarkColors: false, on() {} },
+    screen: { getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } }), getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } }] } };
+  const modules = ['../app/window', '../app/omnibox-popup', '../app/tab'];
+  modules.forEach((file) => delete require.cache[require.resolve(file)]);
+  try {
+    const { MurshidWindow } = loadWithElectron('../app/window', electron);
+    for (const uiPartition of [undefined, 'murshid-temporary-ui']) {
+      made.length = 0;
+      const w = new MurshidWindow({ uiPartition, settings: { get() {} } });
+      w.omniPopup.ensure();
+      assert.equal(made.length, 2);
+      for (const options of made) assert.equal(options.webPreferences.partition, uiPartition);
+    }
+  } finally { modules.forEach((file) => delete require.cache[require.resolve(file)]); }
+});
+
 test('reload and hard reload retry failed destinations', () => {
   const { createCommands } = require('../app/commands');
+  const { Tab } = loadWithElectron('../app/tab', { WebContentsView: class {}, dialog: {} });
   const calls = [];
-  const tab = {errorFor:'https://example.test/', load: u => calls.push(['load',u]), wc:{reload:()=>calls.push(['reload']),reloadIgnoringCache:()=>calls.push(['hard'])}};
+  const tab = Object.assign(Object.create(Tab.prototype), {errorFor:'https://example.test/', load: u => calls.push(['load',u]), wc:{reload:()=>calls.push(['reload']),reloadIgnoringCache:()=>calls.push(['hard'])}});
   const commands = createCommands({});
   commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});
   tab.errorFor = null; commands.run.reload({activeTab:tab}); commands.run.hardReload({activeTab:tab});

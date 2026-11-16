@@ -58,3 +58,84 @@ export async function loadGeneratedMedia(id) {
     });
   } finally { db.close(); }
 }
+
+// The finished clips of videos that failed part-way, kept for a retry: each
+// is paid for, and a retry asks the model for the same clip again. They have
+// a database of their own because Chrome stops an idle background worker
+// soon after a run ends, and the user may ask for the retry later. A clip is
+// named by what was asked of the model (`key`) and handed out once, oldest
+// first; together the kept clips weigh at most what one video may.
+export const KEPT_VIDEO_CLIP_MS = 30 * 60 * 1000;
+const CLIP_DB_NAME = 'webbrain_kept_video_clips';
+const CLIP_STORE_NAME = 'clips';
+
+function openClipDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CLIP_DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(CLIP_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// One read-write transaction over the kept clips: those older than
+// KEPT_VIDEO_CLIP_MS are deleted, then `change(store, fresh, now)` sees the
+// others, oldest first. Its result is returned once the transaction commits.
+async function changeKeptClips(change) {
+  const db = await openClipDB();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(CLIP_STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(CLIP_STORE_NAME);
+      let result;
+      const read = store.getAll();
+      read.onsuccess = () => {
+        const now = Date.now();
+        const fresh = [];
+        for (const record of read.result) {
+          if (now - record.at <= KEPT_VIDEO_CLIP_MS && record.blob instanceof Blob) fresh.push(record);
+          else store.delete(record.id);
+        }
+        try { result = change(store, fresh, now); }
+        catch (error) { reject(error); transaction.abort(); }
+      };
+      transaction.oncomplete = () => resolve(result);
+      transaction.onabort = transaction.onerror = () => reject(transaction.error || new Error('Kept video clips could not be saved.'));
+    });
+  } finally { db.close(); }
+}
+
+/** Keeps clips ({ key, bytes }) for a retry. False when they could not be kept. */
+export async function keepVideoClips(clips) {
+  try {
+    await changeKeptClips((store, fresh, now) => {
+      const all = [...fresh.map(record => ({ record, size: record.blob.size })), ...clips.map(clip => ({ clip, size: clip.bytes.length }))];
+      let total = all.reduce((sum, item) => sum + item.size, 0);
+      while (all.length && total > MAX_JOINED_VIDEO_BYTES) {
+        const { record, size } = all.shift();
+        total -= size;
+        if (record) store.delete(record.id);
+      }
+      for (const { clip } of all) if (clip) store.add({ key: clip.key, at: now, blob: new Blob([clip.bytes], { type: 'video/mp4' }) });
+    });
+    return true;
+  } catch { return false; }
+}
+
+/** The bytes of the oldest clip kept under `key`, handed out once; null when none is. */
+export async function takeVideoClip(key) {
+  try {
+    const record = await changeKeptClips((store, fresh) => {
+      const found = fresh.find(item => item.key === key);
+      if (found) store.delete(found.id);
+      return found;
+    });
+    // A Blob read from the database stays readable after its record is deleted.
+    return record ? new Uint8Array(await record.blob.arrayBuffer()) : null;
+  } catch { return null; }
+}
+
+/** Forgets the clips kept for a retry. */
+export async function forgetVideoClips() {
+  await changeKeptClips(store => { store.clear(); });
+}

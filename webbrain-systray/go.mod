@@ -12,6 +12,7 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/router-for-me/CLIProxyAPI/v8 v8.0.35
 	github.com/sirupsen/logrus v1.9.3
+	github.com/wailsapp/go-webview2 v1.0.23
 	golang.org/x/image v0.47.0
 	golang.org/x/sys v0.49.0
 )
@@ -35,6 +36,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect

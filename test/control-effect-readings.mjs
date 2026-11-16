@@ -64,11 +64,20 @@ for (const build of ['chrome', 'firefox']) {
       assert.equal(await guardRecentSubmitClick(fresh, 1, { text: 'Bestätigen' }, url, () => now, null, reader), null);
       assert.equal(await guardRecentSubmitClick(fresh, 1, { text: 'Bestätigen' }, url, () => now + 1_000, null, reader), null);
     }
-    // An explicit retry acknowledgement still passes and re-arms the window.
+    // A repeat the user approved on WebBrain's card passes and re-arms the
+    // window. No model argument does, and a peek records nothing.
     const acknowledged = new Map();
     const commit = async () => 'commit';
     await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar' }, url, () => now, null, commit);
-    assert.equal(await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar', _allowResubmit: true }, url, () => now + 1_000, null, commit), null);
+    assert.equal((await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar', _allowResubmit: true }, url, () => now + 500, null, commit))
+      ?.blockedDuplicateSubmit, true);
+    const peeked = await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar' }, url, () => now + 600, null, commit, { peek: true });
+    assert.equal(peeked?.blockedDuplicateSubmit, true);
+    assert.equal(peeked.previousClickAt, now);
+    assert.equal(await guardRecentSubmitClick(new Map(), 1, { text: 'Pagar' }, url, () => now, null, commit, { peek: true }), null);
+    assert.equal(acknowledged.get(1)[0].ts, now, 'a peek and a refusal leave the record as it was');
+    assert.equal(await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar' }, url, () => now + 1_000, null, commit, { approved: true }), null);
+    assert.equal(acknowledged.get(1)[0].ts, now + 1_000);
     assert.equal((await guardRecentSubmitClick(acknowledged, 1, { text: 'Pagar' }, url, () => now + 2_000, null, commit))?.blockedDuplicateSubmit, true);
   });
 

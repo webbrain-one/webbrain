@@ -45,6 +45,7 @@ import {
   webgpuModelDisplayName,
 } from './providers/webgpu.js';
 import { Agent } from './agent/agent.js';
+import { cdpClient } from './cdp/cdp-client.js';
 import { normalizeLeanModeSetting } from './agent/lean-mode.js';
 import { normalizeVisionModeSetting } from './agent/vision-mode.js';
 import { normalizeVisionQuality } from './agent/vision-budget.js';
@@ -290,6 +291,10 @@ Promise.all([
 const agent = new Agent(providerManager);
 agent.strictSecretMode = false;
 agent.setStandaloneOfflineRagService(createOffscreenOfflineRetrievalService());
+// Every CDP pointer command first moves the tab's on-page Stop button out of
+// the way of its point (agent._clearAgentStopButton, on a tab that shows the
+// run), so trusted agent input reaches the page there instead of stopping it.
+cdpClient.beforePointerInput = (tabId, point) => agent._clearAgentStopButton(tabId, [point]);
 const ALWAYS_ALLOW_API_MUTATIONS_KEY = 'alwaysAllowApiMutations';
 // apiMutationSitePrompt: true keeps each host's network permission prompt for
 // write requests the default-on setting above allows (written at install, see
@@ -1329,7 +1334,8 @@ function normalizePlanReviewMode(stored = {}) {
 
 function normalizePlanReviewConfidenceThreshold(stored = {}) {
   let threshold = Number(stored.planReviewConfidenceThreshold);
-  if (!Number.isFinite(threshold)) threshold = 0.9;
+  // Unset reads as the product default the Settings slider shows (75%).
+  if (!Number.isFinite(threshold)) threshold = 0.75;
   if (threshold > 1 && threshold <= 100) threshold /= 100;
   // Match the settings slider's [50%, 99%] range so an out-of-band stored
   // value can't disable the review gate while the UI shows an in-range value.
@@ -5039,10 +5045,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.testVisionProvider();
     }
     case 'enable_webgpu_vision': {
-      // Consent is recorded only from the Vision tab of the Providers page.
-      const providersUrl = chrome.runtime.getURL('src/ui/providers.html');
-      if (String(sender?.url || '').split(/[?#]/)[0] !== providersUrl) {
-        return { ok: false, code: 'vision_consent_required', error: 'Local vision can only be enabled from Providers → Vision.' };
+      // Consent is recorded only from the Vision section of Settings.
+      const settingsUrl = chrome.runtime.getURL('src/ui/settings.html');
+      if (String(sender?.url || '').split(/[?#]/)[0] !== settingsUrl) {
+        return { ok: false, code: 'vision_consent_required', error: 'Local vision can only be enabled from Settings → Vision.' };
       }
       return await startExplicitVisionModelDownload();
     }
@@ -5062,9 +5068,9 @@ async function handleMessage(msg, sender) {
       // Choosing WebBrain VL 2 450M can re-enable it under consent already
       // given, so only the two pages that show the choice may change it.
       const senderPage = String(sender?.url || '').split(/[?#]/)[0];
-      const allowedPages = ['src/ui/providers.html', 'src/ui/apocalypse-mode.html'].map(page => chrome.runtime.getURL(page));
+      const allowedPages = ['src/ui/settings.html', 'src/ui/apocalypse-mode.html'].map(page => chrome.runtime.getURL(page));
       if (!allowedPages.includes(senderPage)) {
-        return { ok: false, code: 'vision_choice_page', error: 'The in-browser vision model can only be chosen in Providers → Vision or Apocalypse Mode.' };
+        return { ok: false, code: 'vision_choice_page', error: 'The in-browser vision model can only be chosen in Settings → Vision or Apocalypse Mode.' };
       }
       return await providerManager.setWebgpuVisionChoice(msg.choice);
     }
@@ -5105,12 +5111,12 @@ async function handleMessage(msg, sender) {
     }
 
     // Diagnostic decision readout on the in-browser chat model, for the
-    // hardware eval (scripts/check-webgpu-decisions.mjs). Providers page only,
+    // hardware eval (scripts/check-webgpu-decisions.mjs). Settings page only,
     // where the decision models are configured.
     case 'webgpu_decide_fixture': {
       const api = globalThis.browser || globalThis.chrome;
-      const providersUrl = api.runtime.getURL('src/ui/providers.html');
-      if (sender.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== providersUrl) return { success: false, error: 'Decision fixtures are available only from the extension Providers page.' };
+      const settingsUrl = api.runtime.getURL('src/ui/settings.html');
+      if (sender.id !== api.runtime.id || String(sender.url || '').split(/[?#]/)[0] !== settingsUrl) return { success: false, error: 'Decision fixtures are available only from the extension Settings page.' };
       try {
         await strictSecretModeReady;
         await visionModeReady;
@@ -5124,15 +5130,15 @@ async function handleMessage(msg, sender) {
     }
 
     case 'd1_control': {
-      // The D1 controls are on the Decision tab of the Providers page.
+      // The D1 controls are in the Decision section of Settings.
       const api = globalThis.browser || globalThis.chrome;
       const page = sender.id === api.runtime.id ? String(sender.url || '').split(/[?#]/)[0] : '';
       // The install guide downloads D1 before its local chat model: it reads
       // D1's status, checks the GPU, and starts or stops that download. Every
-      // other control stays on the Providers page.
+      // other control stays in Settings.
       const fromInstall = page === api.runtime.getURL('src/ui/install.html')
         && ['status', 'probe', 'download', 'stop'].includes(msg.command);
-      if (page !== api.runtime.getURL('src/ui/providers.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Providers page.' };
+      if (page !== api.runtime.getURL('src/ui/settings.html') && !fromInstall) return { success: false, error: 'D1 model controls are available only from the extension Settings page.' };
       try {
         // The guide's download names the chat model to download after D1.
         const chatModel = fromInstall && msg.command === 'download' && msg.chatModel != null ? String(msg.chatModel) : '';

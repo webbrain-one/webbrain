@@ -9,6 +9,8 @@ import { quotaTranslations } from './locales/compass-quota-copy.mjs';
 import { memcodeEnglish } from './locales/memcode-copy.mjs';
 import { captchaEnglish, captchaTranslations } from './locales/captcha-copy.mjs';
 import { composerDeliveryTranslations } from './locales/composer-delivery-copy.mjs';
+import { settingsPresetsEnglish, settingsPresetsTranslations } from './locales/settings-presets-copy.mjs';
+import { settingsLayoutEnglish, settingsLayoutTranslations } from './locales/settings-layout-copy.mjs';
 import { permissionSkipTranslations } from './locales/permission-skip-copy.mjs';
 import { cloudBridgeTranslations } from './locales/cloud-bridge-copy.mjs';
 import { safeSocialEnglish, safeSocialTranslations } from './locales/safesocial-copy.mjs';
@@ -49,9 +51,13 @@ const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar
     ...providerGuideEnglish,
     ...safeSocialEnglish,
     ...captchaEnglish,
+    ...settingsPresetsEnglish,
+    ...settingsLayoutEnglish,
     ...decisionEnglish,
     ...(decisionTranslations[code] || {}),
     ...(captchaTranslations[code] || {}),
+    ...(settingsPresetsTranslations[code] || {}),
+    ...(settingsLayoutTranslations[code] || {}),
     ...(safeSocialTranslations[code] || {}),
     ...(providerGuideTranslations[code] || {}),
   }]));

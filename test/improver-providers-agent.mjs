@@ -5,7 +5,8 @@
 // an HTTP status or inside the HTTP 200 stream, must never be mistaken for a
 // context overflow, and must never replay text the user already saw. A
 // per-minute input-token limit that outlasts the cooldowns (the request alone
-// may exceed it) is trimmed once; billing exhaustion fails at once.
+// may exceed it) is trimmed once; billing exhaustion, and a Companion quota
+// that resets after the cooldowns would end, fail at once.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -432,6 +433,37 @@ for (const build of ['chrome', 'firefox']) {
       assert.equal(recovery(updates)?.code, 'insufficient_quota', entry);
       assert.match(recovery(updates)?.diagnostics || '', /exceeded your current quota/, entry);
     }
+  });
+
+  // WebBrain Companion answers HTTP 429 model_cooldown with the reset it
+  // knows (QA 2026-11-13 A1: "Individual quota reached ... Resets in
+  // 43h56m18s."). Only a reset within model-retry's minute is waited out.
+  const companion = () => new OpenAICompatibleProvider({ providerName: 'webbrain-companion',
+    baseUrl: 'http://127.0.0.1:8327/v1', model: 'gemini-3.8-flash-high', supportsAskStreaming: true });
+  const companionCooldown = fields => () => new Response(JSON.stringify({ error: { code: 'model_cooldown',
+    message: 'All credentials for model gemini-3.8-flash-high are cooling down', ...fields } }), { status: 429 });
+  const COMPANION_QUOTA = { last_upstream_error: JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED',
+    message: 'Individual quota reached. Resets in 43h56m18s.' } }) };
+
+  test(`${build}: a Companion quota that resets hours away fails at once in Ask and the streaming loop`, async () => {
+    for (const entry of ['ask', 'stream']) {
+      const { requests, updates, cooldownMs, agent } = await run(Agent, OpenAICompatibleProvider,
+        [companionCooldown(COMPANION_QUOTA)], { entry, provider: companion });
+      assert.equal(requests.length, 1, entry);
+      assert.equal(cooldownMs, 0, entry);
+      assert.deepEqual(warnings(updates), [], `${entry}: not reported as rate limiting`);
+      assert.equal(agent.testStatus, 'error', entry);
+      assert.equal(recovery(updates)?.code, 'model_cooldown', entry);
+      assert.match(recovery(updates)?.diagnostics || '', /provider quota\. The provider reports a reset in 43h56m18s/, entry);
+    }
+  });
+
+  test(`${build}: a Companion cooldown that ends within the minute is waited out`, async () => {
+    const { result, requests, cooldownMs } = await run(Agent, OpenAICompatibleProvider,
+      [companionCooldown({ reset_seconds: 12, reset_time: '12s' }), () => answer('Hello there.')], { provider: companion });
+    assert.equal(result, 'Hello there.');
+    assert.equal(requests.length, 2);
+    assert.equal(cooldownMs, 12000);
   });
 
   test(`${build}: a WebBrain Cloud tier 402 stays an allowance stop, not a rate limit`, async () => {

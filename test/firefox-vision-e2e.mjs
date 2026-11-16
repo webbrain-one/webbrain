@@ -4,7 +4,8 @@
 // wrappedJSObject and exportFunction included), then reads what the page saw.
 // Trusted input (point_input: a click and a hover) runs through the
 // production companion session on the element the real content script marked.
-// Set FIREFOX_BINARY if Firefox is not on PATH or in the macOS default place.
+// FIREFOX_BINARY picks the Firefox to run; without it, the system Firefox (on
+// PATH or in the macOS default place), else Playwright's Firefox.
 //
 //   npm run test:firefox-vision:e2e
 import assert from 'node:assert/strict';
@@ -15,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BidiSession } from '../firefox-companion/session.mjs';
+import { firefoxBinary } from './firefox-binary.mjs';
 
 const temporaryRoot = await realpath(tmpdir());
 const profilePrefix = 'webbrain-firefox-vision-test-';
@@ -85,7 +87,7 @@ const server = createServer((req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}/`;
-const firefox = spawn(process.env.FIREFOX_BINARY || (process.platform === 'darwin' ? '/Applications/Firefox.app/Contents/MacOS/firefox' : 'firefox'),
+const firefox = spawn((await firefoxBinary()).binary,
   ['--headless', '--remote-allow-system-access', '--no-remote', '--profile', profile, '--remote-debugging-port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
 let session;
 try {
@@ -99,7 +101,7 @@ try {
     };
     firefox.stderr.on('data', onData);
     firefox.stdout.on('data', onData);
-    firefox.on('error', reject);
+    firefox.on('error', error => { clearTimeout(timer); reject(error); });
   });
   session = new BidiSession();
   await session.connect(port);

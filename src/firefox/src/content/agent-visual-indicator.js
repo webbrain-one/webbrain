@@ -32,9 +32,17 @@
  *                                'approach' it glides there ahead of the
  *                                input and replies `arriveInMs`; with phase
  *                                'done' it takes the input's verdict.
+ *   WB_AGENT_POINTER_AT       — agent input is about to land at `points`
+ *                                (viewport CSS px); the Stop button moves
+ *                                out of the way of any it covers and
+ *                                replies `moved`.
  *
  * Stop button click → service worker via WB_STOP_AGENT, which calls
- * agent.abort(tabId) the same way the sidepanel's Stop button does.
+ * agent.abort(tabId) the same way the sidepanel's Stop button does. Only a
+ * person's click counts: a page script's click() is not one, and the agent's
+ * own input never reaches the button, which moves to the other edge of the
+ * viewport before agent input lands under it (screenshots are taken with it
+ * hidden, so the model aims at the page there).
  *
  * Self-contained — no imports, runs in the page's content-script world.
  * z-index uses the max signed 32-bit range so the indicator sits above
@@ -67,6 +75,9 @@
   let styleLoaded = false;
   let effect = null;
   let stopContainerEl = null;
+  // Which edge of the viewport the Stop button sits at: the bottom, until
+  // agent input aims under it (keepStopButtonClear).
+  let stopAtTop = false;
   let targetOutlineEl = null;
   let cursor = null;
   let targetElement = null;
@@ -1691,13 +1702,20 @@
    * Stop button, target ring, lifecycle
    * ---------------------------------------------------------------------- */
 
+  // The Stop button's gap from the edge of the viewport it sits at.
+  const STOP_EDGE_GAP_PX = 16;
+  // How far around the Stop button an agent input point still counts as
+  // under it: rounding, and a point read off a slightly different frame.
+  const STOP_CLEARANCE_PX = 8;
+
   function createStopButton() {
+    stopAtTop = false;
     const container = document.createElement('div');
     container.id = 'webbrain-agent-stop-container';
     decorations().add(container);
     container.style.cssText = `
       position: fixed;
-      bottom: 16px;
+      bottom: ${STOP_EDGE_GAP_PX}px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
@@ -1750,7 +1768,11 @@
     button.addEventListener('mouseleave', () => {
       if (indicatorsActive) button.style.background = '#ffffff';
     });
-    button.addEventListener('click', async () => {
+    button.addEventListener('click', async (event) => {
+      // Only a person stops the run here: a page script can call click() on
+      // the button or dispatch a click to it, and neither is trusted. (The
+      // agent's own input never reaches it: keepStopButtonClear.)
+      if (!event.isTrusted) return;
       // Clear the page-owned UI immediately. The background may have
       // restarted (or the run may already be gone), leaving this indicator
       // with no live background state to clean it up.
@@ -1761,6 +1783,49 @@
     });
     container.appendChild(button);
     return container;
+  }
+
+  function placeStopButton(atTop) {
+    stopAtTop = atTop;
+    stopContainerEl.style.top = atTop ? `${STOP_EDGE_GAP_PX}px` : 'auto';
+    stopContainerEl.style.bottom = atTop ? 'auto' : `${STOP_EDGE_GAP_PX}px`;
+  }
+
+  // Which of `points` the Stop button covers where it is now, also while a
+  // screenshot has it hidden (it comes back at the same place). The
+  // container's box is the button's without its slide-in transform.
+  function pointsUnderStopButton(points) {
+    const hidden = stopContainerEl.style.display === 'none';
+    if (hidden) stopContainerEl.style.display = 'flex';
+    const rect = stopContainerEl.getBoundingClientRect();
+    if (hidden) stopContainerEl.style.display = 'none';
+    if (!(rect.width > 0 && rect.height > 0)) return [];
+    return points.filter(({ x, y }) => x >= rect.left - STOP_CLEARANCE_PX && x <= rect.right + STOP_CLEARANCE_PX
+      && y >= rect.top - STOP_CLEARANCE_PX && y <= rect.bottom + STOP_CLEARANCE_PX);
+  }
+
+  /**
+   * Agent input is about to land at `points` (viewport CSS px; the first is
+   * where a press goes). Screenshots are taken with the Stop button hidden,
+   * so a point it covers is the page's to the model, and its trusted press
+   * would otherwise press the button and stop the run. The button moves to
+   * the other edge of the viewport first. When neither edge clears every
+   * point, it takes the edge that keeps the first one clear. Returns whether
+   * it moved.
+   */
+  function keepStopButtonClear(points) {
+    if (!indicatorsActive || !stopContainerEl?.isConnected || !Array.isArray(points)) return false;
+    const list = points.slice(0, 8)
+      .map(point => ({ x: Number(point?.x), y: Number(point?.y) }))
+      .filter(({ x, y }) => Number.isFinite(x) && Number.isFinite(y));
+    if (!list.length) return false;
+    const cost = covered => (covered.includes(list[0]) ? list.length + 1 : 0) + covered.length;
+    const before = cost(pointsUnderStopButton(list));
+    if (!before) return false;
+    placeStopButton(!stopAtTop);
+    if (cost(pointsUnderStopButton(list)) < before) return true;
+    placeStopButton(!stopAtTop);
+    return false;
   }
 
   function createTargetOutline() {
@@ -1981,6 +2046,13 @@
     } else if (!setTargetRect(msg.rect)) {
       return 0;
     }
+    // The input goes to the target's centre, which the page's checks before
+    // it read too: the Stop button gets out of the way first.
+    const box = el ? el.getBoundingClientRect() : null;
+    keepStopButtonClear([box
+      ? { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+      : { x: Number(msg.rect.x) + Math.max(1, Number(msg.rect.w ?? msg.rect.width ?? 1)) / 2,
+        y: Number(msg.rect.y) + Math.max(1, Number(msg.rect.h ?? msg.rect.height ?? 1)) / 2 }]);
     const arriveInMs = pointAtTarget(msg.source || 'click', 'approach');
     return document.visibilityState === 'visible' && !suspendedForToolUse ? arriveInMs : 0;
   }
@@ -2049,7 +2121,8 @@
     clearTarget();
     const btn = stopContainerEl?.querySelector('#webbrain-agent-stop-button');
     if (btn) {
-      btn.style.transform = 'translateY(80px)';
+      // It slides out over the edge it sits at.
+      btn.style.transform = stopAtTop ? 'translateY(-80px)' : 'translateY(80px)';
       btn.style.opacity = '0';
     }
     setTimeout(() => {
@@ -2111,7 +2184,9 @@
   window.addEventListener('scroll', scheduleTargetUpdate, true);
   window.addEventListener('resize', scheduleTargetUpdate, true);
   window.addEventListener('pointerdown', onPagePress, { capture: true, passive: true });
-  window.__webbrainAgentIndicator = { showTarget, showTargetRect, approachTarget, finishTarget, hideTarget: clearTarget };
+  window.__webbrainAgentIndicator = {
+    showTarget, showTargetRect, approachTarget, finishTarget, hideTarget: clearTarget, keepClear: keepStopButtonClear,
+  };
 
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg.type !== 'string') return;
@@ -2134,6 +2209,9 @@
       case 'WB_SHOW_AFTER_TOOL_USE':
         showAfterToolUse();
         sendResponse({ ok: true });
+        break;
+      case 'WB_AGENT_POINTER_AT':
+        sendResponse({ ok: true, moved: keepStopButtonClear(msg.points) });
         break;
       case 'WB_SHOW_AGENT_TARGET':
         if (msg.phase === 'approach') {

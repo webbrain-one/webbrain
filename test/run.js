@@ -16157,6 +16157,186 @@ test('config transfer validates schema, size, containers, and unknown keys', () 
   assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
 });
 
+test('config transfer carries Cookie banners and the new tab switch in both builds', async () => {
+  const configWith = (settings) => JSON.stringify({ schema: 'webbrain-config/1', settings });
+  for (const [label, prefix, configTransfer] of [
+    ['chrome', 'src/chrome', ConfigTransferCh],
+    ['firefox', 'src/firefox', ConfigTransferFx],
+  ]) {
+    const cookieHost = await import(pathToFileURL(path.join(ROOT, prefix, 'src/agent/cookie-banner-host.js')).href);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes(cookieHost.COOKIE_BANNER_SETTING_KEY), `${label}: config export/import omitted Cookie banners`);
+    assert.ok(configTransfer.CONFIG_STORAGE_KEYS.includes('newTabEnabled'), `${label}: config export/import omitted the new tab switch`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.cookieBanners, cookieHost.DEFAULT_COOKIE_BANNER_MODE, `${label}: a file without Cookie banners should restore the host's default`);
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.newTabEnabled, false, `${label}: a file without the switch should leave the new tab opt-in`);
+    // Import accepts exactly the modes the host knows: no mode Settings can save
+    // is refused, and no mode the host would treat as the default is accepted.
+    assert.deepEqual(
+      [...configTransfer.CONFIG_COOKIE_BANNER_MODES].sort(),
+      [...cookieHost.COOKIE_BANNER_MODES].sort(),
+      `${label}: config import's Cookie banners modes should match the cookie-banner host's`,
+    );
+
+    for (const mode of cookieHost.COOKIE_BANNER_MODES) {
+      for (const newTabEnabled of [true, false]) {
+        const exported = configTransfer.createConfigExport({ cookieBanners: mode, newTabEnabled });
+        assert.equal(exported.settings.cookieBanners, mode, `${label}: export dropped Cookie banners ${mode}`);
+        assert.equal(exported.settings.newTabEnabled, newTabEnabled, `${label}: export dropped the new tab switch`);
+        const restored = configTransfer.parseConfigImport(JSON.stringify(exported));
+        assert.equal(restored.settings.cookieBanners, mode, `${label}: /import --replace lost Cookie banners ${mode}`);
+        assert.equal(restored.settings.newTabEnabled, newTabEnabled, `${label}: /import --replace lost the new tab switch`);
+        assert.deepEqual(restored.ignoredKeys, [], `${label}: a round trip should not ignore any key`);
+      }
+    }
+
+    const sparse = configTransfer.parseConfigPatchImport(configWith({ cookieBanners: 'off', newTabEnabled: true }));
+    assert.deepEqual(sparse.settings, { cookieBanners: 'off', newTabEnabled: true }, `${label}: /import should apply both settings`);
+    assert.deepEqual(sparse.ignoredKeys, [], `${label}: /import should not list them as unknown`);
+
+    const fresh = configTransfer.createConfigExport({});
+    assert.equal(fresh.settings.cookieBanners, 'agent', `${label}: an unset Cookie banners exports as Settings shows it`);
+    assert.equal(fresh.settings.newTabEnabled, false, `${label}: an unset new tab switch exports as off, as Settings shows it`);
+    assert.equal(configTransfer.createConfigExport({ cookieBanners: 'sometimes' }).settings.cookieBanners, 'agent', `${label}: an unknown stored mode exports as the default`);
+
+    for (const parse of [configTransfer.parseConfigImport, configTransfer.parseConfigPatchImport]) {
+      assert.throws(() => parse(configWith({ cookieBanners: 'sometimes' })), /cookieBanners/, `${label}: an unknown Cookie banners mode should be refused`);
+      assert.throws(() => parse(configWith({ cookieBanners: true })), /cookieBanners/, `${label}: a non-string Cookie banners value should be refused`);
+      assert.throws(() => parse(configWith({ newTabEnabled: 'true' })), /newTabEnabled/, `${label}: a non-boolean new tab switch should be refused`);
+    }
+  }
+});
+
+// Each storage key a Settings control writes should travel with
+// /export --config, or be listed here with why it stays on this device. This
+// reads the object literals passed to storage.local.set() by the Settings page's
+// scripts. It does not see writes of a prebuilt object (presets, pinned in
+// test/settings-presets.mjs; skills and the clarify-timeout migration, whose
+// keys are exported; the Cloud bridge pairing) or the CAPTCHA provider loop
+// (test/captcha-providers.mjs).
+test('every setting the Settings page writes is exported or deliberately device-local', () => {
+  const deviceLocal = {
+    // Derived from tracingEnabled when a file is imported (background.js import_config).
+    losslessTrace: ['chrome', 'firefox'],
+    // Accumulated spend; Settings only resets it.
+    meteredProviderCostSpentUsd: ['chrome', 'firefox'],
+    // The WebBrain Cloud bridge pairing of this browser.
+    webbrainCloudBridgeBrowserId: ['chrome', 'firefox'],
+    // Chrome's in-browser vision model: consent and downloaded weights belong to
+    // this device, and the choice must not reach Firefox.
+    webgpuVisionEnabled: ['chrome'],
+    webgpuVisionConsentVersion: ['chrome'],
+    // Firefox's connection to its own remote agent on this machine.
+    firefoxBidiEnabled: ['firefox'],
+    firefoxBidiPort: ['firefox'],
+  };
+  const skipString = (src, i) => {
+    for (let j = i + 1; j < src.length; j++) {
+      if (src[j] === '\\') { j++; continue; }
+      if (src[j] === src[i]) return j;
+    }
+    return src.length;
+  };
+  // Top-level keys of the object literal that opens at `open`: plain, quoted or
+  // computed ([NAME]); spreads are skipped.
+  const objectLiteralKeys = (src, open) => {
+    const keys = [];
+    let depth = 0;
+    let expectKey = true;
+    for (let i = open; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '\'' || ch === '"' || ch === '`') {
+        const end = skipString(src, i);
+        if (depth === 1 && expectKey) { keys.push({ name: src.slice(i + 1, end) }); expectKey = false; }
+        i = end;
+      } else if (ch === '/' && src[i + 1] === '/') {
+        i = src.indexOf('\n', i);
+      } else if (ch === '/' && src[i + 1] === '*') {
+        i = src.indexOf('*/', i) + 1;
+      } else if (depth === 1 && expectKey && ch === '[') {
+        const end = src.indexOf(']', i);
+        keys.push({ computed: src.slice(i + 1, end).trim() });
+        expectKey = false;
+        i = end;
+      } else if (ch === '{' || ch === '(' || ch === '[') {
+        depth++;
+      } else if (ch === '}' || ch === ')' || ch === ']') {
+        if (--depth === 0) return keys;
+      } else if (depth === 1 && ch === ',') {
+        expectKey = true;
+      } else if (depth === 1 && expectKey && !/\s/.test(ch)) {
+        if (src.startsWith('...', i)) { expectKey = false; i += 2; continue; }
+        const word = /^[A-Za-z_$][\w$]*/.exec(src.slice(i));
+        if (word) { keys.push({ name: word[0] }); expectKey = false; i += word[0].length - 1; }
+      }
+    }
+    return keys;
+  };
+  const sourceFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return ['vendor', 'locales'].includes(entry.name) ? [] : sourceFiles(full);
+    return entry.name.endsWith('.js') ? [full] : [];
+  });
+
+  for (const [label, configTransfer] of [['chrome', ConfigTransferCh], ['firefox', ConfigTransferFx]]) {
+    const srcDir = path.join(ROOT, 'src', label, 'src');
+    const allSource = sourceFiles(srcDir).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+    // Every value each string constant name has anywhere in the build. A name
+    // defined twice with different values cannot be resolved from source text
+    // alone, so the test refuses it instead of picking one.
+    const constants = new Map();
+    for (const m of allSource.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^'\n]+)'/g)) {
+      if (!constants.has(m[1])) constants.set(m[1], new Set());
+      constants.get(m[1]).add(m[2]);
+    }
+    const resolve = (expr) => {
+      if (constants.has(expr)) {
+        const values = [...constants.get(expr)];
+        assert.equal(values.length, 1, `${label}: [${expr}] has more than one value in the build (${values.join(', ')}); the scan cannot tell which one Settings writes`);
+        return values[0];
+      }
+      const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/.exec(expr);
+      if (!member) return null;
+      const values = new Set();
+      for (const block of allSource.matchAll(new RegExp(`\\bconst\\s+${member[1]}\\s*=\\s*\\{([^}]*)\\}`, 'g'))) {
+        const value = block[1].match(new RegExp(`\\b${member[2]}\\s*:\\s*'([^']+)'`))?.[1];
+        if (value) values.add(value);
+      }
+      assert.ok(values.size <= 1, `${label}: [${expr}] has more than one value in the build (${[...values].join(', ')}); the scan cannot tell which one Settings writes`);
+      return [...values][0] ?? null;
+    };
+
+    const settingsJs = fs.readFileSync(path.join(srcDir, 'ui/settings.js'), 'utf8');
+    const settingsHtml = fs.readFileSync(path.join(srcDir, 'ui/settings.html'), 'utf8');
+    const pageScripts = new Set(['settings.js']);
+    for (const m of settingsJs.matchAll(/from '\.\/([\w-]+\.js)'/g)) pageScripts.add(m[1]);
+    for (const m of settingsHtml.matchAll(/<script src="([\w-]+\.js)"/g)) pageScripts.add(m[1]);
+
+    const written = new Map();
+    for (const script of pageScripts) {
+      const src = fs.readFileSync(path.join(srcDir, 'ui', script), 'utf8');
+      for (const m of src.matchAll(/storage(?:\?\.|\.)local(?:\?\.|\.)set(?:\?\.)?\(\s*\{/g)) {
+        for (const key of objectLiteralKeys(src, m.index + m[0].length - 1)) {
+          const name = key.name ?? resolve(key.computed);
+          assert.ok(name, `${label}: ui/${script} writes a computed key the test cannot resolve: [${key.computed}]`);
+          written.set(name, script);
+        }
+      }
+    }
+    // The scan itself still works: it finds Settings controls the schema has long carried.
+    for (const key of ['verboseMode', 'themeMode', 'wbLocale', 'askBeforeConsequentialActions', 'safeSocialSettings', 'cookieBanners']) {
+      assert.ok(written.has(key), `${label}: the scan no longer sees the Settings write of ${key}`);
+    }
+
+    const exported = new Set(configTransfer.CONFIG_STORAGE_KEYS);
+    for (const [key, builds] of Object.entries(deviceLocal)) {
+      if (builds.includes(label)) assert.equal(exported.has(key), false, `${label}: ${key} is listed as device-local but is exported`);
+    }
+    const missing = [...written]
+      .filter(([key]) => !exported.has(key) && !deviceLocal[key]?.includes(label))
+      .map(([key, script]) => `${key} (ui/${script})`);
+    assert.deepEqual(missing, [], `${label}: Settings writes these keys but /export --config leaves them out`);
+  }
+});
+
 test('download directory routing is relative and uses each browser-supported path', async () => {
   for (const [label, downloadDirectory] of [
     ['chrome', DownloadDirectoryCh],
@@ -22763,6 +22943,31 @@ test('rejects *.internal and *.local regardless of allowLocal', () => {
   }
 });
 
+test('a trailing dot does not get a hostname past the fetch gate (both builds)', () => {
+  // URL.hostname keeps the trailing dot, and localhost. is the same DNS host
+  // as localhost.
+  for (const [label, validate] of [['chrome', validateFetchUrl], ['firefox', validateFetchUrlFx]]) {
+    for (const allowLocalNetwork of [false, true]) {
+      for (const url of [
+        'http://metadata.google.internal./computeMetadata/v1/',
+        'http://metadata.azure.com./metadata/instance',
+        'http://corp-jenkins.internal./',
+        'http://router.local../',
+      ]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+        assert.match(result.error, /Blocked hostname/, `${label}: ${url}`);
+      }
+    }
+    for (const url of ['http://localhost./', 'http://app.localhost.:3000/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+    assert.equal(validate('http://example.com./').ok, true, `${label}: public trailing-dot host`);
+    assert.equal(validate('http://./').ok, false, `${label}: a bare dot has no hostname`);
+  }
+});
+
 test('rejects 169.254.169.254 (cloud metadata IP) regardless of allowLocal', () => {
   for (const allowLocal of [false, true]) {
     expectReject('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: allowLocal });
@@ -22826,6 +23031,43 @@ test('IPv4-mapped IPv6 (::ffff:V4) is decoded and re-validated', () => {
   expectReject('http://[::ffff:169.254.169.254]/'); // metadata even when toggled
   expectReject('http://[::ffff:169.254.169.254]/', { allowLocalNetwork: true });
   expectAccept('http://[::ffff:8.8.8.8]/'); // public v4 mapped
+});
+
+test('IPv6 cloud metadata addresses stay blocked with local network access on (both builds)', () => {
+  // These sit inside unique-local fc00::/7, the range local-network access
+  // relaxes, so they need their own always-blocked check.
+  const metadataUrls = [
+    'http://[fd00:ec2::254]/latest/meta-data/iam/security-credentials/',
+    'http://[FD00:EC2:0:0:0:0:0:254]/latest/meta-data/', // uncompressed, upper-case
+    'http://[fd00:0ec2::0254]/',                          // leading zeros
+    'http://[fd00:ec2::23]/v1/credentials',               // AWS EKS Pod Identity agent
+    'http://[fd20:ce::254]/computeMetadata/v1/',          // Google Cloud
+    'http://[fd00:c1::a9fe:a9fe]/opc/v2/instance/',       // Oracle Cloud
+    'http://[fd00:c1::169.254.169.254]/opc/v1/',          // Oracle, dotted tail
+  ];
+  for (const [label, validate, validateResolved] of [
+    ['chrome', validateFetchUrl, validateResolvedAddressCh],
+    ['firefox', validateFetchUrlFx, validateResolvedAddressFx],
+  ]) {
+    for (const url of metadataUrls) {
+      for (const allowLocalNetwork of [false, true]) {
+        const result = validate(url, { allowLocalNetwork });
+        assert.equal(result.ok, false, `${label}: ${url} (allowLocal=${allowLocalNetwork}) must be blocked`);
+      }
+      assert.match(validate(url, { allowLocalNetwork: true }).error, /cloud metadata/i, `${label}: ${url}`);
+    }
+    // A public hostname whose DNS answer is a metadata address.
+    for (const address of ['fd00:ec2::254', 'fd00:ec2:0:0:0:0:0:254', '[fd20:ce::254]', 'fd00:ec2::23', 'fd00:c1::a9fe:a9fe']) {
+      const result = validateResolved(address, { allowLocalNetwork: true });
+      assert.equal(result.ok, false, `${label}: resolved ${address} must be blocked`);
+      assert.match(result.error, /cloud metadata/i, `${label}: resolved ${address}`);
+    }
+    // Neighbouring unique-local addresses keep the local-network tier.
+    for (const url of ['http://[fd00:ec2::255]/', 'http://[fd20:ce::1]/', 'http://[fd12:3456::254]/']) {
+      assert.equal(validate(url).ok, false, `${label}: ${url} blocked by default`);
+      assert.equal(validate(url, { allowLocalNetwork: true }).ok, true, `${label}: ${url} allowed with local network access`);
+    }
+  }
 });
 
 test('public hosts always accepted', () => {
@@ -23660,9 +23902,164 @@ test('case-insensitive — same registrable domain', () => {
 });
 
 test('firefox port registrableDomain matches chrome', () => {
-  const samples = ['github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1'];
+  const samples = [
+    'github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1',
+    'evil.appspot.com', 'bucket.s3.amazonaws.com', 'obs.uni1.edu.tr', 'shop.example.com.ua',
+    'appspot.com', 'example.com.', 'localhost', '[::1]',
+    'victim-space.github.dev', 'attacker-8080.app.github.dev', 'a.glitch.me', 'a.netlify.com',
+  ];
   for (const h of samples) {
     assert.equal(registrableDomainFx(h), registrableDomain(h), `mismatch on ${h}`);
+  }
+});
+
+const REGISTRABLE_DOMAIN_BUILDS = [['chrome', registrableDomain], ['firefox', registrableDomainFx]];
+
+test('Public Suffix List private section keeps tenants of shared hosts apart (both builds)', () => {
+  // Each pair used to reduce to the same "last two labels", so read_pdf,
+  // fetch_url and read_page_source sent one tenant's cookies on behalf of a
+  // page hosted by another.
+  const tenants = [
+    ['evil.appspot.com', 'victim.appspot.com'],
+    ['attacker.blogspot.com', 'victim.blogspot.com'],
+    ['attacker-bucket.s3.amazonaws.com', 'victim-bucket.s3.amazonaws.com'],
+    ['app-a.us-east-1.elb.amazonaws.com', 'app-b.us-east-1.elb.amazonaws.com'],
+    ['attacker.herokuapp.com', 'victim.herokuapp.com'],
+  ];
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const [a, b] of tenants) {
+      assert.equal(rd(a), a, `${label}: ${a} is its own registrable domain`);
+      assert.notEqual(rd(a), rd(b), `${label}: ${a} and ${b} are different sites`);
+    }
+    assert.equal(rd('www.victim.appspot.com'), 'victim.appspot.com', `${label}: subdomains stay with their tenant`);
+  }
+});
+
+test('second-level ccTLD registries are public suffixes (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    assert.equal(rd('kisi.uni2.edu.tr'), 'uni2.edu.tr', label);
+    assert.equal(rd('obs.uni1.edu.tr'), 'uni1.edu.tr', label);
+    assert.notEqual(rd('kisi.uni2.edu.tr'), rd('obs.uni1.edu.tr'), `${label}: different universities`);
+    assert.equal(rd('obs.uni1.edu.tr'), rd('www.uni1.edu.tr'), `${label}: one university is one site`);
+    assert.notEqual(rd('a.agency1.gov.tr'), rd('b.agency2.gov.tr'), `${label}: gov.tr`);
+    assert.notEqual(rd('a.assoc1.org.tr'), rd('b.assoc2.org.tr'), `${label}: org.tr`);
+    assert.notEqual(rd('shop.store1.com.ua'), rd('shop.store2.com.ua'), `${label}: com.ua`);
+    // co.uk and com.tr were on the old hard-coded list too.
+    assert.equal(rd('foo.bar.example.co.uk'), 'example.co.uk', label);
+    assert.equal(rd('shop.example.com.tr'), 'example.com.tr', label);
+  }
+});
+
+// The suffixes registrableDomain() hard-coded before it used the Public
+// Suffix List. Three of them (github.dev, glitch.me, netlify.com) are not on
+// the bundled list, so the code keeps the old list as a floor.
+const FORMER_HARD_CODED_SUFFIXES = [
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev',
+];
+
+test('every suffix on the former hard-coded list still keeps its tenants apart (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    for (const suffix of FORMER_HARD_CODED_SUFFIXES) {
+      assert.equal(rd(`a.${suffix}`), `a.${suffix}`, `${label}: a.${suffix} is its own site`);
+      assert.equal(rd(`www.a.${suffix}`), `a.${suffix}`, `${label}: www.a.${suffix} stays with a.${suffix}`);
+      assert.notEqual(rd(`a.${suffix}`), rd(`b.${suffix}`), `${label}: a.${suffix} and b.${suffix} are different sites`);
+    }
+    // A public Codespaces forwarded port is attacker-controlled content on
+    // app.github.dev; it must not share a site with someone else's codespace.
+    assert.equal(rd('attacker-8080.app.github.dev'), 'attacker-8080.app.github.dev', label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space.github.dev'), label);
+    assert.notEqual(rd('attacker-8080.app.github.dev'), rd('victim-space-3000.app.github.dev'), label);
+    assert.equal(rd('github.dev'), 'github.dev', `${label}: the editor host matches only itself`);
+    assert.notEqual(rd('github.dev'), rd('victim-space.github.dev'), label);
+    // Where the Public Suffix List is stricter than the old list, it wins.
+    assert.equal(rd('a.service.gov.uk'), 'a.service.gov.uk', label);
+    assert.notEqual(rd('a.service.gov.uk'), rd('b.service.gov.uk'), label);
+    assert.equal(rd('www.example.gov.uk'), 'example.gov.uk', label);
+  }
+});
+
+test('a host with no registrable domain matches only itself (both builds)', () => {
+  for (const [label, rd] of REGISTRABLE_DOMAIN_BUILDS) {
+    // A public suffix itself: never the same site as one of its tenants.
+    assert.equal(rd('appspot.com'), 'appspot.com', label);
+    assert.notEqual(rd('appspot.com'), rd('victim.appspot.com'), label);
+    assert.equal(rd('github.io'), 'github.io', label);
+    assert.equal(rd('co.uk'), 'co.uk', label);
+    assert.equal(rd('localhost'), 'localhost', label);
+    assert.equal(rd('foo.localhost'), 'foo.localhost', label);
+    // A trailing dot names the same host; it must not collapse to the TLD.
+    assert.equal(rd('www.example.com.'), 'example.com', label);
+    assert.notEqual(rd('evil.com.'), rd('victim.com.'), `${label}: trailing-dot hosts stay distinct`);
+    assert.equal(rd('.'), '', `${label}: a bare dot has no registrable domain`);
+  }
+});
+
+test('vendored tldts (Public Suffix List) matches its pinned package in both builds', () => {
+  const pinned = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).devDependencies.tldts;
+  for (const build of ['chrome', 'firefox']) {
+    const dir = path.join(ROOT, 'src', build, 'vendor', 'tldts');
+    assert.equal(
+      createHash('sha256').update(fs.readFileSync(path.join(dir, 'index.esm.min.js'))).digest('hex'),
+      '1f4e2f0bfab5a01e51032948573cf2920366ea0f50addc4e69bd3fffb9aec536',
+      `${build}: vendored tldts does not match the published tldts@${pinned} dist/index.esm.min.js`,
+    );
+    const readme = fs.readFileSync(path.join(dir, 'README.webbrain.md'), 'utf8');
+    assert.match(readme, new RegExp(`Version: \`${escapeRegExpLiteral(pinned)}\``), `${build}: README names another version than package.json`);
+    assert.match(fs.readFileSync(path.join(dir, 'LICENSE'), 'utf8'), /Permission is hereby granted, free of charge/, `${build}: MIT license missing`);
+  }
+});
+
+test('fetch_url and read_page_source send cookies only within one registrable domain (both builds)', async () => {
+  const savedFetch = globalThis.fetch;
+  const savedChrome = globalThis.chrome, savedBrowser = globalThis.browser;
+  try {
+    let activeUrl = '';
+    globalThis.chrome = globalThis.browser = { tabs: { get: async () => ({ url: activeUrl }) } };
+    const cases = [
+      ['https://attacker.appspot.com/page', 'https://victim.appspot.com/private', 'omit'],
+      ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/report', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni2.edu.tr/grades', 'omit'],
+      ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/grades', 'include'],
+      ['https://www.example.com/', 'https://api.example.com/data', 'include'],
+    ];
+    for (const [label, fetchUrl, readPageSource] of [
+      ['chrome', fetchUrlCh, readPageSourceCh],
+      ['firefox', fetchUrlFx, readPageSourceFx],
+    ]) {
+      for (const [tabUrl, target, expected] of cases) {
+        activeUrl = tabUrl;
+        for (const [tool, run] of [
+          ['fetch_url', () => fetchUrl(target, {}, { tabId: 7 })],
+          ['read_page_source', () => readPageSource(target, {}, { tabId: 7 })],
+        ]) {
+          const credentials = [];
+          globalThis.fetch = async (_url, init) => {
+            credentials.push(init.credentials);
+            return new Response('<!doctype html><title>ok</title><p>ok</p>', { headers: { 'Content-Type': 'text/html' } });
+          };
+          const result = await run();
+          assert.equal(result.success, true, `${label} ${tool}: ${JSON.stringify(result)}`);
+          assert.deepEqual(credentials, [expected], `${label} ${tool}: tab ${tabUrl} -> ${target}`);
+        }
+      }
+    }
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedChrome === undefined) delete globalThis.chrome; else globalThis.chrome = savedChrome;
+    if (savedBrowser === undefined) delete globalThis.browser; else globalThis.browser = savedBrowser;
   }
 });
 
@@ -35738,12 +36135,15 @@ test('every WebBrain page signs its header with the extension logo', () => {
       assert.match(html, new RegExp(`<h1><img class="brand-mark" src="\\.\\./\\.\\./icons/icon128\\.png"[^>]*><span data-i18n="${key.replace('.', '\\.')}"></span></h1>`),
         `${browser}: ${page} does not show the WebBrain logo beside a separately translated title`);
     }
-    // Settings, Providers and Permissions share settings.css and one header.
-    for (const [page, key] of [['settings.html', 'st.title'], ['providers.html', 'st.providers_page.title'], ['permissions.html', 'st.permissions_page.title']]) {
-      const html = fs.readFileSync(path.join(uiDir, page), 'utf8');
-      assert.match(html, new RegExp(`<h1><img class="brand-mark" src="\\.\\./\\.\\./icons/icon128\\.png"[^>]*><a id="settings-title-link"[^>]*data-i18n="${key.replaceAll('.', '\\.')}"></a></h1>`),
-        `${browser}: ${page} does not show the WebBrain logo beside its title link`);
-      assert.match(html, /<link rel="stylesheet" href="settings\.css">/, `${browser}: ${page} does not load the shared settings styles`);
+    // Settings holds the Providers and Permissions sections too; those two
+    // pages only forward old links into it, so they have no header to sign.
+    const settingsHtml = fs.readFileSync(path.join(uiDir, 'settings.html'), 'utf8');
+    assert.match(settingsHtml, /<h1><img class="brand-mark" src="\.\.\/\.\.\/icons\/icon128\.png"[^>]*><a id="settings-title-link"[^>]*data-i18n="st\.title"><\/a><\/h1>/,
+      `${browser}: settings.html does not show the WebBrain logo beside its title link`);
+    assert.match(settingsHtml, /<link rel="stylesheet" href="settings\.css">/, `${browser}: settings.html does not load the settings styles`);
+    for (const page of ['providers.html', 'permissions.html']) {
+      assert.match(fs.readFileSync(path.join(uiDir, page), 'utf8'), /<script src="settings-redirect\.js" data-default-section="[a-z]+"><\/script>/,
+        `${browser}: ${page} does not forward to Settings`);
     }
     for (const file of ['settings.css', 'history.html', 'traces.html']) {
       const source = fs.readFileSync(path.join(uiDir, file), 'utf8');
@@ -35761,8 +36161,8 @@ test('Apocalypse download tracker follows every offline transfer from its pages 
     'emergency-box.html',
     'emergency-pdf.html',
     'emergency-communication.html',
+    // Holds the model sections that start in-browser model downloads.
     'settings.html',
-    'providers.html',
   ];
   for (const browser of ['chrome', 'firefox']) {
     const uiDir = path.join(ROOT, `src/${browser}/src/ui`);
@@ -38752,19 +39152,16 @@ test('Apocalypse Mode keeps summary stats in its header and optional Wikipedia i
       `${prefix}: the Wikipedia library cannot persist basic auto-start suppression`);
     assert.match(libraryScript, /const removesArchive = action === 'stop' \|\| action === 'delete';[\s\S]*?isBasicWikipediaArchive\(record\)[\s\S]*?await suppressBasicWikipediaAutoStart\(\)[\s\S]*?command\(removesArchive \? 'delete' : action/,
       `${prefix}: deleting the basic Wikipedia archive can silently auto-download it again`);
-    const headerStart = settingsHtml.indexOf('<div class="header-row">');
-    const apocalypseLink = settingsHtml.indexOf('id="apocalypse-mode-link"', headerStart);
-    const supportLink = settingsHtml.indexOf('href="https://webbrain.one/docs"', headerStart);
-    const tabsStart = settingsHtml.indexOf('<nav class="tabs"', headerStart);
-    assert.ok(headerStart >= 0 && apocalypseLink > headerStart && supportLink > apocalypseLink && tabsStart > supportLink,
-      `${prefix}: Apocalypse Mode must appear beside and before Support in the top header`);
-    // A line icon like Providers and Support, without a highlight of its own.
-    const apocalypseHeaderLink = settingsHtml.slice(apocalypseLink, supportLink);
-    assert.match(apocalypseHeaderLink, /<svg class="apocalypse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"/,
-      `${prefix}: Apocalypse Mode header link is missing its radiation line icon`);
-    assert.doesNotMatch(apocalypseHeaderLink, /☢/, `${prefix}: Apocalypse Mode header link still uses the colored emoji icon`);
-    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.css'), 'utf8'), /\.apocalypse-(?:icon|link)\b[^{]*\{[^}]*var\(--warning\)/,
-      `${prefix}: the Apocalypse Mode header link is highlighted unlike Providers and Support`);
+    // Settings shows Apocalypse Mode as its own Offline section: the archive
+    // status and a link that opens the kit, which keeps the switch and the
+    // downloads it starts.
+    const offlineSection = settingsPanelHtml(settingsHtml, 'offline');
+    assert.match(offlineSection, /<a id="apocalypse-mode-link" class="btn-secondary apocalypse-mode-open" href="apocalypse-mode\.html" target="_blank"[^>]*data-i18n="st\.offline\.open"><\/a>/,
+      `${prefix}: the Offline section does not open Apocalypse Mode`);
+    assert.match(settingsHtml, /<button class="tab-btn" type="button" data-tab="offline" data-i18n="st\.tab\.offline"><\/button>/,
+      `${prefix}: the Settings sidebar does not list the Offline section`);
+    assert.doesNotMatch(settingsHtml.slice(settingsHtml.indexOf('<div class="header-row">'), settingsHtml.indexOf('<div class="settings-layout">')), /apocalypse/,
+      `${prefix}: Apocalypse Mode is still linked from the Settings header`);
     assert.match(pageHtml, /<header><span class="apocalypse-icon" aria-hidden="true">☢<\/span>/,
       `${prefix}: Apocalypse Mode page header lost its radioactive icon`);
     assert.match(pageHtml, /class="header-copy"[\s\S]*?data-i18n="ap\.title"[\s\S]*?data-i18n="ap\.subtitle"/,
@@ -38779,7 +39176,7 @@ test('Apocalypse Mode keeps summary stats in its header and optional Wikipedia i
       `${prefix}: storage usage is still presented as an ambiguous used/quota fraction`);
     assert.match(pageHtml, /\.apocalypse-icon \{[^}]*font-size:48px/,
       `${prefix}: Apocalypse Mode page icon is too small for the page header`);
-    assert.match(settingsHtml, /id="apocalypse-mode-status"[^>]*class="visually-hidden"/, `${prefix}: header gateway status is not accessible`);
+    assert.match(offlineSection, /id="apocalypse-mode-status" role="status" aria-live="polite"/, `${prefix}: the Offline section's archive status is not announced`);
     assert.doesNotMatch(settingsPanelHtml(settingsHtml, 'advanced'), /apocalypse-mode/, `${prefix}: Apocalypse Mode is still listed under Advanced`);
     assert.match(fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8'), /apocalypseModeLink\.dataset\.enabled/, `${prefix}: header gateway does not reflect the enabled state`);
     assert.match(pageScript, /elements\['installed-count'\]\.textContent[\s\S]*?elements\['archive-bytes'\]\.textContent[\s\S]*?elements\['storage-usage'\]\.textContent/,
@@ -49178,10 +49575,10 @@ function settingsPanelHtml(html, name) {
   return html.slice(start, next === -1 ? html.indexOf('<script', start) : next);
 }
 
-// The tab bar of settings.html or providers.html as settings-tabs.js sees it:
-// its data attributes, its tabs, and which panels the settings search covers.
+// The sidebar of settings.html as settings-tabs.js sees it: its data
+// attributes, its sections, and which panels the settings search covers.
 function settingsTabsFixture(html) {
-  const nav = html.match(/<nav class="tabs"([^>]*)>/)?.[1] || '';
+  const nav = html.match(/<nav class="tabs[^"]*"([^>]*)>/)?.[1] || '';
   const attr = (name) => {
     const match = nav.match(new RegExp(`\\s${name}=(?:'([^']*)'|"([^"]*)")`));
     return match ? (match[1] ?? match[2]) : undefined;
@@ -49213,6 +49610,9 @@ function runSettingsTabsScript(script, html, { saved = null, hash = '', searchVa
   const buttons = fixture.tabs.map((name) => ({
     dataset: { tab: name },
     classList: makeClassList(),
+    attributes: {},
+    setAttribute(attribute, value) { this.attributes[attribute] = String(value); },
+    removeAttribute(attribute) { delete this.attributes[attribute]; },
     addEventListener(type, handler) {
       if (type === 'click') this.clickHandler = handler;
     },
@@ -49272,6 +49672,7 @@ function runSettingsTabsScript(script, html, { saved = null, hash = '', searchVa
   vm.runInNewContext(script, context, { timeout: 1000 });
   const state = () => ({
     activeButton: buttons.find((button) => button.classList.active)?.dataset.tab,
+    currentButtons: buttons.filter((button) => button.attributes['aria-current'] === 'page').map((button) => button.dataset.tab),
     activePanel: panels.find((panel) => panel.classList.active)?.dataset.panel,
     storageKey: context.localStorage.key,
     stored: context.localStorage.value,
@@ -49294,7 +49695,6 @@ test('settings tabs validate saved and hash tab names without selector interpola
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const script = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings-tabs.js'), 'utf8');
     const settingsHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
-    const providersHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/providers.html'), 'utf8');
 
     const malformed = runSettingsTabsScript(script, settingsHtml, { saved: 'display"] .boom', hash: '#bad"]' });
     assert.equal(malformed.activeButton, 'display', `${label}: malformed tab values should fall back to General`);
@@ -49302,59 +49702,82 @@ test('settings tabs validate saved and hash tab names without selector interpola
     assert.deepEqual(malformed.selectorCalls, ['nav.tabs', '.tab-btn', '.tab-panel', '[data-search-tab]'], `${label}: dynamic tab values must not be interpolated into selectors`);
     assert.equal(malformed.storageKey, 'webbrainSettingsTab', `${label}: Settings remembers its own last tab`);
 
-    for (const tab of ['budgets', 'captcha', 'advanced']) {
+    for (const tab of ['budgets', 'captcha', 'advanced', 'memory', 'llm', 'decision', 'permissions', 'offline']) {
       const opened = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: `#${tab}` });
-      assert.equal(opened.activeButton, tab, `${label}: #${tab} should override the saved tab`);
+      assert.equal(opened.activeButton, tab, `${label}: #${tab} should override the saved section`);
       assert.equal(opened.activePanel, tab, `${label}: #${tab} should activate its panel`);
-      assert.equal(opened.stored, tab, `${label}: the #${tab} tab should persist`);
+      assert.deepEqual(opened.currentButtons, [tab], `${label}: #${tab} is the one section marked current`);
+      assert.equal(opened.stored, tab, `${label}: the #${tab} section should persist`);
       assert.equal(opened.searchHidden, false, `${label}: the search box covers ${tab}`);
     }
-
-    const memory = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: '#memory' });
-    assert.equal(memory.activeButton, 'memory', `${label}: memory hash should activate Memory tab`);
-    assert.equal(memory.activePanel, 'memory', `${label}: memory hash should activate Memory panel`);
-    assert.equal(memory.stored, 'memory', `${label}: activated Memory tab should persist`);
-    assert.equal(memory.searchHidden, true, `${label}: the search box is hidden on Memory`);
 
     const removed = runSettingsTabsScript(script, settingsHtml, { saved: 'profile', hash: '#profile' });
     assert.equal(removed.activeButton, 'display', `${label}: a removed Profile tab should fall back to General`);
     assert.equal(removed.activePanel, 'display', `${label}: a removed Profile panel should not activate`);
 
-    for (const [hash, target] of [['providers', 'providers.html#llm'], ['multimodal', 'providers.html#vision'], ['vision', 'providers.html#vision'], ['permissions', 'permissions.html']]) {
-      const moved = runSettingsTabsScript(script, settingsHtml, { saved: 'display', hash: `#${hash}` });
-      assert.deepEqual(moved.replaced, [`chrome-extension://webbrain/src/ui/${target}`], `${label}: settings.html#${hash} should open ${target}`);
-      assert.equal(moved.activeButton, undefined, `${label}: a moved tab should not activate a Settings tab`);
+    // Names from the Settings tabs and pages before the sidebar open the
+    // section that holds them now, on this page.
+    for (const [hash, tab] of [['providers', 'llm'], ['multimodal', 'vision'], ['vision', 'vision'], ['permissions', 'permissions'], ['apocalypse', 'offline']]) {
+      const linked = runSettingsTabsScript(script, settingsHtml, { saved: 'speech', hash: `#${hash}` });
+      assert.equal(linked.activeButton, tab, `${label}: settings.html#${hash} should open ${tab}`);
+      assert.deepEqual(linked.replaced, [], `${label}: settings.html#${hash} stays on Settings`);
     }
+    assert.equal(runSettingsTabsScript(script, settingsHtml, { saved: 'speech' }).activeButton, 'speech', `${label}: Settings restores its last section`);
 
     const searching = runSettingsTabsScript(script, settingsHtml, { saved: 'display', searchValue: 'timeout' });
     const picked = searching.click('skills');
-    assert.equal(picked.searchValue, '', `${label}: picking a tab ends the search`);
+    assert.equal(picked.searchValue, '', `${label}: picking a section ends the search`);
     assert.deepEqual(picked.searchEvents, ['input'], `${label}: ending the search refilters the rows`);
-    assert.equal(picked.activeButton, 'skills', `${label}: the picked tab opens`);
-
-    const providers = runSettingsTabsScript(script, providersHtml);
-    assert.equal(providers.activeButton, 'llm', `${label}: Providers opens on LLM`);
-    assert.equal(providers.storageKey, 'webbrainProvidersTab', `${label}: Providers remembers its own last tab`);
-    for (const [hash, tab] of [['multimodal', 'vision'], ['providers', 'llm'], ['decision', 'decision'], ['safesocial', 'safesocial']]) {
-      const linked = runSettingsTabsScript(script, providersHtml, { saved: 'speech', hash: `#${hash}` });
-      assert.equal(linked.activeButton, tab, `${label}: providers.html#${hash} should open ${tab}`);
-      assert.deepEqual(linked.replaced, [], `${label}: providers.html#${hash} stays on Providers`);
-    }
-    assert.equal(runSettingsTabsScript(script, providersHtml, { saved: 'speech' }).activeButton, 'speech', `${label}: Providers restores its last tab`);
-    assert.equal(runSettingsTabsScript(script, providersHtml, { saved: 'advanced' }).activeButton, 'llm', `${label}: a Settings tab name does not open on Providers`);
+    assert.equal(picked.activeButton, 'skills', `${label}: the picked section opens`);
+    assert.deepEqual(picked.currentButtons, ['skills'], `${label}: the picked section is marked current`);
   }
 });
 
-test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keeping profile and memory controls in Memory', () => {
+test('the Providers and Permissions pages forward old links into Settings with their section', () => {
+  for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
+    const script = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings-redirect.js'), 'utf8');
+    assert.equal(script, fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings-redirect.js'), 'utf8'), `${label}: settings-redirect.js is shared verbatim`);
+    const forward = (page, hash) => {
+      const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui', page), 'utf8');
+      const section = html.match(/<script src="settings-redirect\.js" data-default-section="([a-z]+)"><\/script>/)?.[1];
+      assert.ok(section, `${label}: ${page} loads settings-redirect.js with a default section`);
+      assert.doesNotMatch(html, /<script(?![^>]*src=)/, `${label}: ${page} has no inline script`);
+      const replaced = [];
+      const href = `chrome-extension://webbrain/src/ui/${page}${hash}`;
+      vm.runInNewContext(script, {
+        document: { currentScript: { dataset: { defaultSection: section } } },
+        location: { hash, href, replace(url) { replaced.push(url); } },
+        URL,
+      }, { timeout: 1000 });
+      return replaced;
+    };
+    assert.deepEqual(forward('providers.html', ''), ['chrome-extension://webbrain/src/ui/settings.html#llm'], `${label}: providers.html opens the LLM section`);
+    assert.deepEqual(forward('providers.html', '#vision'), ['chrome-extension://webbrain/src/ui/settings.html#vision'], `${label}: providers.html#vision keeps its section`);
+    assert.deepEqual(forward('providers.html', '#multimodal'), ['chrome-extension://webbrain/src/ui/settings.html#multimodal'], `${label}: an old alias is left for Settings to resolve`);
+    assert.deepEqual(forward('permissions.html', ''), ['chrome-extension://webbrain/src/ui/settings.html#permissions'], `${label}: permissions.html opens Permissions & privacy`);
+  }
+});
+
+test('settings organizes its sections in a sidebar while keeping profile and memory controls in Memory', () => {
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
     const css = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.css'), 'utf8');
     const { tabs, panels } = settingsTabsFixture(html);
-    assert.deepEqual(tabs, ['display', 'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'advanced'], `${label}: Settings tabs`);
-    assert.deepEqual(panels.map((panel) => panel.name), tabs, `${label}: one panel per tab, in tab order`);
-    assert.deepEqual(panels.filter((panel) => panel.search).map((panel) => panel.name), ['display', 'budgets', 'captcha', 'advanced'], `${label}: the search covers General, Budgets, CAPTCHA and Advanced`);
-    assert.doesNotMatch(html, /data-(?:tab|panel)="(?:profile|providers|multimodal|permissions)"/, `${label}: Profile, Providers, Assistive Models and Permissions are not Settings tabs`);
-    assert.doesNotMatch(html, /<details class="advanced-settings">/, `${label}: Advanced is a tab, not a drawer inside General`);
+    assert.deepEqual(tabs, [
+      'display', 'llm', 'vision', 'speech', 'generative', 'decision', 'safesocial', 'permissions',
+      'budgets', 'memory', 'skills', 'captcha', 'cloudbridge', 'offline', 'advanced',
+    ], `${label}: Settings sections`);
+    assert.deepEqual(panels.map((panel) => panel.name), tabs, `${label}: one panel per section, in sidebar order`);
+    assert.ok(panels.every((panel) => panel.search), `${label}: the search covers every section`);
+    assert.doesNotMatch(html, /data-(?:tab|panel)="(?:profile|providers|multimodal)"/, `${label}: Profile, Providers and Assistive Models are not Settings sections`);
+    assert.doesNotMatch(html, /<details class="advanced-settings">/, `${label}: Advanced is a section, not a drawer inside General`);
+    // Sub-sections sit under their group label in the sidebar.
+    const nav = html.slice(html.indexOf('<nav class="tabs settings-nav"'), html.indexOf('</nav>'));
+    assert.match(nav, /data-i18n="st\.nav\.models"><\/div>\s*(?:<button class="tab-btn tab-sub"[^>]*><\/button>\s*){6}<button class="tab-btn" type="button" data-tab="permissions"/,
+      `${label}: the six model sections sit under Models`);
+    assert.match(nav, /data-i18n="st\.nav\.integrations"><\/div>\s*<button class="tab-btn tab-sub" type="button" data-tab="captcha"[^>]*><\/button>\s*<button class="tab-btn tab-sub" type="button" data-tab="cloudbridge"/,
+      `${label}: CAPTCHA and Bridge sit under Integrations`);
+    assert.doesNotMatch(nav, /role="tab(?:list)?"/, `${label}: the sidebar is navigation, not a tab list`);
 
     const general = settingsPanelHtml(html, 'display');
     const budgets = settingsPanelHtml(html, 'budgets');
@@ -49366,7 +49789,7 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
     }
 
     const searchStart = html.indexOf('id="input-general-search"');
-    assert.ok(searchStart > html.indexOf('<nav class="tabs"') && searchStart < html.indexOf('<section class="tab-panel'), `${label}: the search box sits between the tabs and the panels`);
+    assert.ok(searchStart > html.indexOf('<aside class="settings-sidebar">') && searchStart < html.indexOf('<nav class="tabs settings-nav"'), `${label}: the search box tops the sidebar`);
     assert.match(html, /id="general-search-empty" hidden/, `${label}: search should include an empty-result state`);
     assert.match(css, /\.settings-search::before \{[\s\S]*?-webkit-mask: url\("data:image\/svg\+xml,[\s\S]*?\}/, `${label}: settings search fields should show a magnifier icon`);
     assert.match(css, /\.settings-search input \{[\s\S]*?padding: 10px 12px 10px 36px;/, `${label}: search text should clear the magnifier icon`);
@@ -49376,14 +49799,15 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
     assert.match(css, /body\.settings-searching \.tab-panel:not\(\[data-search\]\) \{ display: none; \}/, `${label}: a search hides the tabs it does not cover`);
     assert.match(css, /body\.settings-searching \.tab-btn\.active \{ background: transparent; color: var\(--text2\); \}/, `${label}: no tab looks current while a search shows several tabs`);
 
-    // General keeps everyday preferences; the side panel picks the language and zoom.
-    for (const id of ['select-theme', 'input-download-directory', 'select-plan-before-act-mode', 'select-auto-screenshot']) {
+    // General keeps everyday preferences and the combined switches; the side
+    // panel picks the language and zoom.
+    for (const id of ['select-theme', 'input-download-directory', 'select-preset-supervision', 'select-preset-image', 'select-preset-alerts']) {
       assert.ok(general.includes(`id="${id}"`), `${label}: ${id} should stay in General`);
     }
     assert.doesNotMatch(html, /id="select-language"|id="settings-ui-scale-|st\.display\.(?:language|ui_scale)\./, `${label}: language and zoom are chosen in the side panel`);
 
-    // Budgets holds the spend, time, step and image limits, in this order.
-    const budgetIds = ['input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy', 'range-max-steps', 'range-request-timeout', 'select-image-detail', 'select-max-screenshots', 'select-max-image-dimension'];
+    // Budgets holds the spend, time and step limits, in this order.
+    const budgetIds = ['input-cost-session-limit', 'input-cost-total-limit', 'range-clarify-timeout', 'select-clarify-timeout-policy', 'range-max-steps', 'range-request-timeout'];
     const budgetIndexes = budgetIds.map((id) => budgets.indexOf(`id="${id}"`));
     budgetIndexes.forEach((index, position) => assert.notEqual(index, -1, `${label}: ${budgetIds[position]} should live in Budgets`));
     assert.ok(budgetIndexes.every((index, position) => position === 0 || budgetIndexes[position - 1] < index), `${label}: Budgets keeps the requested order`);
@@ -49399,15 +49823,41 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       'toggle-scheduled-confirm',
       'toggle-notify-sound',
       'toggle-completion-confetti',
-      'toggle-screenshot-fallback',
-      'toggle-screenshot-redaction',
       'toggle-site-adapters',
       'toggle-api-mutation-observer',
-      'toggle-strict-secret',
-      'toggle-allow-local-network',
       'toggle-help-improve',
+      // What the combined switches in General stand for is fine-tuned here.
+      'toggle-enforce-action-guards',
+      'toggle-strict-guards',
+      'select-lean-mode',
+      'select-plan-before-act-mode',
+      'select-plan-review-mode',
+      'range-plan-review-confidence',
+      'select-vision-quality',
+      'select-auto-screenshot',
+      'select-image-detail',
+      'select-max-screenshots',
+      'select-max-image-dimension',
+      'toggle-completion-flash-tab',
     ]) {
       assert.ok(advanced.includes(`id="${id}"`), `${label}: ${id} should live in Advanced`);
+      assert.equal(html.indexOf(`id="${id}"`), html.lastIndexOf(`id="${id}"`), `${label}: ${id} appears once`);
+    }
+    // Permissions & privacy holds the permission prompts, the site grants and
+    // the switches that decide what leaves the browser.
+    const permissionsSection = settingsPanelHtml(html, 'permissions');
+    for (const id of ['permissions-card', 'toggle-permission-gate', 'permissions-list', 'toggle-screenshot-redaction', 'toggle-strict-secret', 'toggle-allow-local-network']) {
+      assert.ok(permissionsSection.includes(`id="${id}"`), `${label}: ${id} should live in Permissions & privacy`);
+      assert.equal(html.indexOf(`id="${id}"`), html.lastIndexOf(`id="${id}"`), `${label}: ${id} appears once`);
+    }
+    // Nothing read the Screenshot Fallback setting, so its switch is gone.
+    assert.doesNotMatch(html, /toggle-screenshot-fallback/, `${label}: the dead Screenshot Fallback switch is removed`);
+    // Advanced is sorted under headings that the General switches link to.
+    for (const id of ['supervision', 'vision', 'alerts', 'privacy', 'automation', 'network', 'interface']) {
+      assert.match(advanced, new RegExp(`<h3 class="settings-group-heading" id="adv-group-${id}" tabindex="-1" data-i18n="[a-z_.]+"></h3>`), `${label}: Advanced has the ${id} group heading`);
+    }
+    for (const [group, heading] of [['supervision', 'supervision'], ['image', 'vision'], ['alerts', 'alerts']]) {
+      assert.match(general, new RegExp(`data-preset-jump="adv-group-${heading}"[\\s\\S]*?<select id="select-preset-${group}"`), `${label}: the ${group} switch links to its Advanced group`);
     }
     for (const id of ['profile-card', 'user-memory-card', 'toggle-user-memory-form']) {
       assert.ok(memory.includes(`id="${id}"`), `${label}: ${id} should live in Memory`);
@@ -49425,7 +49875,10 @@ test('settings organizes General, Budgets, CAPTCHA and Advanced tabs while keepi
       assert.match(tracingDescription, /href=\\?["']traces\.html/, `${label}/${filename}: Record traces should link to the Traces page`);
     }
 
-    assert.match(html, /<a id="providers-page-link" class="support-link" href="providers\.html">/, `${label}: the header links to Providers`);
+    // Providers and Permissions are sections now, so the header keeps only Support.
+    const header = html.slice(html.indexOf('<div class="header-row">'), html.indexOf('<div class="settings-layout">'));
+    assert.doesNotMatch(header, /providers-page-link|apocalypse-mode-link/, `${label}: the header no longer links to other settings pages`);
+    assert.match(header, /<a class="support-link" href="https:\/\/webbrain\.one\/docs"/, `${label}: the header keeps Support`);
   }
 });
 
@@ -49808,7 +50261,7 @@ test('sidepanel composer permission switch drives the Settings gate in both buil
     assert.match(block, /else addPersistentSlashMessage\(systemHtml\(t\('sp\.permissions\.disabled_html'\)\)\)/, `${label}: turning prompts off should post the command's persistent notice`);
     assert.doesNotMatch(block, /resolvePendingPermissionPrompt/, `${label}: the composer switch must never approve a pending permission card`);
     assert.match(block, /permissionGateWriteQueue = write\.catch\(\(\) => renderPermissionGateControl\(\)\)/, `${label}: a failed write should restore the stored state`);
-    assert.match(block, /runtime\.getURL\('src\/ui\/permissions\.html'\)/, `${label}: the popover should open the site permission page`);
+    assert.match(block, /runtime\.getURL\('src\/ui\/settings\.html#permissions'\)/, `${label}: the popover should open Settings → Permissions & privacy`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_KEY\]\) \{\s*permissionGateStoredOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: changes made in Settings or by the command should update the switch`);
     assert.match(panel, /if \(changes\[PERMISSION_GATE_SESSION_OFF_KEY\]\) \{\s*permissionGateSessionOff = [^;]+;\s*syncAskBeforeConsequential\(\);/, `${label}: a session skip should update the switch`);
     assert.match(panel, /function syncAskBeforeConsequential\(\) \{[^}]*renderPermissionGateControl\(\);/, `${label}: the gate sync should render the switch`);
@@ -51553,8 +52006,8 @@ test('provider picker exposes both managed Compass tiers, configured providers, 
     assert.match(panel, /get_providers', \{ includeSidepanelOnly: true \}/, `${label}: sidepanel should request its hidden managed provider`);
     assert.match(panel, /MORE_PROVIDERS_OPTION_VALUE = '__more_providers__'/, `${label}: More sentinel missing`);
     assert.match(panel, /providerSelect\.value = selectedProviderId;[\s\S]*?await openProvidersSettingsPage\(\);[\s\S]*?return;/, `${label}: More should restore the selection and stop before activation`);
-    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/providers\.html#llm'\);/, `${label}: More should open the LLM tab of the Providers page`);
-    assert.doesNotMatch(panel, /settings\.html#(?:providers|permissions|multimodal)/, `${label}: the side panel should not link to the old Settings tabs`);
+    assert.match(panel, /async function openProvidersSettingsPage\(\) \{\s*const url = (?:chrome|browser)\.runtime\.getURL\('src\/ui\/settings\.html#llm'\);/, `${label}: More should open the LLM section of Settings`);
+    assert.doesNotMatch(panel, /settings\.html#(?:providers|multimodal)\b|src\/ui\/(?:providers|permissions)\.html/, `${label}: the side panel links to the current Settings sections, not old tab names or the forwarding pages`);
     assert.match(panel, /if \(changes\.providers \|\| changes\.activeProvider\) \{[\s\S]*?loadProviders\(\)/, `${label}: picker should refresh when provider storage changes`);
 
     assert.match(settings, /const isConfigured = id !== 'webbrain_cloud' && config\.configured === true/, `${label}: Settings should derive Active from configured state`);
@@ -71145,17 +71598,17 @@ test('choosing an in-browser vision model never downloads and only reuses consen
   }
 });
 
-test('the in-browser vision choice stays Chrome-local and only Providers or Apocalypse Mode can change it', () => {
+test('the in-browser vision choice stays Chrome-local and only Settings or Apocalypse Mode can change it', () => {
   const background = fs.readFileSync(path.join(ROOT, 'src/chrome/src/background.js'), 'utf8');
-  assert.match(background, /case 'set_webgpu_vision_choice':[\s\S]*?src\/ui\/providers\.html[\s\S]*?src\/ui\/apocalypse-mode\.html[\s\S]*?setWebgpuVisionChoice\(msg\.choice\)/);
+  assert.match(background, /case 'set_webgpu_vision_choice':[\s\S]*?src\/ui\/settings\.html[\s\S]*?src\/ui\/apocalypse-mode\.html[\s\S]*?setWebgpuVisionChoice\(msg\.choice\)/);
   const choiceCase = background.slice(background.indexOf("case 'set_webgpu_vision_choice':"), background.indexOf('setWebgpuVisionChoice(msg.choice)'));
-  assert.doesNotMatch(choiceCase, /src\/ui\/settings\.html/, 'the vision choice moved off the Settings page');
+  assert.doesNotMatch(choiceCase, /src\/ui\/providers\.html/, 'the Providers page only forwards to Settings now');
   for (const file of ['src/chrome/src/config-transfer.js', 'src/chrome/src/profile-sync.js', 'src/firefox/src/config-transfer.js', 'src/firefox/src/profile-sync.js']) {
     assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), /webgpuVisionChoice|WEBGPU_VISION_CHOICE_KEY/,
       `${file}: the in-browser vision choice must not be exported or synced to Firefox`);
   }
-  const providersHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/providers.html'), 'utf8');
-  assert.ok(settingsPanelHtml(providersHtml, 'vision').includes('id="webgpu-vision-choice"'), 'the in-browser vision choice sits on the Vision tab');
+  const providersHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.html'), 'utf8');
+  assert.ok(settingsPanelHtml(providersHtml, 'vision').includes('id="webgpu-vision-choice"'), 'the in-browser vision choice sits in the Vision section');
   const choice = providersHtml.slice(providersHtml.indexOf('id="webgpu-vision-choice"'), providersHtml.indexOf('</select>', providersHtml.indexOf('id="webgpu-vision-choice"')));
   assert.deepEqual([...choice.matchAll(/<option value="([^"]+)"/g)].map(match => match[1]), ['auto', 'compass-vld', 'bonsai', 'webbrain-vl', 'off']);
   const apocalypseHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/apocalypse-mode.html'), 'utf8');
@@ -71653,8 +72106,8 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
     'automatic screenshots must emit one readiness notice and continue without enrichment');
   assert.match(chromeAgent, /full_page_screenshot[\s\S]*?_recordVisionRouteTrace[\s\S]*?method: 'save_only'[\s\S]*?visionStatus[\s\S]*?_localVisionUnavailableResult/,
     'full-page screenshots must preserve save-only behavior while exposing unavailable vision');
-  assert.match(background, /case 'enable_webgpu_vision':[\s\S]*?providers\.html[\s\S]*?startExplicitVisionModelDownload/,
-    'only the dedicated Providers page may record first-time local-vision consent');
+  assert.match(background, /case 'enable_webgpu_vision':[\s\S]*?src\/ui\/settings\.html[\s\S]*?startExplicitVisionModelDownload/,
+    'only the Settings page, where the Vision section is, may record first-time local-vision consent');
   for (const [label, source] of [['chrome', chromeAgent], ['firefox', firefoxAgent]]) {
     assert.match(source, /VISION_SUB_CALL_TIMEOUT_MS = 90_000/,
       `${label}: dedicated vision timeout is missing`);
@@ -71822,8 +72275,8 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
       `aggregate model readiness is missing its ${state} state`);
   }
   assert.match(apocalypseScript, /get_webgpu_download_status/);
-  assert.match(apocalypseScript, /visionFallbackExplicitlyEnabled[\s\S]*?providers\.html#vision/,
-    'Apocalypse Mode must route first-time local-vision enablement to the Vision tab of the Providers page');
+  assert.match(apocalypseScript, /visionFallbackExplicitlyEnabled[\s\S]*?settings\.html#vision/,
+    'Apocalypse Mode must route first-time local-vision enablement to the Vision section of Settings');
   assert.match(apocalypseScript, /webgpu-text-download-state/);
   assert.match(settingsScript, /btn-webgpu-download/,
     'the Settings WebGPU card must offer its own download control so the chat error first path works');
@@ -71922,7 +72375,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.doesNotMatch(apocalypseDocs, /enabling Apocalypse Mode also enables[\s\S]{0,80}vision/i);
   assert.match(englishLocale, /Download it in Providers > WebGPU or Apocalypse Mode, then use the nuclear control in standalone chat[\s\S]*It does not replace your selected provider/);
 
-  const providersPage = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/providers.html'), 'utf8');
+  const providersPage = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.html'), 'utf8');
   const visionTab = providersPage.indexOf('data-panel="vision"');
   const visionCard = providersPage.indexOf('id="vision-card"', visionTab);
   const localToggle = providersPage.indexOf('id="btn-use-webgpu-vision"', visionCard);
@@ -77045,7 +77498,7 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
 
 test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
   const expectedIds = `
-    api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
+    api-route 302ai abacus abliteration aihubmix alibaba-coding-plan alibaba-coding-plan-cn
     atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
     cloudgpu
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
@@ -77061,7 +77514,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 87);
+  assert.equal(expectedIds.length, 88);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77076,8 +77529,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 121/120 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 122 : 121;
+    // deliberately omitted from the 122/121 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 123 : 122;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -85083,6 +85536,81 @@ function receivingFrameGateAgent(AgentClass, tabId, { frameUrls = [], choice = '
   return { agent, state };
 }
 
+// read_pdf fetches the document behind our own viewer page, so its card must
+// name that document's site, not the extension id in the viewer URL, and a
+// local file must not ride on the current page's grant.
+test('read_pdf permission is charged to the unwrapped document host in both builds', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  const inner = 'https://attacker.example/x.pdf?d=SECRET';
+  try {
+    for (const [label, AgentClass, apiName, scheme, extensionId, tabId] of [
+      ['chrome', AgentCh, 'chrome', 'chrome-extension', 'abcdefghijklmnopabcdefghijklmnop', 5131],
+      ['firefox', AgentFx, 'browser', 'moz-extension', '00000000-0000-4000-8000-000000000000', 5132],
+    ]) {
+      const viewer = `${scheme}://${extensionId}/src/ui/pdf-handler.html?url=${encodeURIComponent(inner)}&tabId=${tabId}`;
+      delete globalThis.chrome;
+      delete globalThis.browser;
+      globalThis[apiName] = {
+        runtime: {
+          id: extensionId,
+          getURL: urlPath => `${scheme}://${extensionId}/${urlPath}`,
+          getManifest: () => ({
+            mime_types_handler: { 'application/pdf': { handler_url: 'src/ui/pdf-handler.html' } },
+          }),
+        },
+      };
+      for (const { name, pageUrl, url, prompts, error } of [
+        { name: 'wrapped url from a site', pageUrl: 'https://news.example/article', url: viewer, prompts: ['attacker.example'] },
+        { name: 'wrapped url on the viewer tab', pageUrl: viewer, url: viewer, prompts: ['attacker.example'] },
+        { name: 'plain document url', pageUrl: 'https://news.example/article', url: 'https://papers.example/report.pdf', prompts: ['papers.example'] },
+        { name: 'local file from a site', pageUrl: 'https://news.example/article', url: 'file:///C:/Users/test/report.pdf', prompts: [], error: /file: url[\s\S]*without url/ },
+        { name: 'unsupported scheme', pageUrl: 'https://news.example/article', url: 'data:application/pdf;base64,JVBERi0=', prompts: [], error: /must use http:, https:, or file:/ },
+      ]) {
+        const agent = new AgentClass({ getVisionProvider: async () => null });
+        const executed = [];
+        const asked = [];
+        agent._ensureGateSetting = async () => false;
+        agent._skipPermissionGate = false;
+        agent._currentUrl = async () => pageUrl;
+        agent._recordProgressObservation = async () => null;
+        agent._autoRecordProgressAction = () => null;
+        agent._progressWarningForAction = () => '';
+        agent._persist = () => { };
+        agent._detectLikelySubmitAction = async () => null;
+        agent.permissions.hydrate = async () => { };
+        // The current site and the extension id already hold "always" grants.
+        agent.permissions.check = host => host === 'news.example' || host === extensionId
+          ? { allowed: true, needsPrompt: false }
+          : { allowed: false, needsPrompt: true };
+        agent.permissions.record = async () => { };
+        agent._promptPermission = async (_tabId, capability, host) => {
+          asked.push({ capability, host });
+          return 'deny';
+        };
+        agent.executeTool = async (_tabId, toolName) => {
+          executed.push(toolName);
+          return { success: true };
+        };
+        const messages = [];
+        await agent._executeToolBatch(tabId, [{ id: `pdf_${tabId}`, function: { name: 'read_pdf', arguments: JSON.stringify({ url }) } }],
+          messages, () => { }, { supportsVision: false }, '', new Set(['read_pdf']), 1);
+        assert.deepEqual(asked, prompts.map(host => ({ capability: Capability.NETWORK, host })), `${label}: ${name}: wrong permission host`);
+        assert.deepEqual(executed, [], `${label}: ${name}: read_pdf ran without the document host's permission`);
+        const result = JSON.parse(messages[0].content);
+        assert.equal(result.denied, true, `${label}: ${name}`);
+        if (error) assert.match(result.error, error, `${label}: ${name}`);
+        else assert.match(result.error, new RegExp(`denied permission to .* ${prompts[0].replace(/\./g, '\\.')}`), `${label}: ${name}`);
+      }
+    }
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = previousBrowser;
+  }
+});
+
 const RECEIVING_FRAME_CALLS = [
   ['click', { x: 120, y: 80, coordinate_space: 'css' }, 'click'],
   ['type_text', { text: '4242 4242 4242 4242' }, 'type'],
@@ -86492,7 +87020,9 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
     assert.equal(duplicate.previousClickUrl, 'https://example.test/products');
     assert.equal(duplicate.currentUrl, 'https://example.test/products');
     assert.equal(duplicate.secondsSincePrevious, 10);
-    assert.match(duplicate.error, /pass _allowResubmit: true/i);
+    assert.match(duplicate.error, /needs the user's answer on WebBrain's card/);
+    assert.doesNotMatch(duplicate.error, /pass _allowResubmit/i);
+    assert.equal(duplicate.previousClickAt, 100_000);
 
     currentUrl = 'https://example.test/products/new';
     assert.equal(
@@ -86530,19 +87060,20 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
       await guardModule.guardRecentSubmitClick(
         recentClicks,
         tabId,
-        { text: 'Save changes', _allowResubmit: true },
+        { text: 'Save changes' },
         getCurrentUrl,
         () => now,
         null,
         captionReading,
+        { approved: true },
       ),
       null,
-      'explicit resubmit acknowledgement should bypass the guard',
+      'a repeat the user approved on the card should pass the guard',
     );
     assert.equal(
       recentClicks.get(tabId)[0].ts,
       now,
-      'an acknowledged resubmit should re-record the entry',
+      'an approved repeat should re-record the entry',
     );
 
     now += 30_000;
@@ -86558,7 +87089,7 @@ test('duplicate submit-click guard is production code with Chrome/Firefox parity
     assert.equal(
       thirdRapidClick.blockedDuplicateSubmit,
       true,
-      'a rapid duplicate after an acknowledged resubmit should be blocked by the re-armed window',
+      'a rapid duplicate after an approved repeat should be blocked by the re-armed window',
     );
     assert.equal(thirdRapidClick.secondsSincePrevious, 30);
 
@@ -115347,6 +115878,38 @@ test('requiredHosts: download_files gates EVERY distinct host in urls[]', () => 
   assert.deepEqual(requiredHosts(Capability.CLICK, {}, top, 'iframe_click'), []);
 });
 
+test('requiredHosts: read_pdf names only the http(s) document it fetches, never the page or the viewer', () => {
+  for (const [label, Cap, reqHosts, classify] of [
+    ['firefox', Capability, requiredHosts, capabilityFor],
+    ['chrome', CapabilityCh, requiredHostsCh, capabilityForCh],
+  ]) {
+    const page = 'https://news.example/article';
+    const inner = encodeURIComponent('https://attacker.example/x.pdf?d=SECRET');
+    for (const [url, expected] of [
+      ['https://papers.example/report.pdf', ['papers.example']],
+      ['https://www.papers.example/report.pdf', ['papers.example']],
+      ['  http://papers.example/report.pdf  ', ['papers.example']],
+      // A local file has no site; it must not be charged to the page's grant.
+      ['file:///C:/Users/test/report.pdf', []],
+      ['file://fileserver/share/report.pdf', []],
+      // agent.js unwraps our own viewer first. A viewer URL reaching the gate
+      // must not be charged to the extension id the card would show.
+      [`chrome-extension://abcdefghijklmnopabcdefghijklmnop/src/ui/pdf-handler.html?url=${inner}`, []],
+      [`moz-extension://00000000-0000-4000-8000-000000000000/src/ui/pdf-handler.html?url=${inner}`, []],
+      // read_pdf never resolves against the page, so neither does its gate.
+      ['/files/report.pdf', []],
+      ['//papers.example/report.pdf', []],
+      ['not a url', []],
+    ]) {
+      assert.deepEqual(reqHosts(Cap.NETWORK, { url }, page, 'read_pdf'), expected, `${label}: read_pdf ${url}`);
+    }
+    // fetch_url keeps resolving against the page.
+    assert.deepEqual(reqHosts(Cap.NETWORK, { url: '/api/data' }, page, 'fetch_url'), ['news.example'], `${label}: fetch_url`);
+    // A blank url reads the active tab, as the handler does after trimming.
+    assert.equal(classify('read_pdf', { url: '   ' }), null, `${label}: blank url is the active-tab read`);
+  }
+});
+
 test('hydrateFrom replaces always-grants but keeps once-grants (live revoke)', async () => {
   const pm = new PermissionManager();
   await pm.record('a.com', Capability.CLICK, 'allow', 'always');
@@ -121528,12 +122091,17 @@ test('page Stop WebBrain clears stale indicators without stopping recordings', (
     const indicator = fs.readFileSync(path.join(ROOT, prefix, 'src/content/agent-visual-indicator.js'), 'utf8');
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
 
-    const clickStart = indicator.indexOf("button.addEventListener('click', async () => {");
+    const clickStart = indicator.indexOf("button.addEventListener('click', async (event) => {");
     const clickEnd = indicator.indexOf('\n    });', clickStart);
     assert.notEqual(clickStart, -1, `${label}: page Stop handler missing`);
     assert.notEqual(clickEnd, -1, `${label}: page Stop handler boundary missing`);
     const clickBody = indicator.slice(clickStart, clickEnd);
     const localHideIdx = clickBody.indexOf('hide();');
+    // A page script's click() or dispatched click is not a person's: it
+    // neither hides the indicator nor stops the run.
+    const trustedIdx = clickBody.indexOf('if (!event.isTrusted) return;');
+    assert.notEqual(trustedIdx, -1, `${label}: page Stop must ignore untrusted clicks`);
+    assert.equal(trustedIdx < localHideIdx, true, `${label}: an untrusted click must return before hiding the indicator`);
     const abortMessageIdx = clickBody.indexOf(`${runtimeApi}.runtime.sendMessage({ type: 'WB_STOP_AGENT' })`);
     assert.notEqual(localHideIdx, -1, `${label}: page Stop should immediately hide its local indicator`);
     assert.notEqual(abortMessageIdx, -1, `${label}: page Stop should still request agent abort`);
@@ -127805,6 +128373,131 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     // Non-shopping page with no price cue must NOT get the action.
     const noPrice = build({ url: 'https://example.com/about', title: 'About us' });
     assert.ok(!noPrice.some((a) => a.id === 'compare-price'), 'no compare-price without a shopping/price signal');
+  });
+}
+
+// ── Recommended actions: GitHub pull-request context ────────────────────────
+// Generic "Explain this page" is not useful on a review surface. Offer review
+// and summary prompts scoped to the exact repository and pull request instead.
+for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox', buildRecommendedActionsFx]]) {
+  test(`recommended-actions (${label}): GitHub pull requests surface review actions`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pull/3210/files',
+      title: 'feat: improve onboarding by webbrain-one · Pull Request #3210 · webbrain-one/webbrain',
+    };
+    const actions = build(pageInfo);
+    const byId = new Map(actions.map((action) => [action.id, action]));
+
+    const review = byId.get('review-pull-request');
+    assert.ok(review, 'Review this pull request should be offered');
+    assert.equal(review.label, 'Review this pull request');
+    assert.equal(review.mode, 'ask');
+    assert.match(review.prompt, /webbrain-one\/webbrain#3210/);
+    assert.match(review.prompt, /Do not post the review.*or modify the pull request/);
+
+    const summary = byId.get('summarize-pull-request');
+    assert.ok(summary, 'Summarize this pull request should be offered');
+    assert.equal(summary.label, 'Summarize this pull request');
+    assert.equal(summary.mode, 'ask');
+    assert.match(summary.prompt, /webbrain-one\/webbrain#3210/);
+    assert.ok(!actions.some((action) => action.id === 'explain-page'), 'generic page explanation should not displace PR review');
+  });
+
+  test(`recommended-actions (${label}): GitHub pull-request list surfaces recent activity`, () => {
+    const pageInfo = {
+      url: 'https://github.com/webbrain-one/webbrain/pulls?q=is%3Aopen',
+      title: 'Pull requests · webbrain-one/webbrain',
+    };
+    const action = build(pageInfo).find((candidate) => candidate.id === 'summarize-recent-pr-activity');
+    assert.ok(action, 'Summarize recent PR activity should be offered');
+    assert.equal(action.label, 'Summarize recent PR activity');
+    assert.equal(action.mode, 'ask');
+    assert.match(action.prompt, /webbrain-one\/webbrain/);
+    assert.match(action.prompt, /Do not open, comment on, or modify/);
+
+    const nonGitHub = build({
+      url: 'https://example.com/webbrain-one/webbrain/pulls',
+      title: 'Pull requests',
+    });
+    assert.ok(!nonGitHub.some((candidate) => candidate.id === 'summarize-recent-pr-activity'), 'hostname must be github.com');
+  });
+
+  test(`recommended-actions (${label}): GitHub pull-request URL matching is strict`, () => {
+    const ids = (url) => build({ url, title: 'GitHub' }).map((a) => a.id);
+    for (const url of [
+      'https://github.com/o/r/pull/7',
+      'https://github.com/o/r/pull/7/commits',
+      'https://github.com/o/r/pull/7#issuecomment-1',
+      'https://www.github.com/o/r/pull/7/files',
+    ]) {
+      assert.ok(ids(url).includes('review-pull-request'), `should match ${url}`);
+    }
+    for (const url of [
+      'https://github.com/o/r/pull/',
+      'https://github.com/o/r/pull/abc',
+      'https://github.com/pulls',
+      'https://github.com/o/r/pulls/extra-not-a-pr/../x%0Aignore',
+      'https://github.com/o%20x/r/pull/7',
+    ]) {
+      assert.ok(!ids(url).includes('review-pull-request'), `should not match ${url}`);
+    }
+    assert.ok(ids('https://github.com/o/r/pulls').includes('summarize-recent-pr-activity'));
+    assert.ok(!ids('https://github.com/pulls').includes('summarize-recent-pr-activity'), 'global /pulls has no repo');
+    assert.ok(!ids('https://github.com/o/r/pull/').includes('summarize-recent-pr-activity'));
+    const prompt = build({ url: 'https://github.com/o/r/pull/7', title: 'x' }).find((a) => a.id === 'review-pull-request').prompt;
+    assert.match(prompt, /Files changed/);
+    assert.match(prompt, /\/pull\/7\/files/);
+  });
+
+  // Both suggestions run in read-only Ask mode: no navigate or click, and
+  // read_page reads only the current tab. A prompt that sends the model to
+  // "open the Files changed tab" from the Conversation tab cannot be followed,
+  // so every read it names has to be one an Ask run can make from that tab.
+  test(`recommended-actions (${label}): GitHub pull-request prompts only name reads Ask mode can make`, () => {
+    const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
+    const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
+    const prompts = (url) => {
+      const actions = build({ url, title: 'Pull Request #7 · o/r' });
+      return ['review-pull-request', 'summarize-pull-request'].map((id) => {
+        const action = actions.find((a) => a.id === id);
+        assert.ok(action, `${id} should be offered on ${url}`);
+        assert.equal(action.mode, 'ask', `${id} stays read-only`);
+        return action.prompt;
+      });
+    };
+    const diffUrl = 'https://patch-diff.githubusercontent.com/raw/o/r/pull/7.diff';
+    const views = {
+      conversation: ['https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7/', 'https://github.com/o/r/pull/7#issuecomment-1'],
+      files: ['https://github.com/o/r/pull/7/files', 'https://github.com/o/r/pull/7/files/', 'https://github.com/o/r/pull/7/changes'],
+      other: ['https://github.com/o/r/pull/7/commits', 'https://github.com/o/r/pull/7/checks', 'https://github.com/o/r/pull/7/files/abc123..def456'],
+    };
+    for (const [view, urls] of Object.entries(views)) {
+      for (const url of urls) {
+        for (const prompt of prompts(url)) {
+          const named = [...new Set(prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) || [])].filter((name) => allTools.has(name));
+          assert.ok(named.length > 0, `${url}: prompt names its read tools`);
+          for (const name of named) assert.ok(askTools.has(name), `${url}: ${name} is not available in Ask mode`);
+          assert.doesNotMatch(prompt, /\bopen the Files changed tab \(|\bnavigate to\b/i, `${url}: Ask mode cannot open another tab`);
+          assert.match(prompt, /read-only Ask run: you cannot navigate or click/);
+          // github.com/<o>/<r>/pull/<n>.diff answers with a redirect, which
+          // fetch_url never follows.
+          assert.doesNotMatch(prompt, /https:\/\/github\.com\/\S*\.diff/, `${url}: the github.com .diff URL redirects`);
+          if (view === 'files') {
+            assert.match(prompt, /read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true/);
+            assert.ok(!prompt.includes(diffUrl), `${url}: the diff is already on this tab`);
+          } else {
+            assert.ok(prompt.includes(`fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true`), `${url}: diff comes from fetch_url`);
+            assert.ok(prompt.includes('research_url on https://github.com/o/r/pull/7/files'), `${url}: private repositories fall back to research_url`);
+            assert.doesNotMatch(prompt, /continuationArgs/, `${url}: read_page cannot page a diff this tab does not show`);
+          }
+          if (view === 'conversation') {
+            assert.match(prompt, /Use read_page on this tab to read the description, conversation, and status checks\./);
+          } else {
+            assert.ok(prompt.includes('fetch_url on https://github.com/o/r/pull/7, continuing with offset set to nextOffset'), `${url}: the conversation is fetched, not read from this tab`);
+          }
+        }
+      }
+    }
   });
 }
 
@@ -135918,9 +136611,9 @@ test('generate_image tool exists in both builds, full tier only, and settings UI
     assert.ok(!tools.COMPACT_TOOL_NAMES.has('generate_image') && !tools.MID_TOOL_NAMES.has('generate_image'),
       `${build}: generate_image should stay a full-tier tool`);
 
-    const generativeTab = settingsPanelHtml(fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/providers.html`), 'utf8'), 'generative');
+    const generativeTab = settingsPanelHtml(fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/settings.html`), 'utf8'), 'generative');
     for (const id of ['image-gen-api-key', 'image-gen-model', 'btn-save-image-gen', 'btn-test-image-gen', 'btn-clear-image-gen', 'test-image-gen']) {
-      assert.ok(generativeTab.includes(`id="${id}"`), `${build}: the Generative tab of providers.html should contain #${id}`);
+      assert.ok(generativeTab.includes(`id="${id}"`), `${build}: the Generative section of settings.html should contain #${id}`);
     }
 
     const settingsJs = fs.readFileSync(path.join(ROOT, `src/${build}/src/ui/settings.js`), 'utf8');

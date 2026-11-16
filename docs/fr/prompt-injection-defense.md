@@ -37,7 +37,7 @@ synchronisées — la suite de tests affirme que les modules purs sont octet-ide
    l'humain est l'ancre de confiance.
    - Code : `permission-gate.js` (`capabilityFor`, `requiredHosts`,
      `PermissionManager`) ; la boucle de passerelle dans `agent.js _executeToolBatch`.
-   - Contrôle utilisateur : Paramètres → Permissions (réviser/révoquer les autorisations + l'interrupteur
+   - Contrôle utilisateur : Paramètres → Autorisations et confidentialité (réviser/révoquer les autorisations + l'interrupteur
      principal "Demander avant les actions conséquentes").
 4. **Assainisseur de sortie (Couche 4).** La sortie du modèle est échappée HTML et seul
    le markdown `[label](url)` devient un lien autorisé (http/https/mailto) — pas
@@ -118,7 +118,7 @@ Points d'ingestion connus non-outils (maintenez cette liste à jour) :
 - l'insertion du résultat d'outil `done` (cas spécial avant l'encapsulation normale).
 
 ### N'affaiblissez pas la limite pour les "sites de confiance"
-L'interrupteur principal (Paramètres → Permissions) désactive **uniquement la Couche 3** (les
+L'interrupteur principal (Paramètres → Autorisations et confidentialité) désactive **uniquement la Couche 3** (les
 prompts). Les couches 1, 2 et 4 restent toujours actives — elles ne coûtent rien et sont ce qui
 protège l'utilisateur sur les sites de confiance où le contenu injecté vit réellement
 (un domaine réputé est *anti-corrélé* avec un contenu sûr). Ne bloquez jamais les couches
@@ -137,7 +137,7 @@ protège l'utilisateur sur les sites de confiance où le contenu injecté vit r�
     le stockage d'autorisations / `hydrateFrom`, la suppression d'évasion d'encapsulation de contenu.
   - la vérification de parité / de limites des prompts du planificateur dans `test/security/injection-corpus.mjs`.
 - `test/manual-permissions.md` — la checklist dans le navigateur (la carte de permission
-  à 3 options et l'onglet Paramètres → Permissions) que la suite unitaire ne peut pas
+  à 3 options et la section Paramètres → Autorisations et confidentialité) que la suite unitaire ne peut pas
   couvrir.
 
 **La garde vérifie que les outils sont *listés*, pas qu'ils sont listés

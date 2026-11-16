@@ -9,13 +9,8 @@ const isMac = process.platform === 'darwin';
 
 function createCommands(ctx) {
   const tabOf = (w) => w?.activeTab || null;
-  const reload = (w, hard = false) => {
-    const tab = tabOf(w);
-    if (!tab) return;
-    if (tab.errorFor) tab.load(tab.errorFor);
-    else if (hard) tab.wc.reloadIgnoringCache();
-    else tab.wc.reload();
-  };
+  // Tab.reload tries a failed address again instead of reloading murshid://error.
+  const reload = (w, hard = false) => tabOf(w)?.reload(hard);
   const zoom = (w, delta) => {
     const tab = tabOf(w);
     if (!tab) return;

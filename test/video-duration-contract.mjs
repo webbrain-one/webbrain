@@ -10,7 +10,7 @@ let nextTab = 7200;
 for (const build of ['chrome', 'firefox']) {
   const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
   const { normalizeVideoDurationContract: normalize, pinVideoDurationTarget: pin,
-    recordVideoDurationResult: receipt, videoDurationCompletionBlock: block } = await import(`../src/${build}/src/agent/video-duration-contract.js`);
+    recordVideoDurationResult: receipt, videoDurationCompletionBlock: block, videoDurationTolerance: tolerance } = await import(`../src/${build}/src/agent/video-duration-contract.js`);
   const target = () => ({ requestedSeconds: 60, status: 'pending' });
   const delivered = seconds => ({ success: true, url: 'https://media.example/video.mp4', mimeType: 'video/mp4', durationSeconds: seconds });
   function fixture() {
@@ -51,6 +51,23 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(block(receipt(target(), delivered(5)), 'failed'), null);
     assert.ok(block(normalize({ requestedSeconds: 60, status: 'enough' })));
     assert.equal(normalize({ requestedSeconds: Infinity }), null);
+  });
+
+  test(`${build}: a video made of clips may be a frame short for each clip`, () => {
+    assert.deepEqual([undefined, 1, 2, 8, 24, 1000, -3, 2.5].map(count => Math.round(tolerance(count) * 100) / 100),
+      [0.25, 0.25, 0.35, 0.95, 2.55, 2.55, 0.25, 0.25]);
+    // One clip keeps the quarter second it had.
+    assert.equal(block(receipt(target(), delivered(59.8))), null);
+    assert.equal(block(receipt(target(), delivered(59.7))).durationStatus, 'short');
+    // Eight clips of 7.4 s for a minute: 59.2 s is enough, 59 s is not.
+    const joined = receipt(target(), { ...delivered(59.2), clipCount: 8 });
+    assert.deepEqual([joined.status, joined.clipCount, block(joined)], ['enough', 8, null]);
+    assert.equal(normalize(structuredClone(joined)).status, 'enough', 'a restored receipt keeps its clip count');
+    assert.equal(normalize({ ...joined, clipCount: undefined }).status, 'short', 'the tolerance is the measured video\'s own');
+    assert.equal(block(receipt(target(), { ...delivered(59), clipCount: 8 })).durationStatus, 'short');
+    // A later result of the same video is judged by its own clips.
+    assert.equal(receipt(receipt(target(), { ...delivered(50), clipCount: 8 }), delivered(59.2)).clipCount, undefined);
+    assert.equal(receipt(receipt(target(), { ...delivered(50), clipCount: 8 }), delivered(59.2)).status, 'short');
   });
 
   test(`${build}: only an approved shorter runtime result changes the effective target`, () => {

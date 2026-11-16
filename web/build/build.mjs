@@ -21,6 +21,7 @@
  *   {{page_url}}         canonical URL of the page being rendered
  *   {{browser_path}}     the browser extension's page: the localized homepage
  *                        ("/" or "/es/"); /browser/ redirects there
+ *   {{companion_path}}   the Companion page: "/companion/" or "/companion/es/"
  *   {{websites_path}}    "/websites/"
  *   <!-- if websites -->…<!-- else websites -->…<!-- end websites -->
  *                        kept or dropped by WEBSITES_LAUNCHED (site-footer.mjs)
@@ -647,6 +648,7 @@ function applyTemplate(template, dict, locale, page = 'home') {
     .replace(/\{\{locale_home_url\}\}/g, canonical)
     .replace(/\{\{page_url\}\}/g, pageUrlFor(page, locale))
     .replace(/\{\{browser_path\}\}/g, browserPathFor(locale))
+    .replace(/\{\{companion_path\}\}/g, companionPathFor(locale))
     .replace(/\{\{websites_path\}\}/g, WEBSITES_PATH)
     .replace(/\{\{sites_dashboard_url\}\}/g, SITES_DASHBOARD_URL)
     .replace(/\{\{sites_demo_site_id\}\}/g, SITES_DEMO_SITE_ID)

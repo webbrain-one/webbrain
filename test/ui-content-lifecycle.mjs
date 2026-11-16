@@ -18,6 +18,12 @@ function extract(source, name, indent = '') {
   assert.ok(end > start);
   return source.slice(start, end + indent.length + 2);
 }
+// A private content-script constant, single- or multi-line, exactly as written.
+function extractConst(source, name, indent = '  ') {
+  const declaration = source.match(new RegExp(`^${indent}const ${name} = [\\s\\S]*?;$`, 'm'))?.[0];
+  assert.ok(declaration, `production constant ${name} exists`);
+  return declaration;
+}
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 let checked = 0;
 function panelHarness(build) {
@@ -217,11 +223,17 @@ if (process.argv.includes('--dom')) for (const [engineName, engine] of Object.en
       assert.ok(caretReceipts, 'Use the real private production native-chat caret state');
       const settleDelay = source.match(/^  const SET_FIELD_VERIFY_DELAY_MS = \d+;$/m)?.[0];
       assert.ok(settleDelay, 'Use the production page-handler render delay');
-      const functions = [ownInputScope, caretReceipts, settleDelay].join('\n') + '\n' + [
+      // _typeTextInner also prepares focus through the page monitor, refuses a
+      // truncated preview of the field's own value, and routes native date
+      // inputs; use the real helpers and the constants they read.
+      const constants = ['TRUNCATED_PREVIEW_MIN_PREFIX', 'TRUNCATED_PREVIEW_MIN_HIDDEN', 'TRUNCATED_PREVIEW_MARKERS', '_NATIVE_DATE_INPUT_FORMATS']
+        .map(name => extractConst(source, name));
+      const functions = [ownInputScope, caretReceipts, settleDelay, ...constants].join('\n') + '\n' + [
         'readProseMirrorText', 'readCodeMirrorText', 'readEmptyCaretText', 'isDraftJsEditor', 'isModelManagedEditor', 'readDraftJsText',
         '_nativeChatCaretContext', '_sameNativeChatCaretContext', '_singleEditableCaretBreak',
         '_rememberNativeChatEmptyCaret', '_nativeChatCaretValueIsEmpty', '_editableTextValue',
-        '_insertContentEditableText', '_typeTextInner',
+        '_insertContentEditableText', '_withTypingPreparation', '_nativeDateInputType',
+        '_truncatedPreviewReplacement', '_truncatedPreviewValueFailure', '_truncatedPreviewReplacementFailure', '_typeTextInner',
         ...(build === 'firefox' ? ['_isTypeableElement', '_isDisabledEditable', '_isTextTypeableInput'] : []),
       ].map(name => extract(source, name, '  ')).join('\n');
       const setup = async (html, behavior = '', paragraphEditor = false) => {

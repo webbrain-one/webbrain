@@ -67,7 +67,7 @@ for (const build of ['chrome', 'firefox']) {
     return { calls, controller, setHost: fn => { implementation = fn; },
       set(value) { settings = config.normalizeSettings(value); onChange({ [config.SETTINGS_KEY]: { newValue: settings } }, 'local'); } };
   }
-  const settingsSender = { id: 'wb', url: 'chrome-extension://wb/src/ui/providers.html#safesocial', tab: { id: 2 }, frameId: 0 };
+  const settingsSender = { id: 'wb', url: 'chrome-extension://wb/src/ui/settings.html#safesocial', tab: { id: 2 }, frameId: 0 };
   const contentSender = { id: 'wb', url: 'https://www.instagram.com/', tab: { id: 1 }, frameId: 0 };
   const classify = { command: 'classify', url: 'https://scontent.cdninstagram.com/image.jpg' };
   test(`${build}: disabled and unauthorized callers never start inference or download`, async () => {

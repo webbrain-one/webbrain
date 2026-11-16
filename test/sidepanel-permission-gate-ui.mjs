@@ -262,7 +262,7 @@ for (const [build, engine, api] of [['chrome', chromium, 'chrome'], ['firefox', 
         await page.click('#btn-permission-gate-settings');
         await page.waitForFunction(() => window.__log.opened.length === 1);
         const s = await state();
-        assert.deepEqual(s.log.opened, ['ext://webbrain/src/ui/permissions.html']);
+        assert.deepEqual(s.log.opened, ['ext://webbrain/src/ui/settings.html#permissions']);
         assert.equal(s.open, false);
       }, { width: 360 });
     });

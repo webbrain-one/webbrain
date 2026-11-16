@@ -1,0 +1,54 @@
+{
+  "models": [
+    {
+      "name": "ternary-bonsai-2-27b",
+      "model": "ternary-bonsai-2-27b",
+      "modified_at": "",
+      "size": "",
+      "digest": "",
+      "type": "model",
+      "description": "",
+      "tags": [
+        ""
+      ],
+      "capabilities": [
+        "completion",
+        "multimodal"
+      ],
+      "parameters": "",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "",
+        "families": [
+          ""
+        ],
+        "parameter_size": "",
+        "quantization_level": ""
+      }
+    }
+  ],
+  "object": "list",
+  "data": [
+    {
+      "id": "ternary-bonsai-2-27b",
+      "aliases": [
+        "ternary-bonsai-2-27b"
+      ],
+      "tags": [],
+      "object": "model",
+      "created": 1794712821,
+      "owned_by": "llamacpp",
+      "meta": {
+        "vocab_type": true,
+        "n_vocab": 248320,
+        "n_ctx": 32768,
+        "n_ctx_train": 262144,
+        "n_embd": 5120,
+        "n_params": 26895998464,
+        "size": 5935527936,
+        "ftype": "PTQ1_0 - 1.75 bpw ternary (group 128)"
+      }
+    }
+  ]
+}

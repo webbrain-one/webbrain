@@ -89,7 +89,17 @@ async function batchAgent(build, { mode = 'ask', task = 'Summarize this page.', 
   // was shown it.
   const observe = page => agent._notePageObservationCoverage(tab, PAGE, page);
   const lastDone = updates => updates.filter(update => update.type === 'tool_result' && update.data.name === 'done').at(-1)?.data.result;
-  return { agent, tab, batch, observe, questions, lastDone, Agent };
+  // A steering correction, applied at the run's next boundary the way the
+  // Ask loop applies it (_steeringBoundaryOutcome).
+  const steer = async text => {
+    if (!agent._steeringRuns.has(tab)) agent._beginSteeringRun(tab, () => {}, { detachedRequestId: `steer-${tab}` });
+    const run = agent._steeringRuns.get(tab);
+    const id = `correction-${run.acceptedIds.size + 1}`;
+    run.acceptedIds.add(id);
+    run.messages.push({ id, text });
+    return agent._revalidatePendingSteering(tab, agent.conversations.get(tab), () => {}, mode, null, null, {});
+  };
+  return { agent, tab, batch, observe, steer, questions, lastDone, Agent };
 }
 
 for (const build of ['chrome', 'firefox']) {
@@ -256,6 +266,102 @@ for (const build of ['chrome', 'firefox']) {
     const done = await h.batch([['done', { summary: SUMMARY, outcome: 'success' }]]);
     assert.doesNotMatch(String(done.results[0]), /WHOLE PAGE NOT READ/);
     assert.equal(h.questions.length, 0);
+  });
+
+  // ── Steering corrections in Ask mode ───────────────────────────────────
+  // A correction replaces the request the page's coverage was decided for:
+  // the revised task (the request and its corrections, in order) is read
+  // again, and the coverage check may send one answer back under it.
+  const BYLINE = 'The article was written by A. Author.';
+  const NARROWED = 'Never mind, just tell me who wrote it.';
+  const revisedTask = (request, ...corrections) => `User task revised by steering: ${JSON.stringify({ request,
+    updates: corrections.map(text => ({ kind: 'steering', text })) })}`;
+  // How a model reads these fixtures' requests, the latest correction deciding.
+  const latestCorrectionScope = ({ request }) => (String(request).endsWith(`${JSON.stringify(NARROWED)}}]}`) ? 'part' : 'whole_page');
+
+  test(`${build}: a Summarize this page action steered to one part of the page is answered without a coverage note`, async () => {
+    const task = 'Summarize the page in 5-8 concise bullet points.';
+    const h = await batchAgent(build, { task, decide: latestCorrectionScope,
+      runOptions: { recommendedAction: { id: 'summarize-page', tool: 'read_page', args: { includeChrome: false } } } });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    assert.deepEqual(await h.steer(NARROWED), { changed: true });
+    const updates = [];
+    const done = await h.batch([['done', { summary: BYLINE }]], updates);
+    assert.equal(done.action, 'return', `${build}: the steered question is not judged as a whole-page summary`);
+    assert.equal(done.value, BYLINE, `${build}: no coverage caveat for a question about one part of the page`);
+    assert.notEqual(done.endStatus, 'partial');
+    assert.notEqual(h.lastDone(updates)?.outcome, 'partial');
+    assert.deepEqual(h.questions.map(question => [question.kind, question.request]), [['page_read_scope', revisedTask(task, NARROWED)]],
+      `${build}: the action's own scope gives way to a reading of the revised task`);
+  });
+
+  test(`${build}: a sent-back whole-page answer steered to one part of the page is accepted as it stands`, async () => {
+    const h = await batchAgent(build, { decide: latestCorrectionScope });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    const first = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.match(JSON.parse(first.results[0]).error, /^\[WHOLE PAGE NOT READ: /);
+    await h.steer(NARROWED);
+    const updates = [];
+    const done = await h.batch([['done', { summary: BYLINE }]], updates);
+    assert.equal(done.action, 'return');
+    assert.equal(done.value, BYLINE, `${build}: the earlier request's refusal leaves no caveat on the steered answer`);
+    assert.notEqual(done.endStatus, 'partial');
+    assert.notEqual(h.lastDone(updates)?.outcome, 'partial');
+    assert.deepEqual(h.questions.map(question => question.request), ['Summarize this page.', revisedTask('Summarize this page.', NARROWED)]);
+  });
+
+  test(`${build}: long revised tasks retain the latest scope correction`, async () => {
+    const task = `Who wrote this article? ${'context '.repeat(900)}`;
+    const widened = 'Actually, summarize the whole article instead.';
+    const h = await batchAgent(build, { task, decide: ({ request }) => request.includes(widened) ? 'whole_page' : 'part' });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    await h.steer(widened);
+    const sent = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(sent.action, 'continue');
+    assert.ok(h.questions[0].request.includes(widened));
+  });
+
+  test(`${build}: a correction that widens a question to the whole page sends the answer back`, async () => {
+    const task = 'Who wrote this article?';
+    const h = await batchAgent(build, { task, decide: ({ request }) => (request === task ? 'part' : 'whole_page') });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    assert.equal((await h.batch([['done', { summary: BYLINE }]])).value, BYLINE);
+    // The correction arrives with that answer and supersedes it.
+    const widened = 'Actually, summarize the whole article instead.';
+    await h.steer(widened);
+    const sent = await h.batch([['done', { summary: 'A summary of the opening sections.' }]]);
+    assert.equal(sent.action, 'continue', `${build}: a summary of the first screenful is not let through`);
+    assert.ok(JSON.parse(sent.results[0]).error.includes(`Call read_page(${WHOLE_PAGE_READ}) now`));
+    assert.deepEqual(h.questions.map(question => question.request), [task, revisedTask(task, widened)]);
+  });
+
+  test(`${build}: a correction that keeps the whole-page request is checked under it, and earlier reads still count`, async () => {
+    const restyled = 'Write it in Turkish.';
+    const h = await batchAgent(build, { decide: latestCorrectionScope });
+    h.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    assert.equal((await h.batch([['done', { summary: SUMMARY }]])).action, 'continue');
+    await h.steer(restyled);
+    // The revised task is still a summary of the whole page: its answer is
+    // sent back once under it, and the answer given again ends as partial.
+    const again = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(again.action, 'continue', `${build}: the revised request gets its own note`);
+    assert.match(JSON.parse(again.results[0]).error, /^\[WHOLE PAGE NOT READ: /);
+    assert.deepEqual(h.questions.map(question => question.request), ['Summarize this page.', revisedTask('Summarize this page.', restyled)]);
+    const accepted = await h.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(accepted.value, `${SUMMARY}\n\n${CAVEAT}${coverage.PAGE_COVERAGE_CAVEAT}`);
+    assert.equal(accepted.endStatus, 'partial');
+
+    // A page read to its end before the correction needs no second read.
+    const read = await batchAgent(build, { decide: latestCorrectionScope });
+    read.observe({ success: true, pageContent: TREE, truncated: false, hasMore: false });
+    for (let args = { includeChrome: false }; args;) {
+      const shown = JSON.parse(read.agent._unwrapUntrusted((await read.batch([['read_page', args]])).results[0]));
+      args = shown.hasMore ? shown.continuationArgs : null;
+    }
+    await read.steer(restyled);
+    const done = await read.batch([['done', { summary: SUMMARY }]]);
+    assert.equal(done.value, SUMMARY);
+    assert.equal(read.questions.length, 0, `${build}: nothing is unread, so nothing is asked`);
   });
 
   test(`${build}: calls after a sent-back answer are skipped with the page's own reason`, async () => {
@@ -514,6 +620,84 @@ for (const build of ['chrome', 'firefox']) {
       assert.equal(typeof observed, 'object', `${build}: the observation must stay JSON: ${String(observed).slice(-200)}`);
       assert.ok(observed.pageContent.endsWith(coverage.PAGE_CONTENT_TRUNCATED_MARKER), `${build}: the observation marks its cut`);
       assert.ok(observed.notice.includes(`call read_page(${WHOLE_PAGE_READ})`), observed.notice);
+    });
+  }
+
+  // The whole run with a correction sent from the panel's Steer while the
+  // model works on the sent-back summary: the steered question is answered
+  // as it stands.
+  for (const streaming of [false, true]) {
+    test(`${build} ${streaming ? 'stream' : 'chat'}: an Ask summary steered to one part of the page ends without the whole-page note`, async () => {
+      const tab = nextTab++;
+      const options = { detachedRequestId: `coverage-steer-${tab}`, askStreamingEnabled: false };
+      const scopeRequests = [];
+      let agent;
+      let calls = 0;
+      const done = summary => ({ toolCalls: [{ id: `answer-${calls}`, function: { name: 'done', arguments: JSON.stringify({ summary }) } }] });
+      // A failed check inside the model stub would read as a model error.
+      let failure = null;
+      const respond = messages => {
+        try { return script(messages); } catch (error) { failure ||= error; throw error; }
+      };
+      const script = messages => {
+        calls += 1;
+        const last = messages.at(-1);
+        if (calls === 1) return done('A summary of the opening sections.');
+        if (calls === 2) {
+          assert.match(agent._unwrapUntrusted(String(last.content)), /WHOLE PAGE NOT READ/);
+          assert.equal(agent.steerMessage(tab, NARROWED, { requestId: options.detachedRequestId, messageId: 'steer-1' }).accepted, true);
+          return done('A summary of the opening sections.');
+        }
+        assert.equal(last.role, 'user');
+        assert.ok(String(last.content).startsWith(NARROWED), `${build}: the model answers the correction`);
+        return done(BYLINE);
+      };
+      const chat = withFixedChoiceAnswers(async messages => respond(messages), {
+        page_read_scope: question => { scopeRequests.push(question.request); return latestCorrectionScope(question); },
+      });
+      const provider = { name: 'coverage test', model: 'test', promptTier: 'full', contextWindow: 32000, supportsTools: true,
+        supportsVision: false,
+        chat: async (messages, chatOptions) => (String(messages[0]?.content || '').startsWith('You classify whether one proposed terminal WebBrain Ask answer')
+          ? { content: '{"pageIndependent":false}' } : chat(messages, chatOptions)),
+        async *chatStream(messages) {
+          const response = await respond(messages);
+          if (response.toolCalls) yield { type: 'tool_call', content: response.toolCalls.map((call, index) => ({ ...call, index })) };
+          yield { type: 'done' };
+        } };
+      agent = new Agent({ getActive: () => provider, getProvider: () => provider, getVisionProvider: async () => null });
+      Object.assign(agent, {
+        _hydrate: async () => {}, _persist: () => {}, _persistNow: async () => ({ ok: true }), _persistSubmittedTurn: async () => {},
+        _startTraceRun: async () => null, _endTraceRun: async () => {},
+        _manageContext: async () => {}, _checkCostAllowance: async () => null, _recordCostUsage: async () => null,
+        _currentUrl: async () => PAGE, _getTabUrlTitle: async () => ({ tabUrl: PAGE, tabTitle: 'Long article' }),
+        _maybeEmitAskModeHandoff: async () => {}, _maybeReinjectAdapter: async () => {}, _ensureProgressSessionForCurrentTask: async () => {},
+        _plannerMode: () => 'off',
+        _runPlannerIntentGate: async () => ({ proceed: true, requestKind: 'execute', requiresStateChange: false, requiresSubmission: false }),
+        _skipPermissionGate: true, _ensureGateSetting: async () => true, _shouldAutoScreenshot: () => false, _pageFeedbackIdleMs: 0,
+        _completionDoneBlock: () => null,
+      });
+      const begin = agent._beginPageFeedbackRun.bind(agent);
+      agent._beginPageFeedbackRun = async (tabId, ...rest) => {
+        await begin(tabId, ...rest);
+        const from = { tab: { id: tabId }, frameId: 0, documentId: 'article-document', url: PAGE };
+        const state = agent.pageMonitorState(from, 'article-token');
+        assert.equal(agent.observePageFeedback(from, { ...state, seq: 1, revision: 1, kind: 'dom', source: 'page', target: 'div' }).accepted, true);
+      };
+      agent.executeTool = async (_tab, name, args) => {
+        if (name === 'get_accessibility_tree') return { success: true, pageContent: TREE, truncated: false, hasMore: false };
+        assert.equal(name, 'done', `${build}: the steered question needs no further read`);
+        return { done: true, success: true, summary: args.summary };
+      };
+      const updates = [];
+      const update = (type, data) => updates.push({ type, data });
+      const result = streaming ? await agent.processMessageStream(tab, 'Summarize this page.', update, 'ask', options)
+        : await agent.processMessage(tab, 'Summarize this page.', update, 'ask', [], options);
+      if (failure) throw failure;
+      assert.equal(result, BYLINE, `${build}: the steered answer carries no note that only part of the page was read`);
+      assert.equal(updates.filter(entry => entry.type === 'steering_applied').length, 1);
+      assert.equal(updates.some(entry => entry.type === 'run_status' && entry.data.status === 'partial'), false,
+        `${build}: the steered answer does not end as partial`);
+      assert.deepEqual(scopeRequests, ['Summarize this page.', revisedTask('Summarize this page.', NARROWED)]);
     });
   }
 }

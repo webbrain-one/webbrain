@@ -16,7 +16,7 @@ WebBrain 的智能体在**用户已认证的浏览器会话内**运行：它可�
    - 代码：`tools.js` 中的 `SYSTEM_PROMPT_ASK`、`SYSTEM_PROMPT_ACT`、`SYSTEM_PROMPT_ACT_MID`、`SYSTEM_PROMPT_ACT_COMPACT` 和 `SYSTEM_PROMPT_DEV_APPENDIX`，以及 `planner.js` 中的 `PLANNER_SYSTEM_PROMPT`（用于行动前规划的循环前调用）。
 3. **能力 × 来源权限门（第 3 层）。** 在后果性工具运行之前，智能体检查 `(capability, host)` 授权，如果没有则提示用户（允许一次 / 始终允许 / 拒绝）。无文本检查，无 LLM — 人类是信任锚点。
    - 代码：`permission-gate.js`（`capabilityFor`、`requiredHosts`、`PermissionManager`）；`agent.js` 中的门循环 `_executeToolBatch`。
-   - 用户控制：权限页面（审查/撤销授权 + 主开关"在后果性操作前询问"）。
+   - 用户控制：设置 → 权限与隐私（审查/撤销授权 + 主开关"在后果性操作前询问"）。
 4. **输出清理器（第 4 层）。** 模型输出经过 HTML 转义，只有 `[label](url)` 格式的 markdown 会变成允许列表中的（http/https/mailto）链接 — 不自动加载图像，不将裸 URL 转换为链接。
    - 代码：`ui/markdown-link.js`。
 
@@ -67,7 +67,7 @@ messages.push({ role: 'user', content: `[…]\n${wrapped}` });
 - `done` 工具结果推送（在正常包装前特殊处理）。
 
 ### 不要为"可信站点"削弱边界
-主开关（权限页面）**仅禁用第 3 层**（提示）。第 1、2、4 层始终保持开启 — 它们不消耗任何成本，并且正是保护用户在真正存在注入内容的可信站点上安全的部分（知名域名与安全内容*负相关*）。绝不要将第 1/2/4 层置于某个设置开关之后。
+主开关（设置 → 权限与隐私）**仅禁用第 3 层**（提示）。第 1、2、4 层始终保持开启 — 它们不消耗任何成本，并且正是保护用户在真正存在注入内容的可信站点上安全的部分（知名域名与安全内容*负相关*）。绝不要将第 1/2/4 层置于某个设置开关之后。
 
 ---
 
@@ -77,7 +77,7 @@ messages.push({ role: 'user', content: `[…]\n${wrapped}` });
   - **穷举守卫**：来自 `getToolsForMode('act')` 和 `getToolsForMode('dev')` 的每个模型暴露的行动工具必须被门控（`capabilityFor`）、不可信读取（`UNTRUSTED_CONTENT_TOOLS`）或在 `KNOWN_SAFE_TOOLS` 允许列表中（定义于 `test/run.js`）— 否则 CI 失败。
   - 能力映射、主机解析、`requiredHosts`、`frameHostMatches`、授权存储 / `hydrateFrom`、内容包装的越狱剥离。
   - `test/security/injection-corpus.mjs` 中的规划器提示对等性/边界检查。
-- `test/manual-permissions.md` — 浏览器内检查清单（3 选项权限卡片和权限页面），单元套件无法覆盖这些内容。
+- `test/manual-permissions.md` — 浏览器内检查清单（3 选项权限卡片和设置 → 权限与隐私），单元套件无法覆盖这些内容。
 
 **守卫检查工具是否被*列出*，而不是它们是否被*正确列出*。** 如果工具的结果携带页面派生字节，它属于 `UNTRUSTED_CONTENT_TOOLS`，即使它"只是一个状态工具"（参见 `done`）。如有疑问，请包装它 — 包装可信字段是无害的；留下未包装的页面派生字段则是一个漏洞。
 

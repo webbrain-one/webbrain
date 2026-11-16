@@ -13,7 +13,7 @@ const server = createServer(async (req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const output = process.env.JEV_UI_OUTPUT || '/tmp/jev-ui-review'; await mkdir(output, { recursive: true });
-// Settings is split across settings.html, providers.html and permissions.html.
+// Settings is one page; providers.html and permissions.html forward into it.
 // JEV_DOC_SCREENSHOTS=<dir> refreshes the screenshots the docs use, from the
 // synthetic profile below (no real keys).
 async function captureDocScreenshots(browser, build, directory) {
@@ -33,15 +33,15 @@ async function captureDocScreenshots(browser, build, directory) {
     ['settings.html#memory', 'settings-memory'],
     ['settings.html#captcha', 'settings-captcha'],
     ['settings.html#advanced', 'settings-advanced'],
-    ['providers.html#llm', 'settings-providers'],
-    ['providers.html#vision', 'providers-vision'],
-    ['permissions.html', 'settings-permissions'],
+    ['settings.html#llm', 'settings-providers'],
+    ['settings.html#vision', 'providers-vision'],
+    ['settings.html#permissions', 'settings-permissions'],
   ]) {
     const page = await open(target);
     await page.screenshot({ animations: 'disabled', caret: 'hide', path: resolve(directory, `${name}.jpg`), type: 'jpeg', quality: 85 });
     await page.close();
   }
-  const page = await open('providers.html#decision');
+  const page = await open('settings.html#decision');
   await page.locator('#system-one-heading').scrollIntoViewIfNeeded();
   const clip = await page.evaluate(() => {
     const heading = document.querySelector('#system-one-heading').getBoundingClientRect();
@@ -94,10 +94,10 @@ try {
         const page = await browser.newPage({ viewport: { width, height: 1000 } });
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         await page.addInitScript(installStub, { lang, build, version });
-        await page.goto(`${origin}/src/${build}/src/ui/providers.html#decision`);
+        await page.goto(`${origin}/src/${build}/src/ui/settings.html#decision`);
         await page.waitForFunction(() => document.querySelector('#system-one-heading')?.textContent.trim() === (localStorage.getItem('wbLocale') === 'tr' ? 'Karar modelleri' : 'Decision models'));
         assert.equal(await page.locator('[data-tab="decision"]').textContent(), lang === 'tr' ? 'Karar' : 'Decision');
-        assert.equal(await page.locator('[data-panel="decision"]').isVisible(), true, 'providers.html#decision opens the Decision tab');
+        assert.equal(await page.locator('[data-panel="decision"]').isVisible(), true, 'settings.html#decision opens the Decision section');
         assert.equal(await page.locator('.tab-btn').evaluateAll(buttons => buttons.every(button => {
           const range = document.createRange();
           range.selectNodeContents(button);
@@ -106,10 +106,12 @@ try {
             && button.scrollWidth <= button.clientWidth + 1;
         })), true, 'every tab label fits on one line without clipping');
         await page.screenshot({ animations: 'disabled', path: `${output}/${build}-${lang}-${width}-tabs.png` });
-        assert.deepEqual(await page.locator('.tab-panel > .provider-card').evaluateAll(cards => cards.map(card => [card.closest('.tab-panel').dataset.panel, card.id])), [
+        const assistive = ['vision', 'speech', 'generative', 'decision', 'safesocial'];
+        assert.deepEqual(await page.locator('.tab-panel > [data-search-scope] > .provider-card').evaluateAll((cards, names) => cards
+          .map(card => [card.closest('.tab-panel').dataset.panel, card.id]).filter(([panel]) => names.includes(panel)), assistive), [
           ['vision', 'vision-card'], ['speech', 'transcription-card'], ['generative', 'image-gen-card'], ['decision', 'system-one-card'], ['safesocial', 'safesocial-card'],
-        ], 'each assistive model has its own Providers tab');
-        // Providers remembers its last tab across reloads.
+        ], 'each assistive model has its own section');
+        // Settings remembers its last section across reloads.
         await page.evaluate(() => history.replaceState(null, '', location.pathname));
         await page.locator('[data-tab="llm"]').click();
         await page.reload();

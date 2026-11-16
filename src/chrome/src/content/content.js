@@ -2292,6 +2292,11 @@
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
       return { success: false, dispatched: false, noDispatch: true, error: 'The point is outside the viewport.' };
     }
+    // WebBrain's own Stop button (agent-visual-indicator.js, top document
+    // only) is not in the screenshots the point was read from: it moves out
+    // of the way of the press and of a drag's end before anything is found
+    // at the point, so the input reaches the page there.
+    window.__webbrainAgentIndicator?.keepClear?.(type === 'drag' ? [{ x, y }, { x: Number(params.toX), y: Number(params.toY) }] : [{ x, y }]);
     const hit = _visionTargetAt(x, y);
     if (!hit) return { success: false, dispatched: false, noDispatch: true, error: 'Nothing is rendered at that point.' };
     if (hit.unmappable) {
@@ -7287,7 +7292,11 @@
     const actionTarget = dispatch.actionTarget || null;
     if (!composer?.isConnected || !tool || !actionTarget?.isConnected) return '';
     const identityKey = _messageRecipientIdentityKey(identities);
-    if (!identityKey || identityKey === '[]') return '';
+    // A binding without a recipient exists only for a send the user approved
+    // on WebBrain's card although the page names none (allowUnidentified).
+    // Its dispatch is still held to the composer, the draft and no recipient
+    // appearing in the meantime.
+    if (!identityKey || (identityKey === '[]' && dispatch.allowUnidentified !== true)) return '';
     const entropy = new Uint32Array(3);
     globalThis.crypto.getRandomValues(entropy);
     const token = `wbmr_${Date.now().toString(36)}_${Array.from(entropy, value => value.toString(36)).join('_')}`;
@@ -10254,10 +10263,12 @@
         && messageSend === true
         && (tool === 'upload_file' || !!messageBody)
         && (!twitterConversation || twitterBaselineComplete)
-        && (recipientSets
+        && ((recipientSets
           ? strongRecipients.length > 0
           : strongRecipients.length === 1)
+          || (params.allowUnidentifiedRecipient === true && strongRecipients.length === 0 && tool !== 'upload_file'))
         ? _rememberMessageRecipientDispatchBinding(composer, strongRecipients, {
+            allowUnidentified: params.allowUnidentifiedRecipient === true && strongRecipients.length === 0,
             tool,
             args,
             actionTarget: dispatchTarget,
@@ -11253,6 +11264,7 @@
           let previous = '';
           let method = '';
           let selectExpected = null;
+          let selectExpectedLabel = null;
           if (el.isContentEditable) {
             previous = _editableTextValue(el);
             if (!isModelManagedEditor(el) || (isDraftJsEditor(el) && /[\r\n]/.test(text))) {
@@ -11300,16 +11312,27 @@
                 return failure(`${unmatched.error} (select ref_id ${ref_id})`,
                   unmatched.ambiguous ? { ambiguous: true, candidates: unmatched.candidates } : {});
               }
+              // A person who picks the option already shown changes nothing
+              // and fires no input or change (as in typeText).
+              if (el.selectedIndex === match.index) {
+                return { success: true, verified: true, dispatched: false, noDispatch: true, noop: true,
+                  method: 'type_ax_select', ref_id, rect: typeRect, value: el.value,
+                  selectedText: String(match.textContent || '').replace(/\s+/g, ' ').trim(), fieldMeta, fallbackAttempted: false };
+              }
               if (actionDeadlineExpired()) return deadlineFailure();
               window.__wbPageMonitor?.beforeLocalDispatch();
               dispatched = true;
               const selSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
               if (selSetter) selSetter.call(el, match.value); else el.value = match.value;
+              // The value setter picks the first option with that value;
+              // among options that share it, choose the one the text named.
+              if (el.selectedIndex !== match.index) el.selectedIndex = match.index;
               if (actionDeadlineExpired()) return deadlineFailure();
               el.dispatchEvent(new Event('input', { bubbles: true }));
               if (actionDeadlineExpired()) return deadlineFailure();
               el.dispatchEvent(new Event('change', { bubbles: true }));
               selectExpected = match.value;
+              selectExpectedLabel = String(match.text || '').trim();
               method = 'type_ax_select';
             } else {
               if (actionDeadlineExpired()) return deadlineFailure();
@@ -11359,8 +11382,11 @@
               unverified: { reason: 'readback_unavailable', reader: 'none' }, readbackExact: false },
           );
           const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          // A select shows the named option only when both its value and its
+          // label match: options can share a value.
+          const shownOption = selectExpected !== null ? el.options[el.selectedIndex] : null;
           const verified = selectExpected !== null
-            ? actual === selectExpected
+            ? actual === selectExpected && !!shownOption && String(shownOption.text || '').trim() === selectExpectedLabel
             : _setFieldValueMatches(actual, previous, text, !!clear, el.isContentEditable, (readProseMirrorText(el) !== null || readCodeMirrorText(el) !== null || readDraftJsText(el) !== null || readEmptyCaretText(el) !== null));
           const fallbackAttempted = false;
           if (!verified) {
@@ -11376,6 +11402,7 @@
                 rect: typeRect,
                 verified: false,
                 actual: actual.slice(0, 200),
+                ...(selectExpected !== null ? { selectedText: String(shownOption?.text || '').trim().slice(0, 200) } : {}),
                 fieldMeta,
                 fallbackAttempted,
                 ...(selectExpected === null ? { _expectedValue: (clear ? '' : previous) + text } : {}),

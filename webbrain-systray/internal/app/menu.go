@@ -61,27 +61,49 @@ func percent(v float64) string {
 	return n + "%"
 }
 
-// Tightest picks the usage window with the least left. Windows that cover the
-// whole plan come first; scoped ones (one model, code review, extra usage)
-// count only when a plan reports nothing else, as Google's per-model quotas do.
-// The panel applies the same rule.
+// Tightest picks the summary row for one subscription. Windows that cover the
+// whole plan come first (taking the least left, since hitting either stops the
+// plan). When a plan only reports per-model or per-feature pools, as Google's
+// quotas do, each pool's bottleneck is its tightest window and Tightest picks
+// the healthiest pool so one exhausted model group does not make the whole plan
+// look empty. The panel applies the same rule.
 func Tightest(rows []quota.Row) *quota.Row {
-	for _, scoped := range []bool{false, true} {
-		var best *quota.Row
-		for i := range rows {
-			r := &rows[i]
-			if r.Remaining == nil || (r.Scope != "") != scoped {
-				continue
-			}
-			if best == nil || *r.Remaining < *best.Remaining {
-				best = r
-			}
+	var best *quota.Row
+	for i := range rows {
+		r := &rows[i]
+		if r.Remaining == nil || r.Scope != "" {
+			continue
 		}
-		if best != nil {
-			return best
+		if best == nil || *r.Remaining < *best.Remaining {
+			best = r
 		}
 	}
-	return nil
+	if best != nil {
+		return best
+	}
+
+	byScope := map[string]*quota.Row{}
+	var order []string
+	for i := range rows {
+		r := &rows[i]
+		if r.Remaining == nil {
+			continue
+		}
+		cur, ok := byScope[r.Scope]
+		if !ok {
+			order = append(order, r.Scope)
+			byScope[r.Scope] = r
+		} else if *r.Remaining < *cur.Remaining {
+			byScope[r.Scope] = r
+		}
+	}
+	for _, scope := range order {
+		cand := byScope[scope]
+		if best == nil || *cand.Remaining > *best.Remaining {
+			best = cand
+		}
+	}
+	return best
 }
 
 // sharedNames lists the provider names more than one login uses. Their lines
@@ -139,6 +161,25 @@ func planLine(acc accounts.Account, showWho bool) string {
 	return line
 }
 
+// usageLine keeps the provider's window and scope label together.
+func usageLine(row quota.Row) string {
+	label := row.Label
+	if label == "" {
+		label = row.Scope
+	}
+	line := "    " + label
+	if row.Remaining != nil {
+		line += "  " + bar(*row.Remaining) + "  " + percent(*row.Remaining)
+	}
+	if u := Until(row.ResetAt); u != "" {
+		line += " · " + u
+	}
+	if row.Detail != "" {
+		line += " · " + row.Detail
+	}
+	return line
+}
+
 // Menu renders the tray menu: status, the address, one line per subscription,
 // then the panel and Quit. Everything else lives in the panel.
 func (a *App) Menu(act MenuActions) []tray.Item {
@@ -158,6 +199,12 @@ func (a *App) Menu(act MenuActions) []tray.Item {
 	for _, acc := range s.Accounts {
 		view := "account:" + acc.Name
 		items = append(items, tray.Item{Title: planLine(acc, shared[acc.ProviderName]), Secondary: acc.Disabled, OnClick: func() { act.OpenPanel(view) }})
+		if s.ShowAllUsage && !acc.Disabled && acc.Quota.Status == "ok" {
+			for _, row := range acc.Quota.Rows {
+				line := usageLine(row)
+				items = append(items, tray.Item{Title: line, OnClick: func() { act.OpenPanel(view) }})
+			}
+		}
 	}
 	if len(s.Accounts) == 0 {
 		items = append(items, tray.Item{Title: i18n.T("add"), OnClick: func() { act.OpenPanel("add") }})

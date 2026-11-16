@@ -11,6 +11,17 @@ export const MEDIA_PROVIDERS = Object.freeze({
   comfyui: { label: 'ComfyUI (localhost)', baseUrl: 'http://127.0.0.1:8188', docs: 'https://docs.comfy.org/development/comfyui-server/comms_routes' },
 });
 
+// fal.ai charges less for a lower resolution, so videos default to 480p and
+// 720p is the opt-in. A saved value that is not one of these (an imported or
+// hand-edited setting) falls back to the default instead of disabling media.
+export const FAL_VIDEO_RESOLUTIONS = Object.freeze(['480p', '720p']);
+export const DEFAULT_FAL_VIDEO_RESOLUTION = '480p';
+
+export function falVideoResolution(config) {
+  const saved = String(config?.videoResolution || '').trim().toLowerCase();
+  return FAL_VIDEO_RESOLUTIONS.includes(saved) ? saved : DEFAULT_FAL_VIDEO_RESOLUTION;
+}
+
 // Every provider has an image model and a video model. The saved settings keep
 // the image model's fields under their original names (`model`, Comfy Router's
 // `parameters`, ComfyUI's `workflow`), so settings saved before there were two

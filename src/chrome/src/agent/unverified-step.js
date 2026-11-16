@@ -5,7 +5,11 @@
 // asks "go ahead?" with two fixed answers, 'once' and 'deny'. The sign-in
 // password guard (credential-not-provided) asks on the same card whether to
 // type text the user never gave ('type'), showing it masked, or not at all
-// with strict secret handling.
+// with strict secret handling. Hard-class guards that cannot decide ask on
+// it too, where the user can see what WebBrain cannot: a Delete control
+// whose items it cannot identify ('delete'), a message whose recipient it
+// cannot read ('send'), a repeated click, and a write it sends itself after
+// a correction (shown as the request, 'request').
 //
 // The card's content is page text, so it is untrusted: it is bounded here,
 // the side panel renders it with textContent only, and it is never sent to
@@ -15,17 +19,19 @@
 
 export const UNVERIFIED_STEP_PROMPT_KIND = 'unverifiedStepConfirmation';
 // What the step does; each has a localized question in the side panel.
-export const UNVERIFIED_STEP_ACTIONS = Object.freeze(['commit', 'submit', 'publish', 'click', 'type']);
+export const UNVERIFIED_STEP_ACTIONS = Object.freeze(['commit', 'submit', 'publish', 'click', 'type', 'delete', 'send']);
 // Why WebBrain could not verify it; each has a localized sentence.
 export const UNVERIFIED_STEP_REASONS = Object.freeze([
   'editor_unverified', 'draft_unverified', 'draft_unobserved',
   'submit_unclear', 'target_unresolved', 'repeat_unverified', 'step_unverified',
   'credential_not_provided',
+  'delete_unbound', 'prior_submission_unreconciled', 'recipient_unreadable',
 ]);
 // Where the shown text comes from, or how it is shown; each has a localized
 // label. 'masked' is text WebBrain would type, all but its first character
-// hidden; 'hidden' shows no text (strict secret handling).
-export const UNVERIFIED_STEP_CONTENT_LABELS = Object.freeze(['editor', 'composer', 'page', 'masked', 'hidden']);
+// hidden; 'hidden' shows no text (strict secret handling); 'request' is a
+// request WebBrain would send itself (its method, address and body).
+export const UNVERIFIED_STEP_CONTENT_LABELS = Object.freeze(['editor', 'composer', 'page', 'masked', 'hidden', 'request']);
 export const UNVERIFIED_STEP_CONTENT_LIMIT = 1500;
 
 /**

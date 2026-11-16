@@ -1,13 +1,14 @@
-// Tab switcher for settings.html and providers.html. Kept out of an inline
-// <script> tag because Manifest V3's default CSP (`script-src 'self'`) refuses
-// inline execution. Loaded as a classic script (not a module) at the bottom of
-// the page so the tab/panel elements already exist when this runs.
+// Section switcher for settings.html: the sidebar's buttons (.tab-btn) show
+// one section (.tab-panel) at a time. Kept out of an inline <script> tag
+// because Manifest V3's default CSP (`script-src 'self'`) refuses inline
+// execution. Loaded as a classic script (not a module) at the bottom of the
+// page so the buttons and sections already exist when this runs.
 //
-// The tab bar carries the page's configuration:
-//   data-default-tab  tab shown when neither the URL nor the last visit picks one
-//   data-storage-key  localStorage key that remembers the last tab on this page
-//   data-moved-tabs   old #hash -> page that now holds that tab (redirected)
-//   data-tab-aliases  old #hash -> tab on this page
+// The nav element carries the page's configuration:
+//   data-default-tab  section shown when neither the URL nor the last visit picks one
+//   data-storage-key  localStorage key that remembers the last section
+//   data-moved-tabs   old #hash -> another page that now holds it (redirected)
+//   data-tab-aliases  old #hash -> section on this page
 
 (function () {
   const nav = document.querySelector('nav.tabs');
@@ -22,8 +23,7 @@
     try { return JSON.parse(nav?.dataset[name] || '{}'); } catch (_) { return {}; }
   }
 
-  // Settings links into Providers, Assistive Models and Permissions predate
-  // the providers and permissions pages; send them where those tabs live now.
+  // A #hash that names a section living on another page goes there.
   const hash = (location.hash || '').replace('#', '');
   const moved = readMap('movedTabs');
   if (hash && Object.hasOwn(moved, hash)) {
@@ -40,7 +40,12 @@
     buttons.forEach((b) => {
       const on = b.dataset.tab === name;
       b.classList.toggle('active', on);
-      if (on) matched = true;
+      if (on) {
+        b.setAttribute('aria-current', 'page');
+        matched = true;
+      } else {
+        b.removeAttribute('aria-current');
+      }
     });
     let activePanel = null;
     panels.forEach((p) => {
@@ -88,8 +93,8 @@
     }
   } catch (_) {}
 
-  // Honour #<tab> in the URL so other parts of the extension can deep-link
-  // into a tab, e.g. providers.html#vision from Apocalypse Mode.
+  // Honour #<section> in the URL so other parts of the extension can
+  // deep-link into a section, e.g. settings.html#vision from Apocalypse Mode.
   const aliases = readMap('tabAliases');
   const requested = Object.hasOwn(aliases, hash) ? aliases[hash] : hash;
   if (requested && hasTab(requested)) {

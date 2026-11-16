@@ -16,6 +16,8 @@ const COUPON_FIELD_RE = /\b(coupon|promo(?:tional)?|voucher|discount)\b/i;
 const COUPON_EMPTY_CART_RE = /\b(?:your\s+)?(?:cart|basket|bag)\s+(?:is\s+)?empty\b|\b(?:no|zero)\s+items?\s+in\s+(?:your\s+)?(?:cart|basket|bag)\b/i;
 const COUPON_PRICE_RE = /[₺$€£¥₹₩]|\b(?:USD|EUR|GBP|TRY|CAD|AUD|JPY|BRL|MXN|INR)\s*\d|\d\s*(?:USD|EUR|GBP|TRY|CAD|AUD|JPY|BRL|MXN|INR)\b/i;
 const RELEASES_PATH_RE = /^\/[^/]+\/[^/]+\/releases(?:\/|$)/i;
+const GITHUB_PR_PATH_RE = /^\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:\/|$)/i;
+const GITHUB_PULLS_PATH_RE = /^\/([\w.-]+)\/([\w.-]+)\/pulls(?:\/|$)/i;
 const SEARCH_INPUT_RE = /^(search|q|query|keyword|keywords|s)$/i;
 const EMAIL_HOST_RE = /(^|\.)(mail\.google\.com|gmail\.com|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com|mail\.yahoo\.com|icloud\.com|proton\.me|protonmail\.com|fastmail\.com|hey\.com|mail\.zoho\.com)$/i;
 const DM_HOST_RE = /(^|\.)(instagram\.com|x\.com|twitter\.com|facebook\.com|messenger\.com|threads\.net|reddit\.com|linkedin\.com|discord\.com|slack\.com|web\.whatsapp\.com|messages\.google\.com|web\.telegram\.org)$/i;
@@ -42,6 +44,53 @@ function pathFromUrl(url) {
   } catch {
     return '/';
   }
+}
+
+// Which pull-request tab the path shows. Only the bare Files changed tab
+// (/files, or /changes, which GitHub routes to the same tab) holds the whole
+// diff; a /files/<range> view holds only some of its commits.
+function githubPullRequestView(rest = '') {
+  const segments = String(rest).split('/').filter(Boolean);
+  if (!segments.length) return 'conversation';
+  if (segments.length === 1 && /^(?:files|changes)$/i.test(segments[0])) return 'files';
+  return 'other';
+}
+
+function githubPullRequestContext(path = '') {
+  const value = String(path);
+  const match = GITHUB_PR_PATH_RE.exec(value);
+  return match ? {
+    owner: match[1],
+    repo: match[2],
+    number: match[3],
+    view: githubPullRequestView(value.slice(match[0].length)),
+  } : null;
+}
+
+// The pull-request suggestions run in read-only Ask mode, which has no
+// navigate or click tool, and read_page reads only the current tab. So the
+// prompt names only reads this tab can make: read_page for what the tab
+// shows, fetch_url for the rest. github.com/<owner>/<repo>/pull/<n>.diff
+// redirects to patch-diff.githubusercontent.com and fetch_url follows no
+// redirect, so the diff is fetched from that host directly. That host never
+// sees the user's GitHub sign-in, so a private repository's diff may not load
+// there. research_url on the Files changed tab is then the fallback: it
+// renders with the user's sign-in but returns one bounded read.
+function githubPullRequestReadSteps({ owner, repo, number, view }) {
+  const pageUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+  const diffUrl = `https://patch-diff.githubusercontent.com/raw/${owner}/${repo}/pull/${number}.diff`;
+  const overview = view === 'conversation'
+    ? 'Use read_page on this tab to read the description, conversation, and status checks.'
+    : `Read the description, conversation, and status checks with fetch_url on ${pageUrl}, continuing with offset set to nextOffset while hasMore is true.`;
+  const diff = view === 'files'
+    ? 'Use read_page on this Files changed tab to read the full diff, continuing with read_page continuationArgs while hasMore is true.'
+    : `Read the full diff with fetch_url on ${diffUrl}, continuing with offset set to nextOffset while hasMore is true. If that fails, for example because the repository is private, use research_url on ${pageUrl}/files instead. It returns one bounded read, so name any changed files it did not cover and tell me to open the Files changed tab and run this again for a complete read.`;
+  return `This is a read-only Ask run: you cannot navigate or click, and read_page reads only this tab. ${overview} ${diff}`;
+}
+
+function githubPullsContext(path = '') {
+  const match = GITHUB_PULLS_PATH_RE.exec(String(path));
+  return match ? { owner: match[1], repo: match[2] } : null;
 }
 
 function addUnique(actions, action) {
@@ -363,6 +412,34 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
       label: 'Create a new release',
       prompt: 'Create a new GitHub release for this repository. Ask me for the tag, title, and release notes if needed.',
       mode: 'act',
+    });
+  }
+
+  const pullRequest = githubPullRequestContext(path);
+  if (host === 'github.com' && pullRequest) {
+    const reference = `${pullRequest.owner}/${pullRequest.repo}#${pullRequest.number}`;
+    const readSteps = githubPullRequestReadSteps(pullRequest);
+    addUnique(actions, {
+      id: 'review-pull-request',
+      label: 'Review this pull request',
+      prompt: `Review GitHub pull request ${reference}. ${readSteps} Report prioritized correctness, security, compatibility, and test-coverage findings with exact file and line references. Do not post the review, comment, approve, close, or modify the pull request unless I explicitly ask.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'summarize-pull-request',
+      label: 'Summarize this pull request',
+      prompt: `Summarize GitHub pull request ${reference}, including its review comments. ${readSteps} Summarize the intent, implementation, material risks, review status, and remaining blockers. Do not post or modify anything.`,
+      mode: 'ask',
+    });
+  }
+
+  const pulls = githubPullsContext(path);
+  if (host === 'github.com' && pulls) {
+    addUnique(actions, {
+      id: 'summarize-recent-pr-activity',
+      label: 'Summarize recent PR activity',
+      prompt: `Use read_page to read the visible pull-request list for ${pulls.owner}/${pulls.repo}, including open and recently updated pull requests. Summarize activity by theme, review status, stale items, blockers, and which pull requests need attention. Do not open, comment on, or modify any pull request.`,
+      mode: 'ask',
     });
   }
 

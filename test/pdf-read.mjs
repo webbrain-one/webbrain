@@ -307,8 +307,9 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
         assert.equal(webRequest.onResponseStarted.size, 1, 'The service worker must watch before offscreen fetch starts.');
         webRequest.onResponseStarted.emit({ url: message.url, tabId: -1, ip: '8.8.8.8' });
         const verdictMessage = { type: 'offscreen-pdf-fetch-verdict', requestId: message.requestId };
-        let refused;
-        onMessage.emit(verdictMessage, { id: 'trusted-extension', url: 'chrome-extension://trusted-extension/src/ui/settings.html' }, r => { refused = r; });
+        const refused = await new Promise(resolve => {
+          onMessage.emit(verdictMessage, { id: 'trusted-extension', url: 'chrome-extension://trusted-extension/src/ui/settings.html' }, resolve);
+        });
         assert.equal(refused.ok, false, 'Only the offscreen host may request a verdict.');
         const verdict = await new Promise(resolve => {
           onMessage.emit(verdictMessage, { id: 'trusted-extension', url: 'chrome-extension://trusted-extension/src/offscreen/offscreen.html' }, resolve);
@@ -382,6 +383,92 @@ async function testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes()
   }
 }
 
+async function testPdfVerdictSenderIsTheOffscreenDocument() {
+  const { isTrustedPdfVerdictSender } = await import(pathToFileURL(pdfExtractionModulePath).href);
+  const offscreenUrl = 'chrome-extension://trusted-extension/src/offscreen/offscreen.html';
+  const queries = [];
+  let contexts = [{ contextType: 'OFFSCREEN_DOCUMENT', documentUrl: offscreenUrl, documentId: 'OFFSCREEN-DOC' }];
+  const runtime = {
+    id: 'trusted-extension',
+    getURL: path => `chrome-extension://trusted-extension/${path}`,
+    getContexts: async filter => {
+      queries.push(filter);
+      if (contexts instanceof Error) throw contexts;
+      return contexts;
+    },
+  };
+  // Chrome: messages from the offscreen document carry no tab.
+  assert.equal(await isTrustedPdfVerdictSender({ id: runtime.id, url: offscreenUrl, documentId: 'OFFSCREEN-DOC' }, runtime), true);
+  assert.equal(queries.length, 0, 'A sender without a tab needs no context lookup.');
+  assert.equal(await isTrustedPdfVerdictSender({ id: 'other-extension', url: offscreenUrl }, runtime), false);
+  assert.equal(await isTrustedPdfVerdictSender({ id: runtime.id, url: runtime.getURL('src/ui/settings.html') }, runtime), false);
+  assert.equal(await isTrustedPdfVerdictSender(undefined, runtime), false);
+
+  // Murshid (Electron): the hidden offscreen window's messages carry tab details.
+  const electronSender = { id: runtime.id, url: offscreenUrl, frameId: 0, documentId: 'OFFSCREEN-DOC', tab: { id: 7, url: offscreenUrl } };
+  assert.equal(await isTrustedPdfVerdictSender(electronSender, runtime), true);
+  assert.deepEqual(queries, [{ contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [offscreenUrl] }]);
+  assert.equal(await isTrustedPdfVerdictSender({ ...electronSender, id: 'other-extension' }, runtime), false);
+  // A tab that loaded offscreen.html is another document.
+  assert.equal(await isTrustedPdfVerdictSender({ ...electronSender, documentId: 'TAB-DOC' }, runtime), false);
+  assert.equal(await isTrustedPdfVerdictSender({ ...electronSender, documentId: undefined }, runtime), false);
+  contexts = [{ contextType: 'OFFSCREEN_DOCUMENT', documentUrl: offscreenUrl }];
+  assert.equal(await isTrustedPdfVerdictSender({ ...electronSender, documentId: undefined }, runtime), false,
+    'A context without a documentId must not match a sender without one.');
+  contexts = [{ documentId: 'OFFSCREEN-DOC' }, { documentId: 'OFFSCREEN-DOC' }];
+  assert.equal(await isTrustedPdfVerdictSender(electronSender, runtime), false, 'The offscreen document must be unique.');
+  contexts = [];
+  assert.equal(await isTrustedPdfVerdictSender(electronSender, runtime), false);
+  contexts = new Error('getContexts failed');
+  assert.equal(await isTrustedPdfVerdictSender(electronSender, runtime), false);
+  assert.equal(await isTrustedPdfVerdictSender(electronSender, { id: runtime.id, getURL: runtime.getURL }), false,
+    'Without getContexts a sender with a tab cannot be identified.');
+}
+
+// Murshid runs the Chrome build in Electron, where the offscreen document is
+// a hidden window and its messages arrive with sender.tab set.
+async function testPdfFacadeAcceptsElectronOffscreenSender() {
+  const originalChrome = globalThis.chrome;
+  const webRequest = addressEvents();
+  const onMessage = eventHub();
+  const offscreenUrl = 'chrome-extension://trusted-extension/src/offscreen/offscreen.html';
+  const offscreenSender = { id: 'trusted-extension', url: offscreenUrl, frameId: 0, documentId: 'OFFSCREEN-DOC', tab: { id: 7, url: offscreenUrl } };
+  globalThis.chrome = {
+    webRequest,
+    offscreen: { hasDocument: async () => true },
+    runtime: {
+      id: 'trusted-extension',
+      getURL: path => `chrome-extension://trusted-extension/${path}`,
+      getContexts: async () => [{ contextType: 'OFFSCREEN_DOCUMENT', documentUrl: offscreenUrl, documentId: 'OFFSCREEN-DOC' }],
+      onMessage,
+      sendMessage: async message => {
+        if (message.type === 'offscreen-pdf-extract-ready') return { ok: true, ready: true };
+        webRequest.onResponseStarted.emit({ url: message.url, tabId: -1, ip: '8.8.8.8' });
+        const ask = sender => new Promise(resolve => {
+          onMessage.emit({ type: 'offscreen-pdf-fetch-verdict', requestId: message.requestId }, sender, resolve);
+        });
+        assert.deepEqual(await ask({ ...offscreenSender, tab: { id: 9, url: offscreenUrl }, documentId: 'TAB-DOC' }),
+          { ok: false, error: 'Unauthorized PDF response verification sender.' }, 'A tab that loaded offscreen.html is refused.');
+        // As the offscreen host does: read the bytes only on an ok verdict.
+        const verdict = await ask(offscreenSender);
+        if (verdict?.ok !== true) return { ok: false, error: verdict?.error || 'no verdict' };
+        return { ok: true, result: { success: true, title: 'Electron fixture', totalPages: 1, fromPage: 1, toPage: 1,
+          pageCount: 1, pages: ['fixture text'], hasExtractableText: true, truncated: false, byteLength: 3 } };
+      },
+    },
+  };
+  try {
+    const { extractPdfText } = await import(pathToFileURL(pdfToolsModulePath).href);
+    const result = await extractPdfText('https://example.test/document.pdf');
+    assert.equal(result.title, 'Electron fixture');
+    assert.equal(onMessage.size, 0, 'Verdict listeners must be removed after extraction.');
+    assert.equal(webRequest.onResponseStarted.size, 0, 'Address listeners must be removed after extraction.');
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+}
+
 async function testPdfCookieDomainsUseDocumentUrlsInBothBrowsers() {
   const previous = { chrome: globalThis.chrome, browser: globalThis.browser };
   try {
@@ -404,6 +491,17 @@ async function testPdfCookieDomainsUseDocumentUrlsInBothBrowsers() {
       assert.equal(await pdfFetchCredentials(viewer('https://private.example.com/document.pdf'), 7), 'omit', name);
       activeUrl = viewer('https://alice.github.io/a.pdf');
       assert.equal(await pdfFetchCredentials(viewer('https://bob.github.io/b.pdf'), 7), 'omit', name);
+      // Tenants of shared hosts and second-level ccTLD registries outside the
+      // old hard-coded suffix list are separate sites too.
+      for (const [page, pdf, expected] of [
+        ['https://attacker.appspot.com/', 'https://victim.appspot.com/private.pdf', 'omit'],
+        ['https://attacker-bucket.s3.amazonaws.com/index.html', 'https://victim-bucket.s3.amazonaws.com/q3.pdf', 'omit'],
+        ['https://kisi.uni2.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'omit'],
+        ['https://www.uni1.edu.tr/', 'https://obs.uni1.edu.tr/transcript.pdf', 'include'],
+      ]) {
+        activeUrl = page;
+        assert.equal(await pdfFetchCredentials(pdf, 7), expected, `${name}: ${page} -> ${pdf}`);
+      }
       await assert.rejects(pdfFetchCredentials(viewer('javascript:alert(1)'), 7), /must use http/);
     }
   } finally {
@@ -657,7 +755,79 @@ async function testFirefoxPdfExtractionSsrfAndCookieHardening() {
   }
 }
 
+// The Firefox build parses PDFs in the background page with the vendored
+// PDF.js, which transfers the input buffer to its worker and so detaches the
+// caller's Uint8Array. The Claude document must still carry the whole file.
+async function testFirefoxReadPdfKeepsClaudeBytesAfterPdfjsDetachesThem() {
+  const previous = { browser: globalThis.browser, fetch: globalThis.fetch };
+  const hadDomMatrix = 'DOMMatrix' in globalThis;
+  const url = 'https://example.com/paper.pdf';
+  const pdf = buildSinglePagePdf('Hello from Firefox');
+  const fetchedBuffers = [];
+  const webRequest = addressEvents();
+  // The modern PDF.js build needs a DOMMatrix while it evaluates; see above.
+  if (!hadDomMatrix) globalThis.DOMMatrix = class DOMMatrix {};
+  globalThis.browser = {
+    webRequest,
+    dns: { resolve: async () => ({ addresses: ['93.184.216.34'] }) },
+    runtime: { getURL: relative => pathToFileURL(path.join(root, 'src', 'firefox', relative)).href },
+    tabs: { get: async id => ({ id, url }) },
+  };
+  globalThis.fetch = async fetchUrl => {
+    webRequest.onResponseStarted.emit({ tabId: -1, url: fetchUrl, ip: '93.184.216.34' });
+    return {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => {
+        const buffer = pdf.slice().buffer;
+        fetchedBuffers.push(buffer);
+        return buffer;
+      },
+    };
+  };
+  try {
+    const { extractPdfText } = await import(new URL('../src/firefox/src/agent/pdf-tools.js', import.meta.url));
+    const plain = await extractPdfText(url, {}, { tabId: 71 });
+    assert.deepEqual(plain.pages, ['Hello from Firefox']);
+    assert.equal(fetchedBuffers.at(-1).byteLength, 0,
+      'Fixture precondition: PDF.js must detach the fetched buffer, or this test no longer covers the bug.');
+    assert.equal(plain.byteLength, pdf.length, 'byteLength must be read before PDF.js detaches the bytes.');
+    assert.equal('_pdfBytes' in plain, false, 'Without a Claude provider no document copy is kept.');
+
+    const withDocument = await extractPdfText(url, { includeDocument: true }, { tabId: 71 });
+    assert.equal(withDocument.byteLength, pdf.length);
+    assert.deepEqual(withDocument._pdfBytes, pdf, 'The document copy must be the fetched PDF, not a detached array.');
+
+    const { Agent } = await import(new URL('../src/firefox/src/agent/agent.js', import.meta.url));
+    class AnthropicProvider { config = { model: 'claude-test' }; }
+    class OpenAIProvider { config = { model: 'text-test' }; }
+    const claude = await new Agent({ getActive: () => new AnthropicProvider() })
+      ._executeToolImpl(71, 'read_pdf', { url });
+    assert.equal(claude.success, true, claude.error);
+    assert.equal(claude.method, 'pdf_text+claude_document');
+    assert.equal(claude.byteLength, pdf.length);
+    assert.equal('_pdfBytes' in claude, false, 'Raw bytes must not reach the stringified tool result.');
+    assert.equal(claude._attachDocument.type, 'document');
+    assert.equal(claude._attachDocument.source.media_type, 'application/pdf');
+    assert.deepEqual(new Uint8Array(Buffer.from(claude._attachDocument.source.data, 'base64')), pdf,
+      'Claude must receive the whole PDF, not an empty document block.');
+
+    const other = await new Agent({ getActive: () => new OpenAIProvider() })
+      ._executeToolImpl(71, 'read_pdf', { url });
+    assert.equal(other.success, true, other.error);
+    assert.equal(other.method, 'pdf_text');
+    assert.equal(other.byteLength, pdf.length);
+    assert.equal(other._attachDocument, undefined);
+    assert.equal('_pdfBytes' in other, false);
+  } finally {
+    if (!hadDomMatrix) delete globalThis.DOMMatrix;
+    globalThis.browser = previous.browser;
+    globalThis.fetch = previous.fetch;
+  }
+}
+
 const tests = [
+  ['Firefox read_pdf keeps the Claude document bytes after PDF.js detaches them', testFirefoxReadPdfKeepsClaudeBytesAfterPdfjsDetachesThem],
   ['Chrome PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testPdfExtractionSsrfAndCookieHardening],
   ['Firefox PDF extraction enforces SSRF checks, redirect rejection and scoped cookies', testFirefoxPdfExtractionSsrfAndCookieHardening],
   ['Firefox PDF proxy reads require validated destination DNS answers', testFirefoxPdfProxyRequiresValidatedDestination],
@@ -667,6 +837,8 @@ const tests = [
   ['PDF extraction rejects unsafe URLs and untrusted senders', testPdfUrlAndSenderBoundaries],
   ['PDF extraction preserves bounded page metadata and truncation', testPdfExtractionPreservesBoundedPageMetadataAndTruncation],
   ['PDF facade waits for host readiness and reuses Claude bytes', testPdfFacadeRequestsOffscreenExtractionAndPreservesClaudeBytes],
+  ['PDF verdicts go only to the offscreen document, with or without sender.tab', testPdfVerdictSenderIsTheOffscreenDocument],
+  ['PDF facade accepts the offscreen document of an Electron host (Murshid)', testPdfFacadeAcceptsElectronOffscreenSender],
   ['Vendored PDF.js extracts text through the compat entry points', testVendoredPdfjsExtractsTextThroughCompatEntryPoints],
   ['PDF.js compat fills missing built-ins without replacing native ones', testPdfjsCompatFillsMissingBuiltIns],
 ];

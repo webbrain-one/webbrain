@@ -318,6 +318,42 @@ for (const build of ['chrome', 'firefox']) {
     }
   }
 
+  // OpenAI-compatible relays send "" for a call without arguments. A timeline
+  // ticking behind the page must not supersede that read until page_unstable:
+  // it is retained and runs once with {}, as the executor reads it.
+  for (const streaming of [false, true]) {
+    test(`${build}: ${streaming ? 'stream' : 'chat'} an argument-less read survives passive churn and runs with {}`, async () => {
+      const tab = nextTab++, dispatched = [];
+      let agent, frames, requests = 0, terminal = null;
+      pages.set(tab, {});
+      agent = makeAgent(Agent, async () => {
+        requests++;
+        frames.main({ kind: 'dom', source: 'page', target: 'div#timeline' });
+        if (dispatched.some(item => item.tool === 'read_page')) return call('finished', 'done', { summary: 'Read the page', outcome: 'success' });
+        return { toolCalls: [{ id: 'bare-read-' + requests, function: { name: 'read_page', arguments: '' } }] };
+      });
+      agent.maxSteps = 12;
+      agent._endTraceRun = async (_tab, _run, status) => { terminal = status; };
+      agent._enrichUserMessageWithCurrentPage = async (_tab, _messages, content) => { frames = bindFrames(agent, tab); return { role: 'user', content }; };
+      agent._executeToolWithLifecycle = async (_tab, tool, args) => {
+        if (tool === 'get_accessibility_tree') return { success: true, pageContent: TREE };
+        dispatched.push({ tool, args });
+        return tool === 'done' ? { done: true, success: true, summary: args.summary, outcome: args.outcome }
+          : { success: true, pageContent: TREE };
+      };
+      try {
+        const options = { detachedRequestId: 'bare-read-' + tab, askStreamingEnabled: false };
+        const result = streaming ? await agent.processMessageStream(tab, 'Read the page', () => {}, 'act', options)
+          : await agent.processMessage(tab, 'Read the page', () => {}, 'act', [], options);
+        assert.notEqual(terminal, 'page_unstable');
+        assert.deepEqual(dispatched.map(item => item.tool), ['read_page', 'done']);
+        assert.deepEqual(dispatched[0].args, {});
+        assert.equal(requests, 2, 'The argument-less read is not regenerated');
+        assert.equal(result, 'Read the page');
+      } finally { pages.delete(tab); }
+    });
+  }
+
   test(`${build}: a deterministic scroll without model state dispatches on a quiet page`, async () => {
     const tab = nextTab++, agent = makeAgent(Agent, async () => assert.fail('No inference'));
     const dispatched = [];

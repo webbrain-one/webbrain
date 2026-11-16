@@ -106,6 +106,46 @@ export function isTrustedPdfExtractionSender(sender, runtime = globalThis.chrome
     && sender?.url === runtime.getURL(backgroundScriptPath(runtime));
 }
 
+// Only the offscreen document may ask for a PDF response verdict. Chrome
+// sends an offscreen document's messages without sender.tab, so there a
+// sender with a tab is a tab that loaded offscreen.html. Electron, which
+// Murshid is built on, adds tab details to messages from every window,
+// including the hidden one that hosts the offscreen document. A sender with
+// a tab therefore passes only when its documentId is the documentId of the
+// one OFFSCREEN_DOCUMENT context.
+export async function isTrustedPdfVerdictSender(sender, runtime = globalThis.chrome?.runtime) {
+  if (!runtime?.id || typeof runtime.getURL !== 'function') return false;
+  const offscreenUrl = runtime.getURL('src/offscreen/offscreen.html');
+  if (sender?.id !== runtime.id || sender?.url !== offscreenUrl) return false;
+  if (sender.tab == null) return true;
+  if (typeof sender.documentId !== 'string' || !sender.documentId
+    || typeof runtime.getContexts !== 'function') return false;
+  try {
+    const contexts = await runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [offscreenUrl] });
+    return Array.isArray(contexts) && contexts.length === 1 && contexts[0]?.documentId === sender.documentId;
+  } catch {
+    return false;
+  }
+}
+
+// The service worker's answer to one read_pdf call's verdict request: the
+// offscreen host may read the response only once `addresses` (the worker's
+// watcher for that fetch) has seen an allowed response address.
+export function createPdfVerdictListener(requestId, addresses, runtime = globalThis.chrome?.runtime) {
+  return (message, sender, sendResponse) => {
+    if (message?.type !== PDF_FETCH_VERDICT_MESSAGE || message.requestId !== requestId) return false;
+    (async () => {
+      if (!await isTrustedPdfVerdictSender(sender, runtime)) {
+        sendResponse({ ok: false, error: 'Unauthorized PDF response verification sender.' });
+        return;
+      }
+      const error = await addresses?.settledFailure('fetch');
+      sendResponse(error ? { ok: false, error } : { ok: true });
+    })().catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
+  };
+}
+
 export function bytesToBase64(bytes) {
   if (bytes.length > BASE64_MAX_INPUT_BYTES) {
     throw new Error(`PDF too large for base64 conversion (${bytes.length} bytes, cap ${BASE64_MAX_INPUT_BYTES}).`);

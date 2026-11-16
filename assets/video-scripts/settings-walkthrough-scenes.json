@@ -1,0 +1,306 @@
+[
+  {
+    "id": "01-overview",
+    "title": "One Settings page, one sidebar",
+    "tab": "display",
+    "selector": "#display-settings",
+    "narration": "Welcome to WebBrain. This walkthrough follows the redesigned Settings page in version forty-nine. Everything now lives behind one sidebar, including models and permissions. We'll start with the everyday choices, then visit the deeper controls. You don't need to configure every section before your first conversation."
+  },
+  {
+    "id": "02-navigation",
+    "title": "Find a setting quickly",
+    "tab": "display",
+    "selector": "#settings-search",
+    "narration": "The sidebar is your map. General comes first, followed by Models, Permissions and privacy, Budgets, Memory, and Skills. Integrations, Offline, and Advanced sit below. The search box looks across all sections, so you can find a setting without remembering where it lives. Clear the search to return to browsing."
+  },
+  {
+    "id": "03-general",
+    "title": "General: everyday comfort",
+    "tab": "display",
+    "selector": "#display-settings .setting-row:first-child",
+    "narration": "General starts with appearance, the agent's activity effect, and an optional download subfolder. Messages during a running task can wait in the queue or steer the current work. Selection shortcuts and Chrome's PDF viewer are here too. These are everyday preferences; begin with whatever feels comfortable."
+  },
+  {
+    "id": "04-supervision",
+    "title": "Agent supervision",
+    "tab": "display",
+    "selector": "[data-preset-group=supervision]",
+    "narration": "Agent supervision combines several controls. Balanced is the default and adapts to your model. Thorough plans every turn, asks for plan approval, and stops when a check cannot confirm an action. Fast lets the model check its own work and skips plan-review stops. It makes most sense with a capable model."
+  },
+  {
+    "id": "05-unsupervised",
+    "title": "Understand Unsupervised",
+    "tab": "display",
+    "selector": "[data-preset-group=supervision]",
+    "narration": "There is also an Unsupervised option. It turns off action guards, including checks around recipients, deletion, spending, credentials, and publishing. Treat that as a deliberate trust decision. Permission prompts remain a separate setting in every preset. For a first setup, leave supervision on Balanced."
+  },
+  {
+    "id": "06-image-quality",
+    "title": "Image quality",
+    "tab": "display",
+    "selector": "[data-preset-group=image]",
+    "narration": "Image quality balances detail against cost. Economy sends smaller and fewer screenshots. Balanced is the everyday default. Sharp sends larger, high-detail images and captures after actions that change the page. Try more detail when the agent struggles to see something; use Economy when image traffic is expensive or slow."
+  },
+  {
+    "id": "07-alerts-presets",
+    "title": "Alerts and fine-tuning",
+    "tab": "display",
+    "selector": "[data-preset-group=alerts]",
+    "narration": "Completion alerts can play sounds, show confetti, and flash the tab. Quiet keeps only the flashing tab; Off disables those alerts. Each combined control has a Fine-tune in Advanced link. If individual settings no longer match a preset, General shows Custom. Choosing a preset restores that group's settings."
+  },
+  {
+    "id": "08-llm",
+    "title": "Models: choose your main model",
+    "tab": "llm",
+    "selector": "#providers",
+    "narration": "Under Models, LLM is where you choose the main conversational model. Look for the Selected badge to see which provider is selected for chat. WebBrain Compass includes a free weekly allowance. You can also bring a cloud API key, use a router, or connect a local model."
+  },
+  {
+    "id": "09-provider-setup",
+    "title": "Save, test, select for chat",
+    "tab": "llm",
+    "selector": ".provider-card[data-provider-id=openai]",
+    "narration": "Use the category filters and provider search to narrow the list, then expand a card. For a cloud API, enter your key and model, save the configuration, and test the connection. Select for chat chooses it for conversation. A configured provider and the provider selected for chat are different things.",
+    "shots": [
+      {
+        "selector": ".provider-card[data-provider-id=openai] .btn-row:has(.btn-save)",
+        "cue": "save the configuration"
+      }
+    ]
+  },
+  {
+    "id": "10-local-models",
+    "title": "Local models and model capacity",
+    "tab": "llm",
+    "selector": ".provider-card[data-provider-id=ollama]",
+    "narration": "Local providers need a running server and its address. Load models helps find what's available. Check the context window and prompt tier against your model's capacity. Ollama also needs to allow the extension's origin; its card explains that setup. Chrome's WebGPU provider is another option, running the model inside the browser.",
+    "shots": [
+      {
+        "selector": ".provider-card[data-provider-id=ollama] .field:has([data-key=contextWindow])",
+        "cue": "Check the context window"
+      },
+      {
+        "selector": ".provider-card[data-provider-id=ollama] .provider-ollama-warning",
+        "cue": "Ollama also needs"
+      }
+    ]
+  },
+  {
+    "id": "11-vision",
+    "title": "Vision: reading screenshots",
+    "tab": "vision",
+    "selector": "#vision-card",
+    "narration": "The remaining model sections configure helpers. Vision decides how screenshots are read. A capable chat model can handle images itself. Chrome also offers an in-browser vision route, or you can configure a separate endpoint here. A separate vision model can read screenshots while your main model handles the conversation.",
+    "shots": [
+      {
+        "selector": "#vision-endpoint-fields",
+        "cue": "or you can configure a separate endpoint here"
+      }
+    ]
+  },
+  {
+    "id": "12-speech",
+    "title": "Speech: transcribing recordings",
+    "tab": "speech",
+    "selector": "#transcription-card",
+    "narration": "Speech holds a Whisper-compatible transcription endpoint: its base URL, API key, and model. Save and test it before relying on recordings. This is an optional helper configuration. You can leave it alone if you don't need transcription, and return when you have a service you want to use."
+  },
+  {
+    "id": "13-generative",
+    "title": "Generative: images and video",
+    "tab": "generative",
+    "selector": "#image-gen-card",
+    "narration": "Generative connects the services used to create images and video. Choose a provider, then configure the model and any required credentials. The fields change for hosted services and local ComfyUI workflows. Video has its own model and resolution options. Set up only the media service you intend to use."
+  },
+  {
+    "id": "14-decision",
+    "title": "Decision: small supporting judgments",
+    "tab": "decision",
+    "selector": "#system-one-card",
+    "narration": "Decision models handle supporting judgments, such as checking whether a task is complete. Auto chooses the available route without manual setup, and the status line explains what it is using. On reveals provider controls and individual features. Off disables this helper. Start with Auto unless you have a specific reason to change it."
+  },
+  {
+    "id": "15-safesocial",
+    "title": "SafeSocial: an optional local filter",
+    "tab": "safesocial",
+    "selector": "#safesocial-card",
+    "narration": "SafeSocial is an optional local image classifier for Instagram. Choose the categories you want softened, then blur, hide, dim, or warn on matching images. A higher threshold filters fewer images. It starts off; enabling it downloads a model. Classification runs on your device, and filtered images can be revealed.",
+    "shots": [
+      {
+        "selector": "#safesocial-card .safesocial-labels-fieldset",
+        "cue": "Choose the categories"
+      },
+      {
+        "selector": "#safesocial-card .field:has(#safesocial-threshold)",
+        "cue": "A higher threshold"
+      }
+    ]
+  },
+  {
+    "id": "16-permissions",
+    "title": "Permissions and privacy",
+    "tab": "permissions",
+    "selector": "#permissions-card",
+    "narration": "Permissions and privacy is now a section in this same sidebar. Keep Ask before consequential actions on. Saved site permissions appear underneath, where you can revoke them. Allowing an action on one site is a narrower choice than turning off the permission gate for every site."
+  },
+  {
+    "id": "17-privacy",
+    "title": "Screenshot redaction and secrets",
+    "tab": "permissions",
+    "selector": "#screenshot-redaction-setting",
+    "narration": "The Privacy controls below are separate choices. Screenshot redaction tries to blur sensitive-looking content before vision processing, but cannot guarantee that everything is hidden. Strict secret handling prevents credentials being repeated in answers. Both start off. Local network access also starts off; enable it only when your task needs that access."
+  },
+  {
+    "id": "18-cost-budgets",
+    "title": "Budgets: cloud cost allowances",
+    "tab": "budgets",
+    "selector": "#budget-settings .setting-row:first-child",
+    "narration": "Budgets brings the limits together. Session and total cost allowances stop further eligible paid model calls when reported or estimated spend reaches the allowance. These controls apply to usage-billed cloud and router providers. They exclude WebBrain Compass and local providers. Estimated cost here is not a replacement for your provider's billing records."
+  },
+  {
+    "id": "19-timeouts",
+    "title": "Questions, steps, and timeouts",
+    "tab": "budgets",
+    "selector": ".setting-row:has(#range-clarify-timeout)",
+    "narration": "Clarify timeout controls how long ordinary questions wait, and the next option decides what happens afterward. Permission and form-submit confirmations still wait for you. Below that, Max Agent Steps limits a run's length, and request timeout controls how long WebBrain waits for the model. Slow local models may need more time.",
+    "shots": [
+      {
+        "selector": ".setting-row:has(#range-max-steps)",
+        "cue": "Below that, Max Agent Steps"
+      }
+    ]
+  },
+  {
+    "id": "20-sync",
+    "title": "Memory: encrypted cloud sync",
+    "tab": "memory",
+    "selector": "#profile-sync-card",
+    "narration": "Memory begins with optional encrypted cloud sync for Compass members. It syncs memories, profile autofill, and API-key provider settings, encrypted with your sync password before upload. Chat history and OAuth sign-ins are excluded. Keep that password somewhere safe: WebBrain cannot recover it for you."
+  },
+  {
+    "id": "21-profile",
+    "title": "Profile auto-fill",
+    "tab": "memory",
+    "selector": "#profile-card",
+    "narration": "Profile auto-fill is a short block of details the agent can reuse, for example a name, company, or preferred writing style. When enabled, this text goes into the model's prompt. Keep it minimal. It is stored locally in plain text, so this is not a password vault."
+  },
+  {
+    "id": "22-user-memory",
+    "title": "User memory and optional learning",
+    "tab": "memory",
+    "selector": "#user-memory-card",
+    "narration": "User memory holds durable preferences across tasks. Review saved records, forget outdated details, or export and import them. Automatic learning after chats and learning from completed forms are optional. The character limit controls how much memory reaches the prompt. Enabled memory is shared with your configured model, so avoid storing secrets.",
+    "shots": [
+      {
+        "selector": "#user-memory-card .field:has(#user-memory-list)",
+        "cue": "Review saved records"
+      },
+      {
+        "selector": "#user-memory-card .setting-row:has(#toggle-user-memory-auto)",
+        "cue": "Automatic learning after chats"
+      }
+    ]
+  },
+  {
+    "id": "23-memcode",
+    "title": "Optional MemCode recall",
+    "tab": "memory",
+    "selector": "#memcode-recall-card",
+    "narration": "MemCode adds optional recall from a connected account. Connecting the account and enabling recall are separate steps. The integration is read-only and does not automatically upload your local memory. Search queries and matching memories reach MemCode and your configured model. Local WebBrain memory remains the default."
+  },
+  {
+    "id": "24-skills",
+    "title": "Skills: reusable instructions",
+    "tab": "skills",
+    "selector": "#skills-settings",
+    "narration": "Skills add reusable instructions and sometimes tools. Review the enabled and packaged lists, or use Add skill to import a URL or paste instructions. Relevant skills are loaded on demand in Mid and Full prompt tiers; Compact does not load them. Read unfamiliar skills before enabling them, especially their tool permissions.",
+    "shots": [
+      {
+        "selector": "#btn-show-skill-form",
+        "cue": "or use Add skill"
+      }
+    ]
+  },
+  {
+    "id": "25-captcha",
+    "title": "Integrations: CAPTCHA solvers",
+    "tab": "captcha",
+    "selector": "#captcha-card",
+    "narration": "Under Integrations, CAPTCHA holds optional solver accounts. Configure a service with your own key, save it, and test it. When multiple solvers are available, their advanced weights set the preference order. These are separate services with their own usage charges. You can leave this section unconfigured until a task calls for it.",
+    "shots": [
+      {
+        "selector": ".captcha-provider[aria-labelledby=capsolver-heading] .captcha-advanced",
+        "cue": "When multiple solvers are available"
+      }
+    ]
+  },
+  {
+    "id": "26-bridge",
+    "title": "Bridge: connect another program",
+    "tab": "cloudbridge",
+    "selector": "#cb-card",
+    "narration": "Bridge lets a backend control this browser. Choose the Cloud, MCP, LM Studio, or custom local destination, then supply the matching pairing information. Only one destination is active at a time. The connection status shows whether setup worked. Leave Bridge off until you want a trusted program connected to your browser."
+  },
+  {
+    "id": "27-webmcp",
+    "title": "Experimental WebMCP",
+    "tab": "cloudbridge",
+    "selector": "#webmcp-card",
+    "narration": "The experimental WebMCP switch below Bridge is a separate feature. It lets WebBrain discover structured tools offered by supported Chrome pages. It does not configure an external MCP client. Use the documentation link when setting up a backend connection; the names are similar, but the directions of integration differ."
+  },
+  {
+    "id": "28-offline",
+    "title": "Offline: Apocalypse Mode",
+    "tab": "offline",
+    "selector": "#apocalypse-mode-summary",
+    "narration": "Offline shows the status of Apocalypse Mode. Its button opens the separate kit manager, where you prepare local models and offline reference archives. Set that up while you have a connection and enough storage. This Settings section is the overview; the downloads and detailed offline controls live in the kit manager."
+  },
+  {
+    "id": "29-advanced-supervision",
+    "title": "Advanced: supervision controls",
+    "tab": "advanced",
+    "selector": "#adv-group-supervision",
+    "narration": "Advanced exposes the controls behind General's presets. Action guards, strict checks, Lean mode, planning, and plan review sit together. The default review policy uses a confidence threshold. If you change these individually, General may show Custom. Keeping the Balanced preset is a useful starting point while you learn the trade-offs.",
+    "shots": [
+      {
+        "selector": "#row-plan-review-confidence",
+        "cue": "The default review policy"
+      }
+    ]
+  },
+  {
+    "id": "30-advanced-vision",
+    "title": "Advanced: screenshots and image budget",
+    "tab": "advanced",
+    "selector": "#image-budget-card",
+    "narration": "Vision and screenshots includes automatic capture, detail level, image count, and maximum dimensions. These controls can materially change token use and how well the model sees small text. The Image quality preset changes several together. If you fine-tune them, make one change at a time and compare the result."
+  },
+  {
+    "id": "31-diagnostics",
+    "title": "Privacy and diagnostics",
+    "tab": "advanced",
+    "selector": "#adv-group-privacy",
+    "narration": "Privacy and diagnostics includes Help Improve WebBrain, which is on by default for eligible Compass text and tool interactions. Review its explanation and opt out here if you prefer. Local and bring-your-own API requests have separate per-provider research sharing. Trace recording is another control; inspect diagnostic exports before sharing them."
+  },
+  {
+    "id": "32-automation",
+    "title": "Automation controls",
+    "tab": "advanced",
+    "selector": "#adv-group-automation",
+    "narration": "Automation brings together scheduled tasks, confirmation for consequential scheduled actions, cookie banners, and site adapters. Keep scheduled confirmations enabled while you get comfortable with unattended work. Cookie-banner behavior has its own menu, so choose how broadly it should apply. These controls are available when a workflow gives you a reason to adjust them."
+  },
+  {
+    "id": "33-network-interface",
+    "title": "Network, API, and interface",
+    "tab": "advanced",
+    "selector": "#adv-group-network",
+    "narration": "The final Advanced groups cover API mutation access, request observation, streaming, and interface preferences such as verbose output, voice input, and tab grouping. Read each description before changing behavior you rely on. Allowing API mutations does not remove the other confirmation checks. Most people can leave these controls as they are."
+  },
+  {
+    "id": "34-closing",
+    "title": "A simple starting configuration",
+    "tab": "display",
+    "selector": "[data-preset-group=supervision]",
+    "narration": "That's the new Settings layout. Choose your model, keep supervision and image quality on Balanced, and leave permission prompts enabled. Adjust alerts to your taste. Then return to a real task, see what helps, and change settings only when you have a reason. The sidebar and search will bring you back to the right place."
+  }
+]
