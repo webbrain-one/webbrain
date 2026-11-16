@@ -503,19 +503,28 @@
   }
 
   // --- usage ---------------------------------------------------------------------
-  // The window with the least left. Windows for the whole plan come first;
-  // scoped ones (one model, code review, extra usage) count only when a plan
-  // reports nothing else. The tray menu uses the same rule.
+  // Summary row for one subscription. Plan-wide windows (no scope) use the
+  // least left because hitting any of them stops the plan. Plans that only
+  // report per-model or per-feature pools take each pool's tightest window,
+  // then pick the healthiest pool. The tray menu uses the same rule.
   function tightest(rows) {
-    for (const scoped of [false, true]) {
-      let best = null;
-      for (const r of rows || []) {
-        if (r.remaining === null || r.remaining === undefined || !!r.scope !== scoped) continue;
-        if (!best || r.remaining < best.remaining) best = r;
-      }
-      if (best) return best;
+    let best = null;
+    for (const r of rows || []) {
+      if (r.remaining === null || r.remaining === undefined || r.scope) continue;
+      if (!best || r.remaining < best.remaining) best = r;
     }
-    return null;
+    if (best) return best;
+
+    const byScope = new Map();
+    for (const r of rows || []) {
+      if (r.remaining === null || r.remaining === undefined) continue;
+      const cur = byScope.get(r.scope);
+      if (!cur || r.remaining < cur.remaining) byScope.set(r.scope, r);
+    }
+    for (const cand of byScope.values()) {
+      if (!best || cand.remaining > best.remaining) best = cand;
+    }
+    return best;
   }
 
   function cells(pct, animate) {
