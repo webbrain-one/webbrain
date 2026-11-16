@@ -102,19 +102,55 @@ const VISUALS = {
       <span class="vd-q">Is the cart ready to check out?</span>
       <span class="vd-a"><b>yes</b><i>no</i></span>
     </div>`,
+  unified: () => `<div class="viz viz-unified" aria-hidden="true">
+      <div class="vu-stack">
+        <span class="vu-pill is-accent">Vision + Tools</span>
+        <span class="vu-pill is-ok">pplx-decider</span>
+        <span class="vu-pill is-ink">Heretic 0/8</span>
+        <span class="vu-pill">15 MTP tensors</span>
+      </div>
+      <div class="vu-vram">
+        <div class="vu-vram-head"><span>16 GB GPU fit (weights + vision)</span><b>11.95 / 16 GB</b></div>
+        <div class="vu-vram-track">
+          <span class="vu-seg-model" style="width:69.3%"></span>
+          <span class="vu-seg-proj" style="width:5.4%"></span>
+        </div>
+        <div class="vu-vram-foot">
+          <span><strong>IQ3_XXS</strong> 11.09 GB + <strong>mmproj</strong> 0.86 GB</span>
+          <span>~4 GB free for KV cache</span>
+        </div>
+      </div>
+      <div class="vu-formats">
+        <span>imatrix GGUF (16–24 GB)</span>
+        <span>AutoRound INT4 (Arc B70)</span>
+        <span>NVFP4 + FP8 (Blackwell)</span>
+        <span>BF16</span>
+      </div>
+    </div>`,
 };
 
 function renderTile(project) {
   const tile = project.tile || {};
   const visual = VISUALS[tile.visual] ? VISUALS[tile.visual](tile) : '';
   const stats = (tile.stats || []).map((stat) => `<span class="tile-stat"><b>${esc(stat.value)}</b><span>${esc(stat.label)}</span></span>`).join('');
-  return `<a class="tile tile-${esc(tile.size || 'm')}" href="${researchPathFor(project.slug)}">
-      <span class="tile-kind">${esc(project.kind)}</span>
+  const body = `<span class="tile-kind">${esc(project.kind)}</span>
       <h2>${esc(project.name)}</h2>
-      <p>${inline(project.summary)}</p>
+      <p>${inline(project.summary)}</p>`;
+  const tail = `${stats ? `<span class="tile-stats">${stats}</span>` : ''}
+      <span class="tile-more">Read the introduction</span>`;
+  if (tile.size === 'full') {
+    return `<a class="tile tile-full" href="${researchPathFor(project.slug)}">
+      <div class="tile-lead">
+        ${body}
+        ${tail}
+      </div>
       ${visual}
-      ${stats ? `<span class="tile-stats">${stats}</span>` : ''}
-      <span class="tile-more">Read the introduction</span>
+    </a>`;
+  }
+  return `<a class="tile tile-${esc(tile.size || 'm')}" href="${researchPathFor(project.slug)}">
+      ${body}
+      ${visual}
+      ${tail}
     </a>`;
 }
 
