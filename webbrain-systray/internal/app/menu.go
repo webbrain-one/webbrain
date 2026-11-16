@@ -61,27 +61,49 @@ func percent(v float64) string {
 	return n + "%"
 }
 
-// Tightest picks the usage window with the least left. Windows that cover the
-// whole plan come first; scoped ones (one model, code review, extra usage)
-// count only when a plan reports nothing else, as Google's per-model quotas do.
-// The panel applies the same rule.
+// Tightest picks the summary row for one subscription. Windows that cover the
+// whole plan come first (taking the least left, since hitting either stops the
+// plan). When a plan only reports per-model or per-feature pools, as Google's
+// quotas do, each pool's bottleneck is its tightest window and Tightest picks
+// the healthiest pool so one exhausted model group does not make the whole plan
+// look empty. The panel applies the same rule.
 func Tightest(rows []quota.Row) *quota.Row {
-	for _, scoped := range []bool{false, true} {
-		var best *quota.Row
-		for i := range rows {
-			r := &rows[i]
-			if r.Remaining == nil || (r.Scope != "") != scoped {
-				continue
-			}
-			if best == nil || *r.Remaining < *best.Remaining {
-				best = r
-			}
+	var best *quota.Row
+	for i := range rows {
+		r := &rows[i]
+		if r.Remaining == nil || r.Scope != "" {
+			continue
 		}
-		if best != nil {
-			return best
+		if best == nil || *r.Remaining < *best.Remaining {
+			best = r
 		}
 	}
-	return nil
+	if best != nil {
+		return best
+	}
+
+	byScope := map[string]*quota.Row{}
+	var order []string
+	for i := range rows {
+		r := &rows[i]
+		if r.Remaining == nil {
+			continue
+		}
+		cur, ok := byScope[r.Scope]
+		if !ok {
+			order = append(order, r.Scope)
+			byScope[r.Scope] = r
+		} else if *r.Remaining < *cur.Remaining {
+			byScope[r.Scope] = r
+		}
+	}
+	for _, scope := range order {
+		cand := byScope[scope]
+		if best == nil || *cand.Remaining > *best.Remaining {
+			best = cand
+		}
+	}
+	return best
 }
 
 // sharedNames lists the provider names more than one login uses. Their lines

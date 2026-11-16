@@ -21,14 +21,30 @@ func TestTightest(t *testing.T) {
 		t.Fatalf("plan-wide windows come first, got %+v", r)
 	}
 	google := []quota.Row{
-		{Window: "5h", Scope: "Gemini Pro", Remaining: pct(90)},
-		{Window: "5h", Scope: "Claude", Remaining: pct(20)},
+		{Window: "week", Scope: "Gemini Models", Remaining: pct(84)},
+		{Window: "5h", Scope: "Gemini Models", Remaining: pct(99)},
+		{Window: "week", Scope: "Claude and GPT models", Remaining: pct(2)},
+		{Window: "5h", Scope: "Claude and GPT models", Remaining: pct(100)},
+		{Window: "week", Scope: "Gemini 4 Argon", Remaining: pct(64)},
 	}
-	if r := Tightest(google); r == nil || r.Scope != "Claude" {
-		t.Fatalf("scoped windows count when nothing else is reported, got %+v", r)
+	if r := Tightest(google); r == nil || r.Scope != "Gemini Models" || r.Window != "week" || *r.Remaining != 84 {
+		t.Fatalf("scoped-only plans use each scope's bottleneck, then the healthiest scope, got %+v", r)
+	}
+	scopedMixed := []quota.Row{
+		{Window: "5h", Scope: "Gemini Models", Remaining: pct(30)},
+		{Window: "week", Scope: "Gemini Models", Remaining: pct(80)},
+		{Window: "5h", Scope: "Claude", Remaining: pct(100)},
+		{Window: "week", Scope: "Claude", Remaining: pct(2)},
+		{Window: "custom", Scope: "Credits", Detail: "$4"},
+	}
+	if r := Tightest(scopedMixed); r == nil || r.Scope != "Gemini Models" || r.Window != "5h" || *r.Remaining != 30 {
+		t.Fatalf("within a scope the tighter window still wins before comparing scopes, got %+v", r)
 	}
 	if r := Tightest([]quota.Row{{Window: "custom", Scope: "Credits", Detail: "$4"}}); r != nil {
 		t.Fatalf("rows without a percentage are skipped, got %+v", r)
+	}
+	if r := Tightest(nil); r != nil {
+		t.Fatalf("empty rows should return nil, got %+v", r)
 	}
 }
 
