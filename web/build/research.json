@@ -1,5 +1,5 @@
 {
-  "statsAsOf": "November 2, 2026",
+  "statsAsOf": "November 17, 2026",
   "index": {
     "metaTitle": "WebBrain Research — small, open models for browser agents",
     "metaDescription": "WebBrain’s open research: tiny models that see, decide and act in the browser, open-source ternary compression with OpenBonsai, and frozen public benchmarks.",
@@ -117,19 +117,19 @@
       "models": [
         {
           "id": "webbrain-one/openbonsai-qwen-3.5-9b",
-          "downloads": 714,
-          "likes": 6,
+          "downloads": 1085,
+          "likes": 9,
           "note": "Qwen3.5-9B compressed to ternary with OpenBonsai"
         },
         {
           "id": "webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision",
-          "downloads": 527,
+          "downloads": 534,
           "likes": 1,
           "note": "Prism ML’s Ternary Bonsai 2 2B, rewritten for WebGPU with vision"
         },
         {
           "id": "webbrain-one/Ternary-Bonsai-2-4B-ONNX-WebGPU-Vision",
-          "downloads": 114,
+          "downloads": 90,
           "likes": 2,
           "note": "Prism ML’s Ternary Bonsai 2 4B, rewritten for WebGPU with vision"
         }
@@ -304,50 +304,50 @@
       "models": [
         {
           "id": "webbrain-one/webbrain-compass-vld-v6-2b",
-          "downloads": 17,
+          "downloads": 59,
           "likes": 0,
           "note": "Compass VLD v6 2B"
         },
         {
           "id": "webbrain-one/webbrain-compass-vld-v6-2b-onnx",
-          "downloads": 12,
+          "downloads": 102,
           "likes": 0,
           "note": "ONNX for WebGPU in the browser"
         },
         {
           "id": "webbrain-one/webbrain-compass-vld-v6-2b-gguf",
-          "downloads": 240,
+          "downloads": 449,
           "likes": 0,
           "note": "GGUF for llama.cpp"
         },
         {
           "id": "webbrain-one/webbrain-compass-vld-tiny-v5",
-          "downloads": 13,
+          "downloads": 22,
           "likes": 0,
           "note": "Compass VLD Tiny v5, the previous version"
         },
         {
           "id": "webbrain-one/webbrain-compass-vld-tiny-v5-onnx",
-          "downloads": 35,
+          "downloads": 274,
           "likes": 0,
           "note": "Tiny v5, ONNX"
         },
         {
           "id": "webbrain-one/webbrain-compass-vld-tiny-v5-gguf",
-          "downloads": 381,
+          "downloads": 491,
           "likes": 0,
           "note": "Tiny v5, GGUF"
         },
         {
           "id": "webbrain-one/lfm3-vld-2b-multipass",
-          "downloads": 205,
-          "likes": 18,
+          "downloads": 428,
+          "likes": 20,
           "note": "LFM3-VLD-2B Multipass, v6’s base"
         },
         {
           "id": "webbrain-one/lfm3-vld-2b",
-          "downloads": 231,
-          "likes": 15,
+          "downloads": 420,
+          "likes": 16,
           "note": "LFM3-VLD-2B, from Liquid LFM3-VL-2B"
         }
       ],
@@ -381,6 +381,196 @@
         {
           "label": "v6 collection",
           "url": "https://huggingface.co/collections/webbrain-one/webbrain-compass-vld-v6-2b-6ae5de0980732cb99b006957"
+        }
+      ]
+    },
+    {
+      "slug": "perplexing-pegasus-heretic",
+      "name": "Qwen3.8-27B-Perplexing-Pegasus-Heretic",
+      "kind": "Unified local model",
+      "summary": "Multimodal vision, tool calling, pplx-decider typed decisions and Heretic ARA abliteration in one 27B checkpoint. **With imatrix IQ3_XXS or Q3_K_M plus mmproj, the whole stack runs on a single 16 GB GPU.**",
+      "tile": {
+        "size": "full",
+        "visual": "unified",
+        "stats": [
+          {
+            "value": "11.95 GB",
+            "label": "IQ3_XXS + mmproj F16, fits a 16 GB GPU"
+          },
+          {
+            "value": "0 / 8",
+            "label": "refusal probes refused (102/104 → 6/104 classifier)"
+          },
+          {
+            "value": "30 / 30",
+            "label": "typed-decision agreement vs Pegasus"
+          }
+        ]
+      },
+      "page": {
+        "lede": "An Apache-2.0 abliterated release of AveLabs’ Qwen3.8-27B-Perplexing-Pegasus (Qwen3.8-27B + Perplexity pplx-decider-v1-27b). It packs vision, thinking, tool calling, structured decision logprobs and all 15 Multi-Token Prediction tensors into one checkpoint — down to 16 GB consumer GPUs.",
+        "why": "Peak local agent setups usually juggle two or three models in memory at once: a vision model to inspect the page, a typed-decision router for scoring, and an uncensored model that won’t stall on harmless workflows. Unifying them into one 27B checkpoint lets a single 16 GB or 24 GB GPU run the whole stack.",
+        "stats": [
+          {
+            "value": "11.95 GB",
+            "label": "IQ3_XXS (11.09 GB) + mmproj F16 (0.86 GB) for 16 GB GPUs"
+          },
+          {
+            "value": "0 / 8",
+            "label": "refusal probes refused (102/104 → 6/104 classifier)"
+          },
+          {
+            "value": "30 / 30",
+            "label": "typed-decision agreement vs Pegasus (0.0192 mean TVD)"
+          },
+          {
+            "value": "15 MTP",
+            "label": "Multi-Token Prediction tensors kept (blk.64 at Q8_0 in IQ/3-bit GGUFs)"
+          }
+        ],
+        "sections": [
+          {
+            "heading": "Built for 16 GB and 24 GB machines",
+            "paragraphs": [
+              "For 16 GB cards (such as RTX 4060 Ti 16 GB, RTX 5060 Ti 16 GB, RTX 4080, RTX 5070 Ti or RTX 5080), the **GGUF** repo provides `imatrix` quantizations calibrated directly on the abliterated BF16 weights across general knowledge, reasoning, code, multimodal chat and `pplx-decider` prompts.",
+              "**`IQ3_XXS` (11.09 GB)** plus the F16 vision projector **`mmproj` (0.86 GB)** totals **11.95 GB**, leaving ~4 GB on a 16 GB GPU for KV cache and runtime overhead; **`Q3_K_M` (13.00 GB)** also fits in 16 GB with tighter context. On 24 GB GPUs, **`Q4_K_M` (15.84 GB)** is the recommended default. Across `IQ4_XS`, `Q3_K_M` and `IQ3_XXS`, the MTP layer (`blk.64`) is explicitly kept at `Q8_0`."
+            ]
+          },
+          {
+            "heading": "Abliteration without breaking typed decisions",
+            "paragraphs": [
+              "We ran `heretic-llm` Arbitrary-Rank Ablation (`ARA`, `lora_rank=50`, `preserve_row_magnitudes=true`, full BF16 precision, 150 Optuna TPE trials) across layers 16–52, leaving `lm_head.weight` untouched (cosine similarity `1.000001`), preserving the `decision/` readout (`decision_config.json`, `readout.safetensors`) and keeping all 15 `mtp.*` tensors intact.",
+              "Trial 7 cut classifier refusals from **102/104** on unmodified Pegasus to **6/104** (and **0/8** on refusal probes with thinking off) at **0.0618 KL divergence**, while keeping **100.0% (30/30)** typed-decision agreement and **90.0% → 90.0%** probe accuracy."
+            ]
+          },
+          {
+            "heading": "Four hardware targets under Apache-2.0",
+            "paragraphs": [
+              "Alongside `llama.cpp`, LM Studio and Ollama (`GGUF`), the release ships **AutoRound W4A16 INT4** (18.21 GB) for vLLM on Intel Arc Pro B70 (32 GB XPU) and NVIDIA CUDA GPUs, **mixed NVFP4 + FP8** (22.99 GB) with unquantized BF16 `lm_head`, vision and MTP tensors for NVIDIA Blackwell (`sm_100` / `sm_120`), and the full **BF16** reference checkpoint."
+            ]
+          }
+        ],
+        "results": {
+          "title": "Formats, VRAM targets and verification",
+          "columns": [
+            "Build",
+            "Size",
+            "Target hardware",
+            "Verification & notes"
+          ],
+          "rows": [
+            {
+              "cells": [
+                "**GGUF `IQ3_XXS` + `mmproj`**",
+                "11.09\u00a0+\u00a00.86\u00a0GB",
+                "16 GB GPU (`llama.cpp` / LM Studio)",
+                "`imatrix`; `blk.64` MTP at `Q8_0`"
+              ],
+              "highlight": true
+            },
+            {
+              "cells": [
+                "**GGUF `Q3_K_M` + `mmproj`**",
+                "13.00\u00a0+\u00a00.86\u00a0GB",
+                "16 GB GPU (`llama.cpp` / LM Studio)",
+                "`imatrix`; `blk.64` MTP at `Q8_0`"
+              ],
+              "highlight": true
+            },
+            {
+              "cells": [
+                "GGUF `IQ4_XS` + `mmproj`",
+                "14.69\u00a0+\u00a00.86\u00a0GB",
+                "16–24 GB GPU / offload",
+                "`imatrix`; `blk.64` MTP at `Q8_0`"
+              ]
+            },
+            {
+              "cells": [
+                "GGUF `Q4_K_M` + `mmproj`",
+                "15.84\u00a0+\u00a00.86\u00a0GB",
+                "24 GB GPU recommended default",
+                "`imatrix`"
+              ]
+            },
+            {
+              "cells": [
+                "AutoRound W4A16 INT4",
+                "18.21\u00a0GB",
+                "Intel Arc Pro B70 32 GB / CUDA (`vLLM`)",
+                "0/8 refused · 100.0% match (0.06364 mean TVD)"
+              ]
+            },
+            {
+              "cells": [
+                "Mixed NVFP4 + FP8",
+                "22.99\u00a0GB",
+                "NVIDIA Blackwell `sm_100`/`sm_120` (`vLLM` + MTP)",
+                "0/8 refused · 100.0% match (0.06123 mean TVD)"
+              ]
+            },
+            {
+              "cells": [
+                "Base BF16",
+                "Full precision",
+                "H100 / B200 / RTX PRO 6000",
+                "0/8 refused · 100.0% match (0.0192 mean TVD)"
+              ]
+            }
+          ],
+          "note": "Sizes report weight files on disk (excluding KV cache). AutoRound INT4 and NVFP4 metrics come from their model cards (NVFP4 measured on calibrated QDQ weights prior to packing); GGUF inherits the base BF16 verification and has not been separately re-scored on the 30-probe decision suite."
+        },
+        "caveats": [
+          "Weight sizes exclude KV cache and runtime buffers; longer contexts on 16 GB cards need `IQ3_XXS` or `Q3_K_M` rather than `Q4_K_M`.",
+          "End-to-end scores on WebBrain’s frozen 100-case planner and vision benchmarks have not been published for this checkpoint yet.",
+          "Built on Alibaba’s Qwen3.8-27B, Perplexity’s `pplx-decider-v1-27b` and AveLabs’ `Qwen3.8-27B-Perplexing-Pegasus`."
+        ]
+      },
+      "models": [
+        {
+          "id": "webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic-GGUF",
+          "downloads": 102,
+          "likes": 4,
+          "note": "imatrix GGUF (IQ3_XXS to Q8_0 + split BF16) and mmproj F16 for 16–24 GB GPUs"
+        },
+        {
+          "id": "webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic-AutoRound-INT4",
+          "downloads": 20,
+          "likes": 0,
+          "note": "AutoRound W4A16 INT4 symmetric for vLLM on Intel Arc Pro B70 and CUDA"
+        },
+        {
+          "id": "webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic-NVFP4",
+          "downloads": 15,
+          "likes": 0,
+          "note": "Mixed NVFP4 + FP8 with MTP for NVIDIA Blackwell vLLM"
+        },
+        {
+          "id": "webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic",
+          "downloads": 31,
+          "likes": 0,
+          "note": "Base BF16 weights with intact lm_head, decision/ readout and 15 MTP tensors"
+        }
+      ],
+      "posts": [
+        {
+          "slug": "qwen38-27b-perplexing-pegasus-heretic",
+          "title": "Qwen3.8-27B-Perplexing-Pegasus-Heretic: One 27B Model for Local Vision, Tool Calling, and Typed Decisions",
+          "date": "2026-11-16"
+        }
+      ],
+      "links": [
+        {
+          "label": "GGUF on Hugging Face (16–24 GB)",
+          "url": "https://huggingface.co/webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic-GGUF"
+        },
+        {
+          "label": "Base BF16 on Hugging Face",
+          "url": "https://huggingface.co/webbrain-one/Qwen3.8-27B-Perplexing-Pegasus-Heretic"
+        },
+        {
+          "label": "r/LocalLLaMA thread",
+          "url": "https://www.reddit.com/r/LocalLLaMA/comments/1xxg12n/"
         }
       ]
     },
@@ -489,31 +679,31 @@
       "models": [
         {
           "id": "webbrain-one/webbrain-compass-tiny-v2",
-          "downloads": 18,
+          "downloads": 21,
           "likes": 0,
           "note": "Compass Tiny v2, from MiniCPM5-2B"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-v2.1",
-          "downloads": 338,
+          "downloads": 192,
           "likes": 1,
           "note": "Compass Tiny v2.1"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3",
-          "downloads": 203,
+          "downloads": 120,
           "likes": 2,
           "note": "Compass Tiny XS v3, from Spark-X2.5-1.7B"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3-onnx",
-          "downloads": 11,
+          "downloads": 10,
           "likes": 1,
           "note": "ONNX for WebGPU"
         },
         {
           "id": "webbrain-one/webbrain-compass-tiny-xs-v3.1-onnx",
-          "downloads": 17,
+          "downloads": 11,
           "likes": 1,
           "note": "v3.1, ONNX for WebGPU"
         }
@@ -681,13 +871,13 @@
       "models": [
         {
           "id": "webbrain-one/webbrain-vl-2-450M",
-          "downloads": 93,
-          "likes": 5,
+          "downloads": 83,
+          "likes": 6,
           "note": "WebBrain VL 2, from LFM2.5-VL-450M"
         },
         {
           "id": "webbrain-one/webbrain-vl-2-450M-onnx",
-          "downloads": 370,
+          "downloads": 192,
           "likes": 0,
           "note": "ONNX build that ships in the extension"
         }
@@ -695,7 +885,7 @@
       "datasets": [
         {
           "id": "webbrain-one/webbrain-vl-2-450M-dataset",
-          "downloads": 587,
+          "downloads": 574,
           "likes": 2,
           "note": "50,000 browser screenshots with six-section observations",
           "dataset": true
@@ -787,13 +977,13 @@
       "models": [
         {
           "id": "webbrain-one/d1-browser-decision-fp32",
-          "downloads": 43,
+          "downloads": 50,
           "likes": 0,
           "note": "FP32 release, from LiquidAI d1-omni-600M"
         },
         {
           "id": "webbrain-one/d1-browser-decision-fp16",
-          "downloads": 275,
+          "downloads": 366,
           "likes": 0,
           "note": "FP16 weights for WebGPU in the browser"
         }
@@ -1043,19 +1233,19 @@
       "models": [
         {
           "id": "webbrain-one/Laguna-XS-2.1-Vision-NVFP4",
-          "downloads": 101,
+          "downloads": 74,
           "likes": 3,
           "note": "Poolside Laguna XS 2.1 with MoonViT vision, NVFP4"
         },
         {
           "id": "webbrain-one/Laguna-XS-2.1-Vision-BF16",
-          "downloads": 14,
+          "downloads": 13,
           "likes": 0,
           "note": "BF16"
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-Vision-NVFP4",
-          "downloads": 211,
+          "downloads": 165,
           "likes": 20,
           "note": "DeepSeek V4 Flash with vision, NVFP4"
         },
@@ -1067,13 +1257,13 @@
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-0731-Vision-NVFP4",
-          "downloads": 104,
+          "downloads": 161,
           "likes": 33,
           "note": "The 0731 revision with vision, NVFP4"
         },
         {
           "id": "webbrain-one/DeepSeek-V4-Flash-0731-Vision-BF16",
-          "downloads": 153,
+          "downloads": 89,
           "likes": 6,
           "note": "The 0731 revision with vision, BF16"
         }
@@ -1155,13 +1345,13 @@
       "models": [
         {
           "id": "webbrain-one/Nanbeige4.3-33B-NVFP4",
-          "downloads": 987,
-          "likes": 20,
+          "downloads": 1522,
+          "likes": 23,
           "note": "Nanbeige 4.3 33B in NVFP4"
         },
         {
           "id": "webbrain-one/Ling-3.0-tiny-ONNX",
-          "downloads": 39,
+          "downloads": 23,
           "likes": 2,
           "note": "inclusionAI Ling-3.0-tiny for ONNX runtimes"
         }
