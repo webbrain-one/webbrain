@@ -1579,6 +1579,11 @@
       // below, instead of including unrelated body counters in its owner.
       owner = form; unstructuredOwner = true; meaningfulOwner = true;
     }
+    // Native form membership can bind a complete editor without guessing an
+    // enclosing region. Its controls, associated labels and metabox headings
+    // may exceed the generic owner budget (e.g. Classic Editor: 301 nodes).
+    // Keep every binding and a hard bound; arbitrary/ARIA owners stay smaller.
+    const nodeLimit = form instanceof HTMLFormElement ? 512 : 256;
     const nodes = [], ancestors = [], boundTextNodes = new Set(), dialogIdentities = new Set(), namedNavigationControls = new Set(), visualImages = new Set();
     let uncoveredLabel = false;
     const addNode = (node, options = {}) => {
@@ -1599,7 +1604,7 @@
         if (options.directText && !boundTextNodes.has(node)) previous.value = modelSemantic(node, { directText: true });
         return !options.fullTextRequired || boundTextNodes.has(node);
       }
-      if (nodes.length >= 256 || (node.tagName === 'INPUT' && node.type === 'file' && node.files?.length > 32)) return false;
+      if (nodes.length >= nodeLimit || (node.tagName === 'INPUT' && node.type === 'file' && node.files?.length > 32)) return false;
       if (node instanceof HTMLImageElement && [node.currentSrc, node.getAttribute('src'), node.getAttribute('srcset'), node.getAttribute('sizes')]
         .some(value => String(value || '').length > 8192)) return false;
       const labels = modelLabels(node);
@@ -1609,7 +1614,7 @@
         ...(node.tagName === 'INPUT' && node.type === 'file' ? { files: [...node.files || []] } : {}) });
       if (options.text) boundTextNodes.add(node);
       for (const label of labels) {
-        if (nodes.length >= 256) return false;
+        if (nodes.length >= nodeLimit) return false;
         if (!nodes.some(item => item.node === label.node)) {
           nodes.push(label); boundTextNodes.add(label.node);
         } else if (!boundTextNodes.has(label.node)) uncoveredLabel = true;
