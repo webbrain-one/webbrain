@@ -237,7 +237,6 @@ for (const build of ['chrome', 'firefox']) {
     ['inactive session', (agent, tab) => { agent.progressSessions.get(tab).mode = 'inactive'; }],
     ['action session', (agent, tab) => { agent.progressSessions.get(tab).allowedActions = ['follow']; }],
     ['mixed action session', (agent, tab) => { agent.progressSessions.get(tab).allowedActions = ['process_item', 'follow']; }],
-    ['mutation task', (agent, tab) => { agent._planExecutionGuards.get(tab).requiresStateChange = true; }],
     ['submission task', (agent, tab) => { agent._planExecutionGuards.get(tab).requiresSubmission = true; }],
     ['disabled guard', (agent, tab) => { agent._planExecutionGuards.get(tab).enabled = false; }],
     ['stale session', (agent, tab) => { agent.progressSessions.get(tab).taskText = 'A different task'; }],
@@ -251,6 +250,19 @@ for (const build of ['chrome', 'firefox']) {
     for (let index = 0; index < 8; index++) result = checkRead(agent, tab, fetchArgs(index * 7000), fetchWindow(index * 7000));
     assert.equal(result.kind, 'deliver');
     assert.equal(result.count, 8);
+  });
+
+  test(`${build}: a mutation task gets one API discovery read but no collection continuation credit`, () => {
+    const tab = nextTab++, agent = new Agent({});
+    bindCollection(agent, tab, { guard: { requiresStateChange: true } });
+    let result;
+    for (let index = 0; index < 9; index++) {
+      result = checkRead(agent, tab, fetchArgs(index * 7000), fetchWindow(index * 7000));
+      if (index < 8) assert.notEqual(result.kind, 'deliver');
+    }
+    assert.equal(result.kind, 'deliver');
+    assert.equal(result.count, 8, 'new offsets at one endpoint cannot renew API preparation credit');
+    assert.equal(agent.deliveryApiReads.get(tab).size, 1);
   });
 
   test(`${build}: task-bound coverage survives page resets and clears at a run boundary`, () => {
