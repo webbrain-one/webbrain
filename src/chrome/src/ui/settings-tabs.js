@@ -101,5 +101,11 @@
     initial = requested;
   }
 
+  if (hash === 'supervision') initial = 'display';
   activate(initial);
+  if (hash === 'supervision') {
+    const control = document.getElementById('select-preset-supervision');
+    control?.scrollIntoView({ block: 'center' });
+    control?.focus({ preventScroll: true });
+  }
 })();
