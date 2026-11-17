@@ -363,3 +363,5 @@ hard list refuses, that every id the code names is registered, `mustNotBlock`
 for every guard added after the registry (the 158 that existed then are
 grandfathered, and that list only shrinks), and a ceiling on completion
 refusals (`blockedDone: true`) per build.
+
+When repeated pre-dispatch guard refusals stop a run, the runtime emits a dedicated UI event. The side panel shows one notice per assistant response linking directly to Agent supervision settings. This uses no model call and neither changes settings nor retries an action. The link focuses the supervision control; changes apply to the next run.

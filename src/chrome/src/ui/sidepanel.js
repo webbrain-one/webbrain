@@ -11614,6 +11614,10 @@ function handleAgentUpdateMessage(msg) {
       scrollToBottom();
       break;
 
+    case 'guard_supervision_notice':
+      renderGuardSupervisionNotice(eventAssistantEl || currentAssistantEl);
+      break;
+
     case 'run_capture_warning':
       if (data?.kind === 'record' && data?.message) {
         addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.mic_unavailable', {
@@ -17424,3 +17428,24 @@ document.addEventListener('wb-locale-changed', () => standaloneRagReadiness?.ren
 globalThis.addEventListener('pagehide', () => standaloneRagReadiness?.close(), { once: true });
 startInputPlaceholderRotation();
 init();
+
+
+// Runtime-only notice: no page text or model prose determines whether it appears.
+function renderGuardSupervisionNotice(assistantEl) {
+  const content = assistantEl?.querySelector('.message-content');
+  if (!content || content.querySelector('.guard-supervision-notice')) return;
+  const notice = document.createElement('div');
+  notice.className = 'guard-supervision-notice';
+  notice.setAttribute('role', 'note');
+  const text = document.createElement('p');
+  text.textContent = t('sp.guard_supervision.notice');
+  const link = document.createElement('a');
+  link.href = chrome.runtime.getURL('src/ui/settings.html#supervision');
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = t('sp.guard_supervision.settings');
+  notice.append(text, link);
+  content.appendChild(notice);
+  schedulePersist();
+  scrollToBottom();
+}
