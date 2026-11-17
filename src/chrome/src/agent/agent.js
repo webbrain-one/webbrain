@@ -44,6 +44,7 @@ import { STANDARD_TOOL_RESULT_CHARS, createReadCompletenessState, isCommunicatio
 import { LoopDetector } from './loop-detector.js';
 import { recordCollectionReadProgress } from './collection-read-progress.js';
 import { recordDocumentReadProgress } from './document-read-progress.js';
+import { recordApiReadProgress } from './api-read-progress.js';
 import { PAGE_COVERAGE_CAVEAT, createPageReadCoverage, fitPageContentResult, pageReadCoverageBlock, pageReadCoverageGap, readsPageSource, recordPageObservation, recordPageRead } from './page-read-coverage.js';
 import { parseToolCallsFromText } from './tool-call-parser.js';
 import { IMAGE_BUDGET, estimateImageTokens, fitImageDimensions } from './image-budget.js';
@@ -1328,6 +1329,7 @@ export class Agent extends LoopDetector {
     this.deliveryActionableDiscoveryResets = new Set(); // tabIds that used their one discovery reset since meaningful progress
     this.deliveryCollectionReads = new Map(); // tabId -> task-bound finite source coverage
     this.deliveryDocumentReads = new Map(); // tabId -> read_page windows read this run
+    this.deliveryApiReads = new Map(); // tabId -> distinct API endpoints read this run
     this.lastAutoScreenshotTs = new Map(); // tabId -> ms — defensive debounce
     // tabId -> { toolName, streak }. Burst state must not leak across tabs or
     // be consumed by read-only preflight checks.
@@ -11029,6 +11031,7 @@ export class Agent extends LoopDetector {
     super._clearRunLoopState(tabId);
     this.deliveryCollectionReads.delete(tabId);
     this.deliveryDocumentReads.delete(tabId);
+    this.deliveryApiReads.delete(tabId);
   }
 
   /**
@@ -11902,6 +11905,18 @@ export class Agent extends LoopDetector {
     return recorded.madeProgress;
   }
 
+  _deliveryCheckpointApiReadProgress(tabId, name, args, result) {
+    if (name !== 'fetch_url') return false;
+    const guard = this._planExecutionGuards.get(tabId);
+    // This allowance belongs to an active action task, including runs with
+    // advisory action guards. It does not relax permissions or completion.
+    if (!guard?.enabled || guard.requiresStateChange !== true || guard.taskDrifted === true
+        || !guard.taskKey || guard.taskKey !== this._progressTaskKeyHash(tabId)) return false;
+    const recorded = recordApiReadProgress(this.deliveryApiReads.get(tabId), args, result);
+    this.deliveryApiReads.set(tabId, recorded.state);
+    return recorded.madeProgress;
+  }
+
   _checkDeliveryObservationStreak(tabId, name, args = {}, result = null, options = {}) {
     const observation = this.constructor.DELIVERY_OBSERVATION_TOOLS.has(name)
       && !isNetworkMutation(name, args);
@@ -11938,6 +11953,11 @@ export class Agent extends LoopDetector {
       // post-action verification debt is meaningful progress. Start the next
       // research streak from zero instead of charging this verification read.
       this.deliveryObservationStreaks.delete(tabId);
+      return { kind: 'none' };
+    }
+    if (observation && this._deliveryCheckpointApiReadProgress(tabId, name, args, result)) {
+      // Fresh API preparation consumes a finite per-run allowance. Rereads,
+      // failed requests and reads beyond that allowance still count below.
       return { kind: 'none' };
     }
     if (documentReadProgress) {
@@ -31194,7 +31214,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _deliveryRecoverySystemPrompt(responseLanguagePolicy = null, fallbackLocale = 'en') {
     return [
       'You are WebBrain on a forced terminal delivery turn.',
-      'Browser observation and action tools are no longer available because two delivery checkpoints were ignored.',
+      'Browser observation and action tools are no longer available because the run reached its observation limit without recognized task progress.',
       'Use only facts already present in the conversation, tool results, progress state, and scratchpad.',
       formatResponseLanguagePolicyInstruction(responseLanguagePolicy, fallbackLocale),
       'Call the done tool exactly once. Use outcome partial when useful evidence or results can be delivered; use failed only when there is no useful result or a hard blocker prevented progress. Never use success.',
