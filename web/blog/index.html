@@ -439,10 +439,21 @@
   </style>
   <style>
     [hidden] { display: none !important; }
-    .blog-index main { padding-top: 40px; }
+    body.blog-index {
+      --max-w: 1280px;
+      --wb-footer-width: min(calc(var(--max-w) - 48px), calc(100% - 48px));
+    }
+    .blog-index main { padding-top: 36px; }
     .blog-tools {
       position: relative;
-      margin: 0 0 26px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "label label"
+        "search status";
+      align-items: center;
+      gap: 8px 20px;
+      margin: 0 0 24px;
       padding-left: 18px;
       scroll-margin-top: 88px;
     }
@@ -456,8 +467,9 @@
       box-shadow: 0 0 18px var(--accent-glow);
     }
     .archive-search-label {
+      grid-area: label;
       display: block;
-      margin-bottom: 8px;
+      margin-bottom: 0;
       color: var(--text-dim);
       font-size: 12px;
       font-weight: 600;
@@ -465,9 +477,12 @@
       text-transform: uppercase;
     }
     .search-shell {
+      grid-area: search;
+      width: 100%;
+      max-width: 560px;
       display: flex;
       align-items: center;
-      min-height: 50px;
+      min-height: 46px;
       background: color-mix(in srgb, var(--bg-card) 92%, transparent);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -489,7 +504,7 @@
     .blog-search {
       width: 100%;
       min-width: 0;
-      padding: 12px 10px;
+      padding: 10px;
       appearance: none;
       -webkit-appearance: none;
       border: 0;
@@ -532,18 +547,48 @@
       outline-offset: 3px;
     }
     .archive-status {
+      grid-area: status;
       display: flex;
       align-items: center;
       gap: 10px;
       min-height: 24px;
-      margin-top: 9px;
+      margin-top: 0;
+      white-space: nowrap;
       color: var(--text-dim);
-      font-size: 12px;
+      font-size: 13px;
     }
     .archive-status-rule {
       width: 24px;
       height: 1px;
       background: var(--border);
+    }
+    .blog-index .post-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .blog-index .post-card {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+      padding: 20px 22px;
+    }
+    .blog-index .post-meta { margin-bottom: 8px; }
+    .blog-index .post-title {
+      font-size: 18px;
+      line-height: 1.32;
+      margin-bottom: 8px;
+      overflow-wrap: break-word;
+    }
+    .blog-index .post-excerpt {
+      font-size: 14px;
+      line-height: 1.55;
+      overflow-wrap: break-word;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .empty-state {
       padding: 38px 24px;
@@ -611,7 +656,22 @@
     }
     .page-button:disabled { opacity: 0.38; cursor: not-allowed; }
     .page-direction { min-width: 86px; }
+    @media (max-width: 1040px) {
+      .blog-index .post-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 700px) {
+      body.blog-index { --wb-footer-width: calc(100% - 40px); }
+      .blog-tools {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "label"
+          "search"
+          "status";
+        gap: 8px;
+      }
+      .search-shell { max-width: none; }
+      .blog-index .post-list { grid-template-columns: 1fr; }
+      .blog-index .post-card { padding: 18px 20px; }
       .pagination { gap: 8px; }
       .page-button { min-width: 32px; height: 34px; padding: 0 8px; }
       .page-direction { min-width: 72px; }
@@ -2052,7 +2112,7 @@
   </script>
   <script>
     (function () {
-      const PAGE_SIZE = 8;
+      const PAGE_SIZE = 24;
       const searchInput = document.getElementById('blog-search');
       const clearButton = document.getElementById('search-clear');
       const emptyClearButton = document.getElementById('empty-clear');
