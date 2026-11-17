@@ -6,6 +6,19 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [49.1.2] - 2026-11-17
+
+### Added
+- When repeated guard refusals stop a run, the side panel shows a notice that links to Agent supervision settings, so you can loosen the checks and try again. The notice changes no setting by itself, and site permissions still apply. Chrome and Firefox.
+
+### Changed
+- WebBrain Companion download links now point to version 0.1.5. Its quota summary uses the healthiest scoped pool, so one exhausted model group no longer makes the whole plan look empty.
+- The blog index uses a three-column layout with 24 posts per page, and the Research page lists Qwen3.8-27B-Perplexing-Pegasus-Heretic.
+
+### Fixed
+- In API-first tasks, a successful JSON `fetch_url` read now counts as preparation instead of an idle observation. A run that is still loading a schema, the current user, a taxonomy or existing content is no longer stopped by the observation limit before it can write. Up to eight distinct GET endpoints count per run; rereads, failed requests and non-JSON responses still count toward the limit. Chrome and Firefox.
+- Large native editor forms, such as the WordPress Classic Editor, now keep their full set of controls and labels in the action context instead of dropping fields at the 256-node limit. Chrome and Firefox.
+
 ## [49.1.0] - 2026-11-15
 
 ### Added
