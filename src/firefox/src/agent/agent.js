@@ -15751,6 +15751,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // bounded by its own count instead (_noteRefusalWithoutDispatch).
         const refusalStop = this._noteRefusalWithoutDispatch(tabId, fnName, fnArgs, workflowPreSubmitBlock);
         if (refusalStop) {
+          if (this._actionGuardsEnabled(tabId)) onUpdate('guard_supervision_notice', { reason: 'repeated_guard_refusal' });
           this._appendSyntheticToolResults(tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
             () => ({ success: false, skipped: true, error: 'skipped: run stopped after repeated refusals' }));
           const refusalRunId = this.currentRunId.get(tabId);

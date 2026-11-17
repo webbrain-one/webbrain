@@ -5738,3 +5738,6 @@ html[data-ui-scale="175"] .composer-toolbar {
   -webkit-mask: url("../icons/companion-tray.png") center / contain no-repeat;
   mask: url("../icons/companion-tray.png") center / contain no-repeat;
 }
+
+.guard-supervision-notice { margin: 12px 0; padding: 12px; border: 1px solid currentColor; border-radius: 8px; font-size: 0.9em; }
+.guard-supervision-notice p { margin: 0 0 8px; }
