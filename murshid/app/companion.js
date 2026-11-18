@@ -195,7 +195,9 @@ class Companion {
   async ensureRunning() {
     this.locate();
     if (await this.probe()) {
-      this.refreshQuotas().catch(() => {});
+      // Publish the first reading as soon as it arrives, like the launch
+      // branch below; otherwise the toolbar stays hidden until the poll tick.
+      this.refreshQuotas().then(() => this.ctx.refreshAllWindows()).catch(() => {});
       return true;
     }
     if (!this.ctx.settings.get('startCompanion') || !this.exe) return false;
