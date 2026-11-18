@@ -638,7 +638,7 @@ function popupQuotaMenu(ctx, w, { x, y }) {
       if (compass.promo) sub.push({ label: i18n.t('compass.promo', { amount: money(compass.promo) }), enabled: false });
       if (compass.error) sub.push({ label: `${i18n.t('quota.error')} — ${compass.error}`, enabled: false });
     }
-    const urls = companion.compassUrls;
+    const urls = companion.compassUrls();
     if (urls) {
       sub.push({ type: 'separator' });
       sub.push({ label: i18n.t('compass.subscribe'), click: () => shell.openExternal(urls.subscribe) });

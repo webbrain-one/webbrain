@@ -79,6 +79,11 @@ type Settings struct {
 	// CompassGuid identifies this machine to WebBrain Compass, the cloud
 	// service at api.webbrain.one, whose weekly quota it tracks.
 	CompassGuid string `json:"compass_guid,omitempty"`
+	// CompassShared is set when Murshid hands over the WebBrain extension's
+	// device id, the identity its cloud requests use. Only then does the
+	// panel offer sign-up and billing: a generated id would buy credit for
+	// an account no inference client uses.
+	CompassShared bool `json:"compass_shared,omitempty"`
 }
 
 type Store struct {

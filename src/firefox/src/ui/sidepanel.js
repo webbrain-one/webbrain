@@ -8715,9 +8715,13 @@ async function showCompassPickerQuota(deviceGuid) {
       });
       if (!response.ok) return;
       const usage = await response.json();
-      const limit = (Number(usage.weekly_limit_usd) || 0) + (Number(usage.promotional_balance_usd) || 0);
-      if (!(limit > 0)) return;
-      left = Math.max(0, Math.round(((limit - Math.min(Number(usage.weekly_used_usd) || 0, limit)) / limit) * 100));
+      const base = Number(usage.weekly_limit_usd) || Number(usage.base_weekly_allowance_usd) || 0;
+      const promoLeft = Math.max(0, Number(usage.promotional_balance_usd) || 0);
+      const promoSpent = Math.max(0, Number(usage.promotional_spent_usd) || 0);
+      const capacity = base + promoLeft + promoSpent;
+      if (!(capacity > 0)) return;
+      const baseSpent = Math.min(base, Math.max(0, (Number(usage.weekly_used_usd) || 0) - promoSpent));
+      left = Math.max(0, Math.min(100, Math.round(((base - baseSpent + promoLeft) / capacity) * 100)));
       showCompassPickerQuota._cache = { deviceGuid, left, fetchedAt: Date.now() };
     }
     const meta = t('sp.providers.compass_left', { pct: left });

@@ -33,7 +33,7 @@
       addFirst: "Add a subscription",
       emptySubs: "Sign in with Claude, ChatGPT, Google, Grok or Kimi. Each one shows up here with how much of it is left.",
       compass: "WebBrain Compass",
-      compassLede: "WebBrain's own cloud model, tracked for this computer. Sign up for a larger weekly allowance.",
+      compassLede: "WebBrain's own cloud model, tracked for this computer.",
       compassLoading: "Reading usage…",
       compassErrorShort: "Usage unavailable",
       compassPlan: "Plan",
@@ -217,7 +217,7 @@
       addFirst: "Abonelik ekle",
       emptySubs: "Claude, ChatGPT, Google, Grok ya da Kimi ile giriş yap. Her biri burada ne kadarının kaldığıyla görünür.",
       compass: "WebBrain Compass",
-      compassLede: "WebBrain'ın kendi bulut modeli, bu bilgisayar için izleniyor. Daha büyük haftalık hak için kaydol.",
+      compassLede: "WebBrain'ın kendi bulut modeli, bu bilgisayar için izleniyor.",
       compassLoading: "Kullanım okunuyor…",
       compassErrorShort: "Kullanım okunamadı",
       compassPlan: "Plan",
@@ -661,13 +661,22 @@
   }
 
   // --- WebBrain Compass (the cloud service) ---------------------------------------
-  // The service reports the weekly window in dollars; promotional credit rides
-  // on top of the base allowance, so it counts toward what is left.
+  // The base allowance is spent first, and the weekly use already includes
+  // what came out of promotional credit, so the base is what was spent
+  // beyond that credit; credit left is still spendable.
   function compassPct(c) {
-    const limit = (c.weekly_limit_usd || 0) + (c.promotional_balance_usd || 0);
-    if (!(limit > 0)) return null;
-    const used = Math.min(c.weekly_used_usd || 0, limit);
-    return Math.max(0, ((limit - used) / limit) * 100);
+    const base = c.weekly_limit_usd || c.base_weekly_allowance_usd || 0;
+    const promoLeft = Math.max(0, c.promotional_balance_usd || 0);
+    const promoSpent = Math.max(0, c.promotional_spent_usd || 0);
+    const capacity = base + promoLeft + promoSpent;
+    if (!(capacity > 0)) return null;
+    const baseSpent = Math.min(base, Math.max(0, (c.weekly_used_usd || 0) - promoSpent));
+    return Math.max(0, Math.min(100, ((base - baseSpent + promoLeft) / capacity) * 100));
+  }
+
+  function compassLimit(c) {
+    return (c.weekly_limit_usd || c.base_weekly_allowance_usd || 0)
+      + (c.promotional_balance_usd || 0) + (c.promotional_spent_usd || 0);
   }
 
   function compassInfo() {
@@ -918,7 +927,7 @@
     if (c.status === "ok") {
       const p = compassPct(c);
       body = kv(t("compassPlan"), esc(c.tier || "free"))
-        + kv(t("compassUsed"), `${usd(c.weekly_used_usd)} / ${usd(c.weekly_limit_usd)}`)
+        + kv(t("compassUsed"), `${usd(c.weekly_used_usd)} / ${usd(compassLimit(c))}`)
         + (p != null ? kv(t("compassLeft"), pctText(p)) : "")
         + (c.next_reset_at ? kv(t("compassReset"), when(c.next_reset_at)) : "")
         + (c.promotional_balance_usd ? kv(t("compassPromo"), usd(c.promotional_balance_usd)) : "")
@@ -931,11 +940,16 @@
       body = `<p class="note">${esc(t("compassLoading"))}</p>`;
     }
     const busy = ui.compassBusy;
+    // Sign-up and billing appear only when Murshid shared the extension's
+    // device id; otherwise the panel tracks usage without selling anything.
+    const subscribe = state.compass_subscribe_url
+      ? `<button class="btn primary" data-act="open-url" data-url="${esc(state.compass_subscribe_url)}">${t("compassSubscribe")}</button>` : "";
+    const account = state.compass_account_url
+      ? `<button class="btn" data-act="open-url" data-url="${esc(state.compass_account_url)}">${t("compassAccount")}</button>` : "";
     return sheetHead(t("compass"), t("compassLede"))
       + body
       + `<div class="sheet-actions">
-          <button class="btn primary" data-act="open-url" data-url="${esc(state.compass_subscribe_url || "")}">${t("compassSubscribe")}</button>
-          <button class="btn" data-act="open-url" data-url="${esc(state.compass_account_url || "")}">${t("compassAccount")}</button>
+          ${subscribe}${account}
           <button class="btn small" data-act="compass-refresh" ${busy ? "disabled" : ""}>${busy ? t("refreshing") : t("refreshUsage")}</button>
         </div>`;
   }

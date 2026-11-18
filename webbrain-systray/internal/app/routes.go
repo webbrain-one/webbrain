@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/esokullu/webbrain-systray/internal/compass"
 	"github.com/esokullu/webbrain-systray/internal/d1"
 	"github.com/esokullu/webbrain-systray/internal/localmodel"
 	"github.com/esokullu/webbrain-systray/internal/logx"
@@ -350,6 +351,32 @@ func (a *App) routes(e *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 	api.POST("/compass/refresh", func(c *gin.Context) {
+		go a.RefreshCompass()
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	// Murshid hands over the WebBrain extension's device id, the identity the
+	// extension's cloud requests use, so sign-up and billing from the panel
+	// match that account instead of a generated, inference-less one.
+	api.POST("/compass/device", func(c *gin.Context) {
+		var req struct {
+			Guid string `json:"guid"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		guid := strings.ToLower(strings.TrimSpace(req.Guid))
+		if !compass.ValidGuid(guid) {
+			fail(c, http.StatusBadRequest, errors.New("not a device id"))
+			return
+		}
+		if _, err := a.Store.Update(func(s *settings.Settings) {
+			s.CompassGuid = guid
+			s.CompassShared = true
+		}); err != nil {
+			fail(c, http.StatusInternalServerError, err)
+			return
+		}
 		go a.RefreshCompass()
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})

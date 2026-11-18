@@ -3129,14 +3129,20 @@ async function refreshCompassUsage() {
 
 function renderCompassUsage(slot, usage, deviceGuid) {
   if (!slot.isConnected) return;
-  if (!usage || !(Number(usage.weekly_limit_usd) > 0)) {
+  const base = usage ? Number(usage.weekly_limit_usd) || Number(usage.base_weekly_allowance_usd) || 0 : 0;
+  const promoLeft = usage ? Math.max(0, Number(usage.promotional_balance_usd) || 0) : 0;
+  const promoSpent = usage ? Math.max(0, Number(usage.promotional_spent_usd) || 0) : 0;
+  const capacity = base + promoLeft + promoSpent;
+  if (!(capacity > 0)) {
     slot.hidden = true;
     slot.replaceChildren();
     return;
   }
-  const limit = (Number(usage.weekly_limit_usd) || 0) + (Number(usage.promotional_balance_usd) || 0);
-  const used = Math.min(Number(usage.weekly_used_usd) || 0, limit);
-  const left = limit > 0 ? Math.max(0, Math.round(((limit - used) / limit) * 100)) : 0;
+  // The week's use already includes what came out of promotional credit, so
+  // the base allowance is what was spent beyond that credit; credit left
+  // still counts toward the window.
+  const baseSpent = Math.min(base, Math.max(0, (Number(usage.weekly_used_usd) || 0) - promoSpent));
+  const left = Math.max(0, Math.min(100, Math.round(((base - baseSpent + promoLeft) / capacity) * 100)));
   const line = document.createElement('p');
   line.textContent = t('st.providers.compass_usage', { pct: left });
   const reset = new Date(usage.next_reset_at || '');

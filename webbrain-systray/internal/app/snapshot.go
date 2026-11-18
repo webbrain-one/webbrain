@@ -98,8 +98,12 @@ func (a *App) Snapshot() Snapshot {
 		Update:       a.UpdateStatus(),
 	}
 	snap.Decision.Endpoint = base + "/companion/v1/decide"
-	snap.CompassSubscribe = compass.SubscribeURL(s.CompassGuid)
-	snap.CompassAccount = compass.AccountURL(s.CompassGuid)
+	// Checkout only when the tracked id is the inference identity Murshid
+	// shared; the panel hides the links otherwise.
+	if s.CompassShared && s.CompassGuid != "" {
+		snap.CompassSubscribe = compass.SubscribeURL(s.CompassGuid)
+		snap.CompassAccount = compass.AccountURL(s.CompassGuid)
+	}
 	if snap.Network {
 		snap.NetworkURLs = networkURLs(port)
 	}

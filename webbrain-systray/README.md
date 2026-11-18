@@ -18,9 +18,12 @@ WebBrain's decision model (Compass VLD v6 2B, or d1) natively.
   open the panel.
 - **WebBrain Compass too.** The cloud service at api.webbrain.one appears as
   its own row in the tray menu and the panel, with its weekly allowance, what
-  is spent of it and when it resets. *Sign up* opens Stripe checkout for this
-  machine, *Account & billing* opens the portal; the companion keeps a device
-  id in its settings so the two link to the right account.
+  is spent of it and when it resets. When Murshid runs the companion it hands
+  over the WebBrain extension's device id, the identity the extension's cloud
+  requests use, so *Sign up* (Stripe checkout) and *Account & billing* open
+  the account that actually serves the agent; a standalone companion tracks
+  usage but leaves checkout to the extension instead of selling credit to an
+  id no client uses.
 - **Bonsai 2 27B locally.** The smallest packing (PTQ1_0, 5.95 GB) plus the Q8_0
   vision projector through PrismML's llama.cpp fork, or the MLX 2-bit pack on
   Apple Silicon. The companion sizes it to your machine and decides whether the

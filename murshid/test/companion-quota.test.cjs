@@ -82,6 +82,19 @@ test('summarizeCompass counts promotional credit toward what is left', () => {
   assert.equal(c.remaining, 50);
 });
 
+test('summarizeCompass does not subtract promotional spending twice', () => {
+  // $0.50 base, $0.25 of the $0.50 reward spent, $0.25 left: the week's use
+  // already includes the promotional debit, so $0.25 of a $1.00 window is
+  // 25% left, not 0%.
+  const c = summarizeCompass({
+    weekly_used_usd: 0.75, weekly_limit_usd: 0.5,
+    promotional_balance_usd: 0.25, promotional_spent_usd: 0.25,
+  });
+  assert.equal(c.remaining, 25);
+  assert.equal(c.limit, 1);
+  assert.equal(c.promo, 0.25);
+});
+
 test('summarizeCompass without a limit reports no percent', () => {
   const c = summarizeCompass({ tier: 'free', weekly_used_usd: 0, weekly_limit_usd: 0 });
   assert.equal(c.remaining, null);
