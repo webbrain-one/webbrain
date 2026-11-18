@@ -116,12 +116,21 @@ Section "Install"
 ; single architecture out of the installer.
   File "/oname=WebBrainCompanion-x64.tmp" "${SRC_X64}"
   File "/oname=WebBrainCompanion-arm64.tmp" "${SRC_ARM64}"
+; Rename fails when the destination exists, and CloseRunning only stops the
+; old build: remove it first, then check the replacement happened before the
+; version is recorded as installed.
+  Delete "$INSTDIR\${EXE}"
+  ClearErrors
   ${If} ${IsNativeARM64}
     Rename "WebBrainCompanion-arm64.tmp" "${EXE}"
     Delete "WebBrainCompanion-x64.tmp"
   ${Else}
     Rename "WebBrainCompanion-x64.tmp" "${EXE}"
     Delete "WebBrainCompanion-arm64.tmp"
+  ${EndIf}
+  ${If} ${Errors}
+    MessageBox MB_ICONSTOP|MB_OK|MB_SETFOREGROUND "${APPNAME} could not replace $INSTDIR\${EXE}. Close it and run the installer again." /SD IDOK
+    Abort
   ${EndIf}
   File "/oname=LICENSE.txt" "${LICENSE}"
   File "/oname=README.md" "${README}"
