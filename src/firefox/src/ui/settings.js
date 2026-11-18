@@ -3134,11 +3134,11 @@ function renderCompassUsage(slot, usage, deviceGuid) {
     slot.replaceChildren();
     return;
   }
+  const limit = (Number(usage.weekly_limit_usd) || 0) + (Number(usage.promotional_balance_usd) || 0);
+  const used = Math.min(Number(usage.weekly_used_usd) || 0, limit);
+  const left = limit > 0 ? Math.max(0, Math.round(((limit - used) / limit) * 100)) : 0;
   const line = document.createElement('p');
-  line.textContent = t('st.providers.compass_usage', {
-    used: formatUsd(usage.weekly_used_usd),
-    limit: formatUsd(usage.weekly_limit_usd),
-  });
+  line.textContent = t('st.providers.compass_usage', { pct: left });
   const reset = new Date(usage.next_reset_at || '');
   if (!Number.isNaN(reset.getTime())) {
     line.title = t('st.providers.compass_resets', { time: reset.toLocaleString(getLocale(), { timeZoneName: 'short' }) });

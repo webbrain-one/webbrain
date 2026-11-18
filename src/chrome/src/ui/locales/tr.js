@@ -559,7 +559,7 @@ export default {
   'st.providers.save': 'Kaydet',
   'st.providers.webbrain_note.body': 'Ücretsiz haftalık WebBrain Compass kullanımı dahildir. İstekler api.webbrain.one üzerinden geçer; varsayılan olarak kota ve hata ayıklama için meta verileri kaydederiz; istem metnini, sayfa içeriğini, ekran görüntülerini veya model yanıtlarını kaydetmeyiz. {privacyLink}. Daha fazla kullanım için {subscribeLink} adresinden abone olun. Faturalandırmayı {accountLink} adresinden yönetin.',
   'st.providers.webbrain_note.privacy_link': 'Gizlilik politikası',
-  'st.providers.compass_usage': 'Compass haftalık kullanımı: {limit} içinde {used}',
+  'st.providers.compass_usage': 'Compass haftalık kullanımı: %{pct} kaldı',
   'st.providers.compass_resets': '{time} tarihinde sıfırlanır',
   'st.providers.compass_signup': 'Daha fazla kullanım için kaydol',
   'st.providers.test': 'Bağlantıyı sına',

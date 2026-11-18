@@ -973,7 +973,7 @@ export default {
   'st.providers.share_research.confirm': 'Share queries and diagnostic traces from this provider with WebBrain for research?\n\nWhen on, your prompts, responses, tool interactions, and bounded diagnostic trace metadata—including failed runs, tool names, statuses, errors, and timings—will be sent to WebBrain with the provider and model name. Screenshots and binary attachments are not uploaded. Other text is sent as-is after truncation, so avoid sharing sensitive personal data. You can turn this off at any time to stop future sharing.',
   'st.providers.webbrain_note.body': 'Free weekly WebBrain Compass usage is included. Requests go through api.webbrain.one; by default we log metadata for quota and debugging, not prompt text, page content, screenshots, or model responses. {privacyLink}. For more usage, subscribe at {subscribeLink}. Manage billing at {accountLink}.',
   'st.providers.webbrain_note.privacy_link': 'Privacy policy',
-  'st.providers.compass_usage': 'Compass weekly usage: {used} of {limit}',
+  'st.providers.compass_usage': 'Compass weekly usage: {pct}% left',
   'st.providers.compass_resets': 'resets {time}',
   'st.providers.compass_signup': 'Sign up for more usage',
 
