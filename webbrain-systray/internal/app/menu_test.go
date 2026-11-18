@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/esokullu/webbrain-systray/internal/accounts"
+	"github.com/esokullu/webbrain-systray/internal/compass"
 	"github.com/esokullu/webbrain-systray/internal/i18n"
 	"github.com/esokullu/webbrain-systray/internal/quota"
 )
@@ -111,5 +112,29 @@ func TestUsageLinePreservesScopedWindows(t *testing.T) {
 	}
 	if got := usageLine(quota.Row{Scope: "Credits", Detail: "$4"}); !strings.Contains(got, "Credits") || !strings.Contains(got, "$4") {
 		t.Fatalf("missing fallback scope or detail: %q", got)
+	}
+}
+
+func TestCompassItem(t *testing.T) {
+	i18n.Set("en")
+	opened := ""
+	act := MenuActions{OpenPanel: func(view string) { opened = view }}
+	s := Snapshot{}
+	s.Compass = compass.State{Status: "ok", Tier: "plus", WeeklyUsedUSD: 10, WeeklyLimitUSD: 50, NextResetAt: at(2 * time.Hour)}
+	it := compassItem(act, s)
+	if !strings.Contains(it.Title, "WebBrain Compass") || !strings.Contains(it.Title, "80%") {
+		t.Fatalf("compass line %q", it.Title)
+	}
+	it.OnClick()
+	if opened != "compass" {
+		t.Fatalf("compass click opened %q", opened)
+	}
+	s.Compass = compass.State{Status: "loading"}
+	if got := compassItem(act, s).Title; !strings.Contains(got, "reading usage") {
+		t.Fatalf("loading line %q", got)
+	}
+	s.Compass = compass.State{Status: "error"}
+	if got := compassItem(act, s).Title; !strings.Contains(got, "usage unavailable") {
+		t.Fatalf("error line %q", got)
 	}
 }

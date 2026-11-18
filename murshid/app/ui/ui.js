@@ -51,6 +51,8 @@ const els = {
   zoom: $('zoom-chip'),
   webbrain: $('webbrain'),
   webbrainIcon: $('webbrain-icon'),
+  quota: $('quota'),
+  quotaValue: $('quota-value'),
   downloads: $('downloads'),
   downloadRing: $('download-ring'),
   menu: $('menu'),
@@ -261,6 +263,21 @@ function renderToolbar() {
   }
   els.webbrain.classList.toggle('open', Boolean(state.panel));
 
+  // The quota pill: the least remaining window across the subscriptions
+  // the Companion serves (its value is computed in the main process).
+  const companion = state.companion;
+  els.quota.hidden = !companion?.found;
+  if (companion?.found) {
+    const tightest = companion.quota?.tightest;
+    els.quota.classList.toggle('off', !companion.running);
+    els.quota.classList.toggle('low', Boolean(tightest) && tightest.remaining <= 10);
+    const pct = tightest ? percentFormat.format(tightest.remaining / 100) : '—';
+    els.quotaValue.textContent = pct;
+    els.quota.title = tightest
+      ? `${t('ui.quotaTip')} — ${t('quota.left', { pct })}`
+      : t('ui.quotaTip');
+  }
+
   // The shield: ads and trackers blocked on this site, or allowed here.
   const adblock = state.adblock;
   els.adblock.hidden = !adblock;
@@ -319,6 +336,10 @@ els.forward.addEventListener('click', () => api.invoke('forward'));
 els.reload.addEventListener('click', () => api.invoke(activeTab()?.loading ? 'stop' : 'reload'));
 els.updates.addEventListener('click', () => api.invoke('updates'));
 els.webbrain.addEventListener('click', () => api.invoke('webBrain'));
+els.quota.addEventListener('click', () => {
+  const r = els.quota.getBoundingClientRect();
+  api.invoke('quotaMenu', { x: r.left, y: r.bottom + 2 });
+});
 els.adblock.addEventListener('click', () => api.invoke('adblockSite'));
 els.menu.addEventListener('click', () => {
   const r = els.menu.getBoundingClientRect();
