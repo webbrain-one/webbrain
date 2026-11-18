@@ -7,7 +7,7 @@
 //
 //   node scripts/fetch-companion.mjs                  # the build for this machine
 //   node scripts/fetch-companion.mjs win32-x64 linux-x64
-//   MURSHID_COMPANION_RELEASE=systray-v0.1.5 node scripts/fetch-companion.mjs
+//   MURSHID_COMPANION_RELEASE=systray-v0.2.0 node scripts/fetch-companion.mjs
 //
 // The Windows release is one setup.exe holding both architectures; 7-Zip (or
 // any `7z` on PATH) takes the executable out of it.
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VENDOR = path.join(ROOT, 'vendor', 'companion');
-const RELEASE = process.env.MURSHID_COMPANION_RELEASE || 'systray-v0.1.5';
+const RELEASE = process.env.MURSHID_COMPANION_RELEASE || 'systray-v0.2.0';
 const VERSION = RELEASE.replace(/^systray-v/, '');
 const BASE = `https://github.com/webbrain-one/webbrain/releases/download/${RELEASE}`;
 

@@ -291,7 +291,7 @@ npm run dist   # installers: NSIS (Windows), DMG (macOS), AppImage + deb (Linux)
 The WebBrain extension is copied into `resources/extensions/webbrain`. The
 Companion is embedded the same way: `npm run dist` runs `predist`, which is
 `scripts/fetch-companion.mjs` — it downloads the WebBrain Companion release
-named by `MURSHID_COMPANION_RELEASE` (default `systray-v0.1.5`) into
+named by `MURSHID_COMPANION_RELEASE` (default `systray-v0.2.0`) into
 `vendor/companion/<platform>-<arch>/`, and electron-builder copies that folder
 to `resources/companion`. `npm run companion` runs the fetch by itself;
 `MURSHID_COMPANION_SKIP=1` keeps what is already in `vendor/companion`, and
@@ -303,8 +303,8 @@ installer's architecture. The Windows uninstaller stops a running
 uninstalling Murshid takes the tray app with it. Signing depends on the
 available build identity.
 
-The installers offered on murshid.one bundle WebBrain Companion 0.1.5 from the
-`systray-v0.1.5` release. They are built with
+The installers offered on murshid.one bundle WebBrain Companion 0.2.0 from the
+`systray-v0.2.0` release. They are built with
 `npx electron-builder --win nsis --x64` on Windows and
 `npx electron-builder --linux AppImage deb --x64` in WSL (Ubuntu 24.04), and
 copied into `web/download/`, which is git-ignored and deployed with the site.

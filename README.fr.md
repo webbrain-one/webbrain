@@ -82,7 +82,7 @@ Trois modes contrôlent ce que l'agent a le droit de faire :
 
 **WebBrain Companion** est notre application de bureau distincte pour les
 modèles locaux et les abonnements compatibles. [Téléchargez-la pour Windows,
-macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5),
+macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.2.0),
 puis sélectionnez la carte **WebBrain Companion** dans Paramètres → Modèles → LLM. L'adresse
 locale par défaut est `http://127.0.0.1:8327/v1` ; aucune clé API n'est requise
 pour l'extension sur cet ordinateur. Chargez les modèles et testez la connexion.

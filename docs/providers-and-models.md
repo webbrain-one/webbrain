@@ -1003,10 +1003,10 @@ vision checkbox only when the model loaded in Studio accepts image input.
 
 #### WebBrain Companion
 
-Download the separate desktop app: [Windows installer](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.1.5/WebBrain-Companion-0.1.5-windows-setup.exe),
-[macOS universal app](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.1.5/WebBrain-Companion-0.1.5-macos-universal.zip),
-[Linux x64](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.1.5/WebBrain-Companion-0.1.5-linux-x64.tar.gz),
-or [Linux Arm64](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.1.5/WebBrain-Companion-0.1.5-linux-arm64.tar.gz).
+Download the separate desktop app: [Windows installer](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-windows-setup.exe),
+[macOS universal app](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-macos-universal.zip),
+[Linux x64](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-x64.tar.gz),
+or [Linux Arm64](https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-arm64.tar.gz).
 Its [source and full setup guide](../webbrain-systray/README.md)
 describe supported accounts, the optional Bonsai local model, and the
 platform-specific install steps. In **Settings → Models → LLM → WebBrain Companion**,

@@ -99,7 +99,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 LM Studio（`:1234/v1`）、Osaurus（`:1337/v1`）、Jan（`:1337/v1`）、LocalAI（`:8080/v1`）、GPT4All
 （`:4891/v1`）も同じように使えます。**WebBrain Companion** は、ローカルモデルと対応するアカウントの
 サブスクリプションのための、別のデスクトップアプリです。[Windows、macOS、Linux 向けに
-ダウンロード](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5)したら、
+ダウンロード](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.2.0)したら、
 **WebBrain Companion** のプロバイダーカードを選び、**モデルを読み込み** をクリックして、
 モデルを選択し、接続をテストします。ローカルのエンドポイントのデフォルトは
 `http://127.0.0.1:8327/v1` で、このコンピューター上では API キーは不要です。

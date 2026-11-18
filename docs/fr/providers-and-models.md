@@ -1,7 +1,7 @@
 # Fournisseurs et Modèles
 
 **WebBrain Companion** est une application de bureau distincte. [Téléchargez
-la version Windows, macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.1.5),
+la version Windows, macOS ou Linux](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.2.0),
 puis choisissez la carte **WebBrain Companion**. Son adresse par défaut est
 `http://127.0.0.1:8327/v1` ; l'extension sur le même ordinateur n'a pas besoin
 de clé API. Chargez un modèle, enregistrez la carte et testez la connexion.
