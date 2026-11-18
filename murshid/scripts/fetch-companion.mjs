@@ -130,16 +130,20 @@ async function fetchTarget(target, tmp) {
     fs.copyFileSync(path.join(out, 'webbrain-companion', 'webbrain-companion'), path.join(dest, 'webbrain-companion'));
     fs.chmodSync(path.join(dest, 'webbrain-companion'), 0o755);
   } else if (platform === 'darwin') {
-    // One universal app serves both architectures.
+    // One universal app serves both architectures, so the second target
+    // reuses the first one's extraction: unzip would otherwise ask before
+    // overwriting and stop an unattended dist.
     const file = await download(`${BASE}/WebBrain-Companion-${VERSION}-macos-universal.zip`, path.join(tmp, 'macos.zip'));
     const out = path.join(tmp, 'macos');
-    fs.mkdirSync(out, { recursive: true });
-    try {
-      run('unzip', ['-q', file, '-d', out]);
-    } catch {
-      run('tar', ['-xf', file, '-C', out]); // bsdtar (macOS, Windows 10+) reads zips
-    }
     const app = path.join(out, 'WebBrain Companion.app');
+    if (!fs.existsSync(app)) {
+      fs.mkdirSync(out, { recursive: true });
+      try {
+        run('unzip', ['-q', '-o', file, '-d', out]);
+      } catch {
+        run('tar', ['-xf', file, '-C', out]); // bsdtar (macOS, Windows 10+) reads zips
+      }
+    }
     fs.rmSync(path.join(dest, 'WebBrain Companion.app'), { recursive: true, force: true });
     fs.cpSync(app, path.join(dest, 'WebBrain Companion.app'), { recursive: true });
   } else {
