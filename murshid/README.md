@@ -11,10 +11,14 @@ Murshid is a Chromium browser, built on Electron, with WebBrain built in:
   every profile. The toolbar's WebBrain button opens its side panel, docked in
   the window and resizable; per-tab panels follow the tab you are on.
 - **WebBrain's new tab page preinstalled**, and switched on for new profiles.
-- **WebBrain Companion in the system tray.** Murshid starts
-  `../webbrain-systray` in the background (`--background`, no panel) when it is
-  installed or bundled and not already running. The tray app is the Go
-  companion, not part of the Electron process.
+- **WebBrain Companion, embedded.** The installers ship the companion
+  (`../webbrain-systray`) inside Murshid: one install, no separate download.
+  Murshid starts it in the background (`--background`, no panel) when it is not
+  already running, from `resources/companion` or a normal Companion install,
+  and its icon sits in the system tray as before. Next to the WebBrain button
+  the toolbar has a **quota button**: it shows the least remaining usage
+  window across the subscriptions the companion serves, and its menu lists
+  each subscription with its windows and reset times.
 - **Ad and tracker blocking**, on by default, with EasyList, EasyPrivacy and
   uBlock's Unbreak list (see below).
 
@@ -106,6 +110,25 @@ dependency: Murshid would use nothing of it but its preload, which is a
 package of its own, and importing it switches off Electron's security
 warnings for the whole app (`ELECTRON_DISABLE_SECURITY_WARNINGS`).
 
+## The quota button
+
+The pill next to WebBrain's shows the least remaining usage window across the
+subscriptions the Companion serves — the same "tightest window" rule as the
+tray menu: whole-plan windows first, and with only per-model pools the
+healthiest pool, so one exhausted model group does not make a plan look empty.
+Murshid reads it from the Companion's panel API
+(`http://127.0.0.1:8327/companion/api/state`, keyed from the companion's own
+`companion.json` in its config folder), refreshes it every minute and after
+the companion starts, and turns the number crimson when a subscription is
+under 10% left. The button's menu lists each subscription and its windows with
+reset times, and offers *Refresh quotas* (which asks the companion to re-read
+usage from the providers) and *Open WebBrain Companion* — the panel and the
+tray icon work exactly as when the Companion is installed by itself. With no
+Companion running the menu offers to start it (or get it, in a build that has
+none bundled). `npm test` checks the summary math (`test/companion-quota.test.cjs`);
+`npm run test:quota` opens a real window against a running Companion and checks
+the pill and its menu.
+
 ## Run it
 
 ```sh
@@ -163,7 +186,8 @@ app/
   commands.js      shortcuts (before-input-event on Windows/Linux, app menu on macOS)
   menu.js          app menu, ⋮ menu, tab menu
   downloads.js     download tracking shared by the toolbar and chrome.downloads
-  companion.js     find and start WebBrain Companion
+  companion.js     find and start WebBrain Companion; read subscription quotas
+                   from its panel API for the toolbar's quota button
   permissions.js   site permission prompts
   identity.js      user agent and client hints; owns the session's webRequest listeners
   adblock/         ad and tracker blocking: lists, engine, bundled engine (see above)
@@ -171,6 +195,8 @@ app/
   locales/         en, tr, ar, fa: Murshid's own strings
 assets/
   icons/           app icon, .ico, PNGs, macOS template images
+packaging/
+  murshid.nsh      NSIS hook: stop the Companion before uninstalling
 scripts/
   art/halftone.py  print the homepage pictures as gold halftone
   art/halftone.mjs run halftone.py with a Python that has OpenCV
@@ -181,6 +207,7 @@ scripts/
   copy-fonts.mjs   copy the self-hosted fonts into web/fonts
   serve.mjs        static server for web/ and assets/
   build-adblock.mjs  rebuild app/adblock/engine.bin.gz from the filter lists
+  fetch-companion.mjs  download the Companion release into vendor/companion
 vendor/companion/  WebBrain Companion builds to bundle (not committed)
 web/               the Murshid homepage
 ```
@@ -250,15 +277,23 @@ npm run pack   # unpacked app in dist/ (quick check)
 npm run dist   # installers: NSIS (Windows), DMG (macOS), AppImage + deb (Linux)
 ```
 
-The WebBrain extension is copied into `resources/extensions/webbrain`. To
-bundle the Companion, put its build for the target in
-`vendor/companion/<platform>-<arch>/` first (see the README there); it lands in
-`resources/companion`. Signing depends on the available build identity.
+The WebBrain extension is copied into `resources/extensions/webbrain`. The
+Companion is embedded the same way: `npm run dist` runs `predist`, which is
+`scripts/fetch-companion.mjs` — it downloads the WebBrain Companion release
+named by `MURSHID_COMPANION_RELEASE` (default `systray-v0.1.5`) into
+`vendor/companion/<platform>-<arch>/`, and electron-builder copies that folder
+to `resources/companion`. `npm run companion` runs the fetch by itself;
+`MURSHID_COMPANION_SKIP=1` keeps what is already in `vendor/companion`, and
+you can always build it yourself from `../webbrain-systray` (see the README
+there). On Windows the fetch takes the executable out of the Companion setup
+with 7-Zip and checks its PE header, so the embedded build matches the
+installer's architecture. The Windows uninstaller stops a running
+`WebBrainCompanion.exe` before removing files (`packaging/murshid.nsh`), so
+uninstalling Murshid takes the tray app with it. Signing depends on the
+available build identity.
 
-The installers offered on murshid.one bundle WebBrain Companion 0.1.2 from the
-`systray-v0.1.2` release: the x64 `WebBrainCompanion.exe` from its Windows
-setup (it holds an x64 and an Arm64 build) and the binary from its
-`linux-x64` archive. They are built with
+The installers offered on murshid.one bundle WebBrain Companion 0.1.5 from the
+`systray-v0.1.5` release. They are built with
 `npx electron-builder --win nsis --x64` on Windows and
 `npx electron-builder --linux AppImage deb --x64` in WSL (Ubuntu 24.04), and
 copied into `web/download/`, which is git-ignored and deployed with the site.

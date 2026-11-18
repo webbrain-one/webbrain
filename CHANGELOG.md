@@ -6,6 +6,9 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Added
+- Murshid 0.1.5 embeds WebBrain Companion: the installers now ship the tray app inside Murshid (one install, no separate download), and `npm run dist` fetches the Companion release into `vendor/companion` before packaging. The toolbar gains a quota button next to WebBrain's showing the least remaining usage window across your existing subscriptions, with each subscription's windows and reset times in its menu; the Companion stays accessible from the system tray as before. The Windows uninstaller stops the embedded companion first. WebBrain Companion's Windows setup keeps its x64 and Arm64 builds under distinct names so a single architecture can be extracted from it.
+
 ## [49.1.2] - 2026-11-17
 
 ### Added

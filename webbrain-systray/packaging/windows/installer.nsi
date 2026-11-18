@@ -111,10 +111,17 @@ FunctionEnd
 Section "Install"
   SetOutPath "$INSTDIR"
   !insertmacro CloseRunning
+; Both builds ride in the setup under distinct names, and only the one for
+; this machine is kept: tools (Murshid's fetch-companion) can then take a
+; single architecture out of the installer.
+  File "/oname=WebBrainCompanion-x64.tmp" "${SRC_X64}"
+  File "/oname=WebBrainCompanion-arm64.tmp" "${SRC_ARM64}"
   ${If} ${IsNativeARM64}
-    File "/oname=${EXE}" "${SRC_ARM64}"
+    Rename "WebBrainCompanion-arm64.tmp" "${EXE}"
+    Delete "WebBrainCompanion-x64.tmp"
   ${Else}
-    File "/oname=${EXE}" "${SRC_X64}"
+    Rename "WebBrainCompanion-x64.tmp" "${EXE}"
+    Delete "WebBrainCompanion-arm64.tmp"
   ${EndIf}
   File "/oname=LICENSE.txt" "${LICENSE}"
   File "/oname=README.md" "${README}"
