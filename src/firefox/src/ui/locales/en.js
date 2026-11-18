@@ -35,6 +35,7 @@ export default {
   'sp.providers.no_setup': 'No setup',
   'sp.providers.active_group': 'Active providers',
   'sp.providers.active': 'Active',
+  'sp.providers.compass_left': '{pct}% left this week',
   'sp.history.recover': 'Recover',
   'sp.history.recent': 'Recent conversations for this URL',
   'sp.history.loading': 'Loading…',
@@ -972,6 +973,9 @@ export default {
   'st.providers.share_research.confirm': 'Share queries and diagnostic traces from this provider with WebBrain for research?\n\nWhen on, your prompts, responses, tool interactions, and bounded diagnostic trace metadata—including failed runs, tool names, statuses, errors, and timings—will be sent to WebBrain with the provider and model name. Screenshots and binary attachments are not uploaded. Other text is sent as-is after truncation, so avoid sharing sensitive personal data. You can turn this off at any time to stop future sharing.',
   'st.providers.webbrain_note.body': 'Free weekly WebBrain Compass usage is included. Requests go through api.webbrain.one; by default we log metadata for quota and debugging, not prompt text, page content, screenshots, or model responses. {privacyLink}. For more usage, subscribe at {subscribeLink}. Manage billing at {accountLink}.',
   'st.providers.webbrain_note.privacy_link': 'Privacy policy',
+  'st.providers.compass_usage': 'Compass weekly usage: {used} of {limit}',
+  'st.providers.compass_resets': 'resets {time}',
+  'st.providers.compass_signup': 'Sign up for more usage',
 
   'st.skills.desc_html': 'Enabled skills are available on demand in Mid and Full tiers; Compact does not load skills. A small catalog sends only each eligible skill\'s ID, name, summary, and optional semantic intents. The planner can select relevant skills from this routing metadata; full instructions and compatible <code>webbrain-tools</code> are exposed only after activation for the current run. Optional <code>webbrain-skill</code> metadata controls the summary, semantic intents, and Ask/Act compatibility.',
   'st.skills.name.label': 'Name (optional)',

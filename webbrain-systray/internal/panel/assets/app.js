@@ -32,6 +32,20 @@
       add: "Add",
       addFirst: "Add a subscription",
       emptySubs: "Sign in with Claude, ChatGPT, Google, Grok or Kimi. Each one shows up here with how much of it is left.",
+      compass: "WebBrain Compass",
+      compassLede: "WebBrain's own cloud model, tracked for this computer. Sign up for a larger weekly allowance.",
+      compassLoading: "Reading usage…",
+      compassErrorShort: "Usage unavailable",
+      compassPlan: "Plan",
+      compassUsed: "Used this week",
+      compassWeekly: "Weekly allowance",
+      compassLeft: "Left",
+      compassReset: "Resets",
+      compassPromo: "Promotional credit",
+      compassRequests: "Requests",
+      compassTokens: "Tokens",
+      compassSubscribe: "Sign up",
+      compassAccount: "Account & billing",
       resetsIn: "Resets in {d}",
       emptyUntil: "Empty until {when}",
       paused: "Paused",
@@ -202,6 +216,20 @@
       add: "Ekle",
       addFirst: "Abonelik ekle",
       emptySubs: "Claude, ChatGPT, Google, Grok ya da Kimi ile giriş yap. Her biri burada ne kadarının kaldığıyla görünür.",
+      compass: "WebBrain Compass",
+      compassLede: "WebBrain'ın kendi bulut modeli, bu bilgisayar için izleniyor. Daha büyük haftalık hak için kaydol.",
+      compassLoading: "Kullanım okunuyor…",
+      compassErrorShort: "Kullanım okunamadı",
+      compassPlan: "Plan",
+      compassUsed: "Bu hafta kullanılan",
+      compassWeekly: "Haftalık hak",
+      compassLeft: "Kalan",
+      compassReset: "Sıfırlanma",
+      compassPromo: "Tanıtım kredisi",
+      compassRequests: "İstek",
+      compassTokens: "Token",
+      compassSubscribe: "Kaydol",
+      compassAccount: "Hesap ve ödeme",
       resetsIn: "{d} sonra sıfırlanır",
       emptyUntil: "{when} tarihine kadar boş",
       paused: "Duraklatıldı",
@@ -437,6 +465,7 @@
     portNote: "",
     portDraft: null,   // a port typed in Settings but not applied yet
     welcomedLocal: false,
+    compassBusy: false,
   };
 
   async function api(method, path, body) {
@@ -631,14 +660,49 @@
     </li>`;
   }
 
+  // --- WebBrain Compass (the cloud service) ---------------------------------------
+  // The service reports the weekly window in dollars; promotional credit rides
+  // on top of the base allowance, so it counts toward what is left.
+  function compassPct(c) {
+    const limit = (c.weekly_limit_usd || 0) + (c.promotional_balance_usd || 0);
+    if (!(limit > 0)) return null;
+    const used = Math.min(c.weekly_used_usd || 0, limit);
+    return Math.max(0, ((limit - used) / limit) * 100);
+  }
+
+  function compassInfo() {
+    const c = state.compass || {};
+    if (c.status === "loading" || !c.status) return { text: t("compassLoading") };
+    if (c.status === "error") return { text: t("compassErrorShort"), tone: "warn" };
+    const p = compassPct(c);
+    if (p === null) return { text: t("noQuotaShort") };
+    const ms = c.next_reset_at ? new Date(c.next_reset_at) - Date.now() : 0;
+    return { text: ms > 0 ? t("resetsIn", { d: dur(ms) }) : t("compassWeekly"), pct: p };
+  }
+
+  function compassRow() {
+    const c = state.compass || {};
+    const info = compassInfo();
+    const tier = c.status === "ok" && c.tier ? c.tier : "";
+    const label = [t("compass"), tier, info.text].filter(Boolean).join(", ");
+    return `<li>
+      <button class="item sub-item" id="row-compass" data-act="compass-open" aria-label="${esc(label)}">
+        <span class="badge" style="--h:212;--s:58%;--l:46%" aria-hidden="true">C</span>
+        <span class="txt"><span class="name">${t("compass")}${tier ? ` <span class="plan">${esc(tier)}</span>` : ""}</span>
+          <span class="sub ${info.tone || ""}">${esc(info.text)}</span></span>
+        ${info.pct != null ? cells(info.pct, firstPaint) + `<span class="pct">${pctText(info.pct)}</span>` : ""}
+      </button>
+    </li>`;
+  }
+
   function subsSection() {
     const accounts = state.accounts || [];
     return `<section aria-labelledby="h-subs">
       <div class="sec-head"><h2 id="h-subs">${t("subs")}</h2>
         ${accounts.length ? `<button class="btn small" id="btn-add" data-act="add">${ICON.plus}${t("add")}</button>` : ""}</div>
       ${state.accounts_error ? `<div class="error-box">${esc(state.accounts_error)}</div>` : ""}
-      ${accounts.length ? `<ul class="rows">${accounts.map(subRow).join("")}</ul>`
-        : `<div class="empty"><p>${t("emptySubs")}</p><button class="btn primary" id="btn-add" data-act="add">${t("addFirst")}</button></div>`}
+      ${accounts.length ? `<ul class="rows">${accounts.map(subRow).join("")}${compassRow()}</ul>`
+        : `<div class="empty"><p>${t("emptySubs")}</p><button class="btn primary" id="btn-add" data-act="add">${t("addFirst")}</button></div><ul class="rows">${compassRow()}</ul>`}
     </section>`;
   }
 
@@ -844,6 +908,36 @@
     else if (v === "cpu") why = t("whyCpu");
     else why = t("whyOff");
     return `<span class="${v === "off" ? "vision-off" : "vision-on"}">${esc(label)}</span><span class="why">${esc(why)}</span>`;
+  }
+
+  function compassSheet() {
+    const c = state.compass || {};
+    const usd = (v) => "$" + (Math.round((v || 0) * 1e4) / 1e4).toFixed(2);
+    const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    let body;
+    if (c.status === "ok") {
+      const p = compassPct(c);
+      body = kv(t("compassPlan"), esc(c.tier || "free"))
+        + kv(t("compassUsed"), `${usd(c.weekly_used_usd)} / ${usd(c.weekly_limit_usd)}`)
+        + (p != null ? kv(t("compassLeft"), pctText(p)) : "")
+        + (c.next_reset_at ? kv(t("compassReset"), when(c.next_reset_at)) : "")
+        + (c.promotional_balance_usd ? kv(t("compassPromo"), usd(c.promotional_balance_usd)) : "")
+        + (c.requests ? kv(t("compassRequests"), num(c.requests)) : "")
+        + ((c.input_tokens || c.output_tokens) ? kv(t("compassTokens"), `${num(c.input_tokens || 0)} + ${num(c.output_tokens || 0)}`) : "")
+        + `<p class="note">${t("updated", { ago: ago(c.fetched_at) })}${c.error ? ` · ${t("quotaError", { msg: esc(c.error) })}` : ""}</p>`;
+    } else if (c.status === "error") {
+      body = `<div class="error-box">${esc(c.error || t("compassErrorShort"))}</div>`;
+    } else {
+      body = `<p class="note">${esc(t("compassLoading"))}</p>`;
+    }
+    const busy = ui.compassBusy;
+    return sheetHead(t("compass"), t("compassLede"))
+      + body
+      + `<div class="sheet-actions">
+          <button class="btn primary" data-act="open-url" data-url="${esc(state.compass_subscribe_url || "")}">${t("compassSubscribe")}</button>
+          <button class="btn" data-act="open-url" data-url="${esc(state.compass_account_url || "")}">${t("compassAccount")}</button>
+          <button class="btn small" data-act="compass-refresh" ${busy ? "disabled" : ""}>${busy ? t("refreshing") : t("refreshUsage")}</button>
+        </div>`;
   }
 
   function localSheet() {
@@ -1056,6 +1150,7 @@
     let html;
     switch (s.view) {
       case "account": html = accountSheet(s.name); break;
+      case "compass": html = compassSheet(); break;
       case "local": html = localSheet(); break;
       case "decision": html = decisionSheet(); break;
       case "settings": html = settingsSheet(); break;
@@ -1136,6 +1231,12 @@
       case "account": openSheet({ view: "account", name }, el.id); break;
       case "local-open": openSheet({ view: "local" }, "row-local"); break;
       case "d1-open": openSheet({ view: "decision" }, "row-d1"); break;
+      case "compass-open": openSheet({ view: "compass" }, "row-compass"); break;
+      case "compass-refresh":
+        ui.compassBusy = true; reRender();
+        run(api("POST", "/compass/refresh"));
+        setTimeout(() => { ui.compassBusy = false; reRender(); }, 15000);
+        break;
       case "settings": openSheet({ view: "settings" }, "btn-settings"); break;
       case "pick": startLogin(el.dataset.id); break;
       case "scrim":
@@ -1266,7 +1367,9 @@
   function refreshIfStale() {
     const stale = (state.accounts || []).some((a) => a.quota_supported && !a.disabled && a.quota && a.quota.status === "ok"
       && Date.now() - new Date(a.quota.fetched_at).getTime() > 120000);
-    if (stale && !state.quota_busy) run(api("POST", "/quotas/refresh", {}));
+    const c = state.compass || {};
+    const compassStale = c.status === "ok" && Date.now() - new Date(c.fetched_at).getTime() > 120000;
+    if ((stale || compassStale) && !state.quota_busy) run(api("POST", "/quotas/refresh", {}));
   }
 
   function listen() {
@@ -1284,6 +1387,7 @@
   function openView(view) {
     if (view === "add") openSheet({ view: "pick" }, "btn-add");
     else if (view === "settings") openSheet({ view: "settings" }, "btn-settings");
+    else if (view === "compass") openSheet({ view: "compass" }, "row-compass");
     else if (view === "local") openSheet({ view: "local" }, "row-local");
     else if (view === "decision") openSheet({ view: "decision" }, "row-d1");
     else if (view.startsWith("account:")) {

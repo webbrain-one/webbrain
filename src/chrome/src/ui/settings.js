@@ -14,7 +14,7 @@ import { initD1Settings } from './d1-settings.js';
  * Each section below wires itself up only when its markup is on the page.
  */
 
-import { t, translationsForKey } from './i18n.js';
+import { getLocale, t, translationsForKey } from './i18n.js';
 import { escapeHtml } from './utils.js';
 import { MEDIA_PROVIDERS, mediaProvider, validateMediaConfig, falVideoResolution } from '../agent/media-config.js';
 import { THEME_MODES, applyMode, loadMode, watch } from './theme.js';
@@ -3758,6 +3758,62 @@ async function refreshWebbrainPaymentNotice() {
   }
 }
 
+// The Compass card shows the weekly cloud allowance as a service of its own:
+// what is used, when it resets, and a sign-up link for more usage.
+async function refreshCompassUsage() {
+  const slot = providersContainer.querySelector('.compass-usage');
+  const deviceGuid = providersData.webbrain_cloud?.deviceGuid;
+  if (!slot || !deviceGuid) return;
+  const cached = refreshCompassUsage._cache;
+  if (cached?.deviceGuid === deviceGuid && Date.now() - cached.fetchedAt < 30000) {
+    renderCompassUsage(slot, cached.usage, deviceGuid);
+    return;
+  }
+  try {
+    const response = await fetch('https://api.webbrain.one/usage', {
+      headers: { 'X-WebBrain-Device-Id': deviceGuid, 'X-WebBrain-Client': 'extension' },
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return;
+    const usage = await response.json();
+    refreshCompassUsage._cache = { deviceGuid, usage, fetchedAt: Date.now() };
+    renderCompassUsage(slot, usage, deviceGuid);
+  } catch {
+    /* An unavailable usage report must not interrupt settings. */
+  }
+}
+
+function renderCompassUsage(slot, usage, deviceGuid) {
+  if (!slot.isConnected) return;
+  if (!usage || !(Number(usage.weekly_limit_usd) > 0)) {
+    slot.hidden = true;
+    slot.replaceChildren();
+    return;
+  }
+  const line = document.createElement('p');
+  line.textContent = t('st.providers.compass_usage', {
+    used: formatUsd(usage.weekly_used_usd),
+    limit: formatUsd(usage.weekly_limit_usd),
+  });
+  const reset = new Date(usage.next_reset_at || '');
+  if (!Number.isNaN(reset.getTime())) {
+    line.title = t('st.providers.compass_resets', { time: reset.toLocaleString(getLocale(), { timeZoneName: 'short' }) });
+  }
+  const signup = document.createElement('a');
+  signup.className = 'compass-usage-signup';
+  signup.href = webbrainSubscribeUrl(deviceGuid);
+  signup.target = '_blank';
+  signup.rel = 'noopener noreferrer';
+  signup.textContent = t('st.providers.compass_signup');
+  slot.replaceChildren(line, signup);
+  slot.style.cssText = 'margin-top:10px;padding:12px;border-radius:6px;border:1px solid rgba(74,144,217,0.22);'
+    + 'display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--text2);';
+  signup.style.cssText = 'color:var(--accent,#4A90D9);text-decoration:none;white-space:nowrap;';
+  slot.hidden = false;
+}
+
 function renderProviders() {
   if (!providersContainer) return;
   providersContainer.innerHTML = '';
@@ -4422,7 +4478,7 @@ function renderProviders() {
       </div>` : ''}
       ${fieldsHTML}
       ${providerNote}
-      ${id === 'webbrain_cloud' ? '<div class="webbrain-payment-notice" role="status" hidden></div>' : ''}
+      ${id === 'webbrain_cloud' ? '<div class="compass-usage" role="status" hidden></div><div class="webbrain-payment-notice" role="status" hidden></div>' : ''}
       ${ollamaWarning}
       ${isCompanion ? '' : compatibilitySettings}
       <div class="btn-row">
@@ -4458,6 +4514,7 @@ function renderProviders() {
   }
 
   refreshWebbrainPaymentNotice();
+  refreshCompassUsage();
   restoreProviderApiKeyWarnings();
 
   document.querySelectorAll('.btn-save').forEach(btn => {

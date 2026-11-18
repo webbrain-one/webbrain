@@ -8,6 +8,7 @@ This changelog was generated from the repository Git history and release tags. V
 
 ### Added
 - Murshid 0.1.5 embeds WebBrain Companion: the installers now ship the tray app inside Murshid (one install, no separate download), and `npm run dist` fetches the Companion release into `vendor/companion` before packaging. The toolbar gains a quota button next to WebBrain's showing the least remaining usage window across your existing subscriptions, with each subscription's windows and reset times in its menu; the Companion stays accessible from the system tray as before. The Windows uninstaller stops the embedded companion first. WebBrain Companion's Windows setup keeps its x64 and Arm64 builds under distinct names so a single architecture can be extracted from it.
+- WebBrain Compass, the cloud service at api.webbrain.one, now shows as a separate service with its weekly quota and a sign-up link in all three places: Murshid's quota button (using the extension's device id, handed over through the bridge), the WebBrain Companion tray menu and panel, and the WebBrain extension (the Compass rows in the model picker show the allowance left, and the Compass card in Settings lists weekly usage with a *Sign up for more usage* link). Chrome and Firefox.
 
 ## [49.1.2] - 2026-11-17
 

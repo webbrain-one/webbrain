@@ -343,7 +343,14 @@ func (a *App) routes(e *gin.Engine) {
 		go func() {
 			a.refreshAccounts()
 			a.RefreshQuotas(req.Name)
+			if req.Name == "" {
+				a.RefreshCompass()
+			}
 		}()
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	api.POST("/compass/refresh", func(c *gin.Context) {
+		go a.RefreshCompass()
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 

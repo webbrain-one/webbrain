@@ -17,8 +17,9 @@ Murshid is a Chromium browser, built on Electron, with WebBrain built in:
   already running, from `resources/companion` or a normal Companion install,
   and its icon sits in the system tray as before. Next to the WebBrain button
   the toolbar has a **quota button**: it shows the least remaining usage
-  window across the subscriptions the companion serves, and its menu lists
-  each subscription with its windows and reset times.
+  window across the subscriptions the companion serves and WebBrain Compass
+  (our own cloud service), and its menu lists each with its windows and
+  reset times, plus Compass sign-up and billing.
 - **Ad and tracker blocking**, on by default, with EasyList, EasyPrivacy and
   uBlock's Unbreak list (see below).
 
@@ -128,6 +129,16 @@ Companion running the menu offers to start it (or get it, in a build that has
 none bundled). `npm test` checks the summary math (`test/companion-quota.test.cjs`);
 `npm run test:quota` opens a real window against a running Companion and checks
 the pill and its menu.
+
+The menu also carries **WebBrain Compass**, the cloud service at
+`api.webbrain.one`, as its own row. Murshid asks the WebBrain extension for its
+Compass device id (the extension persists it in its storage; the bridge hands it
+over) and reads `GET /usage` with it, so the row shows the same weekly allowance
+the agent uses: what is spent of the limit, when it resets, and any promotional
+credit. Its submenu offers *Sign up for more usage* and *Manage Compass account*,
+which open the same Stripe and billing pages the extension uses. The pill's
+number counts Compass too, so a nearly-empty cloud week pulls it down like a
+nearly-empty subscription.
 
 ## Run it
 

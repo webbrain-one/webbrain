@@ -15,6 +15,14 @@ const DEFAULT_PORT = 8327;
 const DOWNLOAD_PAGE = 'https://webbrain.one/companion/';
 const QUOTA_POLL_MS = 60000;
 
+// WebBrain Compass is WebBrain's own cloud model (webbrain-cloud, the
+// OpenAI-compatible endpoint at api.webbrain.one). Its weekly usage follows
+// the device id the WebBrain extension uses, which the extension reports to
+// Murshid through the crx bridge.
+const COMPASS_USAGE = 'https://api.webbrain.one/usage';
+const COMPASS_SUBSCRIBE = 'https://webbrain.one/subscribe';
+const COMPASS_ACCOUNT = 'https://api.webbrain.one/account';
+
 // The companion keeps its settings, including the panel key, in its own config
 // folder (webbrain-systray/internal/paths); reading it lets Murshid ask the
 // panel API for subscription quotas.
@@ -85,6 +93,28 @@ function summarize(snapshot) {
   return { accounts, tightest };
 }
 
+/** One Compass reading, narrowed to what the quota button shows. The weekly
+ * window is reported in dollars; promotional credit rides on top of the base
+ * allowance, so it counts toward what is left. */
+function summarizeCompass(c) {
+  if (!c) return null;
+  const limit = (Number(c.weekly_limit_usd) || 0) + (Number(c.promotional_balance_usd) || 0);
+  const used = Math.min(Number(c.weekly_used_usd) || 0, limit);
+  return {
+    status: c.status || 'ok',
+    tier: c.tier || '',
+    subscriptionStatus: c.subscription_status || '',
+    used: Number(c.weekly_used_usd) || 0,
+    limit: Number(c.weekly_limit_usd) || 0,
+    promo: Number(c.promotional_balance_usd) || 0,
+    remaining: limit > 0 ? Math.max(0, Math.min(100, ((limit - used) / limit) * 100)) : null,
+    resetAt: c.next_reset_at || null,
+    requests: Number(c.requests) || 0,
+    fetchedAt: c.fetched_at || new Date().toISOString(),
+    error: c.error || '',
+  };
+}
+
 function candidates() {
   const bundled = paths.bundledCompanionDir();
   const home = os.homedir();
@@ -119,6 +149,8 @@ class Companion {
     this.summary = null;  // summarize(snapshot), refreshed from the panel API
     this.quotaError = null;
     this.quotaTimer = null;
+    this.deviceGuid = '';  // the WebBrain extension's Compass device id
+    this.compass = null;   // summarizeCompass(...) of the cloud usage
   }
 
   locate() {
@@ -230,9 +262,44 @@ class Companion {
   }
 
   async refreshQuotas() {
-    const snapshot = await this.fetchState();
-    this.summary = snapshot ? summarize(snapshot) : null;
+    await Promise.all([
+      this.fetchState().then((snapshot) => {
+        this.summary = snapshot ? summarize(snapshot) : null;
+      }),
+      this.fetchCompass(),
+    ]);
     return this.summary;
+  }
+
+  /** The extension hands over its Compass device id; the cloud account follows it. */
+  setDeviceGuid(guid) {
+    if (!guid || guid === this.deviceGuid) return;
+    this.deviceGuid = guid;
+    this.fetchCompass().then(() => this.ctx.refreshAllWindows()).catch(() => {});
+  }
+
+  async fetchCompass() {
+    if (!this.deviceGuid) {
+      this.compass = null;
+      return null;
+    }
+    try {
+      const res = await fetch(COMPASS_USAGE, {
+        headers: { 'X-WebBrain-Device-Id': this.deviceGuid, 'X-WebBrain-Client': 'murshid' },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this.compass = summarizeCompass(await res.json());
+    } catch (error) {
+      const message = String(error?.message || error);
+      const prev = this.compass;
+      if (prev && prev.status === 'ok' && Date.now() - new Date(prev.fetchedAt).getTime() < 1800000) {
+        this.compass = { ...prev, error: message };  // keep the last good numbers
+      } else {
+        this.compass = { status: 'error', tier: '', subscriptionStatus: '', used: 0, limit: 0, promo: 0, remaining: null, resetAt: null, requests: 0, fetchedAt: new Date().toISOString(), error: message };
+      }
+    }
+    return this.compass;
   }
 
   /** Menu action: make the companion re-read usage from the providers, then update. */
@@ -264,14 +331,26 @@ class Companion {
 
   /** What the toolbar's quota button renders; pushed with the window state. */
   uiState() {
+    let quota = this.summary;
+    let tightest = quota?.tightest || null;
+    if (this.compass && this.compass.status === 'ok' && this.compass.remaining != null
+      && (!tightest || this.compass.remaining < tightest.remaining)) {
+      tightest = { remaining: this.compass.remaining, account: 'WebBrain Compass', plan: this.compass.tier, label: '' };
+    }
+    if (tightest) quota = { ...(quota || { accounts: [] }), tightest };
     return {
       running: this.running,
       found: Boolean(this.exe),
       port: this.port,
       error: this.quotaError,
-      quota: this.summary,
+      quota,
+      compass: this.compass,
+      compassUrls: this.deviceGuid ? {
+        subscribe: `${COMPASS_SUBSCRIBE}?client_reference_id=${encodeURIComponent(this.deviceGuid)}`,
+        account: `${COMPASS_ACCOUNT}?client_reference_id=${encodeURIComponent(this.deviceGuid)}`,
+      } : null,
     };
   }
 }
 
-module.exports = { Companion, summarize, tightestRow, configFile };
+module.exports = { Companion, summarize, summarizeCompass, tightestRow, configFile };
