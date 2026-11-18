@@ -406,6 +406,7 @@ class MurshidWindow {
       downloads: this.ctx.downloads?.summary() || null,
       updates: this.ctx.updates?.snapshot() || null,
       adblock: this.ctx.adblockSite?.(this.activeTab) || null,
+      companion: this.ctx.companion?.uiState() || null,
     });
   }
 

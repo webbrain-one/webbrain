@@ -34,6 +34,29 @@ function murshidPost() {
   }
 
   if (typeof ServiceWorkerGlobalScope !== 'undefined' && globalThis instanceof ServiceWorkerGlobalScope) {
+    // The provider manager persists its Compass device id in storage; hand it
+    // to Murshid so the quota button shows the same cloud account.
+    const reportGuid = () => {
+      try {
+        const got = chrome.storage?.local?.get('webbrainDeviceGuid');
+        Promise.resolve(got).then((v) => {
+          if (v?.webbrainDeviceGuid) call('deviceGuid.report')(v.webbrainDeviceGuid).catch(() => {});
+        }, () => {});
+      } catch {}
+    };
+    // The worker can wake before Murshid has attached its message handler, so
+    // retry a few times; the receiver ignores repeats.
+    reportGuid();
+    let guidTries = 0;
+    const guidTimer = setInterval(() => {
+      reportGuid();
+      if (++guidTries >= 10) clearInterval(guidTimer);
+    }, 2000);
+    try {
+      chrome.storage?.local?.onChanged?.addListener?.((changes) => {
+        if (changes?.webbrainDeviceGuid?.newValue) call('deviceGuid.report')(changes.webbrainDeviceGuid.newValue).catch(() => {});
+      });
+    } catch {}
     // Supplement native webRequest events for browser tabs and offscreen XHRs.
     // Session-level handlers in Electron otherwise suppress those events.
     const matches = (filter, details) => {

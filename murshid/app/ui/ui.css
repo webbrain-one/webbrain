@@ -336,6 +336,15 @@ html[dir="rtl"] .tab .title { mask-image: linear-gradient(270deg, #000 calc(100%
 .toolbar-pill[disabled] { opacity: 0.45; }
 @media (max-width: 760px) { .toolbar-pill span { display: none; } .toolbar-pill { padding: 0 6px; } }
 
+/* The quota pill: a gold gauge with the least remaining window across the
+   subscriptions; crimson when one is nearly out, faint when the Companion
+   is not running. */
+#quota .quota-icon { width: 18px; height: 18px; color: var(--gold); }
+#quota #quota-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+#quota.low .quota-icon, #quota.low #quota-value { color: var(--crimson); }
+#quota.off .quota-icon { color: var(--faint); }
+#quota.off #quota-value { color: var(--muted); }
+
 /* The ad blocker for this site: a gold shield while it blocks, a crossed-out
    faint one where ads are allowed. */
 #adblock svg { width: 19px; height: 19px; color: var(--gold); }

@@ -21,7 +21,7 @@ const { Downloads } = require('./downloads');
 const { createCommands } = require('./commands');
 const { installAppMenu, popupMainMenu, popupTabMenu } = require('./menu');
 const { showContextMenu } = require('./context-menu');
-const { Companion } = require('./companion');
+const { Companion, tightestRow } = require('./companion');
 const { installPermissions } = require('./permissions');
 const { registerSchemes, handleProtocol } = require('./protocol');
 const { resolveInput } = require('./url');
@@ -293,6 +293,7 @@ async function start() {
   openDestinations(pendingUrls.splice(0));
 
   ctx.companion.ensureRunning().catch(() => {});
+  ctx.companion.startQuotaLoop();
   if (app.isPackaged && ctx.settings.get('checkUpdates') !== false) ctx.updates.start();
 
   app.on('activate', () => {
@@ -479,6 +480,9 @@ function installUiIpc() {
       case 'downloadsMenu':
         popupDownloadsMenu(w, args[0] || { x: 0, y: 0 });
         return null;
+      case 'quotaMenu':
+        popupQuotaMenu(ctx, w, args[0] || { x: 0, y: 0 });
+        return null;
       case 'find': {
         const [text, options] = args;
         if (!tab) return null;
@@ -558,6 +562,98 @@ function popupDownloadsMenu(w, { x, y }) {
   });
   if (!items.length) items.push({ label: i18n.t('downloads.none'), enabled: false });
   items.push({ type: 'separator' }, { label: i18n.t('downloads.openFolder'), click: () => shell.openPath(ctx.downloads.folder()) });
+  Menu.buildFromTemplate(items).popup({ window: w.win, x: Math.round(x), y: Math.round(y) });
+}
+
+/** Compact "2h 05m", "45m", "3d" until a quota window resets. */
+function untilText(resetAt) {
+  if (!resetAt) return '';
+  const ms = new Date(resetAt).getTime() - Date.now();
+  if (!(ms > 0)) return '';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h >= 48) return `${Math.floor(h / 24)}d`;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  return `${Math.max(1, m)}m`;
+}
+
+/** The toolbar's quota button: one row per subscription, each window below
+ * it, plus WebBrain Compass, the cloud service, as its own row. */
+function popupQuotaMenu(ctx, w, { x, y }) {
+  const { Menu, shell } = require('electron');
+  const companion = ctx.companion;
+  const summary = companion.summary;
+  const items = [];
+  if (!companion.running) {
+    items.push({ label: i18n.t('quota.notRunning'), enabled: false });
+    items.push({
+      label: i18n.t(companion.found ? 'menu.companionStart' : 'menu.companionGet'),
+      click: () => companion.openPanel(w),
+    });
+  } else if (!summary) {
+    items.push({ label: i18n.t('quota.error'), enabled: false });
+  } else if (!summary.accounts.length) {
+    items.push({ label: i18n.t('quota.noAccounts'), enabled: false });
+  } else {
+    for (const a of summary.accounts) {
+      const name = a.plan ? `${a.provider} ${a.plan}` : a.provider;
+      const sub = [];
+      if (a.disabled) {
+        sub.push({ label: i18n.t('quota.paused'), enabled: false });
+      } else if (a.status === 'loading') {
+        sub.push({ label: i18n.t('quota.loading'), enabled: false });
+      } else if (a.status === 'error') {
+        sub.push({ label: a.error ? `${i18n.t('quota.error')} — ${a.error}` : i18n.t('quota.error'), enabled: false });
+      } else if (a.status !== 'ok') {
+        sub.push({ label: i18n.t(a.supported ? 'quota.none' : 'quota.unsupported'), enabled: false });
+      }
+      for (const r of a.rows) {
+        const pct = r.remaining == null ? r.detail : i18n.t('quota.left', { pct: i18n.percent(Math.round(r.remaining)) });
+        const until = untilText(r.resetAt);
+        const line = `${r.label} — ${pct}${until ? ` · ${i18n.t('quota.resetsIn', { time: until })}` : ''}`;
+        sub.push({ label: line, enabled: false });
+      }
+      const top = !a.disabled && a.status === 'ok' ? tightestRow(a.rows) : null;
+      const label = top && top.remaining != null
+        ? `${name} — ${i18n.t('quota.left', { pct: i18n.percent(Math.round(top.remaining)) })}`
+        : name;
+      items.push({ label, submenu: sub });
+    }
+  }
+
+  // WebBrain Compass: the cloud service, with sign-up and weekly usage.
+  const compass = companion.compass;
+  if (compass) {
+    const money = (v) => `$${(Math.round((v || 0) * 1e4) / 1e4).toFixed(2)}`;
+    const sub = [];
+    if (compass.status === 'loading') {
+      sub.push({ label: i18n.t('quota.loading'), enabled: false });
+    } else if (compass.status === 'error') {
+      sub.push({ label: compass.error ? `${i18n.t('quota.error')} — ${compass.error}` : i18n.t('quota.error'), enabled: false });
+    } else if (compass.remaining != null) {
+      sub.push({ label: i18n.t('compass.weekly', { used: money(compass.used), limit: money(compass.limit) }), enabled: false });
+      const until = untilText(compass.resetAt);
+      const pct = i18n.percent(Math.round(compass.remaining));
+      sub.push({ label: `${i18n.t('quota.left', { pct })}${until ? ` · ${i18n.t('quota.resetsIn', { time: until })}` : ''}`, enabled: false });
+      if (compass.promo) sub.push({ label: i18n.t('compass.promo', { amount: money(compass.promo) }), enabled: false });
+      if (compass.error) sub.push({ label: `${i18n.t('quota.error')} — ${compass.error}`, enabled: false });
+    }
+    const urls = companion.compassUrls();
+    if (urls) {
+      sub.push({ type: 'separator' });
+      sub.push({ label: i18n.t('compass.subscribe'), click: () => shell.openExternal(urls.subscribe) });
+      sub.push({ label: i18n.t('compass.account'), click: () => shell.openExternal(urls.account) });
+    }
+    const name = compass.tier ? `WebBrain Compass ${compass.tier}` : 'WebBrain Compass';
+    const label = compass.status === 'ok' && compass.remaining != null
+      ? `${name} — ${i18n.t('quota.left', { pct: i18n.percent(Math.round(compass.remaining)) })}`
+      : name;
+    items.push({ type: 'separator' }, { label, submenu: sub });
+  }
+
+  items.push({ type: 'separator' });
+  items.push({ label: i18n.t('quota.refresh'), click: () => { companion.requestQuotaRefresh().catch(() => {}); } });
+  items.push({ label: i18n.t('quota.openCompanion'), click: () => companion.openPanel(w) });
   Menu.buildFromTemplate(items).popup({ window: w.win, x: Math.round(x), y: Math.round(y) });
 }
 

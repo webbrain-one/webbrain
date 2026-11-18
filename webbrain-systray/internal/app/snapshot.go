@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/esokullu/webbrain-systray/internal/accounts"
+	"github.com/esokullu/webbrain-systray/internal/compass"
 	"github.com/esokullu/webbrain-systray/internal/d1"
 	"github.com/esokullu/webbrain-systray/internal/i18n"
 	"github.com/esokullu/webbrain-systray/internal/localmodel"
@@ -43,6 +44,11 @@ type Snapshot struct {
 	Endpoints     []Endpoint          `json:"endpoints"`
 	Accounts      []accounts.Account  `json:"accounts"`
 	AccountsError string              `json:"accounts_error,omitempty"`
+	// Compass is WebBrain's own cloud service, tracked with this machine's
+	// device id; its subscribe and account links carry that id.
+	Compass          compass.State `json:"compass"`
+	CompassSubscribe string        `json:"compass_subscribe_url,omitempty"`
+	CompassAccount   string        `json:"compass_account_url,omitempty"`
 	Providers     []accounts.Provider `json:"providers"`
 	Logins        []login             `json:"logins"`
 	Models        []string            `json:"models"`
@@ -92,12 +98,19 @@ func (a *App) Snapshot() Snapshot {
 		Update:       a.UpdateStatus(),
 	}
 	snap.Decision.Endpoint = base + "/companion/v1/decide"
+	// Checkout only when the tracked id is the inference identity Murshid
+	// shared; the panel hides the links otherwise.
+	if s.CompassShared && s.CompassGuid != "" {
+		snap.CompassSubscribe = compass.SubscribeURL(s.CompassGuid)
+		snap.CompassAccount = compass.AccountURL(s.CompassGuid)
+	}
 	if snap.Network {
 		snap.NetworkURLs = networkURLs(port)
 	}
 	a.mu.Lock()
 	snap.Accounts = accounts.FromCredentials(a.creds, a.quotas)
 	snap.AccountsError = a.credsErr
+	snap.Compass = a.compass
 	snap.Models = append([]string(nil), a.models...)
 	snap.Notice = a.notice
 	snap.QuotaBusy = a.quotaBusy

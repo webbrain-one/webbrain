@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/esokullu/webbrain-systray/internal/accounts"
+	"github.com/esokullu/webbrain-systray/internal/compass"
 	"github.com/esokullu/webbrain-systray/internal/core"
 	"github.com/esokullu/webbrain-systray/internal/d1"
 	"github.com/esokullu/webbrain-systray/internal/i18n"
@@ -49,6 +50,7 @@ type App struct {
 	creds     []core.Credential
 	credsErr  string
 	quotas    map[string]quota.State
+	compass   compass.State
 	models    []string
 	logins    map[string]*login
 	notice    string
@@ -95,6 +97,7 @@ func New(version string, store *settings.Store) *App {
 		Store:   store,
 		Proxy:   core.New(),
 		quotas:  map[string]quota.State{},
+		compass: compass.State{Status: "loading"},
 		logins:  map[string]*login{},
 		subs:    map[chan struct{}]struct{}{},
 
@@ -238,6 +241,7 @@ func (a *App) setNotice(s string) {
 func (a *App) loop() {
 	a.refreshAccounts()
 	a.RefreshQuotas("")
+	a.RefreshCompass()
 	accT := time.NewTicker(30 * time.Second)
 	defer accT.Stop()
 	lastQuota := time.Now()
@@ -254,9 +258,27 @@ func (a *App) loop() {
 			if time.Since(lastQuota) >= every {
 				lastQuota = time.Now()
 				a.RefreshQuotas("")
+				a.RefreshCompass()
 			}
 		}
 	}
+}
+
+// RefreshCompass re-reads the WebBrain Compass weekly usage for this machine.
+// A failed read keeps the last good numbers for a while, like a subscription's.
+func (a *App) RefreshCompass() {
+	guid := a.Store.Get().CompassGuid
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	st := compass.Fetch(ctx, guid)
+	a.mu.Lock()
+	if st.Status == "error" && a.compass.Status == "ok" && time.Since(a.compass.FetchedAt) < 30*time.Minute {
+		a.compass.Error = st.Error
+	} else {
+		a.compass = st
+	}
+	a.mu.Unlock()
+	a.changed()
 }
 
 func (a *App) refreshAccounts() {
