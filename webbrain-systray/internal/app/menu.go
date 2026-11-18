@@ -180,8 +180,30 @@ func usageLine(row quota.Row) string {
 	return line
 }
 
+// compassItem is WebBrain Compass, the cloud service, in the tray menu: the
+// share of its weekly allowance left, or why there is none to show.
+func compassItem(act MenuActions, s Snapshot) tray.Item {
+	name := i18n.T("compass")
+	open := func() { act.OpenPanel("compass") }
+	switch s.Compass.Status {
+	case "loading":
+		return tray.Item{Title: name + " — " + i18n.T("quota_loading"), OnClick: open}
+	case "error":
+		return tray.Item{Title: name + " — " + i18n.T("quota_error"), OnClick: open}
+	}
+	r := s.Compass.RemainingPct()
+	if r == nil {
+		return tray.Item{Title: name + " — " + i18n.T("quota_none"), OnClick: open}
+	}
+	line := fmt.Sprintf("%s   %s  %s", name, bar(*r), percent(*r))
+	if u := Until(s.Compass.NextResetAt); u != "" {
+		line += " · " + u
+	}
+	return tray.Item{Title: line, OnClick: open}
+}
+
 // Menu renders the tray menu: status, the address, one line per subscription,
-// then the panel and Quit. Everything else lives in the panel.
+// the cloud service, then the panel and Quit. Everything else lives in the panel.
 func (a *App) Menu(act MenuActions) []tray.Item {
 	s := a.Snapshot()
 	status := i18n.T("stopped")
@@ -209,6 +231,7 @@ func (a *App) Menu(act MenuActions) []tray.Item {
 	if len(s.Accounts) == 0 {
 		items = append(items, tray.Item{Title: i18n.T("add"), OnClick: func() { act.OpenPanel("add") }})
 	}
+	items = append(items, compassItem(act, s))
 	items = append(items, tray.Item{Separator: true})
 	if u := s.Update; u.Latest != "" && u.Supported {
 		switch u.State {

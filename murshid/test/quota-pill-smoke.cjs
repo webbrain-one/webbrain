@@ -24,6 +24,15 @@ app.whenReady().then(async () => {
   })()`);
   console.log('quota pill:', JSON.stringify(out));
   console.log('companion state:', JSON.stringify(ctx.companion.uiState().quota && { tightest: ctx.companion.uiState().quota.tightest }));
+  // The extension reports its Compass id through the bridge; give it a
+  // moment. If the side panel never opened in this throwaway profile the id
+  // may not exist yet, so fall back to seeding one to prove the fetch path.
+  for (let i = 0; i < 30 && !ctx.companion.deviceGuid; i += 1) await new Promise((r) => setTimeout(r, 500));
+  console.log('device guid from extension:', ctx.companion.deviceGuid ? 'reported' : 'absent (will seed)');
+  if (!ctx.companion.deviceGuid) ctx.companion.setDeviceGuid('dfae9111-b752-50af-ab25-ef346262e2a5');
+  for (let i = 0; i < 20 && !ctx.companion.compass; i += 1) await new Promise((r) => setTimeout(r, 500));
+  const uist = ctx.companion.uiState();
+  console.log('compass state:', JSON.stringify({ guid: ctx.companion.deviceGuid ? 'set' : 'unset', compass: ctx.companion.compass, urls: uist.compassUrls ? 'set' : 'unset', pillTightest: uist.quota?.tightest?.account }));
   await w.ui.executeJavaScript('document.getElementById("quota").click(); true');
   await new Promise((r) => setTimeout(r, 1500));
   const alive = ctx.windows.some((x) => !x.win.isDestroyed());

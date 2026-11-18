@@ -499,6 +499,12 @@ CrxBridge.prototype.handlers = {
   'murshid.defaultsApplied'({ extId }) {
     if (this.isWebBrain(extId)) this.resolveDefaults?.();
   },
+  // The extension's Compass device id, mirrored so the quota button reads the
+  // same cloud account the agent in this window uses.
+  'deviceGuid.report'({ extId }, guid) {
+    if (!this.isWebBrain(extId)) return;
+    this.ctx.companion?.setDeviceGuid(String(guid || ''));
+  },
 
   // chrome.sidePanel --------------------------------------------------------
   'sidePanel.setPanelBehavior'({ extId }, behavior = {}) {

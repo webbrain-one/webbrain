@@ -577,9 +577,10 @@ function untilText(resetAt) {
   return `${Math.max(1, m)}m`;
 }
 
-/** The toolbar's quota button: one row per subscription, each window below it. */
+/** The toolbar's quota button: one row per subscription, each window below
+ * it, plus WebBrain Compass, the cloud service, as its own row. */
 function popupQuotaMenu(ctx, w, { x, y }) {
-  const { Menu } = require('electron');
+  const { Menu, shell } = require('electron');
   const companion = ctx.companion;
   const summary = companion.summary;
   const items = [];
@@ -619,6 +620,37 @@ function popupQuotaMenu(ctx, w, { x, y }) {
       items.push({ label, submenu: sub });
     }
   }
+
+  // WebBrain Compass: the cloud service, with sign-up and weekly usage.
+  const compass = companion.compass;
+  if (compass) {
+    const money = (v) => `$${(Math.round((v || 0) * 1e4) / 1e4).toFixed(2)}`;
+    const sub = [];
+    if (compass.status === 'loading') {
+      sub.push({ label: i18n.t('quota.loading'), enabled: false });
+    } else if (compass.status === 'error') {
+      sub.push({ label: compass.error ? `${i18n.t('quota.error')} — ${compass.error}` : i18n.t('quota.error'), enabled: false });
+    } else if (compass.remaining != null) {
+      sub.push({ label: i18n.t('compass.weekly', { used: money(compass.used), limit: money(compass.limit) }), enabled: false });
+      const until = untilText(compass.resetAt);
+      const pct = i18n.percent(Math.round(compass.remaining));
+      sub.push({ label: `${i18n.t('quota.left', { pct })}${until ? ` · ${i18n.t('quota.resetsIn', { time: until })}` : ''}`, enabled: false });
+      if (compass.promo) sub.push({ label: i18n.t('compass.promo', { amount: money(compass.promo) }), enabled: false });
+      if (compass.error) sub.push({ label: `${i18n.t('quota.error')} — ${compass.error}`, enabled: false });
+    }
+    const urls = companion.compassUrls();
+    if (urls) {
+      sub.push({ type: 'separator' });
+      sub.push({ label: i18n.t('compass.subscribe'), click: () => shell.openExternal(urls.subscribe) });
+      sub.push({ label: i18n.t('compass.account'), click: () => shell.openExternal(urls.account) });
+    }
+    const name = compass.tier ? `WebBrain Compass ${compass.tier}` : 'WebBrain Compass';
+    const label = compass.status === 'ok' && compass.remaining != null
+      ? `${name} — ${i18n.t('quota.left', { pct: i18n.percent(Math.round(compass.remaining)) })}`
+      : name;
+    items.push({ type: 'separator' }, { label, submenu: sub });
+  }
+
   items.push({ type: 'separator' });
   items.push({ label: i18n.t('quota.refresh'), click: () => { companion.requestQuotaRefresh().catch(() => {}); } });
   items.push({ label: i18n.t('quota.openCompanion'), click: () => companion.openPanel(w) });

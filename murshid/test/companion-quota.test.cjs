@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { summarize, tightestRow } = require('../app/companion');
+const { summarize, summarizeCompass, tightestRow } = require('../app/companion');
 
 const row = (window, remaining, extra = {}) => ({ window, label: extra.label || window, scope: extra.scope || '', remaining, reset_at: extra.reset_at || null, detail: extra.detail || '' });
 
@@ -64,4 +64,38 @@ test('summarize handles a snapshot without accounts', () => {
   const s = summarize({});
   assert.deepEqual(s.accounts, []);
   assert.equal(s.tightest, null);
+});
+
+test('summarizeCompass turns the dollar window into a percent left', () => {
+  const c = summarizeCompass({
+    tier: 'plus', weekly_used_usd: 10, weekly_limit_usd: 50,
+    next_reset_at: '2026-11-23T00:00:00Z', requests: 12,
+  });
+  assert.equal(c.status, 'ok');
+  assert.equal(c.tier, 'plus');
+  assert.equal(c.remaining, 80);
+  assert.equal(c.resetAt, '2026-11-23T00:00:00Z');
+});
+
+test('summarizeCompass counts promotional credit toward what is left', () => {
+  const c = summarizeCompass({ weekly_used_usd: 0.5, weekly_limit_usd: 0.5, promotional_balance_usd: 0.5 });
+  assert.equal(c.remaining, 50);
+});
+
+test('summarizeCompass does not subtract promotional spending twice', () => {
+  // $0.50 base, $0.25 of the $0.50 reward spent, $0.25 left: the week's use
+  // already includes the promotional debit, so $0.25 of a $1.00 window is
+  // 25% left, not 0%.
+  const c = summarizeCompass({
+    weekly_used_usd: 0.75, weekly_limit_usd: 0.5,
+    promotional_balance_usd: 0.25, promotional_spent_usd: 0.25,
+  });
+  assert.equal(c.remaining, 25);
+  assert.equal(c.limit, 1);
+  assert.equal(c.promo, 0.25);
+});
+
+test('summarizeCompass without a limit reports no percent', () => {
+  const c = summarizeCompass({ tier: 'free', weekly_used_usd: 0, weekly_limit_usd: 0 });
+  assert.equal(c.remaining, null);
 });

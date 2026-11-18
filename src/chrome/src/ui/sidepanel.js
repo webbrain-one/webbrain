@@ -8875,6 +8875,39 @@ function initializeLanguagePicker() {
   syncLanguagePicker();
 }
 
+// Compass rows show the weekly cloud allowance left, so the service reads as
+// a service: sign up, watch the quota, no setup needed.
+async function showCompassPickerQuota(deviceGuid) {
+  if (!deviceGuid || !providerSelect) return;
+  try {
+    const cached = showCompassPickerQuota._cache;
+    let left = cached?.deviceGuid === deviceGuid && Date.now() - cached.fetchedAt < 60000 ? cached.left : null;
+    if (left == null) {
+      const response = await fetch('https://api.webbrain.one/usage', {
+        headers: { 'X-WebBrain-Device-Id': deviceGuid, 'X-WebBrain-Client': 'extension' },
+        cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return;
+      const usage = await response.json();
+      const base = Number(usage.weekly_limit_usd) || Number(usage.base_weekly_allowance_usd) || 0;
+      const promoLeft = Math.max(0, Number(usage.promotional_balance_usd) || 0);
+      const promoSpent = Math.max(0, Number(usage.promotional_spent_usd) || 0);
+      const capacity = base + promoLeft + promoSpent;
+      if (!(capacity > 0)) return;
+      const baseSpent = Math.min(base, Math.max(0, (Number(usage.weekly_used_usd) || 0) - promoSpent));
+      left = Math.max(0, Math.min(100, Math.round(((base - baseSpent + promoLeft) / capacity) * 100)));
+      showCompassPickerQuota._cache = { deviceGuid, left, fetchedAt: Date.now() };
+    }
+    const meta = t('sp.providers.compass_left', { pct: left });
+    for (const id of ['webbrain_cloud', 'webbrain_cloud_max']) {
+      const option = Array.from(providerSelect.options).find(o => o.value === id);
+      if (option) option.textContent = `${providerPickerLabelById.get(id)} — ${meta}`;
+      const metaEl = providerPickerMenu?.querySelector(`.provider-picker-option[data-value="${id}"] .provider-picker-option-meta`);
+      if (metaEl) metaEl.textContent = meta;
+    }
+  } catch { /* an unavailable report keeps the plain "No setup required" row */ }
+}
+
 async function loadProviders() {
   try {
     const res = await sendToBackground('get_providers', { includeSidepanelOnly: true });
@@ -8904,6 +8937,7 @@ async function loadProviders() {
     cloudGroup.appendChild(cloudMaxOption);
     providerPickerLabelById.set('webbrain_cloud_max', cloudMaxLabel);
     appendProviderPickerOption('webbrain_cloud_max', cloudMaxLabel, t('sp.providers.no_setup'), 'webbrain_cloud');
+    void showCompassPickerQuota(res?.providers?.webbrain_cloud?.deviceGuid);
 
     const configuredEntries = Object.entries(res.providers)
       .filter(([id, config]) => !['webbrain_cloud', 'webbrain_cloud_max'].includes(id) && config?.configured === true);

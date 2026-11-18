@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/esokullu/webbrain-systray/internal/compass"
 	"github.com/esokullu/webbrain-systray/internal/paths"
 )
 
@@ -75,6 +76,14 @@ type Settings struct {
 	// ManualUpdates turns off automatic updates: new versions are still
 	// reported, and install only when asked.
 	ManualUpdates bool `json:"manual_updates,omitempty"`
+	// CompassGuid identifies this machine to WebBrain Compass, the cloud
+	// service at api.webbrain.one, whose weekly quota it tracks.
+	CompassGuid string `json:"compass_guid,omitempty"`
+	// CompassShared is set when Murshid hands over the WebBrain extension's
+	// device id, the identity its cloud requests use. Only then does the
+	// panel offer sign-up and billing: a generated id would buy credit for
+	// an account no inference client uses.
+	CompassShared bool `json:"compass_shared,omitempty"`
 }
 
 type Store struct {
@@ -131,6 +140,10 @@ func Open() (*Store, error) {
 	}
 	if st.s.QuotaRefreshMinutes == 0 {
 		st.s.QuotaRefreshMinutes = 5
+		changed = true
+	}
+	if st.s.CompassGuid == "" {
+		st.s.CompassGuid = compass.NewGuid()
 		changed = true
 	}
 	if st.s.Local.Vision == "" {
