@@ -101,7 +101,7 @@ const WEBBRAIN_CLOUD_PROVIDER_IDS = new Set([
 ]);
 const WEBBRAIN_CLOUD_PROVIDER_LABEL = 'WebBrain Compass';
 const DUPLICATE_PROVIDER_SUFFIX = '__duplicate';
-const LOCAL_MODEL_LIST_PROVIDER_IDS = ['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'freebuff2api'];
+const LOCAL_MODEL_LIST_PROVIDER_IDS = ['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'freebuff2api'];
 const WEBBRAIN_CLOUD_CONTEXT_WINDOW = 1000000;
 const WEBBRAIN_CLOUD_LEGACY_CONTEXT_WINDOW = 256000;
 const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
@@ -655,6 +655,20 @@ export class ProviderManager {
         apiKey: '',
         supportsAskStreaming: true,
         supportsVision: true,
+        enabled: true,
+      },
+      rapidmlx: {
+        type: 'openai',
+        category: 'local',
+        label: 'Rapid-MLX (Local)',
+        providerName: 'rapidmlx',
+        requiresModel: true,
+        baseUrl: 'http://127.0.0.1:8000/v1',
+        model: '',
+        contextWindow: 16384,
+        apiKey: '',
+        supportsAskStreaming: true,
+        supportsVision: false,
         enabled: true,
       },
       vllm: {
@@ -1394,7 +1408,7 @@ export class ProviderManager {
   static categoryFor(id, config) {
     if (config && config.category) return config.category;
     if (config?.type === 'llamacpp' || config?.type === 'webgpu') return 'local';
-    if (['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'webgpu'].includes(id)) return 'local';
+    if (['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'webgpu'].includes(id)) return 'local';
     if (ROUTER_PROVIDER_IDS.includes(id)) return 'router';
     return 'cloud';
   }
@@ -2628,7 +2642,7 @@ export class ProviderManager {
 
   /**
    * Fetch selectable models for local providers. Ollama uses its native
-   * /api/tags endpoint; ODS, llama.cpp, LM Studio, Osaurus, Jan, vLLM, SGLang, LocalAI,
+   * /api/tags endpoint; ODS, llama.cpp, LM Studio, Osaurus, Jan, Rapid-MLX, vLLM, SGLang, LocalAI,
    * GPT4All, Unsloth Studio, and generic local proxies use
    * OpenAI-compatible /v1/models.
    */
@@ -2641,6 +2655,12 @@ export class ProviderManager {
     }
     if (provider.config.requiresApiKey && !String(provider.config.apiKey || '').trim()) {
       return { ok: false, error: `${provider.config.label || provider.name} API key is required` };
+    }
+
+    // A shared OpenAI endpoint on port 8000 cannot identify Rapid-MLX.
+    // Users select its card explicitly before discovery participates in onboarding.
+    if (detectServerIdentity && definitionId === 'rapidmlx' && provider.config.configured !== true) {
+      return { ok: true, models: [] };
     }
 
     const observedBaseUrl = provider.config.baseUrl;

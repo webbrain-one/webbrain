@@ -207,6 +207,7 @@ const STRUCTURED_OUTPUT_PROVIDER_NAMES = new Set([
   'vllm',
 ]);
 const LOCAL_OPENAI_COMPAT_PROVIDER_NAMES = new Set([
+  'rapidmlx',
   'llamacpp',
   'ods',
   'lmstudio',

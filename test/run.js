@@ -77529,8 +77529,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 122/121 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 123 : 122;
+    // deliberately omitted from the 123/122 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 124 : 123;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -78876,6 +78876,88 @@ test('WebBrain Companion loads models and chats over its keyless local endpoint'
       const chatRequest = requests.find(request => request.url.endsWith('/chat/completions'));
       assert.equal(chatRequest.url, 'http://127.0.0.1:8327/v1/chat/completions');
       assert.equal(chatRequest.headers.Authorization, undefined);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+    globalThis.browser = originalBrowser;
+  }
+});
+
+test('Rapid-MLX discovers models and chats with optional authentication', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  const originalBrowser = globalThis.browser;
+  try {
+    globalThis.chrome = globalThis.browser = { storage: { local: { async set() {} } } };
+    for (const [browser, PM] of [['chrome', ProviderManagerCh], ['firefox', ProviderManagerFx]]) {
+      const manager = new PM();
+      const defaults = manager._defaultConfigs().rapidmlx;
+      assert.equal(defaults.baseUrl, 'http://127.0.0.1:8000/v1', `${browser}: Rapid-MLX URL`);
+      assert.equal(defaults.requiresApiKey, undefined, `${browser}: loopback access must be keyless`);
+      assert.equal(defaults.requiresModel, true, `${browser}: model selection must be explicit`);
+      assert.equal(defaults.type, 'openai');
+      assert.equal(defaults.category, 'local');
+      assert.equal(defaults.model, '');
+      assert.equal(defaults.apiKey, '');
+      assert.equal(defaults.supportsAskStreaming, true);
+      manager.providers.set('rapidmlx', manager._createProvider('rapidmlx', defaults));
+      const requests = [];
+      globalThis.fetch = async (url, init = {}) => {
+        requests.push({ url: String(url), headers: init.headers || {}, body: init.body });
+        if (String(url).endsWith('/models')) {
+          return new Response(JSON.stringify({ data: [{ id: 'mlx-community/Qwen3.5-4B-MLX-4bit' }] }), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: 'rapid answer' } }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      };
+      assert.deepEqual(await manager.listProviderModels('rapidmlx', { detectServerIdentity: true }),
+        { ok: true, models: [] }, `${browser}: shared port must not identify Rapid-MLX`);
+      assert.equal(requests.length, 0, `${browser}: skip unconfigured automatic probes`);
+      const listed = await manager.listProviderModels('rapidmlx');
+      assert.equal(listed.ok, true, `${browser}: model loading failed`);
+      assert.deepEqual(listed.models, ['mlx-community/Qwen3.5-4B-MLX-4bit'], `${browser}: model IDs`);
+      const provider = manager._createProvider('rapidmlx', {
+        ...defaults, model: 'mlx-community/Qwen3.5-4B-MLX-4bit',
+      });
+      const reply = await provider.chat([{ role: 'user', content: 'hello' }]);
+      assert.equal(reply.content, 'rapid answer');
+      manager.providers.set('rapidmlx', provider);
+      assert.equal((await manager.testProvider('rapidmlx')).ok, true,
+        `${browser}: Test Connection should work without an API key`);
+      assert.equal(requests[0].url, 'http://127.0.0.1:8000/v1/models');
+      assert.equal(requests[0].headers.Authorization, undefined);
+      const chatRequest = requests.find(request => request.url.endsWith('/chat/completions'));
+      assert.equal(chatRequest.url, 'http://127.0.0.1:8000/v1/chat/completions');
+      assert.equal(chatRequest.headers.Authorization, undefined);
+      assert.equal(JSON.parse(chatRequest.body).model, 'mlx-community/Qwen3.5-4B-MLX-4bit');
+      globalThis.fetch = async (url, init) => {
+        assert.equal(String(url), 'http://127.0.0.1:8000/v1/chat/completions');
+        assert.equal(init.headers.Authorization, undefined);
+        assert.equal(JSON.parse(init.body).stream, true);
+        return new Response('data: {"choices":[{"delta":{"content":"rapid stream"}}]}\n\ndata: [DONE]\n\n',
+          { headers: { 'Content-Type': 'text/event-stream' } });
+      };
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) chunks.push(chunk);
+      assert.ok(chunks.some(chunk => chunk.type === 'text' && chunk.content === 'rapid stream'));
+      assert.ok(chunks.some(chunk => chunk.type === 'done'));
+      globalThis.fetch = async (url, init = {}) => {
+        requests.push({ url: String(url), headers: init.headers || {} });
+        return new Response(JSON.stringify(String(url).endsWith('/models')
+          ? { data: [{ id: 'mlx-community/Qwen3.5-4B-MLX-4bit' }] }
+          : { choices: [{ message: { content: 'authenticated answer' } }] }),
+          { headers: { 'Content-Type': 'application/json' } });
+      };
+      provider.config.apiKey = 'local-secret';
+      requests.length = 0;
+      assert.equal((await manager.listProviderModels('rapidmlx')).ok, true);
+      await provider.chat([{ role: 'user', content: 'hello' }]);
+      assert.ok(requests.length >= 2);
+      for (const request of requests) assert.equal(request.headers.Authorization, 'Bearer local-secret');
     }
   } finally {
     globalThis.fetch = originalFetch;

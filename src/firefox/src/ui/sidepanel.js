@@ -167,7 +167,7 @@ if (globalThis.browser?.storage?.onChanged) {
   const localModelList = document.getElementById('ob-local-model-list');
   const companionHint = document.getElementById('ob-companion-hint');
   const totalSteps = steps.length;
-  const LOCAL_PROVIDER_ORDER = ['webbrain_companion', 'unsloth', 'local_openai_proxy', 'jan', 'osaurus', 'lmstudio', 'ollama', 'ods', 'llamacpp', 'vllm', 'sglang', 'localai', 'gpt4all'];
+  const LOCAL_PROVIDER_ORDER = ['webbrain_companion', 'unsloth', 'local_openai_proxy', 'jan', 'osaurus', 'rapidmlx', 'lmstudio', 'ollama', 'ods', 'llamacpp', 'vllm', 'sglang', 'localai', 'gpt4all'];
   let current = 0;
   let scanGeneration = 0;
   let dismissed = false;

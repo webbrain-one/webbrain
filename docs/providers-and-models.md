@@ -504,6 +504,7 @@ class BaseLLMProvider {
 | `lmstudio`           | `openai`       | local    | (loaded model)                                                     | Auto metadata / override        |
 | `osaurus`            | `openai`       | local    | (required)                                                         | Off / manual toggle             |
 | `jan`                | `openai`       | local    | (loaded model)                                                     | Yes (default on)                |
+| `rapidmlx`           | `openai`       | local    | (required)                                                         | Off / manual toggle             |
 | `vllm`               | `openai`       | local    | (loaded model)                                                     | Yes (default on)                |
 | `sglang`             | `openai`       | local    | (loaded model)                                                     | Yes (default on)                |
 | `localai`            | `openai`       | local    | (loaded model)                                                     | Auto metadata / override        |
@@ -941,6 +942,7 @@ require their configured client keys:
 - **LM Studio**: `http://localhost:1234/v1` — LM Studio's local inference server
 - **Osaurus**: `http://127.0.0.1:1337/v1` — `osaurus serve --port 1337` on macOS
 - **Jan**: `http://localhost:1337/v1` — Jan's local OpenAI-compatible API server
+- **Rapid-MLX**: `http://127.0.0.1:8000/v1` — local inference on Apple Silicon Macs
 - **vLLM**: `http://localhost:8000/v1` — vLLM's OpenAI-compatible server
 - **SGLang**: `http://localhost:30000/v1` — SGLang's OpenAI-compatible server
 - **LocalAI**: `http://localhost:8080/v1` — LocalAI's OpenAI-compatible server
@@ -964,6 +966,33 @@ vision support when the installed backend exposes it. Add an API key only if
 you configured ODS to require one. When ODS switches models, select the new
 model in WebBrain unless your ODS installation exposes a stable alias. See the
 [ODS quickstart](https://github.com/Osmantic/ODS/blob/main/ods/QUICKSTART.md).
+
+#### Rapid-MLX
+
+[Rapid-MLX](https://rapidmlx.com) runs local models on Apple Silicon Macs.
+Install with `pip install rapid-mlx`, then start a model with WebBrain's
+Chrome Web Store origin explicitly allowed:
+
+```bash
+rapid-mlx serve qwen3.5-4b-4bit --cors-origins chrome-extension://ljhijonmfahplgbbacgcfnaihbjljhhb
+```
+
+Rapid-MLX rejects foreign `Origin` headers unless allowed. For an unpacked
+Chrome build, replace the ID with the one shown in `chrome://extensions`.
+For Firefox, use `--cors-origins moz-extension://<uuid>` with the extension's
+UUID from `about:debugging#/runtime/this-firefox`.
+
+Open **Settings → Models → LLM → Rapid-MLX (Local)**. Keep the server URL
+`http://127.0.0.1:8000/v1`, leave the API key blank, click **Load Models**,
+select an ID returned by `/v1/models`, save, and click **Test Connection**.
+Chat and interactive Ask streaming use `/v1/chat/completions`. If you started
+Rapid-MLX with `--api-key`, enter that key in **Advanced → API key**.
+Enable vision only for a model and server configuration that support it.
+
+Rapid-MLX shares its default port with other engines. Choose a different port
+with `--port` and update the server URL when needed. WebBrain does not identify
+unknown port-8000 servers as Rapid-MLX during automatic onboarding; configure
+its settings card explicitly.
 
 #### Osaurus
 
