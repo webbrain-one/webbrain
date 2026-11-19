@@ -145,7 +145,7 @@
       "name": "ใช้ WebBrain แบบออฟไลน์ทั้งหมดได้ไหม?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "ได้ ผู้ให้บริการเริ่มต้นของ WebBrain คือ llama.cpp ซึ่งรันโมเดล AI ในเครื่องคุณ ไม่ต้องใช้คีย์ API, AI ไม่ต้องใช้อินเทอร์เน็ต และข้อมูลก็ไม่ออกจากเครื่องคุณเลย เพียงดาวน์โหลดโมเดล GGUF เริ่ม llama-server แล้วคุณจะมี AI browser agent ที่เป็นส่วนตัวเต็มรูปแบบ คุณยังสามารถใช้ Ollama ผ่าน endpoint ที่เข้ากันได้กับ OpenAI ได้ด้วย"
+        "text": "WebBrain ใช้ Compass ซึ่งเป็นบริการบนคลาวด์เป็นค่าเริ่มต้น หากต้องการประมวลผล AI แบบออฟไลน์ ให้ตั้งค่าโมเดลในเครื่องด้วย llama.cpp หรือ Ollama และใช้โมเดลในเครื่องกับฟีเจอร์วิเคราะห์ภาพหรือการตัดสินใจที่เปิดไว้ด้วย เพื่อให้การประมวลผลอยู่บนอุปกรณ์ของคุณ"
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "WebBrain รองรับโมเดล AI ใดบ้าง?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain รองรับผู้ให้บริการ 4 ประเภท: llama.cpp (โมเดล GGUF ภายในเครื่องใด ๆ), OpenAI (GPT-4o, GPT-4 ฯลฯ), Claude (Claude Opus, Sonnet, Haiku ผ่าน API ดั้งเดิม) และ OpenRouter (เข้าถึงโมเดลกว่า 100 โมเดลจากผู้ให้บริการต่าง ๆ) endpoint API ใด ๆ ที่เข้ากันได้กับ OpenAI ก็ใช้ได้ ดังนั้นคุณยังใช้บริการอย่าง Together AI, Groq, Mistral หรือเซิร์ฟเวอร์ภายในเครื่องใด ๆ ที่มีอินเทอร์เฟซเข้ากันได้กับ OpenAI ก็ได้"
+        "text": "WebBrain รองรับ Compass โมเดลในเครื่องผ่าน llama.cpp หรือ Ollama ผู้ให้บริการคลาวด์อย่าง OpenAI และ Anthropic และบริการจัดเส้นทางอย่าง OpenRouter คุณยังเชื่อมต่อกับเอนด์พอยต์ที่กำหนดเองและเข้ากันได้กับ OpenAI ได้ด้วย"
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        ได้ ผู้ให้บริการเริ่มต้นของ WebBrain คือ llama.cpp ซึ่งรันโมเดล AI ในเครื่องคุณ ไม่ต้องใช้คีย์ API, AI ไม่ต้องใช้อินเทอร์เน็ต และข้อมูลก็ไม่ออกจากเครื่องคุณเลย เพียงดาวน์โหลดโมเดล GGUF เริ่ม llama-server แล้วคุณจะมี AI browser agent ที่เป็นส่วนตัวเต็มรูปแบบ คุณยังสามารถใช้ Ollama ผ่าน endpoint ที่เข้ากันได้กับ OpenAI ได้ด้วย
+        WebBrain ใช้ Compass ซึ่งเป็นบริการบนคลาวด์เป็นค่าเริ่มต้น หากต้องการประมวลผล AI แบบออฟไลน์ ให้ตั้งค่าโมเดลในเครื่องด้วย llama.cpp หรือ Ollama และใช้โมเดลในเครื่องกับฟีเจอร์วิเคราะห์ภาพหรือการตัดสินใจที่เปิดไว้ด้วย เพื่อให้การประมวลผลอยู่บนอุปกรณ์ของคุณ
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain รองรับผู้ให้บริการ 4 ประเภท: llama.cpp (โมเดล GGUF ภายในเครื่องใด ๆ), OpenAI (GPT-4o, GPT-4 ฯลฯ), Claude (Claude Opus, Sonnet, Haiku ผ่าน API ดั้งเดิม) และ OpenRouter (เข้าถึงโมเดลกว่า 100 โมเดลจากผู้ให้บริการต่าง ๆ) endpoint API ใด ๆ ที่เข้ากันได้กับ OpenAI ก็ใช้ได้ ดังนั้นคุณยังใช้บริการอย่าง Together AI, Groq, Mistral หรือเซิร์ฟเวอร์ภายในเครื่องใด ๆ ที่มีอินเทอร์เฟซเข้ากันได้กับ OpenAI ก็ได้
+        WebBrain รองรับ Compass โมเดลในเครื่องผ่าน llama.cpp หรือ Ollama ผู้ให้บริการคลาวด์อย่าง OpenAI และ Anthropic และบริการจัดเส้นทางอย่าง OpenRouter คุณยังเชื่อมต่อกับเอนด์พอยต์ที่กำหนดเองและเข้ากันได้กับ OpenAI ได้ด้วย
       </div>
     </details>
 

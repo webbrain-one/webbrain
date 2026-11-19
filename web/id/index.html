@@ -145,7 +145,7 @@
       "name": "Bisakah saya menggunakan WebBrain sepenuhnya offline?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ya. Penyedia bawaan WebBrain adalah llama.cpp, yang menjalankan model AI lokal di komputer Anda. Tidak perlu kunci API, AI tidak butuh internet, dan data tidak pernah meninggalkan mesin Anda. Cukup unduh model GGUF, jalankan llama-server, dan Anda punya agen peramban AI yang sepenuhnya privat. Anda juga dapat menggunakan Ollama dengan endpoint kompatibel-OpenAI miliknya."
+        "text": "Secara default, WebBrain memakai Compass, layanan yang dihosting. Untuk menjalankan inferensi AI secara offline, konfigurasikan model lokal dengan llama.cpp atau Ollama. Agar pemrosesan tetap di perangkat, gunakan juga model lokal untuk fitur visi atau pengambilan keputusan yang diaktifkan."
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "Model AI apa saja yang didukung WebBrain?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain mendukung empat jenis penyedia: llama.cpp (model GGUF lokal apa pun), OpenAI (GPT-4o, GPT-4, dsb.), Claude (Claude Opus, Sonnet, Haiku melalui API asli), dan OpenRouter (akses ke 100+ model dari berbagai penyedia). Endpoint API apa pun yang kompatibel-OpenAI dapat digunakan, jadi Anda juga bisa memakai layanan seperti Together AI, Groq, Mistral, atau server lokal apa pun dengan antarmuka kompatibel-OpenAI."
+        "text": "WebBrain mendukung Compass, model lokal melalui llama.cpp atau Ollama, penyedia cloud seperti OpenAI dan Anthropic, serta router seperti OpenRouter. Anda juga dapat menyambungkan endpoint kustom yang kompatibel dengan OpenAI."
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        Ya. Penyedia bawaan WebBrain adalah llama.cpp, yang menjalankan model AI lokal di komputer Anda. Tidak perlu kunci API, AI tidak butuh internet, dan data tidak pernah meninggalkan mesin Anda. Cukup unduh model GGUF, jalankan llama-server, dan Anda punya agen peramban AI yang sepenuhnya privat. Anda juga dapat menggunakan Ollama dengan endpoint kompatibel-OpenAI miliknya.
+        Secara default, WebBrain memakai Compass, layanan yang dihosting. Untuk menjalankan inferensi AI secara offline, konfigurasikan model lokal dengan llama.cpp atau Ollama. Agar pemrosesan tetap di perangkat, gunakan juga model lokal untuk fitur visi atau pengambilan keputusan yang diaktifkan.
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain mendukung empat jenis penyedia: llama.cpp (model GGUF lokal apa pun), OpenAI (GPT-4o, GPT-4, dsb.), Claude (Claude Opus, Sonnet, Haiku melalui API asli), dan OpenRouter (akses ke 100+ model dari berbagai penyedia). Endpoint API apa pun yang kompatibel-OpenAI dapat digunakan, jadi Anda juga bisa memakai layanan seperti Together AI, Groq, Mistral, atau server lokal apa pun dengan antarmuka kompatibel-OpenAI.
+        WebBrain mendukung Compass, model lokal melalui llama.cpp atau Ollama, penyedia cloud seperti OpenAI dan Anthropic, serta router seperti OpenRouter. Anda juga dapat menyambungkan endpoint kustom yang kompatibel dengan OpenAI.
       </div>
     </details>
 

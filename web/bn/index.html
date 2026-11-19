@@ -145,7 +145,7 @@
       "name": "আমি কি পুরোপুরি অফলাইনে WebBrain ব্যবহার করতে পারি?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "হ্যাঁ। WebBrain এর ডিফল্ট প্রদানকারী হল llama.cpp, যেটি আপনার কম্পিউটারে একটি স্থানীয় AI মডেল চালায়। কোনো API কী প্রয়োজন নেই, AI-এর জন্য কোনো ইন্টারনেটের প্রয়োজন নেই এবং কোনো ডেটা কখনোই আপনার মেশিন ছেড়ে যায় না। শুধু একটি GGUF মডেল ডাউনলোড করুন, llama-server শুরু করুন এবং আপনার কাছে একটি সম্পূর্ণ ব্যক্তিগত AI ব্রাউজার এজেন্ট আছে৷ আপনি Ollama এর OpenAI- সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট সহ ব্যবহার করতে পারেন।"
+        "text": "ডিফল্টভাবে WebBrain তার হোস্ট করা Compass পরিষেবা ব্যবহার করে। অফলাইনে AI চালাতে llama.cpp বা Ollama দিয়ে একটি স্থানীয় মডেল সেট আপ করুন। প্রক্রিয়াকরণ ডিভাইসেই রাখতে, চালু থাকা ছবি বিশ্লেষণ বা সিদ্ধান্ত নেওয়ার ফিচারগুলির জন্যও স্থানীয় মডেল ব্যবহার করুন।"
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "কোন AI মডেল WebBrain সমর্থন করে?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain চারটি প্রদানকারীর প্রকারকে সমর্থন করে: llama.cpp (যে কোনো স্থানীয় GGUF মডেল), OpenAI (GPT-4o, GPT-4, ইত্যাদি), Claude (Claude Opus, Sonnet, Haiku এর মাধ্যমে স্থানীয় API), এবং OpenRouter (বিভিন্ন প্রদানকারীর থেকে 100+ মডেলে অ্যাক্সেস)। যেকোনো OpenAI- সামঞ্জস্যপূর্ণ API এন্ডপয়েন্ট কাজ করে, তাই আপনি Together AI, Groq, Mistral বা OpenAI- সামঞ্জস্যপূর্ণ ইন্টারফেসের সাথে যেকোনো স্থানীয় সার্ভারের মতো পরিষেবাগুলিও ব্যবহার করতে পারেন।"
+        "text": "WebBrain Compass, llama.cpp বা Ollama-এর মাধ্যমে স্থানীয় মডেল, OpenAI ও Anthropic-এর মতো ক্লাউড প্রদানকারী এবং OpenRouter-এর মতো রাউটার সমর্থন করে। আপনি নিজের OpenAI-সামঞ্জস্যপূর্ণ এন্ডপয়েন্টও যুক্ত করতে পারেন।"
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        হ্যাঁ। WebBrain এর ডিফল্ট প্রদানকারী হল llama.cpp, যেটি আপনার কম্পিউটারে একটি স্থানীয় AI মডেল চালায়। কোনো API কী প্রয়োজন নেই, AI-এর জন্য কোনো ইন্টারনেটের প্রয়োজন নেই এবং কোনো ডেটা কখনোই আপনার মেশিন ছেড়ে যায় না। শুধু একটি GGUF মডেল ডাউনলোড করুন, llama-server শুরু করুন এবং আপনার কাছে একটি সম্পূর্ণ ব্যক্তিগত AI ব্রাউজার এজেন্ট আছে৷ আপনি Ollama এর OpenAI- সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট সহ ব্যবহার করতে পারেন।
+        ডিফল্টভাবে WebBrain তার হোস্ট করা Compass পরিষেবা ব্যবহার করে। অফলাইনে AI চালাতে llama.cpp বা Ollama দিয়ে একটি স্থানীয় মডেল সেট আপ করুন। প্রক্রিয়াকরণ ডিভাইসেই রাখতে, চালু থাকা ছবি বিশ্লেষণ বা সিদ্ধান্ত নেওয়ার ফিচারগুলির জন্যও স্থানীয় মডেল ব্যবহার করুন।
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain চারটি প্রদানকারীর প্রকারকে সমর্থন করে: llama.cpp (যে কোনো স্থানীয় GGUF মডেল), OpenAI (GPT-4o, GPT-4, ইত্যাদি), Claude (Claude Opus, Sonnet, Haiku এর মাধ্যমে স্থানীয় API), এবং OpenRouter (বিভিন্ন প্রদানকারীর থেকে 100+ মডেলে অ্যাক্সেস)। যেকোনো OpenAI- সামঞ্জস্যপূর্ণ API এন্ডপয়েন্ট কাজ করে, তাই আপনি Together AI, Groq, Mistral বা OpenAI- সামঞ্জস্যপূর্ণ ইন্টারফেসের সাথে যেকোনো স্থানীয় সার্ভারের মতো পরিষেবাগুলিও ব্যবহার করতে পারেন।
+        WebBrain Compass, llama.cpp বা Ollama-এর মাধ্যমে স্থানীয় মডেল, OpenAI ও Anthropic-এর মতো ক্লাউড প্রদানকারী এবং OpenRouter-এর মতো রাউটার সমর্থন করে। আপনি নিজের OpenAI-সামঞ্জস্যপূর্ণ এন্ডপয়েন্টও যুক্ত করতে পারেন।
       </div>
     </details>
 

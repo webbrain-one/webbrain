@@ -145,7 +145,7 @@
       "name": "¿Puedo usar WebBrain totalmente sin conexión?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sí. El proveedor por defecto de WebBrain es llama.cpp, que ejecuta un modelo de IA local en tu ordenador. Sin claves de API, sin internet para la IA y sin que salga ningún dato de tu máquina. Solo descarga un modelo GGUF, arranca llama-server y tendrás un agente de IA totalmente privado. También puedes usar Ollama con su endpoint compatible con OpenAI."
+        "text": "WebBrain usa por defecto Compass, su servicio alojado. Para ejecutar la IA sin conexión, configura un modelo local con llama.cpp u Ollama. Si activas funciones de visión o decisión, usa modelos locales también para que el procesamiento se quede en tu dispositivo."
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "¿Qué modelos de IA admite WebBrain?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain admite cuatro tipos de proveedor: llama.cpp (cualquier modelo GGUF local), OpenAI (GPT-4o, GPT-4, etc.), Claude (Claude Opus, Sonnet, Haiku mediante la API nativa) y OpenRouter (acceso a más de 100 modelos de varios proveedores). Cualquier endpoint compatible con OpenAI funciona, así que también puedes usar servicios como Together AI, Groq, Mistral o cualquier servidor local con interfaz compatible."
+        "text": "WebBrain admite Compass, modelos locales mediante llama.cpp u Ollama, proveedores en la nube como OpenAI y Anthropic, y enrutadores como OpenRouter. También puedes conectar un endpoint personalizado compatible con OpenAI."
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        Sí. El proveedor por defecto de WebBrain es llama.cpp, que ejecuta un modelo de IA local en tu ordenador. Sin claves de API, sin internet para la IA y sin que salga ningún dato de tu máquina. Solo descarga un modelo GGUF, arranca llama-server y tendrás un agente de IA totalmente privado. También puedes usar Ollama con su endpoint compatible con OpenAI.
+        WebBrain usa por defecto Compass, su servicio alojado. Para ejecutar la IA sin conexión, configura un modelo local con llama.cpp u Ollama. Si activas funciones de visión o decisión, usa modelos locales también para que el procesamiento se quede en tu dispositivo.
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain admite cuatro tipos de proveedor: llama.cpp (cualquier modelo GGUF local), OpenAI (GPT-4o, GPT-4, etc.), Claude (Claude Opus, Sonnet, Haiku mediante la API nativa) y OpenRouter (acceso a más de 100 modelos de varios proveedores). Cualquier endpoint compatible con OpenAI funciona, así que también puedes usar servicios como Together AI, Groq, Mistral o cualquier servidor local con interfaz compatible.
+        WebBrain admite Compass, modelos locales mediante llama.cpp u Ollama, proveedores en la nube como OpenAI y Anthropic, y enrutadores como OpenRouter. También puedes conectar un endpoint personalizado compatible con OpenAI.
       </div>
     </details>
 

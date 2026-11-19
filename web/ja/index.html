@@ -145,7 +145,7 @@
       "name": "WebBrain は完全にオフラインで使えますか?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "はい。WebBrain のデフォルトプロバイダーは llama.cpp で、ローカルの AI モデルをあなたのコンピューター上で実行します。API キーは不要、AI の利用にインターネットは不要、データもマシンから出ません。GGUF モデルをダウンロードして llama-server を起動すれば、完全にプライベートな AI ブラウザエージェントが手に入ります。Ollama の OpenAI 互換エンドポイントも使えます。"
+        "text": "WebBrain は既定でホスト型サービスの Compass を使います。AI 推論をオフラインで実行するには、llama.cpp や Ollama でローカルモデルを設定してください。処理を端末内で完結させるには、有効にした画像認識や意思決定の機能にもローカルモデルを使ってください。"
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "WebBrain はどの AI モデルに対応していますか?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain は 4 種類のプロバイダーに対応しています: llama.cpp (任意のローカル GGUF モデル)、OpenAI (GPT-4o、GPT-4 など)、Claude (ネイティブ API 経由で Claude Opus、Sonnet、Haiku)、OpenRouter (さまざまなプロバイダーの 100 を超えるモデルにアクセス)。OpenAI 互換の API エンドポイントなら何でも動くので、Together AI、Groq、Mistral、あるいは OpenAI 互換インターフェイスを備えた任意のローカルサーバーも使えます。"
+        "text": "WebBrain は Compass のほか、llama.cpp や Ollama のローカルモデル、OpenAI や Anthropic などのクラウドプロバイダー、OpenRouter などのルーターに対応しています。独自の OpenAI 互換エンドポイントにも接続できます。"
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        はい。WebBrain のデフォルトプロバイダーは llama.cpp で、ローカルの AI モデルをあなたのコンピューター上で実行します。API キーは不要、AI の利用にインターネットは不要、データもマシンから出ません。GGUF モデルをダウンロードして llama-server を起動すれば、完全にプライベートな AI ブラウザエージェントが手に入ります。Ollama の OpenAI 互換エンドポイントも使えます。
+        WebBrain は既定でホスト型サービスの Compass を使います。AI 推論をオフラインで実行するには、llama.cpp や Ollama でローカルモデルを設定してください。処理を端末内で完結させるには、有効にした画像認識や意思決定の機能にもローカルモデルを使ってください。
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain は 4 種類のプロバイダーに対応しています: llama.cpp (任意のローカル GGUF モデル)、OpenAI (GPT-4o、GPT-4 など)、Claude (ネイティブ API 経由で Claude Opus、Sonnet、Haiku)、OpenRouter (さまざまなプロバイダーの 100 を超えるモデルにアクセス)。OpenAI 互換の API エンドポイントなら何でも動くので、Together AI、Groq、Mistral、あるいは OpenAI 互換インターフェイスを備えた任意のローカルサーバーも使えます。
+        WebBrain は Compass のほか、llama.cpp や Ollama のローカルモデル、OpenAI や Anthropic などのクラウドプロバイダー、OpenRouter などのルーターに対応しています。独自の OpenAI 互換エンドポイントにも接続できます。
       </div>
     </details>
 
