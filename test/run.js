@@ -78958,9 +78958,42 @@ test('Rapid-MLX discovers models and chats with optional authentication', async 
       await provider.chat([{ role: 'user', content: 'hello' }]);
       assert.ok(requests.length >= 2);
       for (const request of requests) assert.equal(request.headers.Authorization, 'Bearer local-secret');
+
+      const icons = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/provider-icons.js`), 'utf8');
+      assert.match(icons, /rapidmlx: 'rapidmlx\.svg'/);
+      assert.match(icons, /rapidmlx: 'Rapid-MLX'/);
+      assert.ok(
+        fs.existsSync(path.join(ROOT, `src/${browser}/icons/providers/rapidmlx.svg`)),
+        `${browser}: Rapid-MLX icon asset is missing`,
+      );
     }
   } finally {
     globalThis.fetch = originalFetch;
+    globalThis.chrome = originalChrome;
+    globalThis.browser = originalBrowser;
+  }
+});
+
+test('every built-in provider has an icon mapping and asset', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalBrowser = globalThis.browser;
+  try {
+    globalThis.chrome = globalThis.browser = { storage: { local: { async set() {} } } };
+    for (const [browser, PM] of [['chrome', ProviderManagerCh], ['firefox', ProviderManagerFx]]) {
+      const ids = Object.keys(new PM()._defaultConfigs());
+      const { PROVIDER_ICON_FILES } = await import(
+        pathToFileURL(path.join(ROOT, `src/${browser}/src/ui/provider-icons.js`)).href
+      );
+      for (const id of ids) {
+        const file = PROVIDER_ICON_FILES[id];
+        assert.ok(file, `${browser}: ${id} has no icon mapping`);
+        assert.ok(
+          fs.existsSync(path.join(ROOT, `src/${browser}/icons/providers/${file}`)),
+          `${browser}: ${id} icon asset ${file} is missing`,
+        );
+      }
+    }
+  } finally {
     globalThis.chrome = originalChrome;
     globalThis.browser = originalBrowser;
   }
