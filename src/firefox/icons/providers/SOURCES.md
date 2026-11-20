@@ -9,6 +9,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | llamacpp | Jan app asset (brand mark used for llama.cpp) |
 | jan | Jan official app icon |
 | osaurus | [Osaurus official logo](https://github.com/osaurus-ai/osaurus/blob/main/App/osaurus/Assets.xcassets/osaurus-logo.imageset/osaurus-logo-black.svg) (`osaurus-ai/osaurus`, MIT) |
+| rapidmlx | [Rapid-MLX official logo mark](https://rapidmlx.com/rapid-mlx-logo-mark.svg) (`raullenchai/Rapid-MLX`, Apache 2.0) |
 | localai | LocalAI official logo (`mudler/LocalAI`) |
 | gpt4all | Simple mark (not an official GPT4All brand asset) |
 | local_openai_proxy, freebuff2api | WebBrain-authored generic proxy marks |

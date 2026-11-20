@@ -20,6 +20,7 @@ export const PROVIDER_ICON_FILES = {
   ods: 'ods.png',
   lmstudio: 'lmstudio.svg',
   osaurus: 'osaurus.svg',
+  rapidmlx: 'rapidmlx.svg',
   jan: 'jan.png',
   vllm: 'vllm.svg',
   sglang: 'sglang.png',
