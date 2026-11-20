@@ -159,7 +159,7 @@
       "name": "آیا می توانم از WebBrain کاملا آفلاین استفاده کنم؟",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "بله. ارائه‌دهنده پیش‌فرض WebBrain llama.cpp است که یک مدل هوش مصنوعی محلی را روی رایانه شما اجرا می‌کند. بدون نیاز به کلید API، بدون نیاز به اینترنت برای هوش مصنوعی، و هیچ داده ای هرگز از دستگاه شما خارج نمی شود. فقط یک مدل GGUF را دانلود کنید، سرور لاما را راه اندازی کنید و یک عامل مرورگر هوش مصنوعی کاملا خصوصی دارید. همچنین می‌توانید از Ollama با نقطه پایانی سازگار با OpenAI استفاده کنید."
+        "text": "WebBrain به‌طور پیش‌فرض از سرویس ابری Compass استفاده می‌کند. برای اجرای آفلاین هوش مصنوعی، یک مدل محلی را با llama.cpp یا Ollama تنظیم کنید. اگر قابلیت‌های بینایی یا تصمیم‌گیری را فعال کرده‌اید، برای اینکه پردازش روی دستگاه بماند، برای آن‌ها هم از مدل محلی استفاده کنید."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "WebBrain کدام مدل های هوش مصنوعی را پشتیبانی می کند؟",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain از چهار نوع ارائه دهنده پشتیبانی می کند: llama.cpp (هر مدل GGUF محلی)، OpenAI (GPT-4o، GPT-4، و غیره)، Claude (Claude Opus، Sonnet، Haiku از طریق API اصلی) و OpenRouter (دسترسی به بیش از 100 مدل از ارائه دهندگان مختلف). هر نقطه پایانی API سازگار با OpenAI کار می کند، بنابراین می توانید از خدماتی مانند Together AI، Groq، Mistral یا هر سرور محلی با رابط سازگار با OpenAI استفاده کنید."
+        "text": "WebBrain از Compass، مدل‌های محلی از طریق llama.cpp یا Ollama، ارائه‌دهندگان ابری مانند OpenAI و Anthropic و سرویس‌های مسیریابی مانند OpenRouter پشتیبانی می‌کند. می‌توانید یک نقطهٔ پایانی سفارشی سازگار با OpenAI را هم متصل کنید."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>آیا می توانم از WebBrain کاملا آفلاین استفاده کنم؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>بله. ارائه‌دهنده پیش‌فرض WebBrain llama.cpp است که یک مدل هوش مصنوعی محلی را روی رایانه شما اجرا می‌کند. بدون نیاز به کلید API، بدون نیاز به اینترنت برای هوش مصنوعی، و هیچ داده ای هرگز از دستگاه شما خارج نمی شود. فقط یک مدل GGUF را دانلود کنید، سرور لاما را راه اندازی کنید و یک عامل مرورگر هوش مصنوعی کاملا خصوصی دارید. همچنین می‌توانید از Ollama با نقطه پایانی سازگار با OpenAI استفاده کنید.</p></div>
+        <div class="faq-answer"><p>WebBrain به‌طور پیش‌فرض از سرویس ابری Compass استفاده می‌کند. برای اجرای آفلاین هوش مصنوعی، یک مدل محلی را با llama.cpp یا Ollama تنظیم کنید. اگر قابلیت‌های بینایی یا تصمیم‌گیری را فعال کرده‌اید، برای اینکه پردازش روی دستگاه بماند، برای آن‌ها هم از مدل محلی استفاده کنید.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>جعبهٔ اضطراری چیست و RAG آفلاین چگونه کار می‌کند؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>WebBrain کدام مدل های هوش مصنوعی را پشتیبانی می کند؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain از چهار نوع ارائه دهنده پشتیبانی می کند: llama.cpp (هر مدل GGUF محلی)، OpenAI (GPT-4o، GPT-4، و غیره)، Claude (Claude Opus، Sonnet، Haiku از طریق API اصلی) و OpenRouter (دسترسی به بیش از 100 مدل از ارائه دهندگان مختلف). هر نقطه پایانی API سازگار با OpenAI کار می کند، بنابراین می توانید از خدماتی مانند Together AI، Groq، Mistral یا هر سرور محلی با رابط سازگار با OpenAI استفاده کنید.</p></div>
+        <div class="faq-answer"><p>WebBrain از Compass، مدل‌های محلی از طریق llama.cpp یا Ollama، ارائه‌دهندگان ابری مانند OpenAI و Anthropic و سرویس‌های مسیریابی مانند OpenRouter پشتیبانی می‌کند. می‌توانید یک نقطهٔ پایانی سفارشی سازگار با OpenAI را هم متصل کنید.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>بهترین مدل پیشنهادی کدام است؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>

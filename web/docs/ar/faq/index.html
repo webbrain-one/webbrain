@@ -159,7 +159,7 @@
       "name": "هل يمكنني استخدام WebBrain بدون اتصال بالإنترنت بالكامل؟",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "نعم. المزوّد الافتراضي لـ WebBrain هو llama.cpp، الذي يُشغّل نموذج ذكاء اصطناعي محلي على حاسوبك. لا تحتاج إلى مفاتيح API، ولا إلى الإنترنت لتشغيل الذكاء الاصطناعي، ولا تغادر بياناتك جهازك أبدًا. نزّل نموذج GGUF، شغّل llama-server، وسيكون لديك وكيل تصفّح ذكي خاص بالكامل. يمكنك أيضًا استخدام Ollama عبر نقطة نهايته المتوافقة مع OpenAI."
+        "text": "يستخدم WebBrain خدمة Compass المستضافة افتراضيًا. لتشغيل الذكاء الاصطناعي دون اتصال، اضبط نموذجًا محليًا باستخدام llama.cpp أو Ollama. لإبقاء المعالجة على جهازك، استخدم أيضًا نماذج محلية لأي ميزات رؤية أو اتخاذ قرار مفعّلة."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "ما النماذج التي يدعمها WebBrain؟",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "يدعم WebBrain أربعة أنواع من المزوّدين: llama.cpp (أي نموذج GGUF محلي)، و OpenAI (GPT-4o و GPT-4 وغيرهما)، و Claude (Claude Opus و Sonnet و Haiku عبر API الأصلي)، و OpenRouter (الوصول إلى أكثر من 100 موديل من مزوّدين متنوعين). أي نقطة نهاية API متوافقة مع OpenAI تعمل، فيمكنك أيضًا استخدام خدمات مثل Together AI و Groq و Mistral، أو أي خادم محلي بواجهة متوافقة مع OpenAI."
+        "text": "يدعم WebBrain خدمة Compass والنماذج المحلية عبر llama.cpp أو Ollama ومزوّدي الخدمات السحابية مثل OpenAI وAnthropic وخدمات التوجيه مثل OpenRouter. يمكنك أيضًا ربط نقطة نهاية مخصّصة متوافقة مع OpenAI."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>هل يمكنني استخدام WebBrain بدون اتصال بالإنترنت بالكامل؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>نعم. المزوّد الافتراضي لـ WebBrain هو llama.cpp، الذي يُشغّل نموذج ذكاء اصطناعي محلي على حاسوبك. لا تحتاج إلى مفاتيح API، ولا إلى الإنترنت لتشغيل الذكاء الاصطناعي، ولا تغادر بياناتك جهازك أبدًا. نزّل نموذج GGUF، شغّل llama-server، وسيكون لديك وكيل تصفّح ذكي خاص بالكامل. يمكنك أيضًا استخدام Ollama عبر نقطة نهايته المتوافقة مع OpenAI.</p></div>
+        <div class="faq-answer"><p>يستخدم WebBrain خدمة Compass المستضافة افتراضيًا. لتشغيل الذكاء الاصطناعي دون اتصال، اضبط نموذجًا محليًا باستخدام llama.cpp أو Ollama. لإبقاء المعالجة على جهازك، استخدم أيضًا نماذج محلية لأي ميزات رؤية أو اتخاذ قرار مفعّلة.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>ما هو صندوق الطوارئ، وكيف يعمل RAG دون اتصال بالإنترنت؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>ما النماذج التي يدعمها WebBrain؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>يدعم WebBrain أربعة أنواع من المزوّدين: llama.cpp (أي نموذج GGUF محلي)، و OpenAI (GPT-4o و GPT-4 وغيرهما)، و Claude (Claude Opus و Sonnet و Haiku عبر API الأصلي)، و OpenRouter (الوصول إلى أكثر من 100 موديل من مزوّدين متنوعين). أي نقطة نهاية API متوافقة مع OpenAI تعمل، فيمكنك أيضًا استخدام خدمات مثل Together AI و Groq و Mistral، أو أي خادم محلي بواجهة متوافقة مع OpenAI.</p></div>
+        <div class="faq-answer"><p>يدعم WebBrain خدمة Compass والنماذج المحلية عبر llama.cpp أو Ollama ومزوّدي الخدمات السحابية مثل OpenAI وAnthropic وخدمات التوجيه مثل OpenRouter. يمكنك أيضًا ربط نقطة نهاية مخصّصة متوافقة مع OpenAI.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>ما النموذج الأكثر توصيةً؟</span><span class="faq-question-mark" aria-hidden="true"></span></summary>

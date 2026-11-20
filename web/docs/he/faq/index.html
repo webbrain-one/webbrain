@@ -159,7 +159,7 @@
       "name": "האם אני יכול להשתמש ב-WebBrain לחלוטין לא מקוון?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "כן. הספק כברירת מחדל של WebBrain הוא llama.cpp, שפועל מודל בינה מלאכותית מקומי על המחשב שלך. ללא מפתחות API, ללא חיבור לאינטרנט для הבינה המלאכותית, ואין נתונים שעוזבים את המכשיר שלך לעולם. פשוט הורד מודל GGUF, הפעל llama-server, ויהיה לך סוכן דפדפן חכם פרטי לחלוטין. אפשר גם להשתמש ב-Ollama עם קצה התואם ל-OpenAI."
+        "text": "WebBrain משתמש כברירת מחדל בשירות הענן Compass. כדי להפעיל את הבינה המלאכותית ללא חיבור, יש להגדיר מודל מקומי באמצעות llama.cpp או Ollama. כדי שהעיבוד יישאר במכשיר, יש להשתמש במודלים מקומיים גם בתכונות ניתוח תמונה או קבלת החלטות שהופעלו."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "אילו מודלי בינה מלאכותית WebBrain תומך?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain תומך בארבעה סוגי ספקים: llama.cpp (כל מודל GGUF מקומי), OpenAI (GPT-4o, GPT-4, וכו׳), Claude (Claude Opus, Sonnet, Haiku דרך API מקורי) ו-OpenRouter (גישה ליותר מ-100 מודלים מספקים שונים). כל קצה API תואם OpenAI עובד, אז אפשר גם להשתמש בשירותים כמו Together AI, Groq, Mistral או כל שרת מקומי עם ממשק תואם OpenAI."
+        "text": "WebBrain תומך ב-Compass, במודלים מקומיים דרך llama.cpp או Ollama, בספקי ענן כמו OpenAI ו-Anthropic ובנתבים כמו OpenRouter. אפשר גם להתחבר לנקודת קצה מותאמת אישית שתואמת ל-OpenAI."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>האם אני יכול להשתמש ב-WebBrain לחלוטין לא מקוון?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>כן. הספק כברירת מחדל של WebBrain הוא llama.cpp, שפועל מודל בינה מלאכותית מקומי על המחשב שלך. ללא מפתחות API, ללא חיבור לאינטרנט для הבינה המלאכותית, ואין נתונים שעוזבים את המכשיר שלך לעולם. פשוט הורד מודל GGUF, הפעל llama-server, ויהיה לך סוכן דפדפן חכם פרטי לחלוטין. אפשר גם להשתמש ב-Ollama עם קצה התואם ל-OpenAI.</p></div>
+        <div class="faq-answer"><p>WebBrain משתמש כברירת מחדל בשירות הענן Compass. כדי להפעיל את הבינה המלאכותית ללא חיבור, יש להגדיר מודל מקומי באמצעות llama.cpp או Ollama. כדי שהעיבוד יישאר במכשיר, יש להשתמש במודלים מקומיים גם בתכונות ניתוח תמונה או קבלת החלטות שהופעלו.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>מהי קופסת החירום וכיצד פועל RAG לא מקוון?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>אילו מודלי בינה מלאכותית WebBrain תומך?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain תומך בארבעה סוגי ספקים: llama.cpp (כל מודל GGUF מקומי), OpenAI (GPT-4o, GPT-4, וכו׳), Claude (Claude Opus, Sonnet, Haiku דרך API מקורי) ו-OpenRouter (גישה ליותר מ-100 מודלים מספקים שונים). כל קצה API תואם OpenAI עובד, אז אפשר גם להשתמש בשירותים כמו Together AI, Groq, Mistral או כל שרת מקומי עם ממשק תואם OpenAI.</p></div>
+        <div class="faq-answer"><p>WebBrain תומך ב-Compass, במודלים מקומיים דרך llama.cpp או Ollama, בספקי ענן כמו OpenAI ו-Anthropic ובנתבים כמו OpenRouter. אפשר גם להתחבר לנקודת קצה מותאמת אישית שתואמת ל-OpenAI.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>מהו המודל המומלץ ביותר?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>

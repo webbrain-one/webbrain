@@ -159,7 +159,7 @@
       "name": "Bisakah saya menggunakan WebBrain sepenuhnya offline?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ya. Penyedia bawaan WebBrain adalah llama.cpp, yang menjalankan model AI lokal di komputer Anda. Tidak perlu kunci API, AI tidak butuh internet, dan data tidak pernah meninggalkan mesin Anda. Cukup unduh model GGUF, jalankan llama-server, dan Anda punya agen peramban AI yang sepenuhnya privat. Anda juga dapat menggunakan Ollama dengan endpoint kompatibel-OpenAI miliknya."
+        "text": "Secara default, WebBrain memakai Compass, layanan yang dihosting. Untuk menjalankan inferensi AI secara offline, konfigurasikan model lokal dengan llama.cpp atau Ollama. Agar pemrosesan tetap di perangkat, gunakan juga model lokal untuk fitur visi atau pengambilan keputusan yang diaktifkan."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "Model AI apa saja yang didukung WebBrain?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain mendukung empat jenis penyedia: llama.cpp (model GGUF lokal apa pun), OpenAI (GPT-4o, GPT-4, dsb.), Claude (Claude Opus, Sonnet, Haiku melalui API asli), dan OpenRouter (akses ke 100+ model dari berbagai penyedia). Endpoint API apa pun yang kompatibel-OpenAI dapat digunakan, jadi Anda juga bisa memakai layanan seperti Together AI, Groq, Mistral, atau server lokal apa pun dengan antarmuka kompatibel-OpenAI."
+        "text": "WebBrain mendukung Compass, model lokal melalui llama.cpp atau Ollama, penyedia cloud seperti OpenAI dan Anthropic, serta router seperti OpenRouter. Anda juga dapat menyambungkan endpoint kustom yang kompatibel dengan OpenAI."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>Bisakah saya menggunakan WebBrain sepenuhnya offline?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>Ya. Penyedia bawaan WebBrain adalah llama.cpp, yang menjalankan model AI lokal di komputer Anda. Tidak perlu kunci API, AI tidak butuh internet, dan data tidak pernah meninggalkan mesin Anda. Cukup unduh model GGUF, jalankan llama-server, dan Anda punya agen peramban AI yang sepenuhnya privat. Anda juga dapat menggunakan Ollama dengan endpoint kompatibel-OpenAI miliknya.</p></div>
+        <div class="faq-answer"><p>Secara default, WebBrain memakai Compass, layanan yang dihosting. Untuk menjalankan inferensi AI secara offline, konfigurasikan model lokal dengan llama.cpp atau Ollama. Agar pemrosesan tetap di perangkat, gunakan juga model lokal untuk fitur visi atau pengambilan keputusan yang diaktifkan.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>Apa itu Kotak Darurat, dan bagaimana cara kerja RAG offline?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>Model AI apa saja yang didukung WebBrain?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain mendukung empat jenis penyedia: llama.cpp (model GGUF lokal apa pun), OpenAI (GPT-4o, GPT-4, dsb.), Claude (Claude Opus, Sonnet, Haiku melalui API asli), dan OpenRouter (akses ke 100+ model dari berbagai penyedia). Endpoint API apa pun yang kompatibel-OpenAI dapat digunakan, jadi Anda juga bisa memakai layanan seperti Together AI, Groq, Mistral, atau server lokal apa pun dengan antarmuka kompatibel-OpenAI.</p></div>
+        <div class="faq-answer"><p>WebBrain mendukung Compass, model lokal melalui llama.cpp atau Ollama, penyedia cloud seperti OpenAI dan Anthropic, serta router seperti OpenRouter. Anda juga dapat menyambungkan endpoint kustom yang kompatibel dengan OpenAI.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>Model apa yang paling direkomendasikan?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
