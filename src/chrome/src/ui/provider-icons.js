@@ -92,6 +92,7 @@ export const PROVIDER_SHORT_LABELS = {
   ods: 'ODS',
   lmstudio: 'LM Studio',
   osaurus: 'Osaurus',
+  rapidmlx: 'Rapid-MLX',
   jan: 'Jan',
   vllm: 'vLLM',
   sglang: 'SGLang',

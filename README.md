@@ -111,6 +111,11 @@ port and `sk-unsloth-` API key configured by the user; see the
 [Unsloth Studio setup](docs/providers-and-models.md#unsloth-studio).
 **Osaurus (Local)** connects to the Mac's Osaurus server with model discovery,
 streaming, and tool calls; see the [Osaurus setup](docs/providers-and-models.md#osaurus).
+
+**Rapid-MLX** runs locally on Apple Silicon Macs with optional authentication,
+model discovery, and Ask streaming. See the [Rapid-MLX setup](docs/providers-and-models.md#rapid-mlx)
+for the required extension CORS origin and settings.
+
 Size the loaded context window for the selected tier's system prompt and tool
 schemas, the page/history, and the requested output. **16k is a configuration
 fallback, not a guaranteed minimum; Compact is not guaranteed to fit 8k.**
