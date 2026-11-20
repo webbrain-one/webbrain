@@ -159,7 +159,7 @@
       "name": "Чи можна користуватися WebBrain повністю офлайн?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Так. За замовчуванням WebBrain використовує llama.cpp, який запускає локальну AI-модель просто у вас на комп'ютері. API-ключі не потрібні, інтернету AI не потребує, дані не покидають машину. Завантажте GGUF-модель, запустіть llama-server — і у вас повністю приватний AI-агент у браузері. Також можна користуватися Ollama через його OpenAI-сумісний ендпоінт."
+        "text": "За замовчуванням WebBrain використовує хмарний сервіс Compass. Щоб запустити ШІ офлайн, налаштуйте локальну модель у llama.cpp або Ollama. Щоб обробка залишалася на пристрої, використовуйте локальні моделі також для ввімкнених функцій аналізу зображень і прийняття рішень."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "Які AI-моделі підтримує WebBrain?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain підтримує чотири типи провайдерів: llama.cpp (будь-яка локальна GGUF-модель), OpenAI (GPT-4o, GPT-4 тощо), Claude (Claude Opus, Sonnet, Haiku через нативний API) та OpenRouter (доступ до 100+ моделей від різних провайдерів). Підходить будь-який OpenAI-сумісний ендпоінт, тож можна використовувати Together AI, Groq, Mistral або будь-який локальний сервер з OpenAI-сумісним інтерфейсом."
+        "text": "WebBrain підтримує Compass, локальні моделі через llama.cpp або Ollama, хмарних постачальників на кшталт OpenAI й Anthropic та маршрутизатори на кшталт OpenRouter. Можна також підключити власну кінцеву точку, сумісну з OpenAI."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>Чи можна користуватися WebBrain повністю офлайн?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>Так. За замовчуванням WebBrain використовує llama.cpp, який запускає локальну AI-модель просто у вас на комп'ютері. API-ключі не потрібні, інтернету AI не потребує, дані не покидають машину. Завантажте GGUF-модель, запустіть llama-server — і у вас повністю приватний AI-агент у браузері. Також можна користуватися Ollama через його OpenAI-сумісний ендпоінт.</p></div>
+        <div class="faq-answer"><p>За замовчуванням WebBrain використовує хмарний сервіс Compass. Щоб запустити ШІ офлайн, налаштуйте локальну модель у llama.cpp або Ollama. Щоб обробка залишалася на пристрої, використовуйте локальні моделі також для ввімкнених функцій аналізу зображень і прийняття рішень.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>Що таке Аварійна скринька і як працює офлайн-RAG?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>Які AI-моделі підтримує WebBrain?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain підтримує чотири типи провайдерів: llama.cpp (будь-яка локальна GGUF-модель), OpenAI (GPT-4o, GPT-4 тощо), Claude (Claude Opus, Sonnet, Haiku через нативний API) та OpenRouter (доступ до 100+ моделей від різних провайдерів). Підходить будь-який OpenAI-сумісний ендпоінт, тож можна використовувати Together AI, Groq, Mistral або будь-який локальний сервер з OpenAI-сумісним інтерфейсом.</p></div>
+        <div class="faq-answer"><p>WebBrain підтримує Compass, локальні моделі через llama.cpp або Ollama, хмарних постачальників на кшталт OpenAI й Anthropic та маршрутизатори на кшталт OpenRouter. Можна також підключити власну кінцеву точку, сумісну з OpenAI.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>Яка модель найбільш рекомендована?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>

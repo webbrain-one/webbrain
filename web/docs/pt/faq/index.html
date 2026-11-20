@@ -159,7 +159,7 @@
       "name": "Posso usar o WebBrain totalmente offline?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sim. O provedor padrão do WebBrain é llama.cpp, que executa um modelo de IA local em seu computador. Nenhuma chave de API é necessária, nenhuma Internet é necessária para a IA e nenhum dado sai de sua máquina. Basta baixar um modelo GGUF, iniciar o llama-server e você terá um agente de navegador de IA totalmente privado. Você também pode usar Ollama com seu endpoint compatível com OpenAI."
+        "text": "O WebBrain usa por padrão o Compass, seu serviço hospedado. Para executar a IA sem conexão, configure um modelo local com llama.cpp ou Ollama. Para manter o processamento no dispositivo, use também modelos locais nas funções de visão ou decisão que estiverem ativas."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "Quais modelos de IA o WebBrain suporta?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain oferece suporte a quatro tipos de provedores: llama.cpp (qualquer modelo GGUF local), OpenAI (GPT-4o, GPT-4, etc.), Claude (Claude Opus, Sonnet, Haiku via API nativa) e OpenRouter (acesso a mais de 100 modelos de vários fornecedores). Qualquer endpoint de API compatível com OpenAI funciona, então você também pode usar serviços como Together AI, Groq, Mistral ou qualquer servidor local com uma interface compatível com OpenAI."
+        "text": "O WebBrain oferece suporte ao Compass, a modelos locais via llama.cpp ou Ollama, a provedores de nuvem como OpenAI e Anthropic e a roteadores como OpenRouter. Você também pode conectar um endpoint personalizado compatível com OpenAI."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>Posso usar o WebBrain totalmente offline?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>Sim. O provedor padrão do WebBrain é llama.cpp, que executa um modelo de IA local em seu computador. Nenhuma chave de API é necessária, nenhuma Internet é necessária para a IA e nenhum dado sai de sua máquina. Basta baixar um modelo GGUF, iniciar o llama-server e você terá um agente de navegador de IA totalmente privado. Você também pode usar Ollama com seu endpoint compatível com OpenAI.</p></div>
+        <div class="faq-answer"><p>O WebBrain usa por padrão o Compass, seu serviço hospedado. Para executar a IA sem conexão, configure um modelo local com llama.cpp ou Ollama. Para manter o processamento no dispositivo, use também modelos locais nas funções de visão ou decisão que estiverem ativas.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>O que é a Caixa de Emergência e como funciona o RAG offline?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>Quais modelos de IA o WebBrain suporta?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain oferece suporte a quatro tipos de provedores: llama.cpp (qualquer modelo GGUF local), OpenAI (GPT-4o, GPT-4, etc.), Claude (Claude Opus, Sonnet, Haiku via API nativa) e OpenRouter (acesso a mais de 100 modelos de vários fornecedores). Qualquer endpoint de API compatível com OpenAI funciona, então você também pode usar serviços como Together AI, Groq, Mistral ou qualquer servidor local com uma interface compatível com OpenAI.</p></div>
+        <div class="faq-answer"><p>O WebBrain oferece suporte ao Compass, a modelos locais via llama.cpp ou Ollama, a provedores de nuvem como OpenAI e Anthropic e a roteadores como OpenRouter. Você também pode conectar um endpoint personalizado compatível com OpenAI.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>Qual é o modelo mais recomendado?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>

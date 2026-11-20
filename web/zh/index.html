@@ -145,7 +145,7 @@
       "name": "我能完全离线使用 WebBrain 吗?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "可以。WebBrain 的默认提供商是 llama.cpp,它在你的电脑上运行本地 AI 模型。无需 API 密钥,AI 无需互联网,数据不会离开你的机器。下载一个 GGUF 模型,启动 llama-server,你就拥有了一个完全私有的 AI 浏览器代理。你也可以通过 OpenAI 兼容端点使用 Ollama。"
+        "text": "WebBrain 默认使用托管服务 Compass。如需离线运行 AI 推理，请通过 llama.cpp 或 Ollama 配置本地模型。为了让处理留在设备上，已启用的视觉或决策功能也应使用本地模型。"
       }
     },
     {
@@ -161,7 +161,7 @@
       "name": "WebBrain 支持哪些 AI 模型?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain 支持四类提供商:llama.cpp(任意本地 GGUF 模型)、OpenAI(GPT-4o、GPT-4 等)、Claude(通过原生 API 使用 Claude Opus、Sonnet、Haiku)以及 OpenRouter(访问多家提供商的 100 多种模型)。任何 OpenAI 兼容的 API 端点都能工作,因此你也可以使用 Together AI、Groq、Mistral 等服务,或任何提供 OpenAI 兼容接口的本地服务器。"
+        "text": "WebBrain 支持托管服务 Compass、通过 llama.cpp 或 Ollama 运行的本地模型、OpenAI 和 Anthropic 等云服务，以及 OpenRouter 等路由服务。你也可以连接自定义的 OpenAI 兼容端点。"
       }
     },
     {
@@ -4909,7 +4909,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        可以。WebBrain 的默认提供商是 llama.cpp,它在你的电脑上运行本地 AI 模型。无需 API 密钥,AI 无需互联网,数据不会离开你的机器。下载一个 GGUF 模型,启动 llama-server,你就拥有了一个完全私有的 AI 浏览器代理。你也可以通过 OpenAI 兼容端点使用 Ollama。
+        WebBrain 默认使用托管服务 Compass。如需离线运行 AI 推理，请通过 llama.cpp 或 Ollama 配置本地模型。为了让处理留在设备上，已启用的视觉或决策功能也应使用本地模型。
       </div>
     </details>
 
@@ -4919,7 +4919,7 @@
         <svg class="faq-inline-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="faq-inline-answer">
-        WebBrain 支持四类提供商:llama.cpp(任意本地 GGUF 模型)、OpenAI(GPT-4o、GPT-4 等)、Claude(通过原生 API 使用 Claude Opus、Sonnet、Haiku)以及 OpenRouter(访问多家提供商的 100 多种模型)。任何 OpenAI 兼容的 API 端点都能工作,因此你也可以使用 Together AI、Groq、Mistral 等服务,或任何提供 OpenAI 兼容接口的本地服务器。
+        WebBrain 支持托管服务 Compass、通过 llama.cpp 或 Ollama 运行的本地模型、OpenAI 和 Anthropic 等云服务，以及 OpenRouter 等路由服务。你也可以连接自定义的 OpenAI 兼容端点。
       </div>
     </details>
 

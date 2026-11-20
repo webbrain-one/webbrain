@@ -159,7 +159,7 @@
       "name": "WebBrain을 완전히 오프라인에서 사용할 수 있나요?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "예. WebBrain의 기본 프로바이더는 llama.cpp이며, 컴퓨터에서 로컬 AI 모델을 실행합니다. API 키도 필요 없고, AI에 인터넷도 필요 없으며, 데이터가 머신을 떠나지 않습니다. GGUF 모델을 받고 llama-server를 실행하면, 완전히 비공개인 AI 브라우저 에이전트가 됩니다. OpenAI 호환 엔드포인트가 있는 Ollama도 사용할 수 있습니다."
+        "text": "WebBrain은 기본적으로 호스팅 서비스인 Compass를 사용합니다. AI 추론을 오프라인으로 실행하려면 llama.cpp 또는 Ollama로 로컬 모델을 설정하세요. 기기에서만 처리하려면 활성화한 이미지 분석이나 의사 결정 기능에도 로컬 모델을 사용하세요."
       }
     },
     {
@@ -175,7 +175,7 @@
       "name": "WebBrain은 어떤 AI 모델을 지원하나요?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain은 네 가지 프로바이더 유형을 지원합니다: llama.cpp (모든 로컬 GGUF 모델), OpenAI (GPT-4o, GPT-4 등), Claude (네이티브 API를 통한 Claude Opus, Sonnet, Haiku), 그리고 OpenRouter (여러 프로바이더의 100개 이상 모델 접근). OpenAI 호환 API 엔드포인트는 무엇이든 작동하므로, Together AI, Groq, Mistral 같은 서비스나 OpenAI 호환 인터페이스를 가진 로컬 서버도 사용할 수 있습니다."
+        "text": "WebBrain은 Compass, llama.cpp 또는 Ollama로 실행하는 로컬 모델, OpenAI와 Anthropic 같은 클라우드 제공업체, OpenRouter 같은 라우터를 지원합니다. OpenAI 호환 사용자 지정 엔드포인트에도 연결할 수 있습니다."
       }
     },
     {
@@ -671,7 +671,7 @@
       </header>
       <details class="faq-question" id="offline" data-faq-item>
         <summary><span>WebBrain을 완전히 오프라인에서 사용할 수 있나요?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>예. WebBrain의 기본 프로바이더는 llama.cpp이며, 컴퓨터에서 로컬 AI 모델을 실행합니다. API 키도 필요 없고, AI에 인터넷도 필요 없으며, 데이터가 머신을 떠나지 않습니다. GGUF 모델을 받고 llama-server를 실행하면, 완전히 비공개인 AI 브라우저 에이전트가 됩니다. OpenAI 호환 엔드포인트가 있는 Ollama도 사용할 수 있습니다.</p></div>
+        <div class="faq-answer"><p>WebBrain은 기본적으로 호스팅 서비스인 Compass를 사용합니다. AI 추론을 오프라인으로 실행하려면 llama.cpp 또는 Ollama로 로컬 모델을 설정하세요. 기기에서만 처리하려면 활성화한 이미지 분석이나 의사 결정 기능에도 로컬 모델을 사용하세요.</p></div>
       </details>
       <details class="faq-question" id="emergency-box" data-faq-item>
         <summary><span>비상 박스란 무엇이며 오프라인 RAG는 어떻게 작동하나요?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
@@ -679,7 +679,7 @@
       </details>
       <details class="faq-question" id="models-supported" data-faq-item>
         <summary><span>WebBrain은 어떤 AI 모델을 지원하나요?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>WebBrain은 네 가지 프로바이더 유형을 지원합니다: llama.cpp (모든 로컬 GGUF 모델), OpenAI (GPT-4o, GPT-4 등), Claude (네이티브 API를 통한 Claude Opus, Sonnet, Haiku), 그리고 OpenRouter (여러 프로바이더의 100개 이상 모델 접근). OpenAI 호환 API 엔드포인트는 무엇이든 작동하므로, Together AI, Groq, Mistral 같은 서비스나 OpenAI 호환 인터페이스를 가진 로컬 서버도 사용할 수 있습니다.</p></div>
+        <div class="faq-answer"><p>WebBrain은 Compass, llama.cpp 또는 Ollama로 실행하는 로컬 모델, OpenAI와 Anthropic 같은 클라우드 제공업체, OpenRouter 같은 라우터를 지원합니다. OpenAI 호환 사용자 지정 엔드포인트에도 연결할 수 있습니다.</p></div>
       </details>
       <details class="faq-question" id="recommended-model" data-faq-item>
         <summary><span>가장 추천하는 모델은 무엇인가요?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
