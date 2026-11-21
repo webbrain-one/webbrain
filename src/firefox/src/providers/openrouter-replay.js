@@ -6,7 +6,7 @@ export function openRouterReplayIdentity(config) {
   const model = String(config.model || '').trim().toLowerCase();
   return url.hostname === 'openrouter.ai'
     && url.pathname.replace(/\/+$/, '') === '/api/v1'
-    && /^(?:google\/gemini-4-argon|meta\/muse-(?:wonder|spark-open))(?=$|:)/.test(model)
+    && /^(?:google\/gemini-4-(?:argon|carbon|neon|hydrogen)|meta\/muse-(?:wonder|spark-open))(?=$|:)/.test(model)
     ? `openrouter:${model}` : null;
 }
 

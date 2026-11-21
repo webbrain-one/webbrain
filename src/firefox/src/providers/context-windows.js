@@ -338,7 +338,7 @@ export function inferKnownModelContextWindow(config = {}) {
   if (!model) return null;
 
   // OpenAI
-  if (/(?:^|\/)gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:[.\-:]|$)/.test(model)) return 1050000;
+  if (/(?:^|\/)gpt-6(?:\.[12])?-(?:luna-pro|sol|astra)(?:[.\-:]|$)/.test(model)) return 1050000;
   if (/^gpt-5\.6(?:[.\-]|$)/.test(model) || model.includes('/gpt-5.6')) return 1050000;
   if (model.includes('gpt-5.5-pro')) return 1050000;
   if (/^gpt-5(?:[.\-]|$)/.test(model) || model.includes('/gpt-5')) return 400000;
@@ -348,7 +348,7 @@ export function inferKnownModelContextWindow(config = {}) {
   if (model.includes('claude-')) return 200000;
 
   // Google Gemini
-  if (/(?:^|\/)gemini-4-argon(?=$|:)/.test(model)) return 1048576;
+  if (/(?:^|\/)gemini-4-(?:argon|carbon|neon|hydrogen)(?=$|[:\-])/.test(model)) return 1048576;
   if (/gemini-(?:3|3\.|2\.5)/.test(model)) return M1;
 
   if (/(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/.test(model)) return 1048576;
@@ -414,13 +414,13 @@ export function inferMaxOutputTokens(config = {}) {
   const model = clean(config.model);
   if (!model) return null;
 
-  // WebBrain uses synchronous Chat Completions, without Argon's background
+  // WebBrain uses synchronous Chat Completions, without Gemini 4's background
   // long-decode continuation. Do not advertise its 1M background output cap.
-  if (/(?:^|\/)gemini-4-argon(?=$|:)/.test(model)) return 65536;
+  if (/(?:^|\/)gemini-4-(?:argon|carbon|neon|hydrogen)(?=$|[:\-])/.test(model)) return 65536;
   if (/(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/.test(model)) return 943718;
 
   // OpenAI and router slugs
-  if (/^gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:[.\-:]|$)/.test(model) || model.includes('/gpt-6.1-sol')) return 128000;
+  if (/(?:^|\/)gpt-6(?:\.[12])?-(?:luna-pro|sol|astra)(?:[.\-:]|$)/.test(model)) return 128000;
   if (/^gpt-5(?:[.\-]|$)/.test(model) || model.includes('/gpt-5')) return 128000;
   if (/(?:^|\/)o[1-4](?:[.\-]|$)/.test(model)) return 100000;
   if (model.includes('gpt-4.1')) return 32768;

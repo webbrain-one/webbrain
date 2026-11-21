@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const models = ['google/gemini-4-argon', 'meta/muse-wonder', 'meta/muse-spark-open'];
+const models = [
+  'google/gemini-4-carbon',
+  'google/gemini-4-argon',
+  'google/gemini-4-neon',
+  'google/gemini-4-hydrogen',
+  'meta/muse-wonder',
+  'meta/muse-spark-open',
+];
 const tools = [{ type: 'function', function: { name: 'read_page', parameters: { type: 'object', properties: {} } } }];
 
 for (const browser of ['chrome', 'firefox']) {
@@ -22,7 +29,7 @@ for (const browser of ['chrome', 'firefox']) {
       assert.equal(new OpenAICompatibleProvider({ ...config, contextWindow: 16384 }).contextWindow, 16384);
       assert.equal(inferContextWindow({ ...config, category: 'local' }), 16384);
       assert.equal(new OpenAICompatibleProvider(router(`${model}:nitro`)).supportsVision, true);
-      assert.equal(inferMaxOutputTokens(config), model.includes('argon') ? 65536 : 943718);
+      assert.equal(inferMaxOutputTokens(config), model.includes('gemini-4-') ? 65536 : 943718);
     }
     assert.equal(new OpenAICompatibleProvider(router('meta/muse-voice-transcribe')).supportsVision, false);
     assert.equal(new OpenAICompatibleProvider(router('meta/muse-wonderful')).supportsVision, false);
@@ -38,7 +45,7 @@ for (const browser of ['chrome', 'firefox']) {
         }, stream);
         assert.equal(classifier.reasoning.effort, model === 'meta/muse-wonder' ? 'minimal' : 'low');
         assert.equal(Object.hasOwn(classifier.reasoning, 'enabled'), false);
-        assert.equal(classifier.max_tokens, model.includes('argon') ? 32768 : 2048);
+        assert.equal(classifier.max_tokens, model.includes('gemini-4-') ? 32768 : 2048);
         const body = provider._buildChatCompletionsBody([], { tools, toolChoice: 'required' }, stream);
         assert.equal(body.tool_choice, model === 'meta/muse-wonder' ? 'auto' : 'required');
         assert.deepEqual(body.tools, tools);
@@ -62,7 +69,7 @@ for (const browser of ['chrome', 'firefox']) {
           }, stream);
           assert.equal(body.reasoning.effort, model === 'meta/muse-wonder' ? 'minimal' : 'low', model);
           assert.equal(Object.hasOwn(body.reasoning, 'enabled'), false);
-          assert.equal(body.max_tokens, model.includes('argon') ? 32768 : 2048);
+          assert.equal(body.max_tokens, model.includes('gemini-4-') ? 32768 : 2048);
           const normal = provider._buildChatCompletionsBody([], { tools, maxTokens: 4096 }, stream);
           assert.equal(normal.reasoning.effort, 'high', 'Normal tool calls retain the configured effort');
         }
@@ -71,9 +78,16 @@ for (const browser of ['chrome', 'firefox']) {
   });
 
   test(`${browser}: Argon normalizes sampling and effort after all custom body merges`, () => {
-    const configs = [router(models[0]), {
-      providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-argon',
-    }];
+    const configs = [
+      router('google/gemini-4-argon'),
+      router('google/gemini-4-neon'),
+      router('google/gemini-4-hydrogen'),
+      router('google/gemini-4-carbon'),
+      { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-argon' },
+      { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-neon' },
+      { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-hydrogen' },
+      { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-carbon' },
+    ];
     for (const config of configs) {
       const provider = new OpenAICompatibleProvider({ ...config, reasoningEffort: 'off', extraBody: { temperature: 0.2, top_p: 0.9, top_k: 5 } });
       const body = provider._buildChatCompletionsBody([], { maxTokens: 128000 });

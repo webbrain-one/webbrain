@@ -835,11 +835,11 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       // GPT-5 Pro only accepts high reasoning effort.
       body.reasoning.effort = 'high';
     } else if (
-      /^gpt-6\.1-sol(?:$|[-_.:])/.test(normalizedModel)
+      /^(?:gpt-6\.[12]-sol|gpt-6\.2-astra)(?:$|[-_.:])/.test(normalizedModel)
       && !['low', 'medium', 'high', 'xhigh', 'max'].includes(body.reasoning.effort)
     ) {
-      // GPT-6.1 Sol rejects `none` and `minimal`, including the compact
-      // classifier override used by plannerRequestBody.
+      // GPT-6.1/6.2 Sol and GPT-6.2 Astra reject `none` and `minimal`, including
+      // the compact classifier override used by plannerRequestBody.
       body.reasoning.effort = 'low';
     } else if (
       /^gpt-5\.(?:2|4|5)-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(normalizedModel)

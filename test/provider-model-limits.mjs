@@ -21,7 +21,12 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(inferMaxOutputTokens({ model: 'claude-haiku-5-5' }), 128000, `${browser}: Haiku 5.5 output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'claude-haiku-4-5' }), 64000, `${browser}: Haiku 4.5 output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'anthropic.claude-haiku-4-5' }), 64000, `${browser}: Bedrock Haiku slug should match`);
+  assert.equal(inferMaxOutputTokens({ model: 'gpt-6.2-sol' }), 128000, `${browser}: GPT-6.2 Sol output ceiling`);
+  assert.equal(inferMaxOutputTokens({ model: 'gpt-6.2-astra' }), 128000, `${browser}: GPT-6.2 Astra output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'gpt-6.1-sol' }), 128000, `${browser}: GPT-6.1 Sol output ceiling`);
+  assert.equal(inferMaxOutputTokens({ model: 'gemini-4-neon' }), 65536, `${browser}: Gemini 4 Neon output ceiling`);
+  assert.equal(inferMaxOutputTokens({ model: 'gemini-4-hydrogen' }), 65536, `${browser}: Gemini 4 Hydrogen output ceiling`);
+  assert.equal(inferMaxOutputTokens({ model: 'gemini-4-carbon' }), 65536, `${browser}: Gemini 4 Carbon output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'gpt-5.6-terra' }), 128000, `${browser}: GPT-5.6 output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'gpt-4o' }), 16384, `${browser}: GPT-4o output ceiling`);
   assert.equal(inferMaxOutputTokens({ model: 'deepseek-v4-flash' }), 384000, `${browser}: DeepSeek V4 output ceiling`);
