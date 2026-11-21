@@ -219,7 +219,7 @@
   "cloud_strip.label": "Untuk ejen AI",
   "cloud_strip.description": "Pelayar peribadi yang boleh dilihat untuk Codex dan ejen AI lain.",
   "cloud_strip.cta": "Terokai Cloud",
-  "mcp.label": "Baharu · pelayan MCP",
+  "mcp.label": "Pelayan MCP",
   "mcp.title": "Ejen pengekodan anda, di dalam pelayar yang sudah anda gunakan.",
   "mcp.subtitle": "Sambungkan Claude Code, Codex, Cursor, OpenCode atau mana-mana klien MCP stdio kepada tab Chromium anda yang telah dilog masuk. WebBrain mengekalkan gerbang kebenaran setiap tugasan dalam pelayar dan kini turut mengembalikan JSON berstruktur.",
   "mcp.docs_cta": "Buka panduan MCP lengkap",

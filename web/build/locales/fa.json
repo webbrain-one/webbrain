@@ -219,7 +219,7 @@
   "cloud_strip.label": "برای عامل‌های هوش مصنوعی",
   "cloud_strip.description": "مرورگری خصوصی و قابل‌مشاهده برای Codex و دیگر عامل‌های هوش مصنوعی.",
   "cloud_strip.cta": "Cloud را ببینید",
-  "mcp.label": "جدید · سرور MCP",
+  "mcp.label": "سرور MCP",
   "mcp.title": "عامل کدنویسی شما، داخل همان مرورگری که استفاده می‌کنید.",
   "mcp.subtitle": "Claude Code، Codex، Cursor، OpenCode یا هر کلاینت MCP مبتنی بر stdio را به تب‌های Chromium که در آن‌ها وارد شده‌اید متصل کنید. WebBrain دروازه مجوز هر وظیفه را داخل مرورگر نگه می‌دارد و اکنون JSON ساخت‌یافته نیز برمی‌گرداند.",
   "mcp.docs_cta": "راهنمای کامل MCP را باز کنید",

@@ -220,7 +220,7 @@
   "cloud_strip.label": "For AI agents",
   "cloud_strip.description": "A private, visible browser for Codex and other AI agents.",
   "cloud_strip.cta": "Explore Cloud",
-  "mcp.label": "New · MCP server",
+  "mcp.label": "MCP server",
   "mcp.title": "Your coding agent, inside the browser you already use.",
   "mcp.subtitle": "Connect Claude Code, Codex, Cursor, OpenCode, or any stdio MCP client to your signed-in Chromium tabs. WebBrain keeps the task-level permission gate in the browser — and now returns structured JSON too.",
   "mcp.docs_cta": "Open the complete MCP guide",

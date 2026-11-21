@@ -219,7 +219,7 @@
   "cloud_strip.label": "Para sa mga AI agent",
   "cloud_strip.description": "Isang pribado at nakikitang browser para sa Codex at iba pang AI agent.",
   "cloud_strip.cta": "Tuklasin ang Cloud",
-  "mcp.label": "Bago · MCP server",
+  "mcp.label": "MCP server",
   "mcp.title": "Ang coding agent mo, sa loob ng browser na ginagamit mo na.",
   "mcp.subtitle": "Ikonekta ang Claude Code, Codex, Cursor, OpenCode, o anumang stdio MCP client sa mga naka-sign in mong Chromium tab. Pinananatili ng WebBrain sa browser ang permission gate para sa bawat gawain at nagbabalik na rin ngayon ng structured JSON.",
   "mcp.docs_cta": "Buksan ang kumpletong gabay sa MCP",

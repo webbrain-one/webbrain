@@ -219,7 +219,7 @@
   "cloud_strip.label": "AI 에이전트용",
   "cloud_strip.description": "Codex 및 기타 AI 에이전트를 위한 비공개 가시형 브라우저.",
   "cloud_strip.cta": "Cloud 살펴보기",
-  "mcp.label": "새 기능 · MCP 서버",
+  "mcp.label": "MCP 서버",
   "mcp.title": "이미 사용 중인 브라우저 안에서 작동하는 코딩 에이전트.",
   "mcp.subtitle": "Claude Code, Codex, Cursor, OpenCode 또는 모든 stdio MCP 클라이언트를 로그인된 Chromium 탭에 연결하세요. WebBrain은 작업 단위 권한 관문을 브라우저 안에 유지하며 이제 구조화된 JSON도 반환합니다.",
   "mcp.docs_cta": "전체 MCP 가이드 열기",

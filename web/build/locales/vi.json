@@ -219,7 +219,7 @@
   "cloud_strip.label": "Dành cho tác nhân AI",
   "cloud_strip.description": "Trình duyệt riêng tư, hiển thị trực quan cho Codex và các tác nhân AI khác.",
   "cloud_strip.cta": "Khám phá Cloud",
-  "mcp.label": "Mới · máy chủ MCP",
+  "mcp.label": "Máy chủ MCP",
   "mcp.title": "Tác nhân lập trình của bạn, ngay trong trình duyệt bạn đang dùng.",
   "mcp.subtitle": "Kết nối Claude Code, Codex, Cursor, OpenCode hoặc bất kỳ máy khách MCP qua stdio nào với các thẻ Chromium đã đăng nhập. WebBrain giữ cổng cấp quyền theo tác vụ trong trình duyệt và giờ còn trả về JSON có cấu trúc.",
   "mcp.docs_cta": "Mở hướng dẫn MCP đầy đủ",

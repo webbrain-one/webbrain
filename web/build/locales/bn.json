@@ -219,7 +219,7 @@
   "cloud_strip.label": "AI এজেন্টের জন্য",
   "cloud_strip.description": "Codex ও অন্যান্য AI এজেন্টের জন্য ব্যক্তিগত ও দৃশ্যমান ব্রাউজার।",
   "cloud_strip.cta": "Cloud ঘুরে দেখুন",
-  "mcp.label": "নতুন · MCP সার্ভার",
+  "mcp.label": "MCP সার্ভার",
   "mcp.title": "আপনার কোডিং এজেন্ট, আপনি যে ব্রাউজারটি ইতিমধ্যে ব্যবহার করেন তার ভেতরেই।",
   "mcp.subtitle": "Claude Code, Codex, Cursor, OpenCode বা যেকোনো stdio MCP ক্লায়েন্টকে আপনার সাইন-ইন করা Chromium ট্যাবগুলোর সঙ্গে যুক্ত করুন। WebBrain কাজভিত্তিক অনুমতির গেট ব্রাউজারেই রাখে—এবং এখন কাঠামোবদ্ধ JSON-ও ফেরত দেয়।",
   "mcp.docs_cta": "সম্পূর্ণ MCP নির্দেশিকা খুলুন",

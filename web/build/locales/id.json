@@ -219,7 +219,7 @@
   "cloud_strip.label": "Untuk agen AI",
   "cloud_strip.description": "Browser privat yang terlihat untuk Codex dan agen AI lainnya.",
   "cloud_strip.cta": "Jelajahi Cloud",
-  "mcp.label": "Baru · server MCP",
+  "mcp.label": "Server MCP",
   "mcp.title": "Agen coding Anda, di dalam browser yang sudah Anda gunakan.",
   "mcp.subtitle": "Hubungkan Claude Code, Codex, Cursor, OpenCode, atau klien MCP stdio apa pun ke tab Chromium Anda yang sudah login. WebBrain mempertahankan gerbang izin per tugas di browser dan kini juga mengembalikan JSON terstruktur.",
   "mcp.docs_cta": "Buka panduan MCP lengkap",

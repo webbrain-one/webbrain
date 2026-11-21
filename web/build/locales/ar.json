@@ -219,7 +219,7 @@
   "cloud_strip.label": "لوكلاء الذكاء الاصطناعي",
   "cloud_strip.description": "متصفح خاص ومرئي لـ Codex وغيره من وكلاء الذكاء الاصطناعي.",
   "cloud_strip.cta": "استكشف Cloud",
-  "mcp.label": "جديد · خادم MCP",
+  "mcp.label": "خادم MCP",
   "mcp.title": "وكيل البرمجة الخاص بك، داخل المتصفح الذي تستخدمه بالفعل.",
   "mcp.subtitle": "صِل Claude Code أو Codex أو Cursor أو OpenCode أو أي عميل MCP عبر stdio بعلامات تبويب Chromium المسجّل دخولك فيها. يُبقي WebBrain بوابة الأذونات على مستوى المهمة داخل المتصفح، ويعيد الآن بيانات JSON منظّمة أيضًا.",
   "mcp.docs_cta": "افتح دليل MCP الكامل",
