@@ -25891,6 +25891,12 @@ test('read-only recommendations carry immediate first-tool run options', () => {
       'get_accessibility_tree',
       { filter: 'visible', maxDepth: 10 },
     ],
+    [
+      { url: 'https://drive.google.com/drive/my-drive', title: 'My Drive - Google Drive' },
+      'summarize-google-drive-view',
+      'get_accessibility_tree',
+      { filter: 'visible', maxDepth: 10 },
+    ],
   ];
 
   for (const buildRecommendedActions of [buildRecommendedActionsCh, buildRecommendedActionsFx]) {
@@ -44922,6 +44928,52 @@ test('public Apocalypse Mode guide and launch essay document the offline boundar
     'blog: the essay should pair its call to action with honest limitations');
   assert.match(blogPage, /<link rel="canonical" href="https:\/\/webbrain\.one\/blog\/why-we-built-apocalypse-mode">/,
     'blog: the generator should publish the Apocalypse Mode essay with canonical metadata');
+});
+
+test('public Google Workspace guide, homepage link, and screenshots document Office support', () => {
+  const guide = fs.readFileSync(path.join(ROOT, 'web/docs/google-workspace/index.html'), 'utf8');
+  const overview = fs.readFileSync(path.join(ROOT, 'web/docs/index.html'), 'utf8');
+  const template = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
+  const homepage = fs.readFileSync(path.join(ROOT, 'web/index.html'), 'utf8');
+  const enLocale = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/locales/en.json'), 'utf8'));
+  const sitemap = fs.readFileSync(path.join(ROOT, 'web/sitemap.xml'), 'utf8');
+
+  assert.match(guide, /\/mobilebasic[\s\S]*?\/gviz\/tq\?tqx=out:csv[\s\S]*?\/htmlview[\s\S]*?\/htmlpresent/,
+    'docs: the Google Workspace guide should document the direct read endpoints');
+  assert.match(guide, /DOCS_modelChunk[\s\S]*?google-docs-model \(initial snapshot\)[\s\S]*?includeChrome: true/,
+    'docs: the guide should document DOCS_modelChunk snapshot extraction and includeChrome');
+  assert.match(guide, /__webbrainGoogleDocsDarkMode[\s\S]*?Toggle Dark Mode/,
+    'docs: the guide should document the reversible Google Docs Dark Mode action');
+  assert.match(guide, /Summarize visible Drive files[\s\S]*?Suggest form questions[\s\S]*?Summarize form questions/,
+    'docs: the guide should cover Forms and Drive actions');
+
+  for (const shot of [
+    'google-workspace-docs.jpg',
+    'google-workspace-docs-dark.jpg',
+    'google-workspace-sheets.jpg',
+  ]) {
+    assert.ok(guide.includes(`/docs/assets/screenshots/${shot}`), `docs: guide should embed ${shot}`);
+    const shotPath = path.join(ROOT, 'web/docs/assets/screenshots', shot);
+    assert.ok(fs.existsSync(shotPath) && fs.statSync(shotPath).size > 10_000,
+      `docs: screenshot ${shot} should exist and be non-empty`);
+  }
+
+  assert.match(overview, /href="\/docs\/google-workspace\/"[\s\S]*?Explore Google Workspace/,
+    'docs: the overview should link to the Google Workspace guide');
+  for (const page of ['index.html', 'settings/index.html', 'providers/index.html', 'safety/index.html', 'formats/index.html', 'google-workspace/index.html', 'mcp/index.html', 'lm-studio/index.html', 'ollama/index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, 'web/docs', page), 'utf8');
+    assert.match(html, /<a href="\/docs\/google-workspace\/"[^>]*>Google Workspace<\/a>/,
+      `docs/${page}: shared guide navigation should expose Google Workspace`);
+  }
+  assert.match(sitemap, /<loc>https:\/\/webbrain\.one\/docs\/google-workspace\/<\/loc>/,
+    'web: the Google Workspace guide should be in the generated sitemap');
+
+  assert.match(enLocale['features.workspace_note_html'], /href="\/docs\/google-workspace\/"/,
+    'web: en.json should define the Google Workspace homepage mention and link');
+  assert.match(template, /\{\{t-html:features\.workspace_note_html\}\}/,
+    'web: homepage template should render the Google Workspace mention under features');
+  assert.match(homepage, /class="features-guide-note"[\s\S]*?href="\/docs\/google-workspace\/"/,
+    'web: generated homepage should include the Google Workspace mention and link');
 });
 
 test('homepage does not promote the unmerged Ollama launch handoff', () => {
@@ -128662,7 +128714,225 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
       }
     }
   });
+
+  test(`recommended-actions (${label}): Google Docs surfaces summary, review, Markdown, Dark Mode, and untitled drafting`, () => {
+    const populatedActions = build({
+      url: 'https://docs.google.com/document/u/0/d/1AbC_dEf-123/edit',
+      title: 'Q4 Product Roadmap - Google Docs',
+    }, { max: 5 });
+    assert.deepEqual(
+      populatedActions.slice(0, 4).map((a) => a.id),
+      ['summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown', 'google-docs-dark-mode'],
+    );
+    const summarize = populatedActions.find((a) => a.id === 'summarize-google-doc');
+    assert.equal(summarize.mode, 'ask');
+    assert.match(summarize.prompt, /https:\/\/docs\.google\.com\/document\/d\/1AbC_dEf-123\/mobilebasic/);
+    const darkMode = populatedActions.find((a) => a.id === 'google-docs-dark-mode');
+    assert.equal(darkMode.mode, 'dev');
+    assert.match(darkMode.prompt, /__webbrainGoogleDocsDarkMode/);
+
+    const untitledActions = build({
+      url: 'https://docs.google.com/document/d/1AbC_dEf-123/edit',
+      title: 'Untitled document - Google Docs',
+    });
+    assert.equal(untitledActions[0]?.id, 'draft-google-doc');
+    assert.equal(untitledActions[0]?.mode, 'act');
+    assert.ok(untitledActions.some((a) => a.id === 'summarize-google-doc'));
+    assert.ok(!untitledActions.some((a) => a.id === 'explain-page'));
+  });
+
+  test(`recommended-actions (${label}): Google Sheets, Slides, Forms, and Drive surface workspace actions`, () => {
+    const sheetActions = build({
+      url: 'https://docs.google.com/spreadsheets/d/1Sheet_ID-99/edit#gid=42',
+      title: 'Revenue Forecast - Google Sheets',
+    });
+    assert.deepEqual(
+      sheetActions.slice(0, 3).map((a) => a.id),
+      ['analyze-google-sheet', 'generate-sheets-formula', 'clean-google-sheet-data'],
+    );
+    assert.match(
+      sheetActions[0].prompt,
+      /https:\/\/docs\.google\.com\/spreadsheets\/d\/1Sheet_ID-99\/gviz\/tq\?tqx=out:csv&gid=42/,
+    );
+    assert.match(
+      sheetActions[0].prompt,
+      /https:\/\/docs\.google\.com\/spreadsheets\/d\/1Sheet_ID-99\/htmlview/,
+    );
+
+    const untitledSheetActions = build({
+      url: 'https://docs.google.com/spreadsheets/d/1Sheet_ID-99/edit',
+      title: 'Adsız e-tablo - Google E-Tablolar',
+    });
+    assert.equal(untitledSheetActions[0]?.id, 'draft-google-sheet');
+    assert.equal(untitledSheetActions[0]?.mode, 'act');
+
+    const slidesActions = build({
+      url: 'https://docs.google.com/presentation/d/1Slide_ID-77/edit#slide=id.p',
+      title: 'Board Deck - Google Slides',
+    });
+    assert.deepEqual(
+      slidesActions.slice(0, 3).map((a) => a.id),
+      ['summarize-google-slides', 'generate-speaker-notes', 'review-google-slides'],
+    );
+    assert.match(
+      slidesActions[0].prompt,
+      /https:\/\/docs\.google\.com\/presentation\/d\/1Slide_ID-77\/htmlpresent/,
+    );
+
+    const untitledSlidesActions = build({
+      url: 'https://docs.google.com/presentation/d/1Slide_ID-77/edit',
+      title: 'Untitled presentation - Google Slides',
+    });
+    assert.equal(untitledSlidesActions[0]?.id, 'draft-google-slides');
+    assert.equal(untitledSlidesActions[0]?.mode, 'act');
+
+    const formEditActions = build({
+      url: 'https://docs.google.com/forms/d/1Form_ID-55/edit',
+      title: 'Customer Feedback - Google Forms',
+    });
+    assert.deepEqual(
+      formEditActions.slice(0, 2).map((a) => a.id),
+      ['suggest-google-form-questions', 'review-google-form'],
+    );
+
+    const formViewActions = build({
+      url: 'https://docs.google.com/forms/d/e/1FAIpQLSe_example/viewform',
+      title: 'Event Registration',
+    });
+    assert.equal(formViewActions[0]?.id, 'summarize-google-form');
+    assert.equal(formViewActions[0]?.mode, 'ask');
+
+    const driveActions = build({
+      url: 'https://drive.google.com/drive/u/0/my-drive',
+      title: 'My Drive - Google Drive',
+    });
+    const driveSummary = driveActions.find((a) => a.id === 'summarize-google-drive-view');
+    assert.ok(driveSummary, 'Drive view should offer summarize-google-drive-view');
+    assert.equal(driveSummary.mode, 'ask');
+    assert.equal(driveSummary.runOptions?.tool, 'get_accessibility_tree');
+  });
+
+  test(`recommended-actions (${label}): Google Workspace URL matching is strict and Ask prompts only name Ask-mode tools`, () => {
+    const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
+    const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
+    const workspaceActionIds = new Set([
+      'draft-google-doc', 'summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown', 'google-docs-dark-mode',
+      'draft-google-sheet', 'analyze-google-sheet', 'generate-sheets-formula', 'clean-google-sheet-data',
+      'draft-google-slides', 'summarize-google-slides', 'generate-speaker-notes', 'review-google-slides',
+      'suggest-google-form-questions', 'review-google-form', 'summarize-google-form',
+      'summarize-google-drive-view',
+    ]);
+
+    for (const invalidUrl of [
+      'https://docs.google.com.evil.example/document/d/1AbC/edit',
+      'https://www.docs.google.com/document/d/1AbC/edit',
+      'https://docs.google.com/document/u/0/',
+      'https://docs.google.com/document/d/edit',
+      'https://docs.google.com/spreadsheets/d/create',
+      'https://docs.google.com/presentation/d/new',
+      'https://docs.google.com/forms/d/viewform',
+      'https://drive.google.com.evil.example/drive/my-drive',
+      'https://drive.google.com/file/d/1AbC/view',
+    ]) {
+      const actions = build({ url: invalidUrl, title: 'Test' }, { max: 6 });
+      assert.equal(
+        actions.some((a) => workspaceActionIds.has(a.id)),
+        false,
+        `should reject non-matching or lookalike URL: ${invalidUrl}`,
+      );
+    }
+
+    for (const validUrl of [
+      'https://docs.google.com/document/d/1AbC_dEf-123/edit',
+      'https://docs.google.com/spreadsheets/d/1Sheet_ID-99/edit?gid=7',
+      'https://docs.google.com/presentation/d/1Slide_ID-77/edit',
+      'https://docs.google.com/forms/d/1Form_ID-55/edit',
+      'https://docs.google.com/forms/d/e/1FAIpQLSe_example/viewform',
+      'https://drive.google.com/drive/folders/1Folder_ID',
+    ]) {
+      const actions = build({ url: validUrl, title: 'Workspace Item' }, { max: 6 });
+      const askActions = actions.filter((a) => workspaceActionIds.has(a.id) && a.mode === 'ask');
+      assert.ok(askActions.length > 0, `expected Ask actions on ${validUrl}`);
+      for (const action of askActions) {
+        const named = [...new Set(action.prompt.match(/\b[a-z]+(?:_[a-z]+)+\b/g) || [])].filter((name) => allTools.has(name));
+        assert.ok(named.length > 0, `${validUrl} (${action.id}): prompt names its read tools`);
+        for (const name of named) {
+          assert.ok(askTools.has(name), `${validUrl} (${action.id}): ${name} is not available in Ask mode`);
+        }
+        assert.match(action.prompt, /read-only Ask run: you cannot navigate or click/);
+      }
+    }
+  });
 }
+
+test('Google Workspace canvas extraction honors includeChrome and marks initial snapshot in Chrome, Firefox, and CDP', async () => {
+  for (const rel of [
+    'src/chrome/src/content/content.js',
+    'src/firefox/src/content/content.js',
+    'src/chrome/src/cdp/cdp-client.js',
+  ]) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(
+      src,
+      /const googleCanvasText = !includeChrome \? extractGoogleWorkspaceCanvasText\(\) : '';/,
+      `${rel} must gate DOCS_modelChunk extraction on !includeChrome`,
+    );
+    assert.match(
+      src,
+      /google-docs-model \(initial snapshot\)/,
+      `${rel} must label DOCS_modelChunk textSource as an initial snapshot`,
+    );
+  }
+
+  // Execute the CDP getPageInfo expression in vm with a mock Google Docs DOM
+  const { CDPClient } = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js')).href);
+  const client = Object.create(CDPClient.prototype);
+  const makeMockEnv = () => {
+    const scriptEl = { textContent: 'DOCS_modelChunk = [{"ty":"is","ibi":1,"s":"Bootstrap doc body"}];' };
+    const bodyEl = {
+      innerText: 'File Edit View Insert Format Tools Extensions Help',
+      cloneNode() { return { querySelectorAll() { return []; }, innerText: this.innerText }; },
+    };
+    return {
+      window: {
+        location: {
+          href: 'https://docs.google.com/document/d/1AbC_dEf-123/edit',
+          hostname: 'docs.google.com',
+          pathname: '/document/d/1AbC_dEf-123/edit',
+        },
+        innerWidth: 1280,
+        innerHeight: 800,
+        getComputedStyle() { return { display: 'block', visibility: 'visible', opacity: '1' }; },
+      },
+      document: {
+        title: 'Test Doc - Google Docs',
+        body: bodyEl,
+        querySelector() { return null; },
+        querySelectorAll(sel) {
+          if (sel === 'script:not([src])') return [scriptEl];
+          return [];
+        },
+      },
+    };
+  };
+  const evalResults = [];
+  client.evaluate = async (_tabId, expression) => {
+    const env = makeMockEnv();
+    const value = vm.runInNewContext(expression, env);
+    evalResults.push(value);
+    return { result: { value } };
+  };
+
+  const defaultRead = await client.readPage(1, { includeChrome: false });
+  assert.equal(defaultRead.textSource, 'google-docs-model (initial snapshot)');
+  assert.match(defaultRead.text, /^\[Initial page-load snapshot from DOCS_modelChunk/);
+  assert.match(defaultRead.text, /Bootstrap doc body/);
+
+  const chromeRead = await client.readPage(1, { includeChrome: true });
+  assert.equal(chromeRead.textSource, 'body (raw)');
+  assert.equal(chromeRead.text, 'File Edit View Insert Format Tools Extensions Help');
+  assert.equal(evalResults.length, 2);
+});
 
 // ── Store review prompt (#208) ───────────────────────────────────────────────
 const MS_DAY = 24 * 60 * 60 * 1000;

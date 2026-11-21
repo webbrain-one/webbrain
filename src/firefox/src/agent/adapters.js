@@ -16163,7 +16163,9 @@ const ADAPTERS = [
     category: 'general',
     matches: (url) => /^https?:\/\/docs\.google\.com\/document\//.test(url),
     notes: `
-- The document body is a canvas-rendered editor (NOT a normal contenteditable). Direct DOM typing usually fails. Use the floating textbox that appears when you click into the doc, or use keyboard shortcuts.
+- The document body is a canvas-rendered editor (NOT a normal contenteditable). Direct DOM typing usually fails, and get_accessibility_tree sees menus/toolbar rather than body paragraphs. Use the floating textbox that appears when you click into the doc, or use keyboard shortcuts.
+- To READ the full document body reliably on /document/d/<DOC_ID>/..., call fetch_url on \`https://docs.google.com/document/d/<DOC_ID>/mobilebasic\` (continuing with offset/nextOffset while hasMore is true) or call read_page on the active tab (note: read_page on canvas Docs reads the initial page-load snapshot, not edits made after load).
+- When the user asks to suggest edits or tracked changes without overwriting their text, switch the toolbar mode dropdown from "Editing" to "Suggesting" before typing, or present "Before → After" suggestions in chat.
 - Comments are in the right margin; click the comment icon to open the comment panel.
 - Real-time collaboration means the cursor and text shift while you read. Re-read after a delay if a write seems lost.`,
   },
@@ -17356,9 +17358,10 @@ const ADAPTERS = [
     matches: (url) => /^https?:\/\/docs\.google\.com\/spreadsheets\//.test(url),
     notes: `
 - The cell grid is canvas-rendered. get_accessibility_tree returns essentially nothing for cell content — the tree shows menus, toolbar, and the formula bar, but not the cells themselves. Do NOT try to "read the data" by querying the tree; that returns empty.
-- The formula bar (visible in the tree, labeled by current cell) DOES expose the active cell's value. To READ a cell: click the cell first (keyboard arrows or a coordinate click on the visible grid), then read the formula bar.
+- For bulk READS of a sheet on /spreadsheets/d/<SHEET_ID>/..., call fetch_url on \`https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv\` (append \`&gid=<GID>\` when \`#gid=<GID>\` or \`?gid=<GID>\` is in the URL) or \`https://docs.google.com/spreadsheets/d/<SHEET_ID>/htmlview\`, continuing with offset/nextOffset while hasMore is true.
+- The formula bar (visible in the tree, labeled by current cell) DOES expose the active cell's value. To READ a single cell or formula in the UI: click the cell first (keyboard arrows, name box, or a coordinate click on the visible grid), then read the formula bar.
 - To WRITE a cell: click into the cell, type — input goes into the cell. Or click into the formula bar (in the tree) directly. Enter commits and moves down; Tab commits and moves right.
-- For bulk reads / writes / formulas across many cells, the AX-tree path is too slow and brittle. Surface this to the user honestly: "Sheets cells are canvas-rendered; for bulk operations I can navigate cell-by-cell but you may want to do it yourself or paste a CSV." Don't pretend you can read a 100-row range fast.
+- For bulk writes across many cells, the AX-tree path is too slow and brittle. Surface this to the user honestly: "Sheets cells are canvas-rendered; for bulk writes I can navigate cell-by-cell or generate a CSV/formula for you to paste."
 - Menus (File, Edit, View, Insert, Format, Data, Tools, Extensions, Help) ARE in the tree — they're standard HTML menus. The toolbar (bold, color, sum, etc.) also surfaces.
 - Ranges and named ranges: Data > Named ranges. The name box (left of the formula bar) jumps to a range.`,
   },

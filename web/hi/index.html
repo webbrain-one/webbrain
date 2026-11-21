@@ -2317,6 +2317,20 @@
     .features-more-btn[aria-expanded="true"] svg {
       transform: rotate(180deg);
     }
+    .features-guide-note {
+      margin: 18px 0 0;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .features-guide-note a {
+      color: var(--accent2);
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+    .features-guide-note a:hover { color: var(--text); }
+    .features-guide-note a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
     @media (prefers-reduced-motion: reduce) {
       .features-more-btn,
       .features-more-btn svg { transition: none; }
@@ -3540,6 +3554,7 @@
     .features-more,
     .faq-inline-cta-wrap,
     .share-row { justify-content: flex-start; }
+    .features-guide-note { text-align: start; }
     .faq-inline-section { max-width: var(--max-w); }
     .faq-inline-grid { max-width: 860px; }
     .faq-bridge { margin-inline: 0; }
@@ -4838,6 +4853,7 @@
       </svg>
     </button>
   </div>
+  <p class="features-guide-note">Working in Google Docs, Sheets, Slides, Forms, or Drive? <a href="/docs/google-workspace/">See how WebBrain handles Google Workspace →</a></p>
 </section>
 
 <!-- 6. COMPARE: VS CLAUDE IN CHROME (Table only) -->
