@@ -545,7 +545,7 @@ WebBrain also ships 89 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **123 built-in providers on Chromium** and **122 on Firefox**; the
+Settings → Models → LLM lists **124 built-in providers on Chromium** and **123 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
@@ -754,7 +754,7 @@ the model you pick accepts images.
 
 To use the local OpenLLM daemon instead (macOS and Linux, installed with
 `curl -fsSL https://www.openllm.sh/install | bash`), change the card's base URL
-to `http://127.0.0.1:8787/v1`. No key is needed there.
+to `http://127.0.0.1:8787/v1` and leave the API key blank.
 
 ### Ask response streaming
 

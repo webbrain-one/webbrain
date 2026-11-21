@@ -98,6 +98,23 @@ try {
         const card = id => page.locator(`.provider-card[data-provider-id="${id}"]`);
         const rootCard = card('llamacpp');
         await rootCard.locator('input[data-key="label"]').waitFor();
+        const openLLMCard = card('openllm');
+        await openLLMCard.locator('.provider-header').click();
+        const openLLMEndpoint = openLLMCard.locator('input[data-key="baseUrl"]');
+        const openLLMKey = openLLMCard.locator('input[data-key="apiKey"]');
+        const openLLMSave = openLLMCard.locator('.btn-save');
+
+        await openLLMEndpoint.fill('http://127.0.0.1:8787/v1');
+        await openLLMSave.click();
+        await openLLMCard.locator('.test-result.ok.show').waitFor();
+        assert.equal(await openLLMKey.getAttribute('aria-invalid'), 'false');
+
+        await openLLMEndpoint.fill('https://www.openllm.sh/v1');
+        await openLLMSave.click();
+        await openLLMCard.locator('.test-result.warn.show').waitFor();
+        assert.equal(await openLLMKey.getAttribute('aria-invalid'), 'true');
+        await openLLMCard.locator('.provider-header').click();
+
         const companionCard = card('webbrain_companion');
         await companionCard.locator('.provider-header').click();
         assert.equal(
