@@ -541,11 +541,11 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 89 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 90 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **124 built-in providers on Chromium** and **123 on Firefox**; the
+Settings → Models → LLM lists **125 built-in providers on Chromium** and **124 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
@@ -557,6 +557,7 @@ difference is the Chromium-only in-browser WebGPU runtime.
 | `cloudgpu`                                                                                                                                                                                                                                                                                                                     |
 | `standardcompute`                                                                                                                                                                                                                                                                                                              |
 | `openllm`                                                                                                                                                                                                                                                                                                                      |
+| `aigrow`                                                                                                                                                                                                                                                                                                                       |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -755,6 +756,21 @@ the model you pick accepts images.
 To use the local OpenLLM daemon instead (macOS and Linux, installed with
 `curl -fsSL https://www.openllm.sh/install | bash`), change the card's base URL
 to `http://127.0.0.1:8787/v1` and leave the API key blank.
+
+#### AIGROW
+
+[AIGROW](https://aigrow.gg/ai-api) is a prepaid API for Claude, GPT, Gemini,
+Grok, Qwen and Kimi models behind one OpenAI-compatible endpoint,
+`https://aigrow.gg/v1`, with a Bearer key from the
+[dashboard](https://aigrow.gg/dashboard/api). Model IDs are plain slugs without
+a vendor prefix (`claude-haiku-5.5`, `claude-sonnet-5.5`, `gpt-6.2-sol`,
+`gemini-4-neon` and others); the live list with per-token prices is public at
+`https://aigrow.gg/v1/models`.
+
+In WebBrain, open **Settings -> Models -> LLM -> AIGROW**. Paste an API key into the
+card, keep the default `claude-haiku-5.5` model (1000000 tokens), then click
+**Test Connection**. Interactive Ask streaming, tool calls and screenshots work
+through the existing OpenAI-compatible path, so the card starts with vision on.
 
 ### Ask response streaming
 

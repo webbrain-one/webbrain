@@ -27,6 +27,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | openllm | OpenLLM official logo mark (`icon.svg` from the OpenLLM docs site, openllm.sh; black, white in dark mode) |
 | standardcompute | Standard Compute logo mark (standardcompute.com) |
 | abliteration | [Abliteration.ai official icon](https://abliteration.ai/icon.svg) |
+| aigrow | AIGROW "A" mark, white on black (aigrow.gg) |
 
 Brand trademarks remain property of their owners; used only for provider identification in the settings UI.
 

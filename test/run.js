@@ -77498,7 +77498,7 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
 
 test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
   const expectedIds = `
-    api-route 302ai abacus abliteration aihubmix alibaba-coding-plan alibaba-coding-plan-cn
+    api-route 302ai abacus abliteration aigrow aihubmix alibaba-coding-plan alibaba-coding-plan-cn
     atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
     cloudgpu
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
@@ -77514,7 +77514,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 89);
+  assert.equal(expectedIds.length, 90);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77530,7 +77530,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
     // deliberately omitted from the 124/123 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 125 : 124;
+    const expectedDefaultCount = label === 'chrome' ? 126 : 125;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77801,6 +77801,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.openllm.suggestions,
     ['lite', 'plus', 'ultra'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.aigrow.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://aigrow.gg/v1',
+      model: 'claude-haiku-5.5',
+      contextWindow: 1000000,
+      supportsVision: true,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://aigrow.gg/dashboard/api',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.aigrow.suggestions,
+    ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5', 'gpt-6.2-sol', 'gemini-4-neon', 'grok-4.7'],
   );
   assert.deepEqual(
     {

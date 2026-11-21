@@ -47,6 +47,18 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(standardcompute.supportsAskStreaming, true);
   assert.ok(providerIconUrl('standardcompute').endsWith('/standardcompute.svg'));
 
+  const aigrow = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
+  assert.equal(aigrow.type, 'openai', `${browser}: AIGROW must use the OpenAI-compatible adapter`);
+  assert.equal(aigrow.baseUrl, 'https://aigrow.gg/v1', `${browser}: AIGROW endpoint changed`);
+  assert.equal(aigrow.model, 'claude-haiku-5.5');
+  assert.equal(aigrow.contextWindow, 1000000);
+  assert.equal(aigrow.enabled, false);
+  assert.equal(aigrow.apiKey, '');
+  assert.equal(aigrow.supportsVision, true);
+  assert.equal(aigrow.supportsTools, true);
+  assert.equal(aigrow.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('aigrow').endsWith('/aigrow.svg'));
+
   const openllm = ADDITIONAL_PROVIDER_DEFAULTS.openllm;
   assert.equal(openllm.type, 'openai', `${browser}: OpenLLM must use the OpenAI-compatible adapter`);
   assert.equal(openllm.baseUrl, 'https://www.openllm.sh/v1', `${browser}: OpenLLM endpoint changed`);
