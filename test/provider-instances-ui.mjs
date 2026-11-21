@@ -80,6 +80,7 @@ try {
                   await manager.updateProvider(msg.providerId, msg.config, { markConfigured: msg.markConfigured !== false });
                   return { activeProviderId: manager.activeProviderId };
                 }
+                if (msg.action === 'test_provider') return manager.testProvider(msg.providerId);
                 if (msg.action === 'duplicate_provider') return manager.duplicateProvider(msg.providerId);
                 if (msg.action === 'remove_duplicate_provider') return manager.removeDuplicateProvider(msg.providerId);
                 if (msg.action === 'set_active_provider') await manager.setActive(msg.providerId);
@@ -98,6 +99,28 @@ try {
         const card = id => page.locator(`.provider-card[data-provider-id="${id}"]`);
         const rootCard = card('llamacpp');
         await rootCard.locator('input[data-key="label"]').waitFor();
+        const aigrowCard = card('aigrow');
+        await aigrowCard.locator('.provider-header').click();
+        const aigrowPicker = aigrowCard.locator('.model-select');
+        const aigrowContext = aigrowCard.locator('input[data-key="contextWindow"]');
+        assert.deepEqual(await aigrowPicker.locator('option').evaluateAll(options => options.map(option => option.value)),
+          ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5', '__custom__']);
+        await aigrowPicker.selectOption('__custom__');
+        await aigrowCard.locator('input[data-key="model"]').fill('grok-4.7');
+        assert.equal(await aigrowContext.inputValue(), '500000');
+        await aigrowCard.locator('input[data-key="apiKey"]').fill('synthetic-aigrow-key');
+        await page.route('https://aigrow.gg/v1/chat/completions', async route => {
+          assert.equal(route.request().postDataJSON().model, 'grok-4.7');
+          await route.fulfill({ json: { choices: [{ message: { content: 'Hi' }, finish_reason: 'stop' }] } });
+        });
+        await aigrowCard.locator('.btn-test').click();
+        await aigrowCard.locator('.test-result.ok.show').waitFor();
+        assert.equal(await aigrowContext.inputValue(), '500000');
+        assert.equal(await page.evaluate(() => testManager.providers.get('aigrow').contextWindow), 500000);
+        await aigrowPicker.selectOption('claude-haiku-5.5');
+        assert.equal(await aigrowContext.inputValue(), '1000000');
+        await aigrowCard.locator('.provider-header').click();
+
         const openLLMCard = card('openllm');
         await openLLMCard.locator('.provider-header').click();
         const openLLMEndpoint = openLLMCard.locator('input[data-key="baseUrl"]');

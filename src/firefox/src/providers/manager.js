@@ -6,7 +6,7 @@ import { AnthropicProvider, AnthropicOAuthProvider } from './anthropic.js';
 import { VertexAnthropicProvider } from './vertex-anthropic.js';
 import { signOutClaude } from './oauth-claude.js';
 import { AwsBedrockProvider } from './aws-bedrock.js';
-import { ADDITIONAL_PROVIDER_DEFAULTS } from './provider-catalog.js';
+import { ADDITIONAL_PROVIDER_DEFAULTS, aigrowDefaultContextWindow } from './provider-catalog.js';
 import { purgeShareGenerations } from '../trace/webbrain-share-outbox.js';
 import {
   DEEPSEEK_BASE_URL,
@@ -1268,6 +1268,10 @@ export class ProviderManager {
         'vertex_anthropic',
       ].includes(config.type),
     };
+    if (definitionId === 'aigrow' && config.manualContextWindow !== true) {
+      const contextWindow = aigrowDefaultContextWindow(config.model, config.baseUrl);
+      if (contextWindow != null) normalizedConfig.contextWindow = contextWindow;
+    }
     // Runtime-only identity for provider-specific conversation state. Keep it
     // non-enumerable so it never leaks into storage, exports, or the settings UI.
     Object.defineProperty(normalizedConfig, '_providerId', { value: String(id || '') });

@@ -67,7 +67,7 @@ import {
   PROVIDER_SHORT_LABELS,
   sniffProviderIdFromBaseUrl,
 } from './provider-icons.js';
-import { ADDITIONAL_PROVIDER_UI } from '../providers/provider-catalog.js';
+import { ADDITIONAL_PROVIDER_UI, aigrowDefaultContextWindow } from '../providers/provider-catalog.js';
 import { AUTO_VISION_PROVIDER_IDS, visionDetectionMatches } from '../providers/vision-capabilities.js';
 import { canonicalizeOllamaBaseUrl } from '../providers/context-windows.js';
 import { resolvePromptTier } from '../providers/prompt-tier.js';
@@ -4612,6 +4612,7 @@ function renderProviders() {
           if (providersData[providerId]) providersData[providerId].contextWindow = preset.contextWindow;
         }
       }
+      refreshAigrowContextWindow(providerId);
       syncInferredOpenRouterRoutingVariant(providerId, input.value);
       markProviderDirty(providerId);
       refreshProviderCompatibilitySummary(providerId);
@@ -4642,6 +4643,7 @@ function renderProviders() {
   document.querySelectorAll('input[data-key="model"], input[data-key="baseUrl"]').forEach((input) => {
     input.addEventListener('input', () => {
       if (input.dataset.key === 'model') syncInferredOpenRouterRoutingVariant(input.dataset.provider, input.value);
+      refreshAigrowContextWindow(input.dataset.provider);
       refreshProviderCompatibilitySummary(input.dataset.provider);
       refreshVisionStatus(input.dataset.provider);
       if (providerDefinitionId(input.dataset.provider) === 'ollama') refreshVisionStatus(input.dataset.provider);
@@ -4901,6 +4903,16 @@ function applyProviderBaseUrl(id, baseUrl) {
   const input = document.querySelector(`input[data-provider="${id}"][data-key="baseUrl"]`);
   if (input && input.value !== baseUrl) input.value = baseUrl;
   refreshVisionStatus(id);
+}
+
+function refreshAigrowContextWindow(id) {
+  if (providerDefinitionId(id) !== 'aigrow') return;
+  const contextInput = document.querySelector(`input[data-provider="${id}"][data-key="contextWindow"]`);
+  if (!contextInput || contextInput.dataset.manuallyEdited === 'true') return;
+  const model = document.querySelector(`input[data-provider="${id}"][data-key="model"]`)?.value;
+  const baseUrl = document.querySelector(`input[data-provider="${id}"][data-key="baseUrl"]`)?.value;
+  const contextWindow = aigrowDefaultContextWindow(model, baseUrl);
+  if (contextWindow != null) contextInput.value = String(contextWindow);
 }
 
 const providerContextPendingSnapshots = new Map();

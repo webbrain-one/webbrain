@@ -77824,7 +77824,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   );
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.aigrow.suggestions,
-    ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5', 'gpt-6.2-sol', 'gemini-4-neon', 'grok-4.7'],
+    ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5'],
   );
   assert.deepEqual(
     {

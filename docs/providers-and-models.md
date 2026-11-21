@@ -772,6 +772,12 @@ card, keep the default `claude-haiku-5.5` model (1000000 tokens), then click
 **Test Connection**. Interactive Ask streaming, tool calls and screenshots work
 through the existing OpenAI-compatible path, so the card starts with vision on.
 
+The model picker suggests Claude routes that honor **Max output (tokens)**.
+For manually entered GPT, Grok 4.7 and Qwen3.8 Max models, AIGROW can exceed
+that setting and bill for all generated tokens. WebBrain defaults to a
+500,000-token context window for Grok 4.7 on AIGROW.
+[AIGROW model differences](https://aigrow.gg/ai-api/genuine-models#differences)
+
 ### Ask response streaming
 
 Providers with `supportsAskStreaming` stream visible text during interactive
