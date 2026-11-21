@@ -541,11 +541,11 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 88 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 89 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **122 built-in providers on Chromium** and **121 on Firefox**; the
+Settings → Models → LLM lists **123 built-in providers on Chromium** and **122 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
@@ -556,6 +556,7 @@ difference is the Chromium-only in-browser WebGPU runtime.
 | `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`                                                                                                                       |
 | `cloudgpu`                                                                                                                                                                                                                                                                                                                     |
 | `standardcompute`                                                                                                                                                                                                                                                                                                              |
+| `openllm`                                                                                                                                                                                                                                                                                                                      |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -731,6 +732,29 @@ from the dashboard into the card, keep the default `StandardCompute` model
 (1000000 tokens), then click **Test Connection**. Interactive Ask streaming and
 tool calls work through the existing OpenAI-compatible path. The card starts
 with vision off.
+
+#### OpenLLM
+
+[OpenLLM](https://www.openllm.sh) routes API keys, OAuth subscription accounts
+(Claude, ChatGPT and others) and local models through one endpoint. The card
+uses the cloud endpoint `https://www.openllm.sh/v1` with an `sk-llm-...` key
+(sent as a Bearer token). Create a key at [openllm.sh](https://www.openllm.sh)
+and see the [docs](https://docs.openllm.sh). Model IDs are
+`<provider>/<model>`, and the built-in chain aliases `lite` (fast), `plus` and
+`ultra` (most capable) are the card's suggestions. The live list is at
+`https://www.openllm.sh/v1/models` and requires the key; an alias is missing
+from it if the account disabled it.
+
+In WebBrain, open **Settings -> Models -> LLM -> OpenLLM**. Paste an API key into the
+card, keep the default `lite` model (200000 tokens, a conservative budget since
+the real window depends on the account's connections), then click
+**Test Connection**. Interactive Ask streaming and tool calls work through the
+existing OpenAI-compatible path. The card starts with vision off; enable it if
+the model you pick accepts images.
+
+To use the local OpenLLM daemon instead (macOS and Linux, installed with
+`curl -fsSL https://www.openllm.sh/install | bash`), change the card's base URL
+to `http://127.0.0.1:8787/v1`. No key is needed there.
 
 ### Ask response streaming
 
