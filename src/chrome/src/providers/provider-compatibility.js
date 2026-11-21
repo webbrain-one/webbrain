@@ -36,12 +36,28 @@ export function preserveToolCallSignature(target, delta) {
   }
 }
 
+function isGoogleVertexOpenAIEndpoint(baseUrl = '') {
+  const raw = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (/^https:\/\/\{vertex_endpoint\}\/v1(?:beta1)?\/projects\/[^/]+\/locations\/[^/]+\/endpoints\/openapi$/i.test(raw)) {
+    return true;
+  }
+  let url;
+  try { url = new URL(raw); } catch { return false; }
+  return url.protocol === 'https:'
+    && /^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/i.test(url.hostname)
+    && /^\/v1(?:beta1)?\/projects\/[^/]+\/locations\/[^/]+\/endpoints\/openapi$/i.test(url.pathname.replace(/\/+$/, ''));
+}
+
 // These launch contracts are endpoint-scoped: a similarly named local model
 // may use a different template or support disabling thinking.
 function mandatoryReasoningModel(config = {}) {
+  const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
+  if (isGoogleVertexOpenAIEndpoint(config.baseUrl)
+    && /^(?:google\/)?gemini-4-(?:argon|carbon|neon|hydrogen)$/.test(model)) {
+    return { argon: true, router: false, minimumEffort: 'low', maxTokens: 65536 };
+  }
   let url;
   try { url = new URL(config.baseUrl || ''); } catch { return null; }
-  const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
   const router = url.hostname === 'openrouter.ai';
   const argon = (router && /^google\/gemini-4-(?:argon|carbon|neon|hydrogen)$/.test(model))
     || (url.hostname === 'generativelanguage.googleapis.com'

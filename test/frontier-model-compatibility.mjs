@@ -78,6 +78,13 @@ for (const browser of ['chrome', 'firefox']) {
   });
 
   test(`${browser}: Argon normalizes sampling and effort after all custom body merges`, () => {
+    const vertex = (model, location = 'us-central1') => ({
+      providerName: 'google-vertex',
+      baseUrl: 'https://{vertex_endpoint}/v1/projects/{project}/locations/{location}/endpoints/openapi',
+      project: 'sample-project',
+      location,
+      model,
+    });
     const configs = [
       router('google/gemini-4-argon'),
       router('google/gemini-4-neon'),
@@ -87,15 +94,27 @@ for (const browser of ['chrome', 'firefox']) {
       { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-neon' },
       { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-hydrogen' },
       { providerName: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-carbon' },
+      vertex('gemini-4-argon'),
+      vertex('gemini-4-neon'),
+      vertex('gemini-4-hydrogen'),
+      vertex('gemini-4-carbon'),
+      vertex('google/gemini-4-argon', 'global'),
+      { providerName: 'google-vertex', baseUrl: 'https://us-central1-aiplatform.googleapis.com/v1/projects/sample-project/locations/us-central1/endpoints/openapi', model: 'gemini-4-carbon' },
     ];
     for (const config of configs) {
+      const isDirectGoogle = config.providerName === 'gemini' || config.providerName === 'google-vertex';
       const provider = new OpenAICompatibleProvider({ ...config, reasoningEffort: 'off', extraBody: { temperature: 0.2, top_p: 0.9, top_k: 5 } });
       const body = provider._buildChatCompletionsBody([], { maxTokens: 128000 });
       assert.equal(body.max_tokens, 65536);
       for (const key of ['temperature', 'top_p', 'top_k']) assert.equal(Object.hasOwn(body, key), false);
-      assert.equal(config.providerName === 'gemini' ? body.reasoning_effort : body.reasoning.effort, 'low');
+      assert.equal(isDirectGoogle ? body.reasoning_effort : body.reasoning.effort, 'low');
+      const classifier = provider._buildChatCompletionsBody([], {
+        maxTokens: 24, toolChoice: 'none', extraBody: plannerRequestBody(config),
+      });
+      assert.equal(classifier.max_tokens, 32768);
+      assert.equal(isDirectGoogle ? classifier.reasoning_effort : classifier.reasoning.effort, 'low');
       const high = provider._buildChatCompletionsBody([], { extraBody: { reasoning_effort: 'max' } });
-      assert.equal(config.providerName === 'gemini' ? high.reasoning_effort : high.reasoning.effort, 'high');
+      assert.equal(isDirectGoogle ? high.reasoning_effort : high.reasoning.effort, 'high');
     }
   });
 
