@@ -3348,6 +3348,8 @@ function renderProviders() {
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.6-terra',
           suggestions: [
+            'gpt-6.2-sol',
+            'gpt-6.2-astra',
             'gpt-6-luna-pro',
             'gpt-6.1-sol',
             'gpt-6-astra',
@@ -3370,7 +3372,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-or-...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'openrouter/free',
-          suggestions: ['openrouter/free', 'deepseek/deepseek-v4.1-flash-1017', 'google/gemini-4-argon', 'meta/muse-wonder', 'meta/muse-spark-open', 'anthropic/claude-opus-5.5', 'qwen/qwen3.8-27b', 'moonshotai/kimi-k3', 'z-ai/glm-5.3', 'minimax/minimax-m3'] },
+          suggestions: ['openrouter/free', 'deepseek/deepseek-v4.1-flash-1017', 'google/gemini-4-carbon', 'google/gemini-4-argon', 'google/gemini-4-neon', 'google/gemini-4-hydrogen', 'openai/gpt-6.2-sol', 'openai/gpt-6.2-astra', 'meta/muse-wonder', 'meta/muse-spark-open', 'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5', 'anthropic/claude-haiku-5.5', 'qwen/qwen3.8-27b', 'moonshotai/kimi-k3', 'z-ai/glm-5.3', 'minimax/minimax-m3'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://openrouter.ai/api/v1' },
         PROMPT_TIER_FIELD,
         TOOL_MODE_FIELD,
@@ -3419,7 +3421,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'AIza...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gemini-3.1-pro',
-          suggestions: ['gemini-4-argon', 'gemini-3.1-pro', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'] },
+          suggestions: ['gemini-4-carbon', 'gemini-4-argon', 'gemini-4-neon', 'gemini-4-hydrogen', 'gemini-3.1-pro', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://generativelanguage.googleapis.com/v1beta/openai' },
         ...COST_ESTIMATE_FIELDS,
       ],
@@ -3448,7 +3450,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'deepseek-flash',
-          suggestions: ['deepseek-flash', 'deepseek-v4-flash'] },
+          suggestions: ['deepseek-flash', 'deepseek-v4.1-flash-1017', 'deepseek-v4-flash'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.deepseek.com' },
         // Chat Completions is the default wire format; DeepSeek's Responses API
         // is an opt-in that mainly adds JSON-schema structured output.
@@ -3483,7 +3485,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'API key' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'MiniMax-M3',
-          suggestions: ['MiniMax-M3', 'MiniMax-M2.7'] },
+          suggestions: ['MiniMax-M3', 'MiniMax-M3.1-Flash', 'MiniMax-M2.7'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.minimax.chat/v1' },
         ...COST_ESTIMATE_FIELDS,
       ],

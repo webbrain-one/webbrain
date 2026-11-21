@@ -33,14 +33,16 @@ as `openrouter/free` identify the configured route; they do not establish which
 upstream model the router selected. Endpoint URLs, credentials, local model paths
 and private inference-profile ARNs are omitted from this identity context.
 
-### Gemini 4 Argon and new Muse models
+### Gemini 4 family and new Muse models
 
-Settings → Models → LLM suggests `gemini-4-argon` on Google Gemini and
-`google/gemini-4-argon`, `meta/muse-wonder`, and `meta/muse-spark-open` on
+Settings → Models → LLM suggests `gemini-4-carbon`, `gemini-4-argon`,
+`gemini-4-neon`, and `gemini-4-hydrogen` on Google Gemini (and Google Vertex AI)
+and `google/gemini-4-carbon`, `google/gemini-4-argon`, `google/gemini-4-neon`,
+`google/gemini-4-hydrogen`, `meta/muse-wonder`, and `meta/muse-spark-open` on
 OpenRouter. These models support native tools and screenshot input. WebBrain
 infers their 1,048,576-token context unless a user or local runtime overrides it.
 
-Argon uses the existing Google OpenAI-compatible or OpenRouter Chat Completions
+The Gemini 4 family uses the existing Google OpenAI-compatible or OpenRouter Chat Completions
 route. Its synchronous output ceiling is 65,536 tokens; background long decode
 is not implemented. WebBrain reserves at least 32,768 tokens including thinking,
 omits ignored sampling controls, and maps unsupported thinking-off requests to
