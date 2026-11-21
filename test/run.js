@@ -44930,6 +44930,52 @@ test('public Apocalypse Mode guide and launch essay document the offline boundar
     'blog: the generator should publish the Apocalypse Mode essay with canonical metadata');
 });
 
+test('public Google Workspace guide, homepage link, and screenshots document Office support', () => {
+  const guide = fs.readFileSync(path.join(ROOT, 'web/docs/google-workspace/index.html'), 'utf8');
+  const overview = fs.readFileSync(path.join(ROOT, 'web/docs/index.html'), 'utf8');
+  const template = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
+  const homepage = fs.readFileSync(path.join(ROOT, 'web/index.html'), 'utf8');
+  const enLocale = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/locales/en.json'), 'utf8'));
+  const sitemap = fs.readFileSync(path.join(ROOT, 'web/sitemap.xml'), 'utf8');
+
+  assert.match(guide, /\/mobilebasic[\s\S]*?\/gviz\/tq\?tqx=out:csv[\s\S]*?\/htmlview[\s\S]*?\/htmlpresent/,
+    'docs: the Google Workspace guide should document the direct read endpoints');
+  assert.match(guide, /DOCS_modelChunk[\s\S]*?google-docs-model \(initial snapshot\)[\s\S]*?includeChrome: true/,
+    'docs: the guide should document DOCS_modelChunk snapshot extraction and includeChrome');
+  assert.match(guide, /__webbrainGoogleDocsDarkMode[\s\S]*?Toggle Dark Mode/,
+    'docs: the guide should document the reversible Google Docs Dark Mode action');
+  assert.match(guide, /Summarize visible Drive files[\s\S]*?Suggest form questions[\s\S]*?Summarize form questions/,
+    'docs: the guide should cover Forms and Drive actions');
+
+  for (const shot of [
+    'google-workspace-docs.jpg',
+    'google-workspace-docs-dark.jpg',
+    'google-workspace-sheets.jpg',
+  ]) {
+    assert.ok(guide.includes(`/docs/assets/screenshots/${shot}`), `docs: guide should embed ${shot}`);
+    const shotPath = path.join(ROOT, 'web/docs/assets/screenshots', shot);
+    assert.ok(fs.existsSync(shotPath) && fs.statSync(shotPath).size > 10_000,
+      `docs: screenshot ${shot} should exist and be non-empty`);
+  }
+
+  assert.match(overview, /href="\/docs\/google-workspace\/"[\s\S]*?Explore Google Workspace/,
+    'docs: the overview should link to the Google Workspace guide');
+  for (const page of ['index.html', 'settings/index.html', 'providers/index.html', 'safety/index.html', 'formats/index.html', 'google-workspace/index.html', 'mcp/index.html', 'lm-studio/index.html', 'ollama/index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, 'web/docs', page), 'utf8');
+    assert.match(html, /<a href="\/docs\/google-workspace\/"[^>]*>Google Workspace<\/a>/,
+      `docs/${page}: shared guide navigation should expose Google Workspace`);
+  }
+  assert.match(sitemap, /<loc>https:\/\/webbrain\.one\/docs\/google-workspace\/<\/loc>/,
+    'web: the Google Workspace guide should be in the generated sitemap');
+
+  assert.match(enLocale['features.workspace_note_html'], /href="\/docs\/google-workspace\/"/,
+    'web: en.json should define the Google Workspace homepage mention and link');
+  assert.match(template, /\{\{t-html:features\.workspace_note_html\}\}/,
+    'web: homepage template should render the Google Workspace mention under features');
+  assert.match(homepage, /class="features-guide-note"[\s\S]*?href="\/docs\/google-workspace\/"/,
+    'web: generated homepage should include the Google Workspace mention and link');
+});
+
 test('homepage does not promote the unmerged Ollama launch handoff', () => {
   const template = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
   const build = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');

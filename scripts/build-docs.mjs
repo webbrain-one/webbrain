@@ -82,6 +82,19 @@ function withGuideNavigation(html, file) {
     generated = withApocalypseMode;
   }
 
+  const hasGoogleWorkspaceNavigation = /<a href="\/docs\/google-workspace\/"[^>]*>Google Workspace<\/a>/.test(generated);
+  if (isEnglish && !hasGoogleWorkspaceNavigation) {
+    const formatsLink = /(<a href="\/docs\/formats\/"[^>]*>[^<]*<\/a>)/;
+    const withGoogleWorkspace = generated.replace(
+      formatsLink,
+      '$1<a href="/docs/google-workspace/">Google Workspace</a>',
+    );
+    if (withGoogleWorkspace === generated) {
+      throw new Error(`${path.relative(REPO_ROOT, file)} is missing the formats guide navigation anchor`);
+    }
+    generated = withGoogleWorkspace;
+  }
+
   const companionHref = '/companion/';
   const companionLabel = 'WebBrain Companion';
   const escapedCompanionHref = companionHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

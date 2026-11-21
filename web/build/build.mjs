@@ -817,6 +817,7 @@ async function main() {
     { loc: `${SITE_ORIGIN}/docs/safety/` },
     { loc: `${SITE_ORIGIN}/docs/apocalypse-mode/` },
     { loc: `${SITE_ORIGIN}/docs/formats/` },
+    { loc: `${SITE_ORIGIN}/docs/google-workspace/` },
     { loc: `${SITE_ORIGIN}/docs/mcp/` },
     { loc: `${SITE_ORIGIN}/docs/lm-studio/` },
     { loc: `${SITE_ORIGIN}/docs/ollama/` },
