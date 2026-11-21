@@ -47,6 +47,18 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(standardcompute.supportsAskStreaming, true);
   assert.ok(providerIconUrl('standardcompute').endsWith('/standardcompute.svg'));
 
+  const aigrow = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
+  assert.equal(aigrow.type, 'openai', `${browser}: AIGROW must use the OpenAI-compatible adapter`);
+  assert.equal(aigrow.baseUrl, 'https://aigrow.gg/v1', `${browser}: AIGROW endpoint changed`);
+  assert.equal(aigrow.model, 'claude-haiku-5.5');
+  assert.equal(aigrow.contextWindow, 1000000);
+  assert.equal(aigrow.enabled, false);
+  assert.equal(aigrow.apiKey, '');
+  assert.equal(aigrow.supportsVision, true);
+  assert.equal(aigrow.supportsTools, true);
+  assert.equal(aigrow.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('aigrow').endsWith('/aigrow.svg'));
+
   const openllm = ADDITIONAL_PROVIDER_DEFAULTS.openllm;
   assert.equal(openllm.type, 'openai', `${browser}: OpenLLM must use the OpenAI-compatible adapter`);
   assert.equal(openllm.baseUrl, 'https://www.openllm.sh/v1', `${browser}: OpenLLM endpoint changed`);
@@ -98,7 +110,10 @@ for (const browser of ['chrome', 'firefox']) {
   const originalFetch = globalThis.fetch;
   const stored = {
     activeProvider: 'openai',
-    providers: { openai: { configured: true, apiKey: 'existing-test-key', model: 'gpt-5.6-terra' } },
+    providers: {
+      openai: { configured: true, apiKey: 'existing-test-key', model: 'gpt-5.6-terra' },
+      aigrow: { ...aigrow, model: 'grok-4.7', contextWindow: 1000000 },
+    },
   };
   globalThis.chrome = {
     storage: { local: {
@@ -112,6 +127,15 @@ for (const browser of ['chrome', 'firefox']) {
     const { ProviderManager } = await import(pathToFileURL(path.join(prefix, 'providers', 'manager.js')).href);
     const providers = new ProviderManager();
     await providers.load();
+    assert.equal(providers.providers.get('aigrow').contextWindow, 500000,
+      `${browser}: a saved Grok model must lose the inherited Haiku default`);
+    await providers.updateProvider('aigrow', { model: 'claude-haiku-5.5' });
+    assert.equal(stored.providers.aigrow.contextWindow, 1000000);
+    await providers.updateProvider('aigrow', { model: 'grok-4.7' });
+    assert.equal(stored.providers.aigrow.contextWindow, 500000);
+    await providers.updateProvider('aigrow', { contextWindow: 250000 });
+    assert.equal(providers.providers.get('aigrow').contextWindow, 250000,
+      `${browser}: respect a manually configured context window`);
     assert.equal(providers.activeProviderId, 'openai', `${browser}: new provider must not change the user's selection`);
     const added = providers.getAll().abliteration;
     assert.ok(added, `${browser}: existing installations receive Abliteration.ai`);

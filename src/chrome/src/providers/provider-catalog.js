@@ -66,6 +66,7 @@ const PROVIDERS = [
   provider('abacus', 'Abacus', 'https://routellm.abacus.ai/v1', 'o3', 200000, { apiKeyUrl: 'https://abacus.ai/help/api', supportsVision: true, inputCostPerMillionUsd: 2, cacheReadCostPerMillionUsd: 0.5, outputCostPerMillionUsd: 8 }),
   // https://docs.abliteration.ai/models — Large Flash supports images and tools.
   provider('abliteration', 'Abliteration.ai', 'https://api.abliteration.ai/v1', 'abliterated-model-large-flash', 1048576, { category: 'cloud', apiKeyUrl: 'https://abliteration.ai/console', apiKeyPlaceholder: 'ak_...', supportsVision: true, maxImagesPerRequest: 4, maxOutputTokens: 262144, inputCostPerMillionUsd: 1, cacheReadCostPerMillionUsd: 0.1, outputCostPerMillionUsd: 2 }),
+  provider('aigrow', 'AIGROW', 'https://aigrow.gg/v1', 'claude-haiku-5.5', 1000000, { apiKeyUrl: 'https://aigrow.gg/dashboard/api', supportsVision: true, suggestions: ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5'] }),
   provider('aihubmix', 'AIHubMix', 'https://aihubmix.com/v1', 'coding-minimax-m2.7', 204800, { apiKeyUrl: 'https://docs.aihubmix.com', inputCostPerMillionUsd: 0.2, outputCostPerMillionUsd: 0.2 }),
   provider('alibaba-coding-plan', 'Alibaba Coding Plan', 'https://coding-intl.dashscope.aliyuncs.com/v1', 'qwen3-coder-plus', 1000000, { category: 'cloud', apiKeyUrl: 'https://www.alibabacloud.com/help/en/model-studio/coding-plan', supportsAskStreaming: false }),
   provider('alibaba-coding-plan-cn', 'Alibaba Coding Plan (China)', 'https://coding.dashscope.aliyuncs.com/v1', 'qwen3-coder-plus', 1000000, { category: 'cloud', apiKeyUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan', supportsAskStreaming: false }),
@@ -163,3 +164,12 @@ export const ADDITIONAL_PROVIDER_DEFAULTS = Object.freeze(Object.fromEntries(
 export const ADDITIONAL_PROVIDER_UI = Object.freeze(Object.fromEntries(
   PROVIDERS.map(({ id, ui }) => [id, Object.freeze(ui)]),
 ));
+
+// AIGROW's /v1/models lists Grok at half the card's default window.
+export function aigrowDefaultContextWindow(model, baseUrl) {
+  const id = String(model || '').trim().toLowerCase();
+  const url = String(baseUrl || '').trim().replace(/\/+$/, '').toLowerCase();
+  const defaults = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
+  if (!id || (url !== defaults.baseUrl && url !== 'https://aigrow.gg')) return null;
+  return id === 'grok-4.7' ? 500000 : defaults.contextWindow;
+}
