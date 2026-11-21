@@ -382,6 +382,33 @@
    * stripping inside the chosen container — e.g. when the user is asking
    * ABOUT the nav, footer, cookie banner, etc.
    */
+  function extractGoogleWorkspaceCanvasText() {
+    try {
+      if (window.location.hostname !== 'docs.google.com') return '';
+      if (!/^\/(?:document|presentation)\/(?:u\/\d+\/)?d\/[\w-]+/i.test(window.location.pathname || '')) return '';
+      const chunks = [];
+      const scripts = document.querySelectorAll('script:not([src])');
+      const chunkStringRe = /"s"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+      for (const script of scripts) {
+        const code = script.textContent || '';
+        if (!code.includes('DOCS_modelChunk')) continue;
+        let match;
+        chunkStringRe.lastIndex = 0;
+        while ((match = chunkStringRe.exec(code)) !== null) {
+          try {
+            const decoded = JSON.parse(`"${match[1]}"`)
+              .replace(/[\r\u000b]/g, '\n')
+              .replace(/[\u0000-\u0008\u000c\u000e-\u001f\ue000-\uf8ff]/g, '');
+            if (decoded) chunks.push(decoded);
+          } catch {}
+        }
+      }
+      return chunks.join('').trim();
+    } catch {
+      return '';
+    }
+  }
+
   function getPageText(opts) {
     const includeChrome = !!(opts && opts.includeChrome);
 
@@ -456,6 +483,16 @@
         textSource: 'article (pre-gate)',
         isArticlePage,
         pageGate,
+      };
+    }
+
+    const googleCanvasText = extractGoogleWorkspaceCanvasText();
+    if (googleCanvasText) {
+      return {
+        text: googleCanvasText,
+        textSource: 'google-docs-model',
+        isArticlePage,
+        ...(pageGate ? { pageGate } : {}),
       };
     }
 

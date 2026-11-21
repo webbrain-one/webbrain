@@ -19,6 +19,13 @@ const COUPON_PRICE_RE = /[₺$€£¥₹₩]|\b(?:USD|EUR|GBP|TRY|CAD|AUD|JPY|BR
 const RELEASES_PATH_RE = /^\/[^/]+\/[^/]+\/releases(?:\/|$)/i;
 const GITHUB_PR_PATH_RE = /^\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:\/|$)/i;
 const GITHUB_PULLS_PATH_RE = /^\/([\w.-]+)\/([\w.-]+)\/pulls(?:\/|$)/i;
+const GOOGLE_DOC_PATH_RE = /^\/document\/(?:u\/\d+\/)?d\/([\w-]+)(?:\/([^/?#]+))?(?:\/|$)/i;
+const GOOGLE_SHEET_PATH_RE = /^\/spreadsheets\/(?:u\/\d+\/)?d\/([\w-]+)(?:\/([^/?#]+))?(?:\/|$)/i;
+const GOOGLE_SLIDES_PATH_RE = /^\/presentation\/(?:u\/\d+\/)?d\/([\w-]+)(?:\/([^/?#]+))?(?:\/|$)/i;
+const GOOGLE_FORM_PATH_RE = /^\/forms\/(?:u\/\d+\/)?d\/(?:(e)\/)?([\w-]+)(?:\/([^/?#]+))?(?:\/|$)/i;
+const GOOGLE_DRIVE_PATH_RE = /^\/drive\/(?:u\/\d+\/)?(?:my-drive|shared-with-me|recent|starred|priority|folders\/[\w-]+|search)(?:\/|$)/i;
+const GOOGLE_WORKSPACE_RESERVED_ID_RE = /^(?:edit|view|copy|preview|export|mobilebasic|htmlview|htmlpresent|mobilepresent|viewform|formresponse|create|new|e|u)$/i;
+const UNTITLED_GOOGLE_WORKSPACE_TITLE_RE = /^\s*(?:untitled\s+(?:document|spreadsheet|presentation|form)|adsız\s+(?:doküman|e-tablo|sunu|form)|unbenanntes?\s+(?:dokument|tabelle|präsentation|formular)|document(?:o)?\s+(?:sans\s+titre|sin\s+título|sem\s+título)|документ\s+без\s+названия|無題の(?:ドキュメント|スプレッドシート|プレゼンテーション|フォーム)|제목\s+없는\s+(?:문서|스프레드시트|프레젠테이션|설문지)|未命名(?:文档|表格|演示文稿|表单))(?:\s*[-–—]\s*google\s+(?:docs|sheets|slides|forms|dokümanlar|e-tablolar|sunular|formlar))?\s*$/i;
 const SEARCH_INPUT_RE = /^(search|q|query|keyword|keywords|s)$/i;
 const EMAIL_HOST_RE = /(^|\.)(mail\.google\.com|gmail\.com|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com|mail\.yahoo\.com|icloud\.com|proton\.me|protonmail\.com|fastmail\.com|hey\.com|mail\.zoho\.com)$/i;
 const DM_HOST_RE = /(^|\.)(instagram\.com|x\.com|twitter\.com|facebook\.com|messenger\.com|threads\.net|reddit\.com|linkedin\.com|discord\.com|slack\.com|web\.whatsapp\.com|messages\.google\.com|web\.telegram\.org)$/i;
@@ -39,12 +46,90 @@ function hostFromUrl(url) {
   }
 }
 
+function exactHostFromUrl(url) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 function pathFromUrl(url) {
   try {
     return new URL(url).pathname || '/';
   } catch {
     return '/';
   }
+}
+
+function isUntitledGoogleWorkspaceTitle(title = '') {
+  return UNTITLED_GOOGLE_WORKSPACE_TITLE_RE.test(String(title || ''));
+}
+
+function googleDocContext(path = '') {
+  const match = GOOGLE_DOC_PATH_RE.exec(String(path));
+  if (!match || GOOGLE_WORKSPACE_RESERVED_ID_RE.test(match[1])) return null;
+  return {
+    docId: match[1],
+    view: String(match[2] || 'edit').toLowerCase(),
+  };
+}
+
+function googleDocReadSteps(docId) {
+  const mobileBasicUrl = `https://docs.google.com/document/d/${docId}/mobilebasic`;
+  return `This is a read-only Ask run: you cannot navigate or click, and the Google Docs canvas hides body paragraphs from get_accessibility_tree. Read the full document text with fetch_url on ${mobileBasicUrl}, continuing with offset set to nextOffset while hasMore is true. If fetch_url fails, use read_page on this tab (continuing with read_page continuationArgs while hasMore is true) or research_url on ${mobileBasicUrl}.`;
+}
+
+function googleSheetGid(url = '') {
+  try {
+    const parsed = new URL(url);
+    const queryGid = parsed.searchParams.get('gid');
+    if (queryGid && /^\d+$/.test(queryGid)) return queryGid;
+    const hashMatch = /(?:^|[#&?])gid=(\d+)(?:&|$)/i.exec(parsed.hash || '');
+    return hashMatch ? hashMatch[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function googleSheetContext(path = '', url = '') {
+  const match = GOOGLE_SHEET_PATH_RE.exec(String(path));
+  if (!match || GOOGLE_WORKSPACE_RESERVED_ID_RE.test(match[1])) return null;
+  return {
+    sheetId: match[1],
+    view: String(match[2] || 'edit').toLowerCase(),
+    gid: googleSheetGid(url),
+  };
+}
+
+function googleSheetReadSteps({ sheetId, gid }) {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ''}`;
+  const htmlViewUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/htmlview`;
+  return `This is a read-only Ask run: you cannot navigate or click, and the Google Sheets canvas hides grid cells from get_accessibility_tree. Read the sheet data with fetch_url on ${csvUrl}, continuing with offset set to nextOffset while hasMore is true. If that fails or you need all tabs, use fetch_url on ${htmlViewUrl} (continuing with offset set to nextOffset while hasMore is true) or research_url on ${htmlViewUrl}.`;
+}
+
+function googleSlidesContext(path = '') {
+  const match = GOOGLE_SLIDES_PATH_RE.exec(String(path));
+  if (!match || GOOGLE_WORKSPACE_RESERVED_ID_RE.test(match[1])) return null;
+  return {
+    presentationId: match[1],
+    view: String(match[2] || 'edit').toLowerCase(),
+  };
+}
+
+function googleSlidesReadSteps(presentationId) {
+  const htmlPresentUrl = `https://docs.google.com/presentation/d/${presentationId}/htmlpresent`;
+  return `This is a read-only Ask run: you cannot navigate or click. Read the presentation slides with read_page on this tab (continuing with read_page continuationArgs while hasMore is true) or with fetch_url on ${htmlPresentUrl} (continuing with offset set to nextOffset while hasMore is true). If both miss slide text, use research_url on ${htmlPresentUrl}.`;
+}
+
+function googleFormContext(path = '') {
+  const match = GOOGLE_FORM_PATH_RE.exec(String(path));
+  if (!match || GOOGLE_WORKSPACE_RESERVED_ID_RE.test(match[2])) return null;
+  const isResponderRoute = Boolean(match[1]) || /^(?:viewform|formresponse)$/i.test(match[3] || '');
+  return {
+    formId: match[2],
+    view: isResponderRoute ? 'viewform' : 'edit',
+  };
 }
 
 // Which pull-request tab the path shows. Only the bare Files changed tab
@@ -392,6 +477,7 @@ function isLongArticle(pageInfo = {}) {
 export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const max = Number.isFinite(options.max) ? options.max : 4;
   const host = hostFromUrl(pageInfo.url || '');
+  const exactHost = exactHostFromUrl(pageInfo.url || '');
   const path = pathFromUrl(pageInfo.url || '');
   const actions = [];
   const webbrainPostText = t('sp.recommended.tweet.text');
@@ -456,6 +542,178 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
       label: 'Summarize recent PR activity',
       prompt: `Use read_page to read the visible pull-request list for ${pulls.owner}/${pulls.repo}, including open and recently updated pull requests. Summarize activity by theme, review status, stale items, blockers, and which pull requests need attention. Do not open, comment on, or modify any pull request.`,
       mode: 'ask',
+    });
+  }
+
+  const googleDoc = exactHost === 'docs.google.com' ? googleDocContext(path) : null;
+  if (googleDoc) {
+    const readSteps = googleDocReadSteps(googleDoc.docId);
+    const untitled = isUntitledGoogleWorkspaceTitle(pageInfo.title);
+    if (untitled) {
+      addUnique(actions, {
+        id: 'draft-google-doc',
+        label: 'Draft an outline or document',
+        prompt: 'Help me draft a structured outline or document in this Google Doc. Ask me for the topic, target audience, desired sections, and tone before typing into the document.',
+        mode: 'act',
+      });
+    }
+    addUnique(actions, {
+      id: 'summarize-google-doc',
+      label: 'Summarize & find action items',
+      prompt: `Summarize this Google Doc and extract its action items. ${readSteps} Provide a concise executive summary, key decisions, and a checklist of action items with owners or deadlines when mentioned. Do not modify the document.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'review-google-doc',
+      label: 'Suggest edits & improvements',
+      prompt: `Review this Google Doc and suggest improvements. ${readSteps} Propose prioritized edits for clarity, structure, tone, and grammar with exact "Before → After" suggestions by section. Do not modify the document unless I explicitly ask.`,
+      mode: 'ask',
+    });
+    if (!untitled) {
+      addUnique(actions, {
+        id: 'google-doc-to-markdown',
+        label: 'Export to Markdown',
+        prompt: `Convert this Google Doc into clean Markdown. ${readSteps} Preserve the heading hierarchy, bulleted and numbered lists, links, emphasis, and tables in a copy-ready Markdown code block. Do not modify the document.`,
+        mode: 'ask',
+      });
+    }
+    addUnique(actions, {
+      id: 'google-docs-dark-mode',
+      label: 'Toggle Dark Mode',
+      prompt: `Use execute_js once with this exact function body to toggle Dark Mode on this Google Doc without modifying the document content, then report whether Dark Mode is now enabled:
+const STYLE_ID = '__webbrainGoogleDocsDarkMode';
+const existing = document.getElementById(STYLE_ID);
+if (existing) {
+  existing.remove();
+  return { enabled: false };
+}
+const style = document.createElement('style');
+style.id = STYLE_ID;
+style.textContent = \`
+  #docs-chrome, .docs-material, #docs-header-container, #docs-toolbar-wrapper,
+  .kix-appview-editor, .kix-appview-editor-container, .docs-companion-app-switcher-container,
+  .left-sidebar-container, .navigation-widget {
+    background-color: #1e1e24 !important;
+    color: #e8e8ed !important;
+  }
+  .kix-page-paginated, .kix-canvas-tile-content {
+    filter: invert(0.9) hue-rotate(180deg) !important;
+  }
+\`;
+(document.head || document.documentElement).appendChild(style);
+return { enabled: true };`,
+      mode: 'dev',
+    });
+    if (untitled) {
+      addUnique(actions, {
+        id: 'google-doc-to-markdown',
+        label: 'Export to Markdown',
+        prompt: `Convert this Google Doc into clean Markdown. ${readSteps} Preserve the heading hierarchy, bulleted and numbered lists, links, emphasis, and tables in a copy-ready Markdown code block. Do not modify the document.`,
+        mode: 'ask',
+      });
+    }
+  }
+
+  const googleSheet = exactHost === 'docs.google.com' ? googleSheetContext(path, pageInfo.url || '') : null;
+  if (googleSheet) {
+    const readSteps = googleSheetReadSteps(googleSheet);
+    if (isUntitledGoogleWorkspaceTitle(pageInfo.title)) {
+      addUnique(actions, {
+        id: 'draft-google-sheet',
+        label: 'Build a table or tracker',
+        prompt: 'Help me design and populate a table or tracker in this Google Sheet. Ask me for the use case, columns, and sample rows or formulas before writing to the sheet.',
+        mode: 'act',
+      });
+    }
+    addUnique(actions, {
+      id: 'analyze-google-sheet',
+      label: 'Analyze sheet & key metrics',
+      prompt: `Analyze the data in this Google Sheet. ${readSteps} Summarize the columns, row count, key metrics, trends, and notable outliers or pivot-style breakdowns. Do not modify the sheet.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'generate-sheets-formula',
+      label: 'Generate a Sheets formula',
+      prompt: `Help me write or debug a Google Sheets formula for this spreadsheet. ${readSteps} Inspect the exact column headers and data layout first, then provide ready-to-paste Google Sheets formulas (such as QUERY, XLOOKUP, ARRAYFORMULA, or SUMIFS) tailored to the actual column letters and explain how each formula works. Do not modify the sheet.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'clean-google-sheet-data',
+      label: 'Audit & clean sheet data',
+      prompt: `Audit this Google Sheet for data-quality issues. ${readSteps} Identify duplicates, missing values, inconsistent date/number/text formatting, and formula errors, then provide exact cleanup formulas or an optional Apps Script snippet. Do not modify the sheet.`,
+      mode: 'ask',
+    });
+  }
+
+  const googleSlides = exactHost === 'docs.google.com' ? googleSlidesContext(path) : null;
+  if (googleSlides) {
+    const readSteps = googleSlidesReadSteps(googleSlides.presentationId);
+    if (isUntitledGoogleWorkspaceTitle(pageInfo.title)) {
+      addUnique(actions, {
+        id: 'draft-google-slides',
+        label: 'Draft presentation outline',
+        prompt: 'Help me plan and draft a slide-by-slide outline for this Google Slides presentation. Ask me for the topic, audience, goal, and slide count before changing the presentation.',
+        mode: 'act',
+      });
+    }
+    addUnique(actions, {
+      id: 'summarize-google-slides',
+      label: 'Summarize slides & key takeaways',
+      prompt: `Summarize this Google Slides presentation. ${readSteps} Provide the core narrative, a slide-by-slide summary, and the top takeaways or action items. Do not modify the presentation.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'generate-speaker-notes',
+      label: 'Generate speaker notes',
+      prompt: `Draft concise speaker notes and talking points for each slide in this Google Slides presentation. ${readSteps} Match each slide's heading and bullet points, and include transition cues between slides. Do not modify the presentation.`,
+      mode: 'ask',
+    });
+    addUnique(actions, {
+      id: 'review-google-slides',
+      label: 'Improve slide copy & flow',
+      prompt: `Review this Google Slides presentation for narrative flow, clarity, and visual density. ${readSteps} Suggest tighter headlines, punchier bullets, and structural improvements with "Before → After" examples by slide. Do not modify the presentation.`,
+      mode: 'ask',
+    });
+  }
+
+  const googleForm = exactHost === 'docs.google.com' ? googleFormContext(path) : null;
+  if (googleForm) {
+    if (googleForm.view === 'edit') {
+      addUnique(actions, {
+        id: 'suggest-google-form-questions',
+        label: 'Suggest form questions',
+        prompt: 'This is a read-only Ask run: you cannot navigate or click. Use read_page on this tab (continuing with read_page continuationArgs while hasMore is true) and get_accessibility_tree with filter:"visible" to read the current Google Form title, description, and questions. Suggest well-structured additional questions, answer choices, and validation rules that fit the form\'s goal. Do not modify the form.',
+        mode: 'ask',
+      });
+      addUnique(actions, {
+        id: 'review-google-form',
+        label: 'Review form clarity & flow',
+        prompt: 'This is a read-only Ask run: you cannot navigate or click. Use read_page on this tab (continuing with read_page continuationArgs while hasMore is true) and get_accessibility_tree with filter:"visible" to inspect the current Google Form. Audit the questions for ambiguity, leading phrasing, missing answer options, and completion friction, and recommend improvements. Do not modify the form.',
+        mode: 'ask',
+      });
+    } else {
+      addUnique(actions, {
+        id: 'summarize-google-form',
+        label: 'Summarize form questions',
+        prompt: 'This is a read-only Ask run: you cannot navigate or click. Use read_page on this tab (continuing with read_page continuationArgs while hasMore is true) to read the Google Form. Summarize all sections, required vs. optional questions, and what information I need ready before filling it out. Do not submit or modify the form.',
+        mode: 'ask',
+      });
+    }
+  }
+
+  if (exactHost === 'drive.google.com' && GOOGLE_DRIVE_PATH_RE.test(path)) {
+    addUnique(actions, {
+      id: 'summarize-google-drive-view',
+      label: 'Summarize visible Drive files',
+      prompt: 'This is a read-only Ask run: you cannot navigate or click. Use get_accessibility_tree with filter:"visible" first to read the files and folders visible in this Google Drive view. Group items by type or topic, highlight recently modified or notable files, and suggest organization or cleanup ideas without moving, renaming, or deleting anything.',
+      mode: 'ask',
+      runOptions: firstToolRunOptions(
+        'summarize-google-drive-view',
+        'get_accessibility_tree',
+        visibleTreeArgs(10),
+        'Read the visible Google Drive file list before summarizing it.',
+        ['Call get_accessibility_tree with filter:"visible" and maxDepth:10.', 'Group and summarize the visible Drive files and folders without modifying anything.'],
+      ),
     });
   }
 

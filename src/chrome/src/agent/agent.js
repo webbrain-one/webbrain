@@ -12934,6 +12934,7 @@ export class Agent extends LoopDetector {
     'rewrite-focused-draft': new Set(['get_accessibility_tree']),
     'compare-price': new Set(['get_accessibility_tree']),
     'find-coupons': new Set(['get_accessibility_tree']),
+    'summarize-google-drive-view': new Set(['get_accessibility_tree']),
   });
   // Tools that return page or document content. Deliberately excludes
   // screenshot, scroll, waits, and window probes: they observe that something
