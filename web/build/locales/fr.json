@@ -219,7 +219,7 @@
   "cloud_strip.label": "Pour les agents IA",
   "cloud_strip.description": "Un navigateur privé et visible pour Codex et les autres agents IA.",
   "cloud_strip.cta": "Découvrir Cloud",
-  "mcp.label": "Nouveau · serveur MCP",
+  "mcp.label": "Serveur MCP",
   "mcp.title": "Votre agent de code, dans le navigateur que vous utilisez déjà.",
   "mcp.subtitle": "Connectez Claude Code, Codex, Cursor, OpenCode ou tout client MCP stdio à vos onglets Chromium déjà connectés. WebBrain conserve la barrière d’autorisation par tâche dans le navigateur et renvoie désormais aussi du JSON structuré.",
   "mcp.docs_cta": "Ouvrir le guide MCP complet",

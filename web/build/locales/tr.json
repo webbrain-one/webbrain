@@ -219,7 +219,7 @@
   "cloud_strip.label": "AI ajanları için",
   "cloud_strip.description": "Codex ve diğer AI ajanları için özel ve görünür bir tarayıcı.",
   "cloud_strip.cta": "Cloud'u keşfet",
-  "mcp.label": "Yeni · MCP sunucusu",
+  "mcp.label": "MCP sunucusu",
   "mcp.title": "Kodlama ajanınız, zaten kullandığınız tarayıcının içinde.",
   "mcp.subtitle": "Claude Code, Codex, Cursor, OpenCode veya herhangi bir stdio MCP istemcisini oturum açtığınız Chromium sekmelerine bağlayın. WebBrain görev düzeyindeki izin kapısını tarayıcıda tutar ve artık yapılandırılmış JSON da döndürür.",
   "mcp.docs_cta": "Eksiksiz MCP rehberini aç",

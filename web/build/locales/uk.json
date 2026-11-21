@@ -219,7 +219,7 @@
   "cloud_strip.label": "Для ШІ-агентів",
   "cloud_strip.description": "Приватний видимий браузер для Codex та інших ШІ-агентів.",
   "cloud_strip.cta": "Перейти до Cloud",
-  "mcp.label": "Нове · сервер MCP",
+  "mcp.label": "MCP-сервер",
   "mcp.title": "Ваш агент для програмування — у браузері, яким ви вже користуєтеся.",
   "mcp.subtitle": "Підключіть Claude Code, Codex, Cursor, OpenCode або будь-який stdio-клієнт MCP до вкладок Chromium, де ви вже ввійшли. WebBrain зберігає перевірку дозволів на рівні завдання в браузері й тепер також повертає структурований JSON.",
   "mcp.docs_cta": "Відкрити повний посібник з MCP",

@@ -219,7 +219,7 @@
   "cloud_strip.label": "面向 AI 智能体",
   "cloud_strip.description": "为 Codex 和其他 AI 智能体提供私密、可视的浏览器。",
   "cloud_strip.cta": "探索 Cloud",
-  "mcp.label": "新功能 · MCP 服务器",
+  "mcp.label": "MCP 服务器",
   "mcp.title": "你的编程代理，就在你已经使用的浏览器里。",
   "mcp.subtitle": "将 Claude Code、Codex、Cursor、OpenCode 或任意 stdio MCP 客户端连接到已登录的 Chromium 标签页。WebBrain 将任务级权限关卡保留在浏览器中，现在也能返回结构化 JSON。",
   "mcp.docs_cta": "打开完整 MCP 指南",

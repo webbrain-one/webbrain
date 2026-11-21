@@ -219,7 +219,7 @@
   "cloud_strip.label": "לסוכני AI",
   "cloud_strip.description": "דפדפן פרטי וגלוי ל-Codex ולסוכני AI נוספים.",
   "cloud_strip.cta": "גלו את Cloud",
-  "mcp.label": "חדש · שרת MCP",
+  "mcp.label": "שרת MCP",
   "mcp.title": "סוכן הקוד שלך, בתוך הדפדפן שכבר נמצא בשימוש.",
   "mcp.subtitle": "חברו את Claude Code, Codex, Cursor, OpenCode או כל לקוח MCP דרך stdio לכרטיסיות Chromium שבהן כבר התחברתם. WebBrain משאיר בדפדפן את שער ההרשאות לכל משימה, וכעת מחזיר גם JSON מובנה.",
   "mcp.docs_cta": "פתיחת מדריך MCP המלא",

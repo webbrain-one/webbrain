@@ -219,7 +219,7 @@
   "cloud_strip.label": "AI एजेंटों के लिए",
   "cloud_strip.description": "Codex और अन्य AI एजेंटों के लिए निजी और दिखाई देने वाला ब्राउज़र।",
   "cloud_strip.cta": "Cloud देखें",
-  "mcp.label": "नया · MCP सर्वर",
+  "mcp.label": "MCP सर्वर",
   "mcp.title": "आपका कोडिंग एजेंट, उसी ब्राउज़र के अंदर जिसे आप पहले से इस्तेमाल करते हैं।",
   "mcp.subtitle": "Claude Code, Codex, Cursor, OpenCode या किसी भी stdio MCP क्लाइंट को अपने साइन-इन किए हुए Chromium टैब से जोड़ें। WebBrain हर कार्य की अनुमति-जाँच ब्राउज़र में ही रखता है और अब संरचित JSON भी लौटाता है।",
   "mcp.docs_cta": "पूरी MCP मार्गदर्शिका खोलें",
