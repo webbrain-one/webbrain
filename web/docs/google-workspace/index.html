@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Google Workspace — WebBrain User Guide</title>
+  <meta name="description" content="Use WebBrain across Google Docs, Sheets, Slides, Forms, and Drive with context-aware suggested actions, Dark Mode, direct same-origin reads, and canvas snapshot extraction.">
+  <link rel="canonical" href="https://webbrain.one/docs/google-workspace/">
+  <link rel="icon" href="/favicon.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
+  <link rel="stylesheet" href="/docs/assets/docs.css?v=20261107">
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+</head>
+<body class="doc-page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="header-inner"><a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">User guide</span></a><nav class="top-nav" aria-label="Primary"><a href="/">Home</a><a href="/docs/" aria-current="page">Docs</a><a href="/blog/">Blog</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav><div class="header-tools"><button class="icon-button" type="button" data-theme-toggle aria-label="Use light theme">☀</button><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Open documentation menu">☰</button></div></div></header>
+
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation"><div class="sidebar-group"><div class="sidebar-label">Start here</div><nav><a href="/docs/">Overview</a><a href="/docs/faq/">FAQ</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Use WebBrain</div><nav><a href="/docs/settings/">Settings, explained</a><a href="/docs/captcha/">CAPTCHA solvers</a><a href="/docs/providers/">Providers &amp; models</a><a href="/companion/">WebBrain Companion</a><a href="/docs/safety/">Modes, safety &amp; privacy</a><a href="/docs/apocalypse-mode/">Apocalypse Mode</a><a href="/docs/formats/">Exports &amp; workflows</a><a href="/docs/google-workspace/" aria-current="page">Google Workspace</a><a href="/docs/mcp/">MCP server</a><a href="/docs/lm-studio/">LM Studio plugin</a><a href="/docs/ollama/">Ollama</a></nav></div><div class="sidebar-group"><div class="sidebar-label">On your website</div><nav><a href="/docs/websites/">WebBrain for websites</a></nav></div><div class="sidebar-group"><div class="sidebar-label">For builders</div><nav><a href="https://github.com/webbrain-one/webbrain/pull/673">PR #673 implementation ↗</a><a href="https://github.com/webbrain-one/webbrain/tree/main/docs">Technical docs ↗</a></nav></div><div class="sidebar-group"><div class="sidebar-label">Community</div><nav><a href="https://discord.gg/cgC325ssfw">Discord Support</a></nav></div></aside>
+
+    <main class="doc-main" id="main">
+      <div class="breadcrumb"><a href="/docs/">Docs</a> / Google Workspace</div>
+      <section class="doc-hero">
+        <div class="eyebrow">Google Workspace · Chrome &amp; Firefox</div>
+        <h1>Read, review, and work faster across Google Docs, Sheets, Slides, Forms, and Drive.</h1>
+        <p class="lede">Google Docs, Sheets, and Slides render their main editing surfaces on <code>&lt;canvas&gt;</code>, which hides document text and spreadsheet cells from ordinary DOM and accessibility-tree reads. WebBrain pairs surface-aware suggested actions with direct same-origin endpoints and canvas snapshot extraction so Ask, Act, and Dev runs work reliably out of the box.</p>
+        <div class="meta">Chrome and Firefox builds · Screenshots show synthetic Workspace documents alongside the real side panel UI</div>
+      </section>
+
+      <section class="doc-section" id="overview">
+        <div class="eyebrow">Five surfaces</div>
+        <h2>What WebBrain adds in Google Workspace</h2>
+        <p>Open any supported Google Workspace tab and start a fresh conversation in the WebBrain side panel. Under <strong>Suggested actions</strong>, WebBrain detects the exact product, document ID, active sheet tab (<code>gid</code>), Form view (editor vs. responder), and whether the file is still untitled.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Surface</th><th>URL scope</th><th>Suggested actions &amp; modes</th><th>Primary read path</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Google Docs</strong></td>
+                <td><code>docs.google.com/document/d/&lt;id&gt;</code></td>
+                <td>Draft an outline or document (<code>Act</code> on untitled), Summarize &amp; find action items (<code>Ask</code>), Suggest edits &amp; improvements (<code>Ask</code>), Export to Markdown (<code>Ask</code>), Toggle Dark Mode (<code>Dev</code>)</td>
+                <td><code>fetch_url</code> on <code>/mobilebasic</code> (fallback: <code>read_page</code> via <code>DOCS_modelChunk</code> or <code>research_url</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>Google Sheets</strong></td>
+                <td><code>docs.google.com/spreadsheets/d/&lt;id&gt;</code></td>
+                <td>Build a table or tracker (<code>Act</code> on untitled), Analyze sheet &amp; key metrics (<code>Ask</code>), Generate a Sheets formula (<code>Ask</code>), Audit &amp; clean sheet data (<code>Ask</code>)</td>
+                <td><code>fetch_url</code> on <code>/gviz/tq?tqx=out:csv</code> (with <code>&amp;gid=</code>), fallback <code>/htmlview</code></td>
+              </tr>
+              <tr>
+                <td><strong>Google Slides</strong></td>
+                <td><code>docs.google.com/presentation/d/&lt;id&gt;</code></td>
+                <td>Draft presentation outline (<code>Act</code> on untitled), Summarize slides &amp; key takeaways (<code>Ask</code>), Generate speaker notes (<code>Ask</code>), Improve slide copy &amp; flow (<code>Ask</code>)</td>
+                <td><code>fetch_url</code> on <code>/htmlpresent</code> (fallback: <code>read_page</code> via <code>DOCS_modelChunk</code> or <code>research_url</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>Google Forms</strong></td>
+                <td><code>docs.google.com/forms/d/...</code></td>
+                <td>Editor (<code>/edit</code>): Suggest form questions, Review form clarity &amp; flow (<code>Ask</code>)<br>Responder (<code>/viewform</code>, <code>/d/e/...</code>): Summarize form questions (<code>Ask</code>)</td>
+                <td><code>read_page</code> + <code>get_accessibility_tree</code> (<code>filter: "visible"</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>Google Drive</strong></td>
+                <td><code>drive.google.com/drive/...</code></td>
+                <td>Summarize visible Drive files (<code>Ask</code>, with automatic <code>get_accessibility_tree</code> preflight)</td>
+                <td><code>get_accessibility_tree</code> (<code>filter: "visible"</code>, <code>maxDepth: 10</code>)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout tip">
+          <strong class="callout-title">Untitled files surface drafting first</strong>
+          <p>When a Doc, Sheet, or Slides title matches an untitled placeholder (across English and localized Google titles such as <em>Untitled document</em>, <em>Adsız doküman</em>, <em>Unbenanntes Dokument</em>, <em>Document sans titre</em>, <em>無題のドキュメント</em>, or <em>未命名文档</em>), WebBrain surfaces an <code>Act</code>-mode drafting action first so you can plan an outline or table before typing.</p>
+        </div>
+      </section>
+
+      <section class="doc-section" id="docs">
+        <div class="eyebrow">Google Docs</div>
+        <h2>Summarize, review, export to Markdown, and toggle Dark Mode</h2>
+        <p>On a populated Google Doc, the side panel offers four one-click actions above the composer. Read-only actions stay strictly in <strong>Ask</strong> mode and never edit your document unless you switch to an editing request.</p>
+        <figure class="shot">
+          <a href="/docs/assets/screenshots/google-workspace-docs.jpg"><img src="/docs/assets/screenshots/google-workspace-docs.jpg" alt="Google Docs open alongside the WebBrain side panel showing four Suggested Actions: Summarize and find action items, Suggest edits and improvements, Export to Markdown, and Toggle Dark Mode"></a>
+          <figcaption>A titled Google Doc shows four context-aware suggested actions in the WebBrain side panel.</figcaption>
+        </figure>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Action</th><th>Mode</th><th>What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Draft an outline or document</strong></td>
+                <td><code>Act</code></td>
+                <td>Shown first on untitled docs. Asks for your topic, target audience, desired sections, and tone before typing into the document.</td>
+              </tr>
+              <tr>
+                <td><strong>Summarize &amp; find action items</strong></td>
+                <td><code>Ask</code></td>
+                <td>Reads the full document via <code>/mobilebasic</code> (paginating with <code>offset</code>/<code>nextOffset</code> while <code>hasMore</code> is true) and returns an executive summary, key decisions, and an action-item checklist with owners and deadlines.</td>
+              </tr>
+              <tr>
+                <td><strong>Suggest edits &amp; improvements</strong></td>
+                <td><code>Ask</code></td>
+                <td>Reviews clarity, structure, tone, and grammar, returning prioritized <strong>“Before → After”</strong> suggestions by section without altering the file.</td>
+              </tr>
+              <tr>
+                <td><strong>Export to Markdown</strong></td>
+                <td><code>Ask</code></td>
+                <td>Converts headings, bulleted and numbered lists, links, emphasis, and tables into a copy-ready Markdown code block.</td>
+              </tr>
+              <tr>
+                <td><strong>Toggle Dark Mode</strong></td>
+                <td><code>Dev</code></td>
+                <td>Runs <code>execute_js</code> once to inject or remove a local stylesheet (<code>__webbrainGoogleDocsDarkMode</code>) that darkens the editor chrome and inverts the page canvas without touching document content.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="docs-dark-mode">Reversible Dark Mode for Google Docs</h3>
+        <p>Google Docs does not ship a native dark theme on desktop web. Clicking <strong>Toggle Dark Mode</strong> runs a single <code>execute_js</code> snippet that injects <code>&lt;style id="__webbrainGoogleDocsDarkMode"&gt;</code> into the current tab—darkening <code>#docs-chrome</code>, toolbars, and navigation sidebars (<code>#1e1e24</code>) while applying <code>invert(0.9) hue-rotate(180deg)</code> to <code>.kix-page-paginated</code> and <code>.kix-canvas-tile-content</code>. Click <strong>Toggle Dark Mode</strong> a second time to remove the style element and return to standard light mode.</p>
+        <figure class="shot">
+          <a href="/docs/assets/screenshots/google-workspace-docs-dark.jpg"><img src="/docs/assets/screenshots/google-workspace-docs-dark.jpg" alt="Google Docs with WebBrain Dark Mode enabled via execute_js, showing dark toolbars, dark outline sidebar, and inverted document canvas alongside the Dev-mode confirmation in the side panel"></a>
+          <figcaption><strong>Toggle Dark Mode</strong> applies only local CSS in your browser tab; collaborators still see the normal document, and nothing is saved to the file.</figcaption>
+        </figure>
+
+        <h3>Editing and Suggesting mode</h3>
+        <p>When you ask WebBrain in <strong>Act</strong> mode to make changes directly in a Google Doc, the updated <code>google-docs</code> site adapter guides the agent around canvas editor quirks:</p>
+        <ul>
+          <li><strong>Tracked changes:</strong> When you ask for tracked suggestions without overwriting existing text, WebBrain switches the toolbar mode dropdown from <strong>Editing</strong> to <strong>Suggesting</strong> before typing—or presents “Before → After” edits in chat.</li>
+          <li><strong>Typing into the canvas:</strong> Direct DOM writes on the canvas fail, so Act mode clicks into the document to focus the floating editor textbox or uses keyboard shortcuts.</li>
+          <li><strong>Collaborative cursors:</strong> Real-time collaborators can shift text and cursor positions while reading or typing, so the adapter tells the agent to re-read after a brief pause if a write appears lost.</li>
+        </ul>
+      </section>
+
+      <section class="doc-section" id="sheets">
+        <div class="eyebrow">Google Sheets</div>
+        <h2>Analyze data, write formulas, and audit messy columns</h2>
+        <p>Google Sheets renders its cell grid on canvas, so the accessibility tree only sees menus, the toolbar, and the formula bar for the currently selected cell. WebBrain reads the actual spreadsheet rows in bulk using direct same-origin endpoints and preserves the active tab’s <code>gid</code>.</p>
+        <figure class="shot">
+          <a href="/docs/assets/screenshots/google-workspace-sheets.jpg"><img src="/docs/assets/screenshots/google-workspace-sheets.jpg" alt="Google Sheets open on a specific tab with gid=42 alongside the WebBrain side panel showing Analyze sheet and key metrics, Generate a Sheets formula, and Audit and clean sheet data"></a>
+          <figcaption>WebBrain preserves <code>#gid=</code> or <code>?gid=</code> from the active tab URL when fetching CSV data from <code>/gviz/tq?tqx=out:csv</code>.</figcaption>
+        </figure>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Action</th><th>Mode</th><th>What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Build a table or tracker</strong></td>
+                <td><code>Act</code></td>
+                <td>Shown first on untitled spreadsheets. Asks for your use case, columns, and sample rows or formulas before writing to the sheet.</td>
+              </tr>
+              <tr>
+                <td><strong>Analyze sheet &amp; key metrics</strong></td>
+                <td><code>Ask</code></td>
+                <td>Reads the active tab via <code>/gviz/tq?tqx=out:csv</code> (or <code>/htmlview</code> for all tabs) and summarizes columns, row count, key metrics, trends, outliers, and pivot-style breakdowns.</td>
+              </tr>
+              <tr>
+                <td><strong>Generate a Sheets formula</strong></td>
+                <td><code>Ask</code></td>
+                <td>Inspects exact column headers and data layout first, then writes ready-to-paste formulas (<code>QUERY</code>, <code>XLOOKUP</code>, <code>ARRAYFORMULA</code>, <code>SUMIFS</code>) tailored to your actual column letters.</td>
+              </tr>
+              <tr>
+                <td><strong>Audit &amp; clean sheet data</strong></td>
+                <td><code>Ask</code></td>
+                <td>Flags duplicates, missing values, inconsistent date/number/text formatting, and formula errors, and provides cleanup formulas or an optional Apps Script snippet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <strong class="callout-title">Single-cell edits vs. bulk writes</strong>
+          <p>For single-cell checks or edits, WebBrain clicks a cell (or jumps via the Name Box) and reads or types through the formula bar, using <kbd>Enter</kbd> and <kbd>Tab</kbd> to commit. For bulk writes across dozens or hundreds of cells, the Sheets adapter instructs the agent to be honest about canvas-UI speed limits and generate a copy-ready formula or CSV for you to paste.</p>
+        </div>
+      </section>
+
+      <section class="doc-section" id="slides">
+        <div class="eyebrow">Google Slides</div>
+        <h2>Slide-by-slide summaries, speaker notes, and copy edits</h2>
+        <p>On <code>docs.google.com/presentation/d/&lt;id&gt;</code>, WebBrain reads slide text cleanly via <code>/htmlpresent</code> (or falls back to <code>read_page</code>’s <code>DOCS_modelChunk</code> snapshot and <code>research_url</code>).</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Action</th><th>Mode</th><th>Output</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Draft presentation outline</strong></td>
+                <td><code>Act</code></td>
+                <td>Shown first on untitled decks. Collects topic, audience, goal, and slide count before editing.</td>
+              </tr>
+              <tr>
+                <td><strong>Summarize slides &amp; key takeaways</strong></td>
+                <td><code>Ask</code></td>
+                <td>Core narrative, slide-by-slide summary, and top takeaways or action items without modifying the deck.</td>
+              </tr>
+              <tr>
+                <td><strong>Generate speaker notes</strong></td>
+                <td><code>Ask</code></td>
+                <td>Concise talking points matched to each slide’s headings and bullets, plus transition cues between slides.</td>
+              </tr>
+              <tr>
+                <td><strong>Improve slide copy &amp; flow</strong></td>
+                <td><code>Ask</code></td>
+                <td>Reviews narrative flow, clarity, and visual density with slide-by-slide <strong>“Before → After”</strong> rewrites.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="doc-section" id="forms-drive">
+        <div class="eyebrow">Forms &amp; Drive</div>
+        <h2>Form builders, responder views, and visible Drive listings</h2>
+        <p>Google Forms and Google Drive use standard HTML and accessible DOM structures, so WebBrain adapts its suggested actions to whether you are editing a form, filling one out, or browsing Drive folders.</p>
+        <div class="card-grid">
+          <div class="card">
+            <span class="tab-key">Forms · Editor (<code>/edit</code>)</span>
+            <h3>Suggest &amp; review questions</h3>
+            <p><strong>Suggest form questions</strong> proposes additional questions, answer choices, and validation rules. <strong>Review form clarity &amp; flow</strong> audits existing items for ambiguity, leading phrasing, missing options, and completion friction using <code>read_page</code> and visible accessibility-tree inspection.</p>
+          </div>
+          <div class="card">
+            <span class="tab-key">Forms · Responder (<code>/viewform</code>)</span>
+            <h3>Summarize before you fill</h3>
+            <p><strong>Summarize form questions</strong> reads all sections in <code>Ask</code> mode and lists required vs. optional fields plus what information you should gather before submitting.</p>
+          </div>
+          <div class="card">
+            <span class="tab-key">Google Drive</span>
+            <h3>Summarize visible Drive files</h3>
+            <p>Active on My Drive, Shared with me, Recent, Starred, Priority, folder views, and Drive search. Automatically preflights <code>get_accessibility_tree</code> (<code>filter: "visible"</code>, <code>maxDepth: 10</code>) to group visible items by type or topic and suggest cleanup ideas without moving, renaming, or deleting anything.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="under-the-hood">
+        <div class="eyebrow">Architecture &amp; guardrails</div>
+        <h2>How canvas reading and Ask-mode safety work</h2>
+        <p>Read-only <strong>Ask</strong> mode has no click or navigation tools, and <code>read_page</code> only inspects the currently open tab. To keep Ask mode fast, complete, and safe across Google Office surfaces, WebBrain combines three mechanisms:</p>
+
+        <h3>1. Direct same-origin endpoints for full reads</h3>
+        <p>Rather than clicking Export menus or scrolling through virtualized canvases, Ask-mode actions instruct <code>fetch_url</code> to request Google’s lightweight, non-redirecting same-origin views using your browser’s signed-in session—paginating automatically with <code>offset</code>/<code>nextOffset</code> whenever <code>hasMore</code> is true:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Surface</th><th>Primary endpoint</th><th>Fallback path</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Google Docs</td>
+                <td><code>https://docs.google.com/document/d/&lt;DOC_ID&gt;/mobilebasic</code></td>
+                <td><code>read_page</code> (<code>DOCS_modelChunk</code>) or <code>research_url</code> on <code>/mobilebasic</code></td>
+              </tr>
+              <tr>
+                <td>Google Sheets</td>
+                <td><code>https://docs.google.com/spreadsheets/d/&lt;SHEET_ID&gt;/gviz/tq?tqx=out:csv[&amp;gid=&lt;GID&gt;]</code></td>
+                <td><code>fetch_url</code> or <code>research_url</code> on <code>/htmlview</code> (all tabs)</td>
+              </tr>
+              <tr>
+                <td>Google Slides</td>
+                <td><code>https://docs.google.com/presentation/d/&lt;ID&gt;/htmlpresent</code></td>
+                <td><code>read_page</code> (<code>DOCS_modelChunk</code>) or <code>research_url</code> on <code>/htmlpresent</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>2. <code>DOCS_modelChunk</code> snapshot extraction in <code>read_page</code></h3>
+        <p>When you ask an ad-hoc question in chat and the agent calls <code>read_page</code> directly on a Google Docs or Slides tab (with <code>includeChrome: false</code>, the default), WebBrain’s Chrome content script, Firefox content script, and CDP reader extract embedded text chunks from inline <code>DOCS_modelChunk</code> script blocks instead of returning only toolbar menu labels.</p>
+        <ul>
+          <li><strong>Labeled as an initial snapshot:</strong> The extracted text sets <code>textSource</code> to <code>google-docs-model (initial snapshot)</code> and prepends a clear notice explaining that edits typed after page load may not appear there—pointing the model to <code>fetch_url</code> on <code>/mobilebasic</code> or <code>/htmlpresent</code> for the current saved document.</li>
+          <li><strong>Honors <code>includeChrome: true</code>:</strong> When a caller explicitly requests page chrome (menus, toolbar, raw DOM), WebBrain skips <code>DOCS_modelChunk</code> extraction and returns the regular DOM text.</li>
+        </ul>
+
+        <h3>3. Strict URL validation &amp; tool discipline</h3>
+        <ul>
+          <li><strong>Exact host matching:</strong> Suggested actions only activate on exact <code>docs.google.com</code> and <code>drive.google.com</code> hosts, rejecting lookalike domains.</li>
+          <li><strong>Reserved route filtering:</strong> Path segments such as <code>edit</code>, <code>view</code>, <code>copy</code>, <code>preview</code>, <code>export</code>, <code>mobilebasic</code>, <code>htmlview</code>, <code>htmlpresent</code>, <code>viewform</code>, <code>create</code>, and <code>new</code> are never mistaken for document IDs.</li>
+          <li><strong>Read-only Ask enforcement:</strong> Every Ask-mode Workspace action constrains its instructions to read-only tools (<code>fetch_url</code>, <code>read_page</code>, <code>research_url</code>, <code>get_accessibility_tree</code>) and forbids clicking, navigating, or editing.</li>
+        </ul>
+
+        <div class="callout warning">
+          <strong class="callout-title">Privacy boundary stays the same</strong>
+          <p>Document text read by WebBrain is sent to whichever LLM provider you have configured—just like any other page. If you work with confidential Docs, Sheets, or Slides and need data to stay on your machine, use a local model via <a href="/docs/ollama/">Ollama</a>, <a href="/docs/lm-studio/">LM Studio</a>, or <code>llama.cpp</code>.</p>
+        </div>
+      </section>
+
+      <section class="doc-section" id="faq">
+        <div class="eyebrow">Quick answers</div>
+        <h2>Troubleshooting &amp; common questions</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Question</th><th>Answer</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Why didn’t my latest edit show up in an ad-hoc <code>read_page</code> call?</strong></td>
+                <td><code>DOCS_modelChunk</code> captures the document state from initial page load. Reload the tab, or ask WebBrain to read the saved document via <code>/mobilebasic</code> (Docs) or <code>/htmlpresent</code> (Slides)—all built-in suggested actions already do this first.</td>
+              </tr>
+              <tr>
+                <td><strong>Does <em>Toggle Dark Mode</em> change the document for collaborators?</strong></td>
+                <td>No. It injects a temporary <code>&lt;style id="__webbrainGoogleDocsDarkMode"&gt;</code> element only in your local browser tab. Reloading the tab or clicking <strong>Toggle Dark Mode</strong> again removes it completely.</td>
+              </tr>
+              <tr>
+                <td><strong>How does Sheets know which tab I want to analyze?</strong></td>
+                <td>WebBrain reads <code>gid</code> from either <code>?gid=</code> or <code>#gid=</code> in your current URL and appends <code>&amp;gid=&lt;GID&gt;</code> to the CSV query. If CSV export fails or you want every tab in the workbook, it falls back to <code>/htmlview</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>Where did the Suggested Actions row go?</strong></td>
+                <td>Suggested actions appear on empty conversations and collapse cleanly via the chevron above the chips. If you collapsed them earlier, click the chevron to expand them again, or start a new chat with <strong>+ New chat</strong>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <nav class="next-links" aria-label="Next guides"><a href="/docs/formats/"><span>Previous</span>← Exports &amp; workflows</a><a href="/docs/safety/"><span>Keep boundaries clear</span>Modes, safety &amp; privacy →</a></nav>
+    </main>
+
+    <aside class="on-this-page" aria-label="On this page"><h2>On this page</h2><a href="#overview">Overview</a><a href="#docs">Google Docs</a><a href="#docs-dark-mode">Dark Mode</a><a href="#sheets">Google Sheets</a><a href="#slides">Google Slides</a><a href="#forms-drive">Forms &amp; Drive</a><a href="#under-the-hood">Under the hood</a><a href="#faq">Troubleshooting</a></aside>
+  </div>
+
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">On a mission to make the web smarter.</p>
+      <p class="wb-footer-copy">© 2026 WebBrain. Built by <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> &amp; <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">contributors</a>.</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/">Browser extension</a>
+        <a href="/websites/">For websites</a>
+        <a href="/companion/">Desktop Companion</a>
+        <a href="/research/">Research</a>
+        <a href="/docs/">Docs</a>
+        <a href="/docs/faq/">FAQ</a>
+        <a href="/blog/">Blog</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">Report Bug</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 License</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">Press</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass Subscription</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="WebBrain on Mastodon" title="WebBrain on Mastodon" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="WebBrain on Bluesky" title="WebBrain on Bluesky" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="WebBrain on Discord" title="WebBrain on Discord" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="WebBrain on Hugging Face" title="WebBrain on Hugging Face" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end -->
+  <script src="/docs/assets/docs.js?v=20261107"></script>
+</body>
+</html>

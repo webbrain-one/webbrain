@@ -36,7 +36,9 @@ export const LEAN_STRONG_MODEL_RULES = Object.freeze([
   Object.freeze({ family: 'gpt', pattern: /(?:^|[^a-z])gpt-(\d+)/, min: 5, exclude: /nano/ }),
   // OpenAI o3/o4 reasoning models and later o-series.
   Object.freeze({ family: 'openai-reasoning', pattern: /(?:^|[/.:])o(\d+)(?:-|$)/, min: 3 }),
-  // Gemini 2.5 Pro and newer Pro or Ultra models.
+  // Gemini 4 elemental models (Argon, Carbon, Neon, Hydrogen), Gemini 2.5 Pro
+  // and newer Pro or Ultra models.
+  Object.freeze({ family: 'gemini', pattern: /gemini-(\d+(?:\.\d+)?)-(?:argon|carbon|neon|hydrogen)/, min: 4 }),
   Object.freeze({ family: 'gemini', pattern: /gemini-(\d+(?:\.\d+)?)-(?:pro|ultra)/, min: 2.5 }),
   // Gemini Flash from generation 3 (gemini-3-flash, gemini-3.8-flash-high).
   // Flash-Lite is a smaller model, and Flash before 3 stays off the list.

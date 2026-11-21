@@ -90,9 +90,46 @@
   }
 
   /**
+   * Extract embedded document/slide text from Google Docs or Google Slides
+   * inline DOCS_modelChunk scripts when the editor surface is canvas-rendered.
+   */
+  function extractGoogleWorkspaceCanvasText() {
+    try {
+      if (window.location.hostname !== 'docs.google.com') return '';
+      if (!/^\/(?:document|presentation)\/(?:u\/\d+\/)?d\/[\w-]+/i.test(window.location.pathname || '')) return '';
+      const chunks = [];
+      const scripts = document.querySelectorAll('script:not([src])');
+      const chunkStringRe = /"s"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+      for (const script of scripts) {
+        const code = script.textContent || '';
+        if (!code.includes('DOCS_modelChunk')) continue;
+        let match;
+        chunkStringRe.lastIndex = 0;
+        while ((match = chunkStringRe.exec(code)) !== null) {
+          try {
+            const decoded = JSON.parse(`"${match[1]}"`)
+              .replace(/[\r\u000b]/g, '\n')
+              .replace(/[\u0000-\u0008\u000c\u000e-\u001f\ue000-\uf8ff]/g, '');
+            if (decoded) chunks.push(decoded);
+          } catch {}
+        }
+      }
+      return chunks.join('').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function formatGoogleWorkspaceSnapshotText(text) {
+    return `[Initial page-load snapshot from DOCS_modelChunk — edits made after page load may not appear here; use fetch_url on /mobilebasic (Docs) or /htmlpresent (Slides) for current saved text]\n\n${text}`;
+  }
+
+  /**
    * Extract readable text content from the page.
    */
   function getPageText() {
+    const googleCanvasText = extractGoogleWorkspaceCanvasText();
+    if (googleCanvasText) return formatGoogleWorkspaceSnapshotText(googleCanvasText);
     // Try to get article/main content first
     const selectors = ['article', 'main', '[role="main"]', '.content', '#content'];
     for (const sel of selectors) {
@@ -5212,6 +5249,11 @@
         const articleRoot = gate.element.closest('article, [role="article"], main, [role="main"]');
         textSource = 'article (pre-gate)';
         return renderedArticleTextBeforeGate(articleRoot, gate.element) || gate.label;
+      }
+      const googleCanvasText = !includeChrome ? extractGoogleWorkspaceCanvasText() : '';
+      if (googleCanvasText) {
+        textSource = 'google-docs-model (initial snapshot)';
+        return formatGoogleWorkspaceSnapshotText(googleCanvasText);
       }
       for (const sel of ARTICLE_SELECTORS) {
         let el;

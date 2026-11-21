@@ -45,7 +45,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   _prepareRequestBody(body, options = {}, _stream = false) {
     const prepared = this._mergeConfiguredRequestBody(body, options);
-    const gen55 = /^claude-(?:opus|sonnet|haiku)-5-5(?:$|[-_.@])/.test(String(this.model || '').toLowerCase());
+    const gen55 = /^claude-(?:opus|sonnet|haiku)-5[-.]5(?:$|[-_.@])/.test(String(this.model || '').toLowerCase());
     let thinkingType = prepared.thinking?.type;
     if (gen55 && ['disabled', 'enabled'].includes(thinkingType)) {
       // The 5.5 generation has mandatory adaptive thinking; effort controls its budget.
@@ -114,7 +114,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   _convertToolChoice(toolChoice) {
     if (!toolChoice || toolChoice === 'auto') return undefined;
-    if (/^claude-(?:opus|sonnet|haiku)-5-5(?:$|[-_.@])/.test(String(this.model || '').toLowerCase())) {
+    if (/^claude-(?:opus|sonnet|haiku)-5[-.]5(?:$|[-_.@])/.test(String(this.model || '').toLowerCase())) {
       return { type: 'auto' };
     }
     if (toolChoice === 'required') return { type: 'any' };

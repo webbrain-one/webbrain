@@ -18,7 +18,7 @@ export const OPENROUTER_ROUTING_VARIANTS = Object.freeze(['standard', 'nitro', '
 // Shared base vision sniff (provider-agnostic). OpenAICompatibleProvider exposes
 // it via _modelNameSniffedVision so vendor subclasses (e.g. DeepSeek) can extend
 // it without duplicating the explicit-override precedence in supportsVision.
-const BASE_VISION_MODEL_PATTERN = /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:$|[-_.:/])|claude|gemini|grok|minimax-m3|kimi-k(?:-?3|2\.[5-9])|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|qwen3p8-27b|pixtral|llama.*vision|gemma.*vision|gemma-?[34]|step-3/;
+const BASE_VISION_MODEL_PATTERN = /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|gpt-6(?:\.[12])?-(?:luna-pro|sol|astra)(?:$|[-_.:/])|claude|gemini|grok|minimax-m3|kimi-k(?:-?3|2\.[5-9])|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|qwen3p8-27b|pixtral|llama.*vision|gemma.*vision|gemma-?[34]|step-3/;
 export function baseModelNameSniffedVision(model) {
   return BASE_VISION_MODEL_PATTERN.test(String(model || ''))
     || /(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/i.test(String(model || '').trim());
@@ -36,16 +36,33 @@ export function preserveToolCallSignature(target, delta) {
   }
 }
 
+function isGoogleVertexOpenAIEndpoint(baseUrl = '') {
+  const raw = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (/^https:\/\/\{vertex_endpoint\}\/v1(?:beta1)?\/projects\/[^/]+\/locations\/[^/]+\/endpoints\/openapi$/i.test(raw)) {
+    return true;
+  }
+  let url;
+  try { url = new URL(raw); } catch { return false; }
+  return url.protocol === 'https:'
+    && /^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/i.test(url.hostname)
+    && /^\/v1(?:beta1)?\/projects\/[^/]+\/locations\/[^/]+\/endpoints\/openapi$/i.test(url.pathname.replace(/\/+$/, ''));
+}
+
 // These launch contracts are endpoint-scoped: a similarly named local model
 // may use a different template or support disabling thinking.
 function mandatoryReasoningModel(config = {}) {
+  const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
+  if (isGoogleVertexOpenAIEndpoint(config.baseUrl)
+    && /^(?:google\/)?gemini-4-(?:argon|carbon|neon|hydrogen)$/.test(model)) {
+    return { argon: true, router: false, minimumEffort: 'low', maxTokens: 65536 };
+  }
   let url;
   try { url = new URL(config.baseUrl || ''); } catch { return null; }
-  const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
   const router = url.hostname === 'openrouter.ai';
-  const argon = (router && model === 'google/gemini-4-argon')
+  const argon = (router && /^google\/gemini-4-(?:argon|carbon|neon|hydrogen)$/.test(model))
     || (url.hostname === 'generativelanguage.googleapis.com'
-      && url.pathname.replace(/\/+$/, '') === '/v1beta/openai' && model === 'gemini-4-argon');
+      && url.pathname.replace(/\/+$/, '') === '/v1beta/openai'
+      && /^gemini-4-(?:argon|carbon|neon|hydrogen)$/.test(model));
   if (argon) return { argon: true, router, minimumEffort: 'low', maxTokens: 65536 };
   if (router && ['meta/muse-wonder', 'meta/muse-spark-open'].includes(model)) {
     return { router, minimumEffort: model === 'meta/muse-wonder' ? 'minimal' : 'low', maxTokens: 943718 };
@@ -437,12 +454,13 @@ export function shouldUseOpenAIResponsesApi(config = {}) {
     return /^(muse-spark|gpt-5|claude|gemini|grok)(?:$|[-_.\/])/.test(model);
   }
   if (!isOfficialOpenAIConfig(config)) return false;
-  // GPT-5.6 and GPT-6.1 Sol need Responses for reliable reasoning/tool replay.
+  // GPT-5.6 and GPT-6.1/6.2 Sol/Astra need Responses for reliable reasoning/tool replay.
   // GPT-5 Pro, GPT-5.2 Pro, GPT-5.4 Pro, and GPT-5.5 Pro are Responses-only.
   // Proxies and compatible providers keep their existing Chat Completions wire
   // format even when they reuse an OpenAI model id.
   return /^gpt-5\.6(?:$|-(?:sol|terra|luna)(?:$|-))/.test(model)
-    || /^gpt-6\.1-sol(?:$|[-_.:])/.test(model)
+    || /^gpt-6\.[12]-sol(?:$|[-_.:])/.test(model)
+    || /^gpt-6\.2-astra(?:$|[-_.:])/.test(model)
     || /^gpt-5(?:\.(?:2|4|5))?-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(model);
 }
 
@@ -486,9 +504,9 @@ export function requiresOpenAIDefaultTemperature(config = {}) {
   const providerName = clean(config.providerName);
   const model = clean(config.model);
   if (providerName === 'openrouter') {
-    return /(?:^|\/)openai\/gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:$|[-_.\/:])/.test(model);
+    return /(?:^|\/)openai\/gpt-6(?:\.[12])?-(?:luna-pro|sol|astra)(?:$|[-_.\/:])/.test(model);
   }
-  return isOfficialOpenAIConfig(config) && /^gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:$|[-_.:])/.test(model);
+  return isOfficialOpenAIConfig(config) && /^gpt-6(?:\.[12])?-(?:luna-pro|sol|astra)(?:$|[-_.:])/.test(model);
 }
 
 export function supportsOpenAIAskStreaming(config = {}) {

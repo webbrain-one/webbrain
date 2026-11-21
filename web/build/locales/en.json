@@ -153,6 +153,7 @@
   "features.label": "Features",
   "features.show_more": "Show more features",
   "features.show_less": "Show fewer",
+  "features.workspace_note_html": "Working in Google Docs, Sheets, Slides, Forms, or Drive? <a href=\"/docs/google-workspace/\">See how WebBrain handles Google Workspace →</a>",
   "features.title": "Everything you need in a browser AI",
   "features.subtitle": "A full-featured AI agent that lives in your browser sidebar and understands any web page.",
   "apocalypse.label": "Apocalypse Mode",
