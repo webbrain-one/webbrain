@@ -44942,14 +44942,13 @@ test('public Google Workspace guide, homepage link, and screenshots document Off
     'docs: the Google Workspace guide should document the direct read endpoints');
   assert.match(guide, /DOCS_modelChunk[\s\S]*?google-docs-model \(initial snapshot\)[\s\S]*?includeChrome: true/,
     'docs: the guide should document DOCS_modelChunk snapshot extraction and includeChrome');
-  assert.match(guide, /__webbrainGoogleDocsDarkMode[\s\S]*?Toggle Dark Mode/,
-    'docs: the guide should document the reversible Google Docs Dark Mode action');
+  assert.doesNotMatch(guide, /__webbrainGoogleDocsDarkMode|Toggle Dark Mode/,
+    'docs: the guide should not document the removed Google Docs Dark Mode action');
   assert.match(guide, /Summarize visible Drive files[\s\S]*?Suggest form questions[\s\S]*?Summarize form questions/,
     'docs: the guide should cover Forms and Drive actions');
 
   for (const shot of [
     'google-workspace-docs.jpg',
-    'google-workspace-docs-dark.jpg',
     'google-workspace-sheets.jpg',
   ]) {
     assert.ok(guide.includes(`/docs/assets/screenshots/${shot}`), `docs: guide should embed ${shot}`);
@@ -128725,21 +128724,19 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     }
   });
 
-  test(`recommended-actions (${label}): Google Docs surfaces summary, review, Markdown, Dark Mode, and untitled drafting`, () => {
+  test(`recommended-actions (${label}): Google Docs surfaces summary, review, Markdown, and untitled drafting`, () => {
     const populatedActions = build({
       url: 'https://docs.google.com/document/u/0/d/1AbC_dEf-123/edit',
       title: 'Q4 Product Roadmap - Google Docs',
     }, { max: 5 });
     assert.deepEqual(
-      populatedActions.slice(0, 4).map((a) => a.id),
-      ['summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown', 'google-docs-dark-mode'],
+      populatedActions.slice(0, 3).map((a) => a.id),
+      ['summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown'],
     );
     const summarize = populatedActions.find((a) => a.id === 'summarize-google-doc');
     assert.equal(summarize.mode, 'ask');
     assert.match(summarize.prompt, /https:\/\/docs\.google\.com\/document\/d\/1AbC_dEf-123\/mobilebasic/);
-    const darkMode = populatedActions.find((a) => a.id === 'google-docs-dark-mode');
-    assert.equal(darkMode.mode, 'dev');
-    assert.match(darkMode.prompt, /__webbrainGoogleDocsDarkMode/);
+    assert.ok(!populatedActions.some((a) => a.id === 'google-docs-dark-mode'));
 
     const untitledActions = build({
       url: 'https://docs.google.com/document/d/1AbC_dEf-123/edit',
@@ -128748,6 +128745,7 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     assert.equal(untitledActions[0]?.id, 'draft-google-doc');
     assert.equal(untitledActions[0]?.mode, 'act');
     assert.ok(untitledActions.some((a) => a.id === 'summarize-google-doc'));
+    assert.ok(!untitledActions.some((a) => a.id === 'google-docs-dark-mode'));
     assert.ok(!untitledActions.some((a) => a.id === 'explain-page'));
   });
 
@@ -128826,7 +128824,7 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     const allTools = label === 'chrome' ? AGENT_TOOL_NAMES_CH : AGENT_TOOL_NAMES_FX;
     const askTools = new Set((label === 'chrome' ? getToolsForModeCh : getToolsForModeFx)('ask').map((t) => t.function.name));
     const workspaceActionIds = new Set([
-      'draft-google-doc', 'summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown', 'google-docs-dark-mode',
+      'draft-google-doc', 'summarize-google-doc', 'review-google-doc', 'google-doc-to-markdown',
       'draft-google-sheet', 'analyze-google-sheet', 'generate-sheets-formula', 'clean-google-sheet-data',
       'draft-google-slides', 'summarize-google-slides', 'generate-speaker-notes', 'review-google-slides',
       'suggest-google-form-questions', 'review-google-form', 'summarize-google-form',

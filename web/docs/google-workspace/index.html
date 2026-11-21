@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Google Workspace — WebBrain User Guide</title>
-  <meta name="description" content="Use WebBrain across Google Docs, Sheets, Slides, Forms, and Drive with context-aware suggested actions, Dark Mode, direct same-origin reads, and canvas snapshot extraction.">
+  <meta name="description" content="Use WebBrain across Google Docs, Sheets, Slides, Forms, and Drive with context-aware suggested actions, direct same-origin reads, and canvas snapshot extraction.">
   <link rel="canonical" href="https://webbrain.one/docs/google-workspace/">
   <link rel="icon" href="/favicon.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
@@ -76,7 +76,7 @@
       <section class="doc-hero">
         <div class="eyebrow">Google Workspace · Chrome &amp; Firefox</div>
         <h1>Read, review, and work faster across Google Docs, Sheets, Slides, Forms, and Drive.</h1>
-        <p class="lede">Google Docs, Sheets, and Slides render their main editing surfaces on <code>&lt;canvas&gt;</code>, which hides document text and spreadsheet cells from ordinary DOM and accessibility-tree reads. WebBrain pairs surface-aware suggested actions with direct same-origin endpoints and canvas snapshot extraction so Ask, Act, and Dev runs work reliably out of the box.</p>
+        <p class="lede">Google Docs, Sheets, and Slides render their main editing surfaces on <code>&lt;canvas&gt;</code>, which hides document text and spreadsheet cells from ordinary DOM and accessibility-tree reads. WebBrain pairs surface-aware suggested actions with direct same-origin endpoints and canvas snapshot extraction so Ask and Act runs work reliably out of the box.</p>
         <div class="meta">Chrome and Firefox builds · Screenshots show synthetic Workspace documents alongside the real side panel UI</div>
       </section>
 
@@ -93,7 +93,7 @@
               <tr>
                 <td><strong>Google Docs</strong></td>
                 <td><code>docs.google.com/document/d/&lt;id&gt;</code></td>
-                <td>Draft an outline or document (<code>Act</code> on untitled), Summarize &amp; find action items (<code>Ask</code>), Suggest edits &amp; improvements (<code>Ask</code>), Export to Markdown (<code>Ask</code>), Toggle Dark Mode (<code>Dev</code>)</td>
+                <td>Draft an outline or document (<code>Act</code> on untitled), Summarize &amp; find action items (<code>Ask</code>), Suggest edits &amp; improvements (<code>Ask</code>), Export to Markdown (<code>Ask</code>)</td>
                 <td><code>fetch_url</code> on <code>/mobilebasic</code> (fallback: <code>read_page</code> via <code>DOCS_modelChunk</code> or <code>research_url</code>)</td>
               </tr>
               <tr>
@@ -131,11 +131,11 @@
 
       <section class="doc-section" id="docs">
         <div class="eyebrow">Google Docs</div>
-        <h2>Summarize, review, export to Markdown, and toggle Dark Mode</h2>
-        <p>On a populated Google Doc, the side panel offers four one-click actions above the composer. Read-only actions stay strictly in <strong>Ask</strong> mode and never edit your document unless you switch to an editing request.</p>
+        <h2>Summarize, review, and export to Markdown</h2>
+        <p>On a populated Google Doc, the side panel offers three one-click actions above the composer. Read-only actions stay strictly in <strong>Ask</strong> mode and never edit your document unless you switch to an editing request.</p>
         <figure class="shot">
-          <a href="/docs/assets/screenshots/google-workspace-docs.jpg"><img src="/docs/assets/screenshots/google-workspace-docs.jpg" alt="Google Docs open alongside the WebBrain side panel showing four Suggested Actions: Summarize and find action items, Suggest edits and improvements, Export to Markdown, and Toggle Dark Mode"></a>
-          <figcaption>A titled Google Doc shows four context-aware suggested actions in the WebBrain side panel.</figcaption>
+          <a href="/docs/assets/screenshots/google-workspace-docs.jpg"><img src="/docs/assets/screenshots/google-workspace-docs.jpg" alt="Google Docs open alongside the WebBrain side panel showing Suggested Actions: Summarize and find action items, Suggest edits and improvements, and Export to Markdown"></a>
+          <figcaption>A titled Google Doc shows context-aware suggested actions in the WebBrain side panel.</figcaption>
         </figure>
         <div class="table-wrap">
           <table>
@@ -163,21 +163,9 @@
                 <td><code>Ask</code></td>
                 <td>Converts headings, bulleted and numbered lists, links, emphasis, and tables into a copy-ready Markdown code block.</td>
               </tr>
-              <tr>
-                <td><strong>Toggle Dark Mode</strong></td>
-                <td><code>Dev</code></td>
-                <td>Runs <code>execute_js</code> once to inject or remove a local stylesheet (<code>__webbrainGoogleDocsDarkMode</code>) that darkens the editor chrome and inverts the page canvas without touching document content.</td>
-              </tr>
             </tbody>
           </table>
         </div>
-
-        <h3 id="docs-dark-mode">Reversible Dark Mode for Google Docs</h3>
-        <p>Google Docs does not ship a native dark theme on desktop web. Clicking <strong>Toggle Dark Mode</strong> runs a single <code>execute_js</code> snippet that injects <code>&lt;style id="__webbrainGoogleDocsDarkMode"&gt;</code> into the current tab—darkening <code>#docs-chrome</code>, toolbars, and navigation sidebars (<code>#1e1e24</code>) while applying <code>invert(0.9) hue-rotate(180deg)</code> to <code>.kix-page-paginated</code> and <code>.kix-canvas-tile-content</code>. Click <strong>Toggle Dark Mode</strong> a second time to remove the style element and return to standard light mode.</p>
-        <figure class="shot">
-          <a href="/docs/assets/screenshots/google-workspace-docs-dark.jpg"><img src="/docs/assets/screenshots/google-workspace-docs-dark.jpg" alt="Google Docs with WebBrain Dark Mode enabled via execute_js, showing dark toolbars, dark outline sidebar, and inverted document canvas alongside the Dev-mode confirmation in the side panel"></a>
-          <figcaption><strong>Toggle Dark Mode</strong> applies only local CSS in your browser tab; collaborators still see the normal document, and nothing is saved to the file.</figcaption>
-        </figure>
 
         <h3>Editing and Suggesting mode</h3>
         <p>When you ask WebBrain in <strong>Act</strong> mode to make changes directly in a Google Doc, the updated <code>google-docs</code> site adapter guides the agent around canvas editor quirks:</p>
@@ -355,10 +343,6 @@
                 <td><code>DOCS_modelChunk</code> captures the document state from initial page load. Reload the tab, or ask WebBrain to read the saved document via <code>/mobilebasic</code> (Docs) or <code>/htmlpresent</code> (Slides)—all built-in suggested actions already do this first.</td>
               </tr>
               <tr>
-                <td><strong>Does <em>Toggle Dark Mode</em> change the document for collaborators?</strong></td>
-                <td>No. It injects a temporary <code>&lt;style id="__webbrainGoogleDocsDarkMode"&gt;</code> element only in your local browser tab. Reloading the tab or clicking <strong>Toggle Dark Mode</strong> again removes it completely.</td>
-              </tr>
-              <tr>
                 <td><strong>How does Sheets know which tab I want to analyze?</strong></td>
                 <td>WebBrain reads <code>gid</code> from either <code>?gid=</code> or <code>#gid=</code> in your current URL and appends <code>&amp;gid=&lt;GID&gt;</code> to the CSV query. If CSV export fails or you want every tab in the workbook, it falls back to <code>/htmlview</code>.</td>
               </tr>
@@ -374,7 +358,7 @@
       <nav class="next-links" aria-label="Next guides"><a href="/docs/formats/"><span>Previous</span>← Exports &amp; workflows</a><a href="/docs/safety/"><span>Keep boundaries clear</span>Modes, safety &amp; privacy →</a></nav>
     </main>
 
-    <aside class="on-this-page" aria-label="On this page"><h2>On this page</h2><a href="#overview">Overview</a><a href="#docs">Google Docs</a><a href="#docs-dark-mode">Dark Mode</a><a href="#sheets">Google Sheets</a><a href="#slides">Google Slides</a><a href="#forms-drive">Forms &amp; Drive</a><a href="#under-the-hood">Under the hood</a><a href="#faq">Troubleshooting</a></aside>
+    <aside class="on-this-page" aria-label="On this page"><h2>On this page</h2><a href="#overview">Overview</a><a href="#docs">Google Docs</a><a href="#sheets">Google Sheets</a><a href="#slides">Google Slides</a><a href="#forms-drive">Forms &amp; Drive</a><a href="#under-the-hood">Under the hood</a><a href="#faq">Troubleshooting</a></aside>
   </div>
 
   <!-- Site footer: start -->

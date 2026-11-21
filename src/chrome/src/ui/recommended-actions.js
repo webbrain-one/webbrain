@@ -569,49 +569,12 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
       prompt: `Review this Google Doc and suggest improvements. ${readSteps} Propose prioritized edits for clarity, structure, tone, and grammar with exact "Before → After" suggestions by section. Do not modify the document unless I explicitly ask.`,
       mode: 'ask',
     });
-    if (!untitled) {
-      addUnique(actions, {
-        id: 'google-doc-to-markdown',
-        label: 'Export to Markdown',
-        prompt: `Convert this Google Doc into clean Markdown. ${readSteps} Preserve the heading hierarchy, bulleted and numbered lists, links, emphasis, and tables in a copy-ready Markdown code block. Do not modify the document.`,
-        mode: 'ask',
-      });
-    }
     addUnique(actions, {
-      id: 'google-docs-dark-mode',
-      label: 'Toggle Dark Mode',
-      prompt: `Use execute_js once with this exact function body to toggle Dark Mode on this Google Doc without modifying the document content, then report whether Dark Mode is now enabled:
-const STYLE_ID = '__webbrainGoogleDocsDarkMode';
-const existing = document.getElementById(STYLE_ID);
-if (existing) {
-  existing.remove();
-  return { enabled: false };
-}
-const style = document.createElement('style');
-style.id = STYLE_ID;
-style.textContent = \`
-  #docs-chrome, .docs-material, #docs-header-container, #docs-toolbar-wrapper,
-  .kix-appview-editor, .kix-appview-editor-container, .docs-companion-app-switcher-container,
-  .left-sidebar-container, .navigation-widget {
-    background-color: #1e1e24 !important;
-    color: #e8e8ed !important;
-  }
-  .kix-page-paginated, .kix-canvas-tile-content {
-    filter: invert(0.9) hue-rotate(180deg) !important;
-  }
-\`;
-(document.head || document.documentElement).appendChild(style);
-return { enabled: true };`,
-      mode: 'dev',
+      id: 'google-doc-to-markdown',
+      label: 'Export to Markdown',
+      prompt: `Convert this Google Doc into clean Markdown. ${readSteps} Preserve the heading hierarchy, bulleted and numbered lists, links, emphasis, and tables in a copy-ready Markdown code block. Do not modify the document.`,
+      mode: 'ask',
     });
-    if (untitled) {
-      addUnique(actions, {
-        id: 'google-doc-to-markdown',
-        label: 'Export to Markdown',
-        prompt: `Convert this Google Doc into clean Markdown. ${readSteps} Preserve the heading hierarchy, bulleted and numbered lists, links, emphasis, and tables in a copy-ready Markdown code block. Do not modify the document.`,
-        mode: 'ask',
-      });
-    }
   }
 
   const googleSheet = exactHost === 'docs.google.com' ? googleSheetContext(path, pageInfo.url || '') : null;
