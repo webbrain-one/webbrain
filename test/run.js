@@ -128795,6 +128795,75 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
   });
 }
 
+test('Google Workspace canvas extraction honors includeChrome and marks initial snapshot in Chrome, Firefox, and CDP', async () => {
+  for (const rel of [
+    'src/chrome/src/content/content.js',
+    'src/firefox/src/content/content.js',
+    'src/chrome/src/cdp/cdp-client.js',
+  ]) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(
+      src,
+      /const googleCanvasText = !includeChrome \? extractGoogleWorkspaceCanvasText\(\) : '';/,
+      `${rel} must gate DOCS_modelChunk extraction on !includeChrome`,
+    );
+    assert.match(
+      src,
+      /google-docs-model \(initial snapshot\)/,
+      `${rel} must label DOCS_modelChunk textSource as an initial snapshot`,
+    );
+  }
+
+  // Execute the CDP getPageInfo expression in vm with a mock Google Docs DOM
+  const { CDPClient } = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js')).href);
+  const client = Object.create(CDPClient.prototype);
+  const makeMockEnv = () => {
+    const scriptEl = { textContent: 'DOCS_modelChunk = [{"ty":"is","ibi":1,"s":"Bootstrap doc body"}];' };
+    const bodyEl = {
+      innerText: 'File Edit View Insert Format Tools Extensions Help',
+      cloneNode() { return { querySelectorAll() { return []; }, innerText: this.innerText }; },
+    };
+    return {
+      window: {
+        location: {
+          href: 'https://docs.google.com/document/d/1AbC_dEf-123/edit',
+          hostname: 'docs.google.com',
+          pathname: '/document/d/1AbC_dEf-123/edit',
+        },
+        innerWidth: 1280,
+        innerHeight: 800,
+        getComputedStyle() { return { display: 'block', visibility: 'visible', opacity: '1' }; },
+      },
+      document: {
+        title: 'Test Doc - Google Docs',
+        body: bodyEl,
+        querySelector() { return null; },
+        querySelectorAll(sel) {
+          if (sel === 'script:not([src])') return [scriptEl];
+          return [];
+        },
+      },
+    };
+  };
+  const evalResults = [];
+  client.evaluate = async (_tabId, expression) => {
+    const env = makeMockEnv();
+    const value = vm.runInNewContext(expression, env);
+    evalResults.push(value);
+    return { result: { value } };
+  };
+
+  const defaultRead = await client.readPage(1, { includeChrome: false });
+  assert.equal(defaultRead.textSource, 'google-docs-model (initial snapshot)');
+  assert.match(defaultRead.text, /^\[Initial page-load snapshot from DOCS_modelChunk/);
+  assert.match(defaultRead.text, /Bootstrap doc body/);
+
+  const chromeRead = await client.readPage(1, { includeChrome: true });
+  assert.equal(chromeRead.textSource, 'body (raw)');
+  assert.equal(chromeRead.text, 'File Edit View Insert Format Tools Extensions Help');
+  assert.equal(evalResults.length, 2);
+});
+
 // ── Store review prompt (#208) ───────────────────────────────────────────────
 const MS_DAY = 24 * 60 * 60 * 1000;
 

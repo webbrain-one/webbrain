@@ -4584,10 +4584,10 @@ export class CDPClient {
             textSource = 'article (pre-gate)';
             return textBeforeGate(articleRoot, gate.element) || gate.label;
           }
-          const googleCanvasText = extractGoogleWorkspaceCanvasText();
+          const googleCanvasText = !includeChrome ? extractGoogleWorkspaceCanvasText() : '';
           if (googleCanvasText) {
-            textSource = 'google-docs-model';
-            return googleCanvasText;
+            textSource = 'google-docs-model (initial snapshot)';
+            return '[Initial page-load snapshot from DOCS_modelChunk — edits made after page load may not appear here; use fetch_url on /mobilebasic (Docs) or /htmlpresent (Slides) for current saved text]\\n\\n' + googleCanvasText;
           }
           for (const sel of ARTICLE_SELECTORS) {
             let el;

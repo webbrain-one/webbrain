@@ -118,7 +118,7 @@ function googleSlidesContext(path = '') {
 
 function googleSlidesReadSteps(presentationId) {
   const htmlPresentUrl = `https://docs.google.com/presentation/d/${presentationId}/htmlpresent`;
-  return `This is a read-only Ask run: you cannot navigate or click. Read the presentation slides with read_page on this tab (continuing with read_page continuationArgs while hasMore is true) or with fetch_url on ${htmlPresentUrl} (continuing with offset set to nextOffset while hasMore is true). If both miss slide text, use research_url on ${htmlPresentUrl}.`;
+  return `This is a read-only Ask run: you cannot navigate or click. Read the presentation slides with fetch_url on ${htmlPresentUrl} (continuing with offset set to nextOffset while hasMore is true). If fetch_url fails, use read_page on this tab (continuing with read_page continuationArgs while hasMore is true; note it reads the initial page-load snapshot if canvas-rendered) or research_url on ${htmlPresentUrl}.`;
 }
 
 function googleFormContext(path = '') {

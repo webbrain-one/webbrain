@@ -409,6 +409,10 @@
     }
   }
 
+  function formatGoogleWorkspaceSnapshotText(text) {
+    return `[Initial page-load snapshot from DOCS_modelChunk — edits made after page load may not appear here; use fetch_url on /mobilebasic (Docs) or /htmlpresent (Slides) for current saved text]\n\n${text}`;
+  }
+
   function getPageText(opts) {
     const includeChrome = !!(opts && opts.includeChrome);
 
@@ -486,11 +490,11 @@
       };
     }
 
-    const googleCanvasText = extractGoogleWorkspaceCanvasText();
+    const googleCanvasText = !includeChrome ? extractGoogleWorkspaceCanvasText() : '';
     if (googleCanvasText) {
       return {
-        text: googleCanvasText,
-        textSource: 'google-docs-model',
+        text: formatGoogleWorkspaceSnapshotText(googleCanvasText),
+        textSource: 'google-docs-model (initial snapshot)',
         isArticlePage,
         ...(pageGate ? { pageGate } : {}),
       };

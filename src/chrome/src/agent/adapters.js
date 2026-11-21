@@ -16165,7 +16165,7 @@ const ADAPTERS = [
     matches: (url) => /^https?:\/\/docs\.google\.com\/document\//.test(url),
     notes: `
 - The document body is a canvas-rendered editor (NOT a normal contenteditable). Direct DOM typing usually fails, and get_accessibility_tree sees menus/toolbar rather than body paragraphs. Use the floating textbox that appears when you click into the doc, or use keyboard shortcuts.
-- To READ the full document body reliably on /document/d/<DOC_ID>/..., call fetch_url on \`https://docs.google.com/document/d/<DOC_ID>/mobilebasic\` (continuing with offset/nextOffset while hasMore is true) or call read_page on the active tab.
+- To READ the full document body reliably on /document/d/<DOC_ID>/..., call fetch_url on \`https://docs.google.com/document/d/<DOC_ID>/mobilebasic\` (continuing with offset/nextOffset while hasMore is true) or call read_page on the active tab (note: read_page on canvas Docs reads the initial page-load snapshot, not edits made after load).
 - When the user asks to suggest edits or tracked changes without overwriting their text, switch the toolbar mode dropdown from "Editing" to "Suggesting" before typing, or present "Before → After" suggestions in chat.
 - Comments are in the right margin; click the comment icon to open the comment panel.
 - Real-time collaboration means the cursor and text shift while you read. Re-read after a delay if a write seems lost.`,
