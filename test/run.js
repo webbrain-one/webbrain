@@ -77506,7 +77506,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
     kuae-cloud-coding-plan llama lucidquery meganova minimax-cn-coding-plan
     minimax-coding-plan moark modelscope morph nano-gpt nearai nebius nova novita-ai
-    ollama-cloud opencode opencode-go opper orcarouter ovhcloud perplexity
+    ollama-cloud opencode opencode-go openllm opper orcarouter ovhcloud perplexity
     perplexity-agent poe pollinations privatemode-ai qihang-ai qiniu-ai requesty runcrate scaleway siliconflow
     siliconflow-cn stackit standardcompute stepfun submodel synthetic tencent-coding-plan
     upstage v0 venice vercel vivgrid vultr wandb xiaomi zai-coding-plan zenmux
@@ -77514,7 +77514,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 88);
+  assert.equal(expectedIds.length, 89);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77529,8 +77529,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 123/122 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 124 : 123;
+    // deliberately omitted from the 124/123 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 125 : 124;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77777,6 +77777,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.standardcompute.suggestions,
     ['StandardCompute', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash', 'z-ai/glm-5.3', 'moonshotai/kimi-k3'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.openllm.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://www.openllm.sh/v1',
+      model: 'lite',
+      contextWindow: 200000,
+      supportsVision: false,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://www.openllm.sh',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.openllm.suggestions,
+    ['lite', 'plus', 'ultra'],
   );
   assert.deepEqual(
     {

@@ -3192,7 +3192,15 @@ function providerApiKeyWarning(id, config) {
   if (!input) return '';
   const rawApiKey = String(config.apiKey || '').trim();
   const apiKey = DUMMY_API_KEYS.has(rawApiKey) ? '' : rawApiKey;
-  const keyIsOptional = providersData[id]?.category === 'local' && config.requiresApiKey !== true;
+  let isLocalOpenLLM = false;
+  if (providerDefinitionId(id) === 'openllm') {
+    try {
+      const endpoint = new URL(config.baseUrl);
+      isLocalOpenLLM = endpoint.protocol === 'http:' && isLoopbackHostname(endpoint.hostname);
+    } catch { /* An invalid URL is not a local daemon endpoint. */ }
+  }
+  const keyIsOptional = (providersData[id]?.category === 'local' || isLocalOpenLLM)
+    && config.requiresApiKey !== true;
   const looksInvalid = apiKey ? apiKey.length < MIN_API_KEY_LENGTH : !keyIsOptional;
   input.setAttribute('aria-invalid', looksInvalid ? 'true' : 'false');
   return looksInvalid ? t('st.providers.api_key_warning') : '';

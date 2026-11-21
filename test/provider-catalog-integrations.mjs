@@ -47,6 +47,17 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(standardcompute.supportsAskStreaming, true);
   assert.ok(providerIconUrl('standardcompute').endsWith('/standardcompute.svg'));
 
+  const openllm = ADDITIONAL_PROVIDER_DEFAULTS.openllm;
+  assert.equal(openllm.type, 'openai', `${browser}: OpenLLM must use the OpenAI-compatible adapter`);
+  assert.equal(openllm.baseUrl, 'https://www.openllm.sh/v1', `${browser}: OpenLLM endpoint changed`);
+  assert.equal(openllm.model, 'lite');
+  assert.equal(openllm.contextWindow, 200000);
+  assert.equal(openllm.enabled, false);
+  assert.equal(openllm.apiKey, '');
+  assert.equal(openllm.supportsTools, true);
+  assert.equal(openllm.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('openllm').endsWith('/openllm.svg'));
+
   const runcrate = ADDITIONAL_PROVIDER_DEFAULTS.runcrate;
   assert.equal(runcrate.type, 'openai', `${browser}: Runcrate must use the OpenAI-compatible adapter`);
   assert.equal(runcrate.baseUrl, 'https://api.runcrate.ai/v1', `${browser}: Runcrate endpoint changed`);

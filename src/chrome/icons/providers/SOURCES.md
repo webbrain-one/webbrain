@@ -24,6 +24,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | opper | Opper official logo mark (opper.ai) |
 | cloudgpu | CloudGPU logo mark (cloudgpu.app) |
 | runcrate | Runcrate logo mark (runcrate.ai) |
+| openllm | OpenLLM official logo mark (`icon.svg` from the OpenLLM docs site, openllm.sh; black, white in dark mode) |
 | standardcompute | Standard Compute logo mark (standardcompute.com) |
 | abliteration | [Abliteration.ai official icon](https://abliteration.ai/icon.svg) |
 
