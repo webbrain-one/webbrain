@@ -2365,31 +2365,37 @@
     /* ================================================================
        WORD ON THE WEB — compact quote strip
        ================================================================ */
-    .voices-section { max-width: 1180px; padding-top: 44px; padding-bottom: 28px; margin-inline: auto; }
+    .voices-section { max-width: 1180px; padding-top: 44px; padding-bottom: 28px; margin-inline: auto; scroll-margin-top: 72px; }
     .voices-section h2 {
       margin-bottom: 24px;
       font-size: 13px; font-weight: 700; letter-spacing: .12em;
       text-transform: uppercase; color: var(--text-dim);
       text-align: center;
     }
-    .voices-grid { display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: 0; }
+    .voices-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .voice {
-      display: grid; grid-template-columns: auto 1fr; gap: 16px;
-      align-items: center; padding: 10px 24px; text-align: start;
+      display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px;
+      align-items: center; align-content: center; padding: 12px 16px; text-align: start;
       margin: 0;
     }
     .voice + .voice { border-inline-start: 1px solid var(--border); }
     .voice-portrait { width: 76px; height: 76px; margin: 0; grid-row: span 2; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     :root:not([data-theme="light"]) .voice-portrait { mix-blend-mode: normal; background: #fff; filter: brightness(.88); }
-    .voice blockquote { margin: 0 0 6px; font: 400 15px/1.45 Georgia, 'Times New Roman', serif; text-wrap: pretty; color: var(--text); }
+    .voice blockquote { align-self: end; margin: 0; font: 400 15px/1.45 Georgia, 'Times New Roman', serif; text-wrap: pretty; color: var(--text); }
+    .voice figcaption { align-self: start; }
     .voice-featured .voice-portrait { width: 90px; height: 90px; margin-top: 0; }
     .voice-featured blockquote { font-size: 19px; line-height: 1.35; font-weight: 500; }
     .voice-name { display: inline; font-size: 13px; font-weight: 700; color: var(--text); }
-    .voice-source { margin: 0 0 0 6px; font-size: 12px; color: var(--accent2); text-decoration: underline; text-underline-offset: 4px; }
+    .voice-source { display: block; font-size: 12px; color: var(--accent2); text-decoration: underline; text-underline-offset: 4px; }
     .voice-source:hover { color: var(--text); }
     .voice-source:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
-    @media (max-width: 860px) {
-      .voices-grid { grid-template-columns: 1fr; gap: 18px; max-width: 540px; margin-inline: auto; }
+    @media (max-width: 1080px) {
+      .voices-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .voice:nth-child(odd) { border-inline-start: 0; }
+      .voice:nth-child(n + 3) { border-top: 1px solid var(--border); }
+    }
+    @media (max-width: 560px) {
+      .voices-grid { grid-template-columns: minmax(0, 1fr); }
       .voice { padding: 14px 16px; }
       .voice + .voice { border-inline-start: 0; border-top: 1px solid var(--border); }
       .voice-portrait { width: 68px; height: 68px; }
@@ -4645,6 +4651,14 @@
       <figcaption>
         <span class="voice-name">Asif Razzaq</span>
         <a class="voice-source" href="https://www.marktechpost.com/2026/07/02/meet-webbrain-an-open-source-local-first-ai-browser-agent-that-reads-pages-and-automates-tasks-in-chrome-and-firefox/" target="_blank" rel="noopener noreferrer">MarkTechPost</a>
+      </figcaption>
+    </figure>
+    <figure class="voice">
+      <img class="voice-portrait" src="/assets/voices/scott-devaney.png" alt="Illustrated portrait of Scott DeVaney" width="76" height="76" loading="lazy" decoding="async">
+      <blockquote cite="https://blog.mozilla.org/addons/2026/11/20/developer-spotlight-webbrain/">“WebBrain offers an impressively robust free tier of usage.”</blockquote>
+      <figcaption>
+        <span class="voice-name">Scott DeVaney</span>
+        <a class="voice-source" href="https://blog.mozilla.org/addons/2026/11/20/developer-spotlight-webbrain/" target="_blank" rel="noopener noreferrer">Mozilla</a>
       </figcaption>
     </figure>
   </div>
