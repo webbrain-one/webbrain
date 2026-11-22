@@ -289,7 +289,7 @@
       "name": "Wie funktioniert die Profil-Autoausfüllung und ist sie sicher?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Die Profil-Autoausfüllung ist eine optionale Funktion unter Einstellungen → Memorie. Sie geben eine kurze Biografie ein — Name, Arbeits-E-Mail, Unternehmen und ein Wegwerf-Passwort für unkomplizierte Anmeldungen — und aktivieren sie. Wenn aktiviert, fügt WebBrain diesen Text dem System-Prompt des Agenten hinzu, damit er Anmeldeformulare ausfüllen kann, ohne jedes Mal zu fragen. Der Text wird in Klartext im lokalen Speicher Ihres Browsers gespeichert. Er wird nicht an das WebBrain-Projekt übertragen, aber er wird an jeden LLM-Anbieter, den Sie konfiguriert haben, bei jedem Durchgang als Teil des System-Prompts gesendet. Standardmäßig deaktiviert. Geben Sie hier keine Passwörter für wichtige Konten ein (Google, Apple, iCloud, Banken, Arbeits-SSO, Haupt-E-Mail). Diese Konten sollten Zwei-Faktor-Authentifizierung verwenden und sollten ohnehin nicht an einen Agenten übergeben werden. Ein Wegwerfpasswort, das Sie für Newsletter-Anmeldungen und kostenlose Testversionen wiederverwenden, ist der vorgesehene Anwendungsfall."
+        "text": "Optionale Profilangaben wie Name oder geschäftliche E-Mail helfen beim Ausfüllen von Formularen. Standardmäßig deaktiviert. Ist die Funktion aktiv, wird der Profiltext unverschlüsselt im Browser gespeichert und als Kontext an den ausgewählten Modellanbieter übermittelt, auch an den gehosteten WebBrain Compass, wenn dieser ausgewählt ist. Keine echten oder wiederverwendeten Passwörter oder andere Geheimnisse eingeben. Die optionale Cloud-Synchronisierung verschlüsselt das Profil vor dem Upload und ist von Modellanfragen getrennt."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Profil-Autoausfüllung</h3>
-      <p>Optionale Klartext-Biografie — Name, Arbeits-E-Mail, Unternehmen, ein Wegwerfpasswort — lässt den Agenten problemlos durch unkomplizierte Anmeldeformulare navigieren, ohne jedes Mal zu fragen. Standardmäßig deaktiviert, alles lokal gespeichert.</p>
-      <p class="feature-note">Standardmäßig aus. Wird lokal in Ihrem Browser gespeichert und nie an WebBrain gesendet.</p>
+      <p>Optionale Profilangaben wie Name oder geschäftliche E-Mail helfen beim Ausfüllen von Formularen.</p>
+      <p class="feature-note">Standardmäßig deaktiviert. Ist die Funktion aktiv, wird der Profiltext unverschlüsselt im Browser gespeichert und als Kontext an den ausgewählten Modellanbieter übermittelt, auch an den gehosteten WebBrain Compass, wenn dieser ausgewählt ist. Keine echten oder wiederverwendeten Passwörter oder andere Geheimnisse eingeben.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>

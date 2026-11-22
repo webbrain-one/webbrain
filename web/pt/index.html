@@ -289,7 +289,7 @@
       "name": "Como funciona o preenchimento automático do perfil e é seguro?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "O preenchimento automático do perfil é um recurso opcional no Configurações → Memória. Você insere uma breve biografia - nome, e-mail comercial, empresa e um descartável senha para inscrições de apostas baixas – e ative-a. Quando ativado, WebBrain anexa esse texto ao prompt do sistema do agente para que ele possa preencher formulários de inscrição sem perguntar sempre. O texto é armazenado em texto simples no armazenamento local do seu navegador. É não transmitido para o projeto WebBrain, mas é enviado para qualquer provedor LLM que você configurou a cada turno, como parte do prompt do sistema. Desativado por padrão. Não coloque senhas para contas importantes (Google, Apple, iCloud, serviços bancários, SSO comercial, e-mail principal) aqui. Essas contas devem usar 2FA e, de qualquer maneira, não devem ser entregues a um agente. Uma senha descartável que você reutiliza para inscrições em boletins informativos e avaliações gratuitas é o caso de uso pretendido."
+        "text": "Dados opcionais do perfil, como nome e e-mail de trabalho, ajudam a preencher formulários. Desativado por padrão. Quando ativado, o texto do perfil é armazenado sem criptografia no navegador e incluído como contexto nas solicitações ao provedor de modelo selecionado, inclusive ao WebBrain Compass hospedado, se escolhido. Não insira senhas reais ou reutilizadas nem outros segredos. A sincronização opcional na nuvem criptografa o perfil antes do envio e é separada das solicitações ao modelo."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Preenchimento automático de perfil</h3>
-      <p>Biografia opcional em texto simples - nome, e-mail comercial, empresa, uma senha descartável - permite que o agente passe rapidamente por formulários de inscrição de baixo risco sem perguntar sempre. Desativado por padrão, todos armazenados localmente.</p>
-      <p class="feature-note">Desativado por padrão. Armazenado localmente no seu navegador, nunca enviado ao WebBrain.</p>
+      <p>Dados opcionais do perfil, como nome e e-mail de trabalho, ajudam a preencher formulários.</p>
+      <p class="feature-note">Desativado por padrão. Quando ativado, o texto do perfil é armazenado sem criptografia no navegador e incluído como contexto nas solicitações ao provedor de modelo selecionado, inclusive ao WebBrain Compass hospedado, se escolhido. Não insira senhas reais ou reutilizadas nem outros segredos.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>

@@ -289,7 +289,7 @@
       "name": "Bagaimana isi-otomatis Profil bekerja, dan apakah aman?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Isi-otomatis profil adalah fitur opsional di Pengaturan → Memori. Anda memasukkan bio singkat — nama, email kerja, perusahaan, dan kata sandi sekali pakai untuk pendaftaran berisiko rendah — lalu mengaktifkannya. Saat aktif, WebBrain menambahkan teks itu ke prompt sistem agen sehingga ia dapat mengisi formulir pendaftaran tanpa bertanya setiap kali. Teks tersebut disimpan dalam bentuk teks biasa di penyimpanan lokal peramban Anda. Teks itu tidak dikirim ke proyek WebBrain, tetapi dikirim ke penyedia LLM yang Anda konfigurasi pada setiap giliran, sebagai bagian dari prompt sistem. Mati secara bawaan. Jangan menaruh kata sandi akun penting (Google, Apple, iCloud, perbankan, SSO kantor, email utama) di sini. Akun-akun itu seharusnya menggunakan 2FA dan tidak perlu Anda serahkan kepada agen. Kasus penggunaan yang dimaksud adalah kata sandi sekali pakai yang Anda pakai ulang untuk pendaftaran newsletter dan uji coba gratis."
+        "text": "Informasi profil opsional seperti nama atau email kerja membantu mengisi formulir. Nonaktif secara bawaan. Jika diaktifkan, teks profil disimpan tanpa enkripsi di browser dan disertakan sebagai konteks dalam permintaan ke penyedia model yang dipilih, termasuk WebBrain Compass yang dihosting jika dipilih. Jangan masukkan kata sandi asli atau yang digunakan ulang, maupun rahasia lainnya. Sinkronisasi cloud opsional mengenkripsi profil sebelum unggah dan terpisah dari permintaan model."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Isi-Otomatis Profil</h3>
-      <p>Bio plaintext opsional — nama, email kerja, perusahaan, kata sandi sekali pakai — membuat agen melewati formulir pendaftaran berisiko rendah tanpa bertanya setiap kali. Mati secara bawaan, semuanya disimpan secara lokal.</p>
-      <p class="feature-note">Nonaktif secara default. Disimpan secara lokal di browser Anda, tidak pernah dikirim ke WebBrain.</p>
+      <p>Informasi profil opsional seperti nama atau email kerja membantu mengisi formulir.</p>
+      <p class="feature-note">Nonaktif secara bawaan. Jika diaktifkan, teks profil disimpan tanpa enkripsi di browser dan disertakan sebagai konteks dalam permintaan ke penyedia model yang dipilih, termasuk WebBrain Compass yang dihosting jika dipilih. Jangan masukkan kata sandi asli atau yang digunakan ulang, maupun rahasia lainnya.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>
