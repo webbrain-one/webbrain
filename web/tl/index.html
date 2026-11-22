@@ -289,7 +289,7 @@
       "name": "Paano gumagana ang Profile auto-fill, at ligtas ba ito?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ang Profile auto-fill ay isang opsyonal na tampok sa Settings → Memory. Maglalagay ka ng maikling bio — pangalan, work email, kumpanya, at isang isahang-gamit na password para sa mga low-stakes na signup — at i-on ito. Kapag naka-enable, idinaragdag ng WebBrain ang text na iyon sa system prompt ng ahente para makapag-puno ito ng signup forms nang hindi nagtatanong tuwing kailangan. Ang text ay nakaimbak bilang plain text sa local storage ng iyong browser. Hindi ito ipinapadala sa proyektong WebBrain, ngunit ipinapadala ito sa kung anong LLM provider ang iyong na-configure sa bawat turn, bilang bahagi ng system prompt. Naka-off bilang default. Huwag maglagay ng mga password para sa mahahalagang account (Google, Apple, iCloud, banking, work SSO, primary email) dito. Dapat gumamit ng 2FA ang mga account na iyon at hindi naman dapat ipinapasa sa isang ahente. Ang inilaang gamit ay isang isahang-gamit na password na ginagamit mo ulit para sa mga newsletter signup at libreng trial."
+        "text": "Nakakatulong sa pagpuno ng mga form ang opsyonal na impormasyon sa profile, gaya ng pangalan o email sa trabaho. Naka-off bilang default. Kapag naka-on, iniimbak ang teksto ng profile sa browser nang walang encryption at isinasama bilang konteksto sa mga kahilingan sa napiling model provider, kasama ang hosted na WebBrain Compass kung iyon ang pinili. Huwag maglagay ng totoong password, password na ginagamit muli, o iba pang lihim. Ang opsyonal na cloud sync ay nag-e-encrypt ng profile bago i-upload at hiwalay sa mga kahilingan sa modelo."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Auto-fill ng Profile</h3>
-      <p>Isang opsyonal na plaintext bio — pangalan, email sa trabaho, kumpanya, isang isahang-gamit na password — ang nagbibigay-daan sa ahente na lumagpas sa mga low-stakes na signup form nang hindi nagtatanong tuwing kailangan. Naka-off bilang default, lahat naka-store nang lokal.</p>
-      <p class="feature-note">Naka-off bilang default. Nakaimbak nang lokal sa iyong browser, hindi kailanman ipinapadala sa WebBrain.</p>
+      <p>Nakakatulong sa pagpuno ng mga form ang opsyonal na impormasyon sa profile, gaya ng pangalan o email sa trabaho.</p>
+      <p class="feature-note">Naka-off bilang default. Kapag naka-on, iniimbak ang teksto ng profile sa browser nang walang encryption at isinasama bilang konteksto sa mga kahilingan sa napiling model provider, kasama ang hosted na WebBrain Compass kung iyon ang pinili. Huwag maglagay ng totoong password, password na ginagamit muli, o iba pang lihim.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>

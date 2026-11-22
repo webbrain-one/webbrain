@@ -289,7 +289,7 @@
       "name": "¿Cómo funciona el autocompletado de perfil y es seguro?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "El autocompletado de perfil es una función opcional en Ajustes → Memoria. Introduces una biografía breve —nombre, correo laboral, empresa y una contraseña desechable para registros poco importantes— y lo activas. Cuando está activo, WebBrain añade ese texto al prompt del sistema del agente para que pueda rellenar formularios de registro sin preguntar cada vez. El texto se guarda en texto plano en el almacenamiento local del navegador. No se transmite al proyecto WebBrain, pero sí se envía al proveedor de LLM que tengas configurado en cada turno, como parte del prompt del sistema. Desactivado por defecto. No pongas aquí contraseñas de cuentas importantes (Google, Apple, iCloud, banca, SSO de trabajo, correo principal). Esas cuentas deberían usar 2FA y, de todas formas, no deberían entregarse a un agente. El uso previsto es una contraseña desechable que reutilizas para registros en boletines y pruebas gratuitas."
+        "text": "Los datos opcionales del perfil, como tu nombre o correo de trabajo, ayudan a rellenar formularios. Desactivado por defecto. Al activarlo, el texto se guarda sin cifrar en el navegador y se incluye como contexto en las solicitudes al proveedor del modelo seleccionado, incluido WebBrain Compass si lo eliges. No introduzcas contraseñas reales o reutilizadas ni otros secretos. La sincronización opcional en la nube cifra el perfil antes de subirlo y es independiente de las solicitudes al modelo."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Autocompletado de perfil</h3>
-      <p>Una biografía opcional en texto plano —nombre, correo laboral, empresa y una contraseña desechable— permite al agente rellenar formularios de registro de poca importancia sin preguntar cada vez. Desactivado por defecto, todo se almacena localmente.</p>
-      <p class="feature-note">Desactivado por defecto. Se guarda localmente en tu navegador; nunca se envía a WebBrain.</p>
+      <p>Los datos opcionales del perfil, como tu nombre o correo de trabajo, ayudan a rellenar formularios.</p>
+      <p class="feature-note">Desactivado por defecto. Al activarlo, el texto se guarda sin cifrar en el navegador y se incluye como contexto en las solicitudes al proveedor del modelo seleccionado, incluido WebBrain Compass si lo eliges. No introduzcas contraseñas reales o reutilizadas ni otros secretos.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>

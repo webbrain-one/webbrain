@@ -289,7 +289,7 @@
       "name": "Comment fonctionne l'auto-remplissage de profil, et est-ce sûr ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "L'auto-remplissage de profil est une fonctionnalité optionnelle dans Paramètres → Mémoire. Vous saisissez une courte bio — nom, e-mail pro, entreprise et un mot de passe jetable pour les inscriptions à faible enjeu — et vous l'activez. Une fois actif, WebBrain ajoute ce texte au prompt système de l'agent, afin qu'il puisse remplir les formulaires d'inscription sans vous demander à chaque fois. Le texte est stocké en clair dans le stockage local du navigateur. Il n'est pas transmis au projet WebBrain, mais il est envoyé au fournisseur de LLM que vous avez configuré à chaque tour, dans le prompt système. Désactivé par défaut. N'y mettez pas les mots de passe de comptes importants (Google, Apple, iCloud, banque, SSO pro, e-mail principal). Ces comptes devraient utiliser la 2FA et ne devraient pas être confiés à un agent. L'usage prévu est un mot de passe jetable réutilisé pour des newsletters et des essais gratuits."
+        "text": "Les données de profil facultatives, comme votre nom ou votre e-mail professionnel, aident à remplir les formulaires. Désactivé par défaut. Si activé, le texte du profil est stocké sans chiffrement dans le navigateur et inclus comme contexte dans les requêtes au fournisseur de modèle choisi, y compris WebBrain Compass, le service hébergé, s’il est sélectionné. Ne saisissez pas de mots de passe réels ou réutilisés ni d’autres secrets. La synchronisation cloud facultative chiffre le profil avant l’envoi et est distincte des requêtes au modèle."
       }
     },
     {
@@ -4852,8 +4852,8 @@
     <div class="feature-card" data-extra>
       <div class="feature-icon">👤</div>
       <h3>Auto-remplissage du profil</h3>
-      <p>Une biographie optionnelle en texte brut — nom, e-mail pro, entreprise, un mot de passe jetable — permet à l&#39;agent de passer les formulaires d&#39;inscription à faible enjeu sans poser la question à chaque fois. Désactivé par défaut, stocké uniquement en local.</p>
-      <p class="feature-note">Désactivé par défaut. Stocké localement dans votre navigateur, jamais envoyé à WebBrain.</p>
+      <p>Les données de profil facultatives, comme votre nom ou votre e-mail professionnel, aident à remplir les formulaires.</p>
+      <p class="feature-note">Désactivé par défaut. Si activé, le texte du profil est stocké sans chiffrement dans le navigateur et inclus comme contexte dans les requêtes au fournisseur de modèle choisi, y compris WebBrain Compass, le service hébergé, s’il est sélectionné. Ne saisissez pas de mots de passe réels ou réutilisés ni d’autres secrets.</p>
     </div>
     <div class="feature-card" data-extra>
       <div class="feature-icon">🧩</div>

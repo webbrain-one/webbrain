@@ -303,7 +303,7 @@
       "name": "个人资料自动填写如何工作?它安全吗?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "个人资料自动填写是 设置 → 记忆 中的可选功能。你输入一段简短的自述 —— 姓名、工作邮箱、公司以及用于低风险注册的一次性密码 —— 然后将其打开。启用后,WebBrain 会将这段文本附加到代理的系统提示中,这样它就能无需每次询问即可填写注册表单。 该文本以明文保存在浏览器的本地存储中。它不会被传送到 WebBrain 项目,但会在每一轮作为系统提示的一部分发送给你配置的 LLM 提供商。默认关闭。 不要在此放置重要账户的密码(Google、Apple、iCloud、银行、公司 SSO、主邮箱)。这些账户应启用 2FA,而且本就不该交给代理。预期用途是你在订阅通讯和免费试用注册时反复使用的一次性密码。"
+        "text": "姓名、工作邮箱等可选资料可帮助填写表单。 默认关闭。开启后，资料文本以未加密形式保存在浏览器中，并作为上下文包含在发送给所选模型提供商的请求里；若选择托管的 WebBrain Compass，亦是如此。请勿输入真实、重复使用的密码或其他秘密信息。 可选的云同步会在上传前加密资料，与模型请求是分开的。"
       }
     },
     {
@@ -751,7 +751,7 @@
       </details>
       <details class="faq-question" id="profile" data-faq-item>
         <summary><span>个人资料自动填写如何工作?它安全吗?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>个人资料自动填写是 <strong>设置 → 记忆</strong> 中的可选功能。你输入一段简短的自述 —— 姓名、工作邮箱、公司以及用于低风险注册的<em>一次性</em>密码 —— 然后将其打开。启用后,WebBrain 会将这段文本附加到代理的系统提示中,这样它就能无需每次询问即可填写注册表单。</p><p>该文本以<strong>明文</strong>保存在浏览器的本地存储中。它<strong>不会</strong>被传送到 WebBrain 项目,但<strong>会</strong>在每一轮作为系统提示的一部分发送给你配置的 LLM 提供商。默认关闭。</p><p><strong>不要在此放置重要账户的密码</strong>(Google、Apple、iCloud、银行、公司 SSO、主邮箱)。这些账户应启用 2FA,而且本就不该交给代理。预期用途是你在订阅通讯和免费试用注册时反复使用的一次性密码。</p></div>
+        <div class="faq-answer"><p>姓名、工作邮箱等可选资料可帮助填写表单。</p><p>默认关闭。开启后，资料文本以未加密形式保存在浏览器中，并作为上下文包含在发送给所选模型提供商的请求里；若选择托管的 WebBrain Compass，亦是如此。请勿输入真实、重复使用的密码或其他秘密信息。</p><p>可选的云同步会在上传前加密资料，与模型请求是分开的。</p></div>
       </details>
       <details class="faq-question" id="screenshot-redaction" data-faq-item>
         <summary><span>截图打码设置能保证我的隐私数据永远不会到达云端视觉模型吗？</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
