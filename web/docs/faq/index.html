@@ -303,7 +303,7 @@
       "name": "How does Profile auto-fill work, and is it safe?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Profile auto-fill is an optional feature in Settings → Memory. You enter a short bio — name, work email, company, and a throwaway password for low-stakes signups — and toggle it on. When enabled, WebBrain appends that text to the agent's system prompt so it can fill signup forms without asking every time. The text is stored in plaintext in your browser's local storage. It is not transmitted to the WebBrain project, but it is sent to whichever LLM provider you have configured on every turn, as part of the system prompt. Off by default. Do not put passwords for important accounts (Google, Apple, iCloud, banking, work SSO, primary email) here. Those accounts should use 2FA and shouldn't be handed to an agent anyway. A throwaway password you reuse for newsletter signups and free trials is the intended use case."
+        "text": "Optional profile information, such as your name or work email, helps fill forms. Off by default. If enabled, profile text is stored unencrypted in your browser and included as context in model requests to the selected provider, including hosted WebBrain Compass if selected. Do not enter real or reused passwords or other secrets. Optional Cloud Sync encrypts the profile before upload; it is separate from model requests."
       }
     },
     {
@@ -751,7 +751,7 @@
       </details>
       <details class="faq-question" id="profile" data-faq-item>
         <summary><span>How does Profile auto-fill work, and is it safe?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
-        <div class="faq-answer"><p>Profile auto-fill is an optional feature in <strong>Settings → Memory</strong>. You enter a short bio — name, work email, company, and a <em>throwaway</em> password for low-stakes signups — and toggle it on. When enabled, WebBrain appends that text to the agent's system prompt so it can fill signup forms without asking every time.</p><p>The text is stored <strong>in plaintext</strong> in your browser's local storage. It is <strong>not</strong> transmitted to the WebBrain project, but it <strong>is</strong> sent to whichever LLM provider you have configured on every turn, as part of the system prompt. Off by default.</p><p><strong>Do not put passwords for important accounts</strong> (Google, Apple, iCloud, banking, work SSO, primary email) here. Those accounts should use 2FA and shouldn't be handed to an agent anyway. A throwaway password you reuse for newsletter signups and free trials is the intended use case.</p></div>
+        <div class="faq-answer"><p>Optional profile information, such as your name or work email, helps fill forms.</p><p>Off by default. If enabled, profile text is stored unencrypted in your browser and included as context in model requests to the selected provider, including hosted WebBrain Compass if selected. Do not enter real or reused passwords or other secrets.</p><p>Optional Cloud Sync encrypts the profile before upload; it is separate from model requests.</p></div>
       </details>
       <details class="faq-question" id="screenshot-redaction" data-faq-item>
         <summary><span>Does the Screenshot redaction setting guarantee my private data never reaches a cloud vision model?</span><span class="faq-question-mark" aria-hidden="true"></span></summary>
