@@ -155,6 +155,11 @@ grep -E '(import|export)[^"]*from\s+"[a-zA-Z@]' \
   | grep -v '^\s*//' | grep -v '^\s*\*'
 ```
 
+Keep the browser bundle's local WASM default: replace the upstream CDN
+initializer with URLs for the packaged asyncify factory and binary relative
+to `import.meta.url`. This also covers callers that have not yet set
+`ort.env.wasm.wasmPaths`. Do not reintroduce a remote runtime fallback.
+
 The LFM2.5-VL ONNX repositories need two compatibility hooks. The 1.6B export
 predates the standard ImageTextToText component filenames, so keep the small
 `session_file_names` alias hook in
@@ -191,7 +196,8 @@ cp node_modules/onnxruntime-common/dist/esm/*.js \
 
 Copy the Transformers.js license and the ONNX Runtime license plus
 `ThirdPartyNotices.txt` into this directory whenever the runtime is updated.
-Reapply the specifier and ImageTextToText session-alias patches, update the
+Reapply the import specifiers, local WASM default, and ImageTextToText
+session-alias patches, update the
 version table above, then verify:
 
 1. `node --check` passes for the provider, host, and worker.
