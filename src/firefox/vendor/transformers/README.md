@@ -19,8 +19,9 @@ cache for fully offline use.
 | `ThirdPartyNotices.onnxruntime.txt` | ONNX Runtime | Incorporated third-party notices |
 
 The readable browser build is the same patched file used by Chrome: its bare
-ONNX Runtime imports point at packaged relative files, and its ImageTextToText
-session map accepts filename aliases for Chrome's legacy LFM2.5-VL 1.6B export.
+ONNX Runtime imports and default asyncify factory/WASM paths point at packaged
+relative files. Its ImageTextToText session map accepts filename aliases for
+Chrome's legacy LFM2.5-VL 1.6B export.
 It can also opt into nested `processor_config.json` metadata and standalone
 chat-template files used by current VL exports. Those hooks are dormant in
 Firefox. The WebGPU JSEP binaries are intentionally omitted from Firefox

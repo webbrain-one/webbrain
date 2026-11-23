@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import vm from 'node:vm';
 
 // One top-level function of a source file, by name.
@@ -47,6 +49,34 @@ async function withD1Download(pin, { stored = {}, marker = 'current' } = {}, fn)
     globalThis.chrome = saved.chrome; globalThis.browser = saved.browser;
   }
 }
+
+const execFile = promisify(execFileCallback);
+
+test('vendored Transformers imports default to packaged ONNX factory and WASM before worker configuration', async () => {
+  for (const browser of ['chrome', 'firefox']) {
+    for (const vendor of ['d1', 'transformers']) {
+      const url = new URL(`../src/${browser}/vendor/${vendor}/transformers.web.js`, import.meta.url);
+      // The real browser module must never install a CDN fallback, even if
+      // today's worker sets local paths immediately after the import.
+      const source = await readFile(url, 'utf8');
+      assert.doesNotMatch(source, /https?:\/\/[^\s"'`]*onnxruntime-web/i, url.pathname);
+      const { stdout } = await execFile(process.execPath, ['--input-type=module', '--eval', `
+        const url = process.argv[1];
+        // Select the bundled web ORT backend in a fresh process before import.
+        globalThis.process = undefined;
+        const { env } = await import(url);
+        console.log(JSON.stringify(env.backends.onnx.wasm.wasmPaths));
+      `, url.href]);
+      const expected = {
+        mjs: new URL('ort-wasm-simd-threaded.asyncify.mjs', url),
+        wasm: new URL('ort-wasm-simd-threaded.asyncify.wasm', url),
+      };
+      assert.deepEqual(JSON.parse(stdout), { mjs: expected.mjs.href, wasm: expected.wasm.href }, url.pathname);
+      assert.match(await readFile(expected.mjs, 'utf8'), /export default/, url.pathname);
+      assert.deepEqual((await readFile(expected.wasm)).subarray(0, 4), Buffer.from([0, 97, 115, 109]), url.pathname);
+    }
+  }
+});
 
 for (const build of ['chrome', 'firefox']) {
   const config = await import(`../src/${build}/src/agent/decision-config.js`);
