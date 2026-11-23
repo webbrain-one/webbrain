@@ -8726,18 +8726,12 @@ if (ONNX_ENV) {
     ONNX_ENV.logLevel = ONNX_LOG_LEVEL_NAMES[severityLevel];
   };
   if (ONNX_ENV.wasm) {
-    if (
-      // @ts-ignore Cannot find name 'ServiceWorkerGlobalScope'.ts(2304)
-      !(typeof ServiceWorkerGlobalScope !== "undefined" && self instanceof ServiceWorkerGlobalScope) && ONNX_ENV.versions?.web && !ONNX_ENV.wasm.wasmPaths
-    ) {
-      const wasmPathPrefix = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNX_ENV.versions.web}/dist/`;
-      let wasmPathSuffix = ".asyncify";
-      if (apis.IS_SAFARI_BELOW_26 && !apis.IS_WEBGPU_AVAILABLE) {
-        wasmPathSuffix = "";
-      }
+    // MV3: executable runtime files must come from the extension package.
+    // Both vendored ONNX Runtime builds use the asyncify factory/WASM pair.
+    if (!ONNX_ENV.wasm.wasmPaths) {
       ONNX_ENV.wasm.wasmPaths = {
-        mjs: `${wasmPathPrefix}ort-wasm-simd-threaded${wasmPathSuffix}.mjs`,
-        wasm: `${wasmPathPrefix}ort-wasm-simd-threaded${wasmPathSuffix}.wasm`
+        mjs: new URL("./ort-wasm-simd-threaded.asyncify.mjs", import.meta.url).href,
+        wasm: new URL("./ort-wasm-simd-threaded.asyncify.wasm", import.meta.url).href
       };
     }
     ONNX_ENV.wasm.proxy = false;

@@ -76,12 +76,12 @@
         "bytes": 1156762,
         "sha256": "ad44c6e41ff23fd5b01fa3fe08199a0440a35711dc9f80a31132fcce08fbd432"
       },
-      "copied_bytes": 1156776,
-      "copied_sha256": "539590a6de78977caa3d28a4669df919c909a485388a870d4da67cdea8aa5698",
+      "copied_bytes": 1156484,
+      "copied_sha256": "85e66224c31c821cf9f47bf1768f213b01885eb9ebb01f984d7ddf83b9844434",
       "byte_exact": false
     }
   ],
-  "transformers_import_linkage_only_changes": [
+  "transformers_packaging_patches": [
     [
       "import * as ONNX_WEB from \"onnxruntime-web/webgpu\";",
       "import * as ONNX_WEB from \"./ort.webgpu.bundle.min.mjs\";"
@@ -89,8 +89,12 @@
     [
       "import { Tensor } from \"onnxruntime-common\";",
       "import { Tensor } from \"./ort.webgpu.bundle.min.mjs\";"
+    ],
+    [
+      "Upstream jsDelivr ONNX Runtime default (including the unused Safari variant)",
+      "Packaged asyncify factory and WASM resolved relative to import.meta.url"
     ]
   ],
-  "old_chat_vendors_modified": false,
+  "old_chat_vendors_modified": true,
   "global_dependency_versions_modified": false
 }
