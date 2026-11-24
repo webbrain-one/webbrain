@@ -77561,7 +77561,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
     kuae-cloud-coding-plan llama lucidquery meganova minimax-cn-coding-plan
     minimax-coding-plan moark modelscope morph nano-gpt nearai nebius nova novita-ai
-    ollama-cloud opencode opencode-go openllm opper orcarouter ovhcloud perplexity
+    ollama-cloud onomeo opencode opencode-go openllm opper orcarouter ovhcloud perplexity
     perplexity-agent poe pollinations privatemode-ai qihang-ai qiniu-ai requesty runcrate scaleway siliconflow
     siliconflow-cn stackit standardcompute stepfun submodel synthetic tencent-coding-plan
     upstage v0 venice vercel vivgrid vultr wandb xiaomi zai-coding-plan zenmux
@@ -77569,7 +77569,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 90);
+  assert.equal(expectedIds.length, 91);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77585,7 +77585,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
     // deliberately omitted from the 124/123 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 126 : 125;
+    const expectedDefaultCount = label === 'chrome' ? 127 : 126;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -77880,6 +77880,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.aigrow.suggestions,
     ['claude-haiku-5.5', 'claude-sonnet-5.5', 'claude-opus-5.5'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.onomeo.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://onomeo.com/v1',
+      model: 'deepseek-v4.1-flash',
+      contextWindow: 1048576,
+      supportsVision: true,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://onomeo.com/dashboard',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.onomeo.suggestions,
+    ['deepseek-v4.1-flash', 'claude-sonnet-5.5', 'claude-opus-5.5'],
   );
   assert.deepEqual(
     {

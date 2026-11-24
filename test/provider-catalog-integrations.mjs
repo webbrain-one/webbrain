@@ -59,6 +59,18 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(aigrow.supportsAskStreaming, true);
   assert.ok(providerIconUrl('aigrow').endsWith('/aigrow.svg'));
 
+  const onomeo = ADDITIONAL_PROVIDER_DEFAULTS.onomeo;
+  assert.equal(onomeo.type, 'openai', `${browser}: onomeo must use the OpenAI-compatible adapter`);
+  assert.equal(onomeo.baseUrl, 'https://onomeo.com/v1', `${browser}: onomeo endpoint changed`);
+  assert.equal(onomeo.model, 'deepseek-v4.1-flash');
+  assert.equal(onomeo.contextWindow, 1048576);
+  assert.equal(onomeo.enabled, false);
+  assert.equal(onomeo.apiKey, '');
+  assert.equal(onomeo.supportsVision, true);
+  assert.equal(onomeo.supportsTools, true);
+  assert.equal(onomeo.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('onomeo').endsWith('/onomeo.svg'));
+
   const openllm = ADDITIONAL_PROVIDER_DEFAULTS.openllm;
   assert.equal(openllm.type, 'openai', `${browser}: OpenLLM must use the OpenAI-compatible adapter`);
   assert.equal(openllm.baseUrl, 'https://www.openllm.sh/v1', `${browser}: OpenLLM endpoint changed`);

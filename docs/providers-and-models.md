@@ -543,11 +543,11 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 90 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 91 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **125 built-in providers on Chromium** and **124 on Firefox**; the
+Settings → Models → LLM lists **126 built-in providers on Chromium** and **125 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
@@ -560,6 +560,7 @@ difference is the Chromium-only in-browser WebGPU runtime.
 | `standardcompute`                                                                                                                                                                                                                                                                                                              |
 | `openllm`                                                                                                                                                                                                                                                                                                                      |
 | `aigrow`                                                                                                                                                                                                                                                                                                                       |
+| `onomeo`                                                                                                                                                                                                                                                                                                                       |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -779,6 +780,23 @@ For manually entered GPT, Grok 4.7 and Qwen3.8 Max models, AIGROW can exceed
 that setting and bill for all generated tokens. WebBrain defaults to a
 500,000-token context window for Grok 4.7 on AIGROW.
 [AIGROW model differences](https://aigrow.gg/ai-api/genuine-models#differences)
+
+#### onomeo
+
+[onomeo](https://onomeo.com) is an OpenAI-compatible API for Claude, GPT,
+DeepSeek and other models behind one endpoint, `https://onomeo.com/v1`, with a
+Bearer key from the [dashboard](https://onomeo.com/dashboard). Model IDs are
+plain slugs without a vendor prefix (`deepseek-v4.1-flash`, `claude-sonnet-5.5`,
+`claude-opus-5.5`, `gpt-6.1-sol` and others); `GET https://onomeo.com/v1/models`
+with a key returns the list, and the [models page](https://onomeo.com/models)
+shows prices. New accounts can call `deepseek-v4.1-flash` within free limits;
+other models are charged to a prepaid balance.
+
+In WebBrain, open **Settings -> Models -> LLM -> onomeo**. Paste an API key into
+the card, keep the default `deepseek-v4.1-flash` model (1048576 tokens), then
+click **Test Connection**. Interactive Ask streaming, tool calls and screenshots
+work through the existing OpenAI-compatible path, so the card starts with vision
+on.
 
 ### Ask response streaming
 
