@@ -789,14 +789,27 @@ Bearer key from the [dashboard](https://onomeo.com/dashboard). Model IDs are
 plain slugs without a vendor prefix (`deepseek-v4.1-flash`, `claude-sonnet-5.5`,
 `claude-opus-5.5`, `gpt-6.1-sol` and others); `GET https://onomeo.com/v1/models`
 with a key returns the list, and the [models page](https://onomeo.com/models)
-shows prices. New accounts can call `deepseek-v4.1-flash` within free limits;
-other models are charged to a prepaid balance.
+shows current availability and pricing. Onomeo offers limited free access to
+eligible models; DeepSeek usage is billed from the prepaid balance after a top-up,
+and Claude and other premium models require a funded account for API access.
+Check [current billing rules](https://onomeo.com/help) before using the provider.
 
-In WebBrain, open **Settings -> Models -> LLM -> onomeo**. Paste an API key into
-the card, keep the default `deepseek-v4.1-flash` model (1048576 tokens), then
-click **Test Connection**. Interactive Ask streaming, tool calls and screenshots
-work through the existing OpenAI-compatible path, so the card starts with vision
-on.
+In WebBrain, open **Settings → Models → LLM → onomeo**, paste your API key,
+and click **Test Connection**. The default `deepseek-v4.1-flash` model has a
+nominal one-million-token context, not a free-tier request allowance. Onomeo
+can refuse a free request above 32,000 of its counted units across the prompt,
+history, and file text; these units are not model tokens. Keep free sessions
+short or lower the WebBrain context setting. The
+[API accepts up to eight images per request](https://onomeo.com/integrations)
+and also limits individual images and total request size.
+
+This is an **opt-in cloud provider**, not local inference. Prompts, page
+context and, when enabled, screenshots leave the browser. Onomeo says its
+operator can read excerpts of the most recent 100 API requests and responses
+per account for up to 30 days. Its
+[default model's privacy notice](https://onomeo.com/models/deepseek-v4.1-flash)
+says the upstream model provider may use prompts and answers for training.
+Do not use this provider with sensitive page content.
 
 ### Ask response streaming
 
