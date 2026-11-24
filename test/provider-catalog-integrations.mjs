@@ -59,6 +59,19 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(aigrow.supportsAskStreaming, true);
   assert.ok(providerIconUrl('aigrow').endsWith('/aigrow.svg'));
 
+  const onomeo = ADDITIONAL_PROVIDER_DEFAULTS.onomeo;
+  assert.equal(onomeo.type, 'openai', `${browser}: onomeo must use the OpenAI-compatible adapter`);
+  assert.equal(onomeo.baseUrl, 'https://onomeo.com/v1', `${browser}: onomeo endpoint changed`);
+  assert.equal(onomeo.model, 'deepseek-v4.1-flash');
+  assert.equal(onomeo.contextWindow, 1048576);
+  assert.equal(onomeo.enabled, false);
+  assert.equal(onomeo.apiKey, '');
+  assert.equal(onomeo.supportsVision, true);
+  assert.equal(onomeo.maxImagesPerRequest, 8);
+  assert.equal(onomeo.supportsTools, true);
+  assert.equal(onomeo.supportsAskStreaming, true);
+  assert.ok(providerIconUrl('onomeo').endsWith('/onomeo.svg'));
+
   const openllm = ADDITIONAL_PROVIDER_DEFAULTS.openllm;
   assert.equal(openllm.type, 'openai', `${browser}: OpenLLM must use the OpenAI-compatible adapter`);
   assert.equal(openllm.baseUrl, 'https://www.openllm.sh/v1', `${browser}: OpenLLM endpoint changed`);
@@ -161,8 +174,8 @@ for (const browser of ['chrome', 'firefox']) {
     assert.equal(provider.supportsAskStreaming, true);
     assert.equal(provider.maxImagesPerRequest, 4);
     assert.deepEqual(Object.entries(ADDITIONAL_PROVIDER_DEFAULTS)
-      .filter(([, config]) => config.maxImagesPerRequest != null).map(([id]) => id), ['abliteration'],
-    'The new image-count limit applies only to Abliteration');
+      .filter(([, config]) => config.maxImagesPerRequest != null).map(([id]) => id), ['abliteration', 'onomeo'],
+    'Only providers with a documented image-count limit should preflight it');
 
     const requests = [];
     const tools = [{ type: 'function', function: { name: 'read_page', parameters: { type: 'object', properties: {} } } }];
@@ -218,6 +231,32 @@ for (const browser of ['chrome', 'firefox']) {
     assert.equal(unlimited.maxImagesPerRequest, null);
     assert.deepEqual(unlimited._buildChatCompletionsBody(fiveImages).messages, fiveImages,
       'Providers without a declared image-count limit keep their existing behavior');
+
+    await providers.updateProvider('onomeo', { apiKey: 'synthetic-onomeo-key' });
+    await providers.setActive('onomeo');
+    const onomeoProvider = providers.getActive();
+    const eightImages = images(8);
+    const nineImages = images(9);
+    const nineImageSnapshot = structuredClone(nineImages);
+    const onomeoOverLimit = error => error.code === 'provider_image_limit'
+      && error.imageCount === 9 && error.maxImagesPerRequest === 8;
+    const requestOffset = requests.length;
+    await onomeoProvider.chat(eightImages, { tools, maxTokens: 256 });
+    for await (const _ of onomeoProvider.chatStream(eightImages, { maxTokens: 256 })) {}
+    await assert.rejects(() => onomeoProvider.chat(nineImages), onomeoOverLimit);
+    await assert.rejects(async () => {
+      for await (const _ of onomeoProvider.chatStream(nineImages)) {}
+    }, onomeoOverLimit);
+    assert.equal(requests.length, requestOffset + 2, 'Nine images must never reach the network');
+    assert.deepEqual(nineImages, nineImageSnapshot, 'Onomeo validation must not mutate history');
+    for (const request of requests.slice(requestOffset)) {
+      assert.equal(request.url, 'https://onomeo.com/v1/chat/completions');
+      assert.equal(request.headers.get('Authorization'), 'Bearer synthetic-onomeo-key');
+      assert.equal(request.body.model, 'deepseek-v4.1-flash');
+      assert.deepEqual(request.body.messages, eightImages);
+    }
+    assert.equal(requests[requestOffset].body.stream ?? false, false);
+    assert.equal(requests[requestOffset + 1].body.stream, true);
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = originalChrome;

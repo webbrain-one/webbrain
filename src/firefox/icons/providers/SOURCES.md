@@ -28,6 +28,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | standardcompute | Standard Compute logo mark (standardcompute.com) |
 | abliteration | [Abliteration.ai official icon](https://abliteration.ai/icon.svg) |
 | aigrow | AIGROW "A" mark, white on black (aigrow.gg) |
+| onomeo | onomeo pixel mascot mark (onomeo.com) |
 
 Brand trademarks remain property of their owners; used only for provider identification in the settings UI.
 
