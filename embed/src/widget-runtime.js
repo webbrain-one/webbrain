@@ -1044,7 +1044,7 @@
         justify-content: flex-end;
         align-items: baseline;
         flex-wrap: wrap;
-        gap: 3px 12px;
+        gap: 3px 8px;
       }
       .wb-chat-history-notice {
         margin: 0 auto 0 0;
@@ -1227,7 +1227,7 @@
             </button>
           </div>
           <div class="wb-footer-meta">
-            <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>This site’s owner can review saved chats.</p>
+            <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>Chats saved for site owner</p>
             <a class="wb-footer-credit" href="https://webbrain.one" target="_blank" rel="noopener noreferrer">Powered by WebBrain</a>
           </div>
         </footer>

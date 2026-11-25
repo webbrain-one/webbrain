@@ -143,12 +143,16 @@ test('the widget links to WebBrain and separates tool rows on a phone', async ()
       const footer = shadow.querySelector('.wb-footer');
       const messages = shadow.getElementById('wb-messages');
       const credit = footer.querySelector('.wb-footer-credit');
+      const notice = footer.querySelector('.wb-chat-history-notice');
+      const noticeBounds = notice.getBoundingClientRect();
+      const creditBounds = credit.getBoundingClientRect();
       const [first, second] = shadow.querySelectorAll('.wb-tool-step');
       return {
         href: credit.getAttribute('href'),
         target: credit.target,
         opensSafely: credit.relList.contains('noopener'),
-        noticeVisible: !footer.querySelector('.wb-chat-history-notice').hidden,
+        noticeVisible: !notice.hidden,
+        footerOnOneLine: noticeBounds.top < creditBounds.bottom && creditBounds.top < noticeBounds.bottom,
         rowGap: second.getBoundingClientRect().top - first.getBoundingClientRect().bottom,
         footerFits: footer.scrollWidth <= footer.clientWidth,
         messagesFit: messages.scrollWidth <= messages.clientWidth,
@@ -158,6 +162,7 @@ test('the widget links to WebBrain and separates tool rows on a phone', async ()
     assert.equal(layout.target, '_blank');
     assert.equal(layout.opensSafely, true);
     assert.equal(layout.noticeVisible, true);
+    assert.equal(layout.footerOnOneLine, true);
     assert.ok(layout.rowGap >= 6);
     assert.equal(layout.footerFits, true);
     assert.equal(layout.messagesFit, true);
