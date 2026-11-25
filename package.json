@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:omarchy": "node --test integrations/omarchy/test/cli.test.mjs",
     "authenticated": "npm --prefix website-tests run cli --",
     "test:authenticated": "npm --prefix website-tests test",
     "test:authenticated:installed": "npm --prefix website-tests run test:installed",

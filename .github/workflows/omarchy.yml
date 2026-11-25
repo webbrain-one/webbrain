@@ -1,0 +1,58 @@
+name: Omarchy integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/omarchy.yml"
+      - "integrations/omarchy/**"
+      - "mcp-server/**"
+      - "docs/omarchy.md"
+      - "web/docs/omarchy/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/omarchy.yml"
+      - "integrations/omarchy/**"
+      - "mcp-server/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omarchy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+      - name: Test setup, configuration preservation, and task handoff
+        run: npm run test:omarchy
+      - name: Verify the bundled MCP source builds
+        run: |
+          npm ci --prefix mcp-server --ignore-scripts --no-audit --no-fund
+          npm run build --prefix mcp-server
+      - name: Read the targeted Omarchy manifest validator
+        uses: actions/checkout@v4
+        with:
+          repository: omacom/omarchy
+          ref: ac2690cd7be4f47e4a255f5e2e78d904d436b068
+          path: .omarchy-reference
+          sparse-checkout: bin/omarchy-plugin-validate
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Validate the native plugin manifest
+        run: bash .omarchy-reference/bin/omarchy-plugin-validate integrations/omarchy
+      - name: Check QML syntax
+        run: |
+          python -m venv /tmp/webbrain-qml
+          /tmp/webbrain-qml/bin/pip install --disable-pip-version-check PySide6-Essentials==6.12.0
+          /tmp/webbrain-qml/bin/pyside6-qmlformat integrations/omarchy/BarWidget.qml > /dev/null
+          /tmp/webbrain-qml/bin/pyside6-qmlformat integrations/omarchy/WebBrainPanel.qml > /dev/null

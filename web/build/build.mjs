@@ -819,6 +819,7 @@ async function main() {
     { loc: `${SITE_ORIGIN}/docs/formats/` },
     { loc: `${SITE_ORIGIN}/docs/google-workspace/` },
     { loc: `${SITE_ORIGIN}/docs/mcp/` },
+    { loc: `${SITE_ORIGIN}/docs/omarchy/` },
     { loc: `${SITE_ORIGIN}/docs/lm-studio/` },
     { loc: `${SITE_ORIGIN}/docs/ollama/` },
     // Every translated guide set: the same page list under /docs/<code>/.
