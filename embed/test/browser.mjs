@@ -126,6 +126,46 @@ test('embed.js loads as a classic script without page errors', async () => {
   await page.close();
 });
 
+test('the widget links to WebBrain and separates tool rows on a phone', async () => {
+  const { page } = await openPage({ modePolicy: 'ask_only', saveChats: true }, [
+    { toolCalls: [
+      { id: 't1', name: 'read_page', arguments: {} },
+      { id: 't2', name: 'get_interactive_elements', arguments: {} },
+    ] },
+    { content: 'Answer from the page.' },
+  ]);
+  try {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.evaluate(() => { window.WebBrain.ask('What is on the page?'); });
+    await page.waitForFunction(() => window.__testShadow.querySelector('.wb-msg-assistant'));
+    const layout = await page.evaluate(() => {
+      const shadow = window.__testShadow;
+      const footer = shadow.querySelector('.wb-footer');
+      const messages = shadow.getElementById('wb-messages');
+      const credit = footer.querySelector('.wb-footer-credit');
+      const [first, second] = shadow.querySelectorAll('.wb-tool-step');
+      return {
+        href: credit.getAttribute('href'),
+        target: credit.target,
+        opensSafely: credit.relList.contains('noopener'),
+        noticeVisible: !footer.querySelector('.wb-chat-history-notice').hidden,
+        rowGap: second.getBoundingClientRect().top - first.getBoundingClientRect().bottom,
+        footerFits: footer.scrollWidth <= footer.clientWidth,
+        messagesFit: messages.scrollWidth <= messages.clientWidth,
+      };
+    });
+    assert.equal(layout.href, 'https://webbrain.one');
+    assert.equal(layout.target, '_blank');
+    assert.equal(layout.opensSafely, true);
+    assert.equal(layout.noticeVisible, true);
+    assert.ok(layout.rowGap >= 6);
+    assert.equal(layout.footerFits, true);
+    assert.equal(layout.messagesFit, true);
+  } finally {
+    await page.close();
+  }
+});
+
 test('embed confirms its mounted page only while installation verification is pending', async () => {
   state.installationChecks = [];
   const { page } = await openPage({ modePolicy: 'ask_only' });

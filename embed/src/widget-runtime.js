@@ -760,7 +760,16 @@
       }
 
       /* Message Bubbles */
+      #wb-messages {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #wb-messages:empty {
+        display: none;
+      }
       .wb-msg {
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -864,8 +873,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
-        padding: 6px 10px;
+        gap: 10px;
+        padding: 8px 11px;
         border-radius: 8px;
         background: var(--bg-input);
         border: 1px solid var(--border);
@@ -875,7 +884,8 @@
       .wb-tool-step-left {
         display: flex;
         align-items: center;
-        gap: 7px;
+        flex-wrap: wrap;
+        gap: 3px 8px;
         min-width: 0;
       }
       .wb-tool-badge {
@@ -883,8 +893,18 @@
         font-size: 11px;
         color: var(--accent);
         font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .wb-tool-detail {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .wb-tool-detail:empty {
+        display: none;
       }
       .wb-tool-status {
+        flex: none;
+        white-space: nowrap;
         font-size: 10.5px;
         color: var(--success);
         font-weight: 600;
@@ -986,7 +1006,7 @@
       }
       .wb-mini-chips {
         display: flex;
-        gap: 5px;
+        gap: 7px;
         overflow-x: auto;
         scrollbar-width: none;
         padding-bottom: 2px;
@@ -997,7 +1017,7 @@
         border: 1px solid var(--border);
         color: var(--text-secondary);
         border-radius: 999px;
-        padding: 3px 9px;
+        padding: 4px 10px;
         font-size: 11px;
         white-space: nowrap;
         cursor: pointer;
@@ -1019,13 +1039,37 @@
       .wb-input-row:focus-within {
         border-color: var(--accent);
       }
+      .wb-footer-meta {
+        display: flex;
+        justify-content: flex-end;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 3px 12px;
+      }
       .wb-chat-history-notice {
-        margin: 0;
+        margin: 0 auto 0 0;
         font-size: 11px;
         color: var(--text-secondary);
       }
+      .wb-footer-credit {
+        padding-block: 2px;
+        color: var(--text-secondary);
+        font-size: 11px;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        white-space: nowrap;
+      }
+      .wb-footer-credit:hover {
+        color: var(--accent);
+      }
+      .wb-footer-credit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 2px;
+      }
       .wb-textarea {
         flex: 1;
+        min-width: 0;
         background: transparent;
         border: none;
         outline: none;
@@ -1182,7 +1226,10 @@
               </svg>
             </button>
           </div>
-          <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>This site’s owner can review saved chats.</p>
+          <div class="wb-footer-meta">
+            <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>This site’s owner can review saved chats.</p>
+            <a class="wb-footer-credit" href="https://webbrain.one" target="_blank" rel="noopener noreferrer">Powered by WebBrain</a>
+          </div>
         </footer>
       </aside>
     </div>
@@ -1663,7 +1710,7 @@
     el.innerHTML = `
       <span class="wb-tool-step-left">
         <span class="wb-tool-badge">${escapeCodeHtml(name)}</span>
-        <span>${escapeCodeHtml(detailText)}</span>
+        <span class="wb-tool-detail">${escapeCodeHtml(detailText)}</span>
       </span>
       <span class="wb-tool-status">${escapeCodeHtml(status)}</span>
     `;
