@@ -10,6 +10,8 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | jan | Jan official app icon |
 | osaurus | [Osaurus official logo](https://github.com/osaurus-ai/osaurus/blob/main/App/osaurus/Assets.xcassets/osaurus-logo.imageset/osaurus-logo-black.svg) (`osaurus-ai/osaurus`, MIT) |
 | rapidmlx | [Rapid-MLX official logo mark](https://rapidmlx.com/rapid-mlx-logo-mark.svg) (`raullenchai/Rapid-MLX`, Apache 2.0) |
+| strata | Official Strata marks for [light](https://github.com/Niko1221/Strata/blob/main/app/host/public/brand/strata-mark-light.svg) and [dark](https://github.com/Niko1221/Strata/blob/main/app/host/public/brand/strata-mark-dark.svg) backgrounds combined into one SVG |
+| maple | [Maple official small icon](https://maple.ai/brand/maple-icon.svg) from the [Maple brand guidelines](https://maple.ai/brand) |
 | localai | LocalAI official logo (`mudler/LocalAI`) |
 | gpt4all | Simple mark (not an official GPT4All brand asset) |
 | local_openai_proxy, webgpu, freebuff2api | WebBrain-authored generic local-runtime marks |

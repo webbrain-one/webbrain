@@ -104,6 +104,14 @@ const PROVIDERS = [
   provider('kuae-cloud-coding-plan', 'KUAE Cloud Coding Plan', 'https://coding-plan-endpoint.kuaecloud.net/v1', 'GLM-4.7', 204800, { category: 'cloud', apiKeyUrl: 'https://docs.mthreads.com/kuaecloud/kuaecloud-doc-online/coding_plan/' }),
   provider('llama', 'Meta Llama API', 'https://api.llama.com/compat/v1', 'llama-4-scout-17b-16e-instruct-fp8', 128000, { category: 'cloud', apiKeyUrl: 'https://llama.developer.meta.com/', supportsVision: true }),
   provider('lucidquery', 'LucidQuery', 'https://api.lucidquery.com/v1', 'lucidnova-rf1-100b', 120000, { apiKeyUrl: 'https://lucidquery.com/docs', supportsVision: true, inputCostPerMillionUsd: 2, outputCostPerMillionUsd: 5 }),
+  // The proxy listens on loopback and forwards inference to Maple.
+  provider('maple', 'Maple Proxy', 'http://127.0.0.1:8080/v1', 'gpt-oss-120b', 131072, {
+    apiKeyUrl: 'https://maple.ai/docs/proxy/authentication',
+    apiKeyPlaceholder: 'Maple API key',
+    requiresApiKey: true,
+    requiresModel: true,
+    suggestions: [],
+  }),
   provider('meganova', 'Meganova', 'https://api.meganova.ai/v1', 'meta-llama/Llama-3.3-70B-Instruct', 131072, { apiKeyUrl: 'https://docs.meganova.ai', inputCostPerMillionUsd: 0.1, outputCostPerMillionUsd: 0.3 }),
   provider('minimax-cn-coding-plan', 'MiniMax Token Plan (China)', 'https://api.minimaxi.com/v1', 'MiniMax-M3', 1000000, { category: 'cloud', apiKeyUrl: 'https://platform.minimaxi.com/docs/token-plan/intro', supportsVision: true, suggestions: ['MiniMax-M3', 'MiniMax-M3.1-Flash', 'MiniMax-M2.7'] }),
   provider('minimax-coding-plan', 'MiniMax Token Plan', 'https://api.minimax.io/v1', 'MiniMax-M3', 1000000, { category: 'cloud', apiKeyUrl: 'https://platform.minimax.io/docs/token-plan/intro', supportsVision: true, suggestions: ['MiniMax-M3', 'MiniMax-M3.1-Flash', 'MiniMax-M2.7'] }),
@@ -139,6 +147,12 @@ const PROVIDERS = [
   provider('stackit', 'STACKIT', 'https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1', 'cortecs/Llama-3.3-70B-Instruct-FP8-Dynamic', 128000, { apiKeyUrl: 'https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/', inputCostPerMillionUsd: 0.53, outputCostPerMillionUsd: 0.76 }),
   provider('standardcompute', 'Standard Compute', 'https://api.stdcmpt.com/v1', 'StandardCompute', 1000000, { apiKeyUrl: 'https://standardcompute.com/dashboard', suggestions: ['StandardCompute', 'deepseek/deepseek-v4-pro', 'deepseek/deepseek-v4-flash', 'z-ai/glm-5.3', 'moonshotai/kimi-k3'] }),
   provider('stepfun', 'StepFun', 'https://api.stepfun.com/v1', 'step-3.7-flash', 262144, { category: 'cloud', apiKeyUrl: 'https://platform.stepfun.com/docs/zh/overview/concept', supportsVision: true, inputCostPerMillionUsd: 2.05, cacheReadCostPerMillionUsd: 0.41, outputCostPerMillionUsd: 9.59, suggestions: ['step-3.7-flash', 'step-3.5-flash'] }),
+  provider('strata', 'Strata (Local)', 'http://127.0.0.1:8080/v1', '', 16384, {
+    category: 'local',
+    apiKeyUrl: 'https://github.com/Niko1221/Strata/blob/main/docs/TERMINAL_LAUNCH.md#after-the-start-the-monitor',
+    apiKeyPlaceholder: 'Optional Strata server API key',
+    requiresModel: true,
+  }),
   provider('submodel', 'submodel', 'https://llm.submodel.ai/v1', 'Qwen/Qwen3-235B-A22B-Thinking-2507', 262144, { apiKeyUrl: 'https://submodel.gitbook.io', inputCostPerMillionUsd: 0.2, outputCostPerMillionUsd: 0.6 }),
   provider('synthetic', 'Synthetic', 'https://api.synthetic.new/openai/v1', 'hf:moonshotai/Kimi-K2.7-Code', 262144, { apiKeyUrl: 'https://synthetic.new/', supportsVision: true, inputCostPerMillionUsd: 0.95, cacheReadCostPerMillionUsd: 0.95, outputCostPerMillionUsd: 4 }),
   provider('tencent-coding-plan', 'Tencent Coding Plan (China)', 'https://api.lkeap.cloud.tencent.com/coding/v3', 'minimax-m2.5', 204800, { category: 'cloud', apiKeyUrl: 'https://cloud.tencent.com/document/product/1772/128947' }),

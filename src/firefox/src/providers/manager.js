@@ -61,7 +61,7 @@ const WEBBRAIN_CLOUD_PROVIDER_IDS = new Set([
 ]);
 const WEBBRAIN_CLOUD_PROVIDER_LABEL = 'WebBrain Compass';
 const DUPLICATE_PROVIDER_SUFFIX = '__duplicate';
-const LOCAL_MODEL_LIST_PROVIDER_IDS = ['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'freebuff2api'];
+const LOCAL_MODEL_LIST_PROVIDER_IDS = ['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth', 'freebuff2api', 'maple', 'strata'];
 const WEBBRAIN_CLOUD_CONTEXT_WINDOW = 1000000;
 const WEBBRAIN_CLOUD_LEGACY_CONTEXT_WINDOW = 256000;
 const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
@@ -2039,7 +2039,7 @@ export class ProviderManager {
   /**
    * Fetch selectable models for local providers. Ollama uses its native
    * /api/tags endpoint; ODS, llama.cpp, LM Studio, Osaurus, Jan, Rapid-MLX, vLLM, SGLang, LocalAI,
-   * GPT4All, Unsloth Studio, and generic local proxies use
+   * GPT4All, Unsloth Studio, Strata, Maple Proxy, and generic local proxies use
    * OpenAI-compatible /v1/models.
    */
   async listProviderModels(id, { detectServerIdentity = false } = {}) {
@@ -2053,9 +2053,9 @@ export class ProviderManager {
       return { ok: false, error: `${provider.config.label || provider.name} API key is required` };
     }
 
-    // A shared OpenAI endpoint on port 8000 cannot identify Rapid-MLX.
-    // Users select its card explicitly before discovery participates in onboarding.
-    if (detectServerIdentity && definitionId === 'rapidmlx' && provider.config.configured !== true) {
+    // A shared OpenAI endpoint cannot identify Rapid-MLX or Strata.
+    // Users select these cards explicitly before discovery participates in onboarding.
+    if (detectServerIdentity && ['rapidmlx', 'strata'].includes(definitionId) && provider.config.configured !== true) {
       return { ok: true, models: [] };
     }
 
@@ -2534,9 +2534,12 @@ export class ProviderManager {
     if (!Array.isArray(source)) return [];
     // Studio exposes its full catalog, but nonresident entries fail when
     // request-time model switching is disabled (the default).
-    const selectable = id === 'unsloth'
-      ? source.filter((m) => m?.loaded !== false)
-      : source;
+    let selectable = source;
+    if (id === 'unsloth') selectable = source.filter((m) => m?.loaded !== false);
+    if (id === 'maple') {
+      // Maple's catalog also includes embedding and audio models.
+      selectable = source.filter((m) => !Array.isArray(m?.tasks) || m.tasks.includes('generate'));
+    }
     const ids = selectable
       .map((m) => {
         if (typeof m === 'string') return m;

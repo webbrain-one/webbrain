@@ -1,0 +1,13 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .outer { fill: #221e1f; }
+    .middle { fill: #10b981; }
+    @media (prefers-color-scheme: dark) {
+      .outer { fill: #eef1f3; }
+      .middle { fill: #34d399; }
+    }
+  </style>
+  <rect class="outer" x="11" y="9" width="26" height="7" rx="3.5"/>
+  <rect class="middle" x="5" y="20.5" width="38" height="7" rx="3.5"/>
+  <rect class="outer" x="11" y="32" width="26" height="7" rx="3.5"/>
+</svg>
