@@ -47,6 +47,19 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(standardcompute.supportsAskStreaming, true);
   assert.ok(providerIconUrl('standardcompute').endsWith('/standardcompute.svg'));
 
+  const teamorouter = ADDITIONAL_PROVIDER_DEFAULTS.teamorouter;
+  assert.equal(teamorouter.type, 'openai', `${browser}: TeamoRouter must use the OpenAI-compatible adapter`);
+  assert.equal(teamorouter.baseUrl, 'https://api.teamorouter.com/v1', `${browser}: TeamoRouter endpoint changed`);
+  assert.equal(teamorouter.model, 'deepseek-v4-flash');
+  assert.equal(teamorouter.contextWindow, 131072);
+  assert.equal(teamorouter.enabled, false);
+  assert.equal(teamorouter.apiKey, '');
+  assert.equal(teamorouter.supportsVision, false);
+  assert.equal(teamorouter.supportsTools, true);
+  assert.equal(teamorouter.supportsAskStreaming, true);
+  assert.equal(teamorouter.apiKeyUrl, 'https://teamorouter.com/dashboard?tab=api-keys');
+  assert.ok(providerIconUrl('teamorouter').endsWith('/teamorouter.svg'));
+
   const aigrow = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
   assert.equal(aigrow.type, 'openai', `${browser}: AIGROW must use the OpenAI-compatible adapter`);
   assert.equal(aigrow.baseUrl, 'https://aigrow.gg/v1', `${browser}: AIGROW endpoint changed`);
