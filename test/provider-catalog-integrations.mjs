@@ -153,6 +153,41 @@ for (const browser of ['chrome', 'firefox']) {
     const { ProviderManager } = await import(pathToFileURL(path.join(prefix, 'providers', 'manager.js')).href);
     const providers = new ProviderManager();
     await providers.load();
+    const { maple, strata } = providers.getAll();
+    for (const [id, config] of Object.entries({ maple, strata })) {
+      assert.equal(config.configured, false, `${browser}: ${id} starts unconfigured`);
+      assert.equal(config.type, 'openai');
+      assert.equal(config.baseUrl, 'http://127.0.0.1:8080/v1');
+      assert.equal(config.supportsAskStreaming, true);
+      assert.ok(providerIconUrl(id).endsWith(`/${id}.svg`));
+      assert.ok(fs.existsSync(path.join(prefix, '..', 'icons', 'providers', `${id}.svg`)));
+    }
+    assert.equal(maple.category, 'router');
+    assert.equal(strata.category, 'local');
+    globalThis.fetch = () => { throw new Error('Model discovery must skip this request'); };
+    assert.deepEqual(await providers.listProviderModels('strata', { detectServerIdentity: true }),
+      { ok: true, models: [] });
+    assert.deepEqual(await providers.listProviderModels('maple'),
+      { ok: false, error: 'Maple Proxy API key is required' });
+
+    const modelListRequests = [];
+    globalThis.fetch = async (url, options) => {
+      const authorization = new Headers(options.headers).get('Authorization');
+      modelListRequests.push({ url: String(url), authorization });
+      const data = authorization ? [
+        { id: 'gpt-oss-120b', tasks: ['generate'] },
+        { id: 'nomic-embed-text', tasks: ['embed'] },
+        { id: 'whisper', tasks: ['transcribe'] },
+      ] : [{ id: 'strata-loaded-model' }];
+      return Response.json({ data });
+    };
+    await providers.updateProvider('maple', { apiKey: 'synthetic-maple-key' }, { markConfigured: false });
+    assert.deepEqual(await providers.listProviderModels('maple'), { ok: true, models: ['gpt-oss-120b'] });
+    assert.deepEqual(await providers.listProviderModels('strata'), { ok: true, models: ['strata-loaded-model'] });
+    assert.deepEqual(modelListRequests, [
+      { url: 'http://127.0.0.1:8080/v1/models', authorization: 'Bearer synthetic-maple-key' },
+      { url: 'http://127.0.0.1:8080/v1/models', authorization: null },
+    ]);
     assert.equal(providers.providers.get('aigrow').contextWindow, 500000,
       `${browser}: a saved Grok model must lose the inherited Haiku default`);
     await providers.updateProvider('aigrow', { model: 'claude-haiku-5.5' });
