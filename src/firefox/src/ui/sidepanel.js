@@ -6221,10 +6221,15 @@ async function restorePendingCurrentClarification(tabId, state, assistantEl, sho
   const current = fresh?.pendingCurrentClarification;
   if (fresh?.runUi?.requestId !== requestId || String(fresh?.runId || '') !== runId) return false;
   if (Number(fresh.runUi.seq || 0) < Number(assistantEl.dataset.lastRenderedSeq || 0)) return false;
-  if (!fresh?.running || isTerminalRunUiStatus(fresh?.runUi?.status) || !current) {
+  if (!fresh?.running || isTerminalRunUiStatus(fresh?.runUi?.status)) {
     invalidateUnresolvedClarifyCards(assistantEl);
     return false;
   }
+  // A live run can stop projecting its prompt (the descriptor compares the
+  // provider object, so a providers reload is enough) while the agent still
+  // awaits the card. Permission cards never time out, so removing one here
+  // hangs the run; keep it answerable and let run_complete close it.
+  if (!current) return false;
   if (current.tabId !== Number(tabId) || current.requestId !== requestId
       || current.runId !== runId || !current.clarifyId || current.data?.clarifyId !== current.clarifyId) return false;
   const pending = current;

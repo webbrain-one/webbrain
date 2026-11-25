@@ -142,6 +142,21 @@ for (const build of builds) {
     } finally { await p.close(); await f.close(); }
   });
 
+  test(`${build.build}: provider reload mid-prompt keeps the awaited permission card answerable`, async () => {
+    const f = fixture(build), wait = f.permission(), p = await panel(f);
+    try {
+      await p.apply(); assert.equal((await p.shape()).permissionCards, 1);
+      // A providers storage reload swaps the provider instance while the run waits.
+      f.agent.providerManager.getActive = () => ({ ...f.provider });
+      assert.equal(f.agent.activeRunState(f.tab).pendingCurrentClarification, null);
+      await p.apply(); await p.apply();
+      assert.equal((await p.shape()).permissionCards, 1, 'A card the agent still awaits must not be removed');
+      assert.equal(p.calls.filter(x => x.action === 'clarify_response').length, 0);
+      await p.page.locator('.clarify-option[data-value="once"]').click();
+      assert.equal(await wait.promise, 'once');
+    } finally { await p.close(); await f.close(); }
+  });
+
   test(`${build.build}: rejected local-owner replay neither relabels newer assistant nor ACKs`, async () => {
     const f = fixture(build); f.permission(); const p = await panel(f, { staleLocalOwner: true });
     try { assert.equal(await p.apply(), false); const shape = await p.shape(); assert.equal(shape.cards, 0); assert.equal(shape.request, '');
