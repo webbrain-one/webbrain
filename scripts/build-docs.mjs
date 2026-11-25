@@ -95,6 +95,16 @@ function withGuideNavigation(html, file) {
     generated = withGoogleWorkspace;
   }
 
+  const hasOmarchyNavigation = /<a href="\/docs\/omarchy\/"[^>]*>Omarchy<\/a>/.test(generated);
+  if (isEnglish && !hasOmarchyNavigation) {
+    const mcpLink = /(<a href="\/docs\/mcp\/"[^>]*>[^<]*<\/a>)/;
+    const withOmarchy = generated.replace(mcpLink, '$1<a href="/docs/omarchy/">Omarchy</a>');
+    if (withOmarchy === generated) {
+      throw new Error(`${path.relative(REPO_ROOT, file)} is missing the MCP guide navigation anchor`);
+    }
+    generated = withOmarchy;
+  }
+
   const companionHref = '/companion/';
   const companionLabel = 'WebBrain Companion';
   const escapedCompanionHref = companionHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
