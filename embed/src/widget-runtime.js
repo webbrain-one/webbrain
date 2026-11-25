@@ -1736,17 +1736,17 @@
   /**
    * Executes a single tool call against upstream WebBrain's `content.js` or `calculator.js`.
    */
-  async function executeInPageTool(name, rawArgs = {}) {
-    const result = await runInPageTool(name, normalizeToolArgs(rawArgs));
+  async function executeInPageTool(name, args) {
+    const result = await runInPageTool(name, args);
     return redactCredentialFields(result);
   }
 
   // The tool schemas let the model repeat a paged call by passing the previous
   // result's continuationArgs; the extension's runtime spreads them into the call.
   function normalizeToolArgs(rawArgs) {
-    const args = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+    const args = rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs) ? rawArgs : {};
     const { continuationArgs, ...rest } = args;
-    return continuationArgs && typeof continuationArgs === 'object'
+    return continuationArgs && typeof continuationArgs === 'object' && !Array.isArray(continuationArgs)
       ? { ...rest, ...continuationArgs }
       : rest;
   }
@@ -1959,14 +1959,14 @@
         pageText: String(initialPageInfo?.text || document.body?.innerText || '').slice(0, 6000),
       };
       const maxSteps = effectiveMode === 'act' ? 8 : 5;
+      const firstStepStatus = effectiveMode === 'act' ? 'Planning page actions...' : 'Reading page...';
+      let previousPageRead;
+      let repeatedPageRead = false;
 
       for (let step = 0; step < maxSteps; step++) {
-        setBusy(
-          true,
-          step === 0
-            ? (effectiveMode === 'act' ? 'Planning page actions...' : 'Reading page...')
-            : `Step ${step + 1} · Reasoning...`
-        );
+        const finalize = repeatedPageRead || step === maxSteps - 1;
+        const stepStatus = step === 0 ? firstStepStatus : `Step ${step + 1} · Reasoning...`;
+        setBusy(true, finalize ? 'Preparing the answer...' : stepStatus);
 
         const res = await fetch(`${apiBase}/api/sites/${encodeURIComponent(siteConfig.siteId)}/chat`, {
           method: 'POST',
@@ -1975,7 +1975,7 @@
           body: JSON.stringify({
             mode: effectiveMode,
             messages: history,
-            finalize: step === maxSteps - 1,
+            finalize,
             pageContext,
           }),
         });
@@ -1991,8 +1991,11 @@
         const toolCalls = (Array.isArray(turn.toolCalls) ? turn.toolCalls : [])
           .map((tc, index) => ({ ...tc, id: tc.id || `call_${history.length}_${index}` }));
 
-        if (toolCalls.length === 0) {
-          const reply = turn.content || 'Done.';
+        if (finalize || toolCalls.length === 0) {
+          const answer = toolCalls.length === 0
+            ? turn.content
+            : toolCalls.find((tc) => tc.name === 'done' && typeof tc.arguments?.summary === 'string')?.arguments.summary;
+          const reply = (typeof answer === 'string' && answer.trim()) || "I couldn't finish answering this turn.";
           history.push({ role: 'assistant', content: reply });
           appendAssistantBubble(reply);
           return;
@@ -2004,9 +2007,11 @@
           toolCalls,
         });
 
+        const precedingPageRead = previousPageRead;
+        previousPageRead = undefined;
         for (const tc of toolCalls) {
           const tcName = tc.name;
-          const tcArgs = tc.arguments || {};
+          const tcArgs = normalizeToolArgs(tc.arguments);
 
           if (tcName === 'done') {
             const summary = tcArgs.summary || turn.content || 'Task complete.';
@@ -2020,7 +2025,7 @@
               ? `${tcArgs.ref_id}${tcArgs.text ? ` "${String(tcArgs.text).slice(0, 24)}"` : ''}`
               : tcArgs.expression
               ? tcArgs.expression
-              : tcArgs.filter || '';
+              : typeof tcArgs.filter === 'string' ? tcArgs.filter : '';
 
           const stepRow = appendToolStep(tcName, argPreview, 'Running…');
           const statusNode = stepRow.querySelector('.wb-tool-status');
@@ -2049,16 +2054,19 @@
           }
 
           const rawOutput = toolOutput?.pageContent || toolOutput;
+          const outputText = typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput);
+          if (effectiveMode === 'ask' && toolCalls.length === 1 && tcName === 'read_page' && typeof toolOutput?.text === 'string') {
+            previousPageRead = outputText;
+            repeatedPageRead = previousPageRead === precedingPageRead;
+          }
           const wrappedResult =
             tcName === 'calculate' || tcName === 'scratchpad_write'
               ? JSON.stringify(toolOutput)
-              : wrapUntrusted(limitToolText(typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput)), tcName);
+              : wrapUntrusted(limitToolText(outputText), tcName);
 
           pushToolResult(history, tc, wrappedResult);
         }
       }
-
-      appendAssistantBubble('Completed all scheduled inspection steps for this turn.');
     } catch (err) {
       if (!signal.aborted) {
         // formatMarkdown escapes the message.

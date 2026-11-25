@@ -176,14 +176,53 @@ test('tool results never carry password or hidden field values', async () => {
 
 test('read_page returns the requested window of the page text', async () => {
   const { page } = await openPage({ modePolicy: 'ask_only' }, [
+    { toolCalls: [{ id: 'r0', name: 'read_page', arguments: { offset: 0, limit: 500 } }] },
     { toolCalls: [{ id: 'r1', name: 'read_page', arguments: { offset: 5, limit: 500 } }] },
     { content: 'ok' },
   ]);
   await page.evaluate(() => { window.WebBrain.ask('Read the page'); });
-  await waitFor(() => state.requests.length >= 2, 'the second /chat request');
-  const content = toolMessages(state.requests[1])[0].content;
+  await waitFor(() => state.requests.length >= 3, 'the third /chat request');
+  assert.equal(state.requests[2].finalize, false, 'A different page window is progress');
+  const content = toolMessages(state.requests[2])[1].content;
   assert.match(content, /"textOffset":5/);
   assert.match(content, /"textLimit":500/);
+  await page.close();
+});
+
+test('an unchanged page read is followed by an answer-only request', async () => {
+  const { page } = await openPage({ modePolicy: 'ask_only' }, [
+    { toolCalls: [{ id: 'r1', name: 'read_page', arguments: { offset: 0, limit: 4000 } }] },
+    { toolCalls: [{ id: 'r2', name: 'read_page', arguments: [] }] },
+    { content: 'Here is what I found on this page.' },
+  ]);
+  await page.evaluate(() => { window.WebBrain.ask('What is on this page?'); });
+  const answer = await page.waitForFunction(() => window.__testShadow.querySelector('.wb-msg-assistant')?.textContent);
+  assert.equal(await answer.jsonValue(), 'Here is what I found on this page.');
+  assert.deepEqual(state.requests.map((request) => request.finalize), [false, false, true]);
+  assert.equal(toolMessages(state.requests[2]).length, 2);
+  const details = await page.evaluate(() => Array.from(
+    window.__testShadow.querySelectorAll('.wb-tool-step-left > span:last-child'),
+    (detail) => detail.textContent,
+  ));
+  assert.deepEqual(details, ['', '']);
+  await page.close();
+});
+
+test('the last Act turn requests an answer and ignores unexpected page actions', async () => {
+  const turns = Array.from({ length: 7 }, (_, i) => ({
+    toolCalls: [{ id: `w${i}`, name: 'get_window_info', arguments: {} }],
+  }));
+  turns.push({
+    content: 'I will click Delete.',
+    toolCalls: [{ id: 'c1', name: 'click', arguments: { selector: '#danger' } }],
+  });
+  const { page } = await openPage({ modePolicy: 'ask_and_act' }, turns);
+  await page.evaluate(() => { window.WebBrain.act('Find the Delete button'); });
+  const answer = await page.waitForFunction(() => window.__testShadow.querySelector('.wb-msg-assistant')?.textContent);
+  assert.match(await answer.jsonValue(), /couldn't finish/);
+  assert.equal(state.requests.length, 8);
+  assert.equal(state.requests.at(-1).finalize, true);
+  assert.equal(await page.evaluate(() => window.__dangerClicks), 0);
   await page.close();
 });
 
