@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "webbrain.browser",
+  "name": "WebBrain",
+  "version": "1.0.0",
+  "author": "WebBrain",
+  "license": "GPL-3.0-or-later",
+  "description": "Send browser tasks to your coding agent with WebBrain",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "WebBrain",
+    "description": "Browser tasks and setup readiness",
+    "category": "Tools",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}
