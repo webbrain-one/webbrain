@@ -187,6 +187,7 @@
     // Read-only until the site's config says otherwise, including when it fails to load.
     modePolicy: 'ask_only',
     defaultMode: 'ask',
+    showLauncher: null, // Wait for config before showing the dock.
     launcherStyle: 'grok',
     launcherLabel: 'Ask AI',
     position: 'bottom-right',
@@ -326,6 +327,7 @@
         pointer-events: none;
         transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
       }
+      .wb-dock[hidden] { display: none; }
       .wb-dock[data-pos="bottom-right"] { bottom: 22px; right: 22px; align-items: flex-end; }
       .wb-dock[data-pos="bottom-left"] { bottom: 22px; left: 22px; align-items: flex-start; }
       .wb-dock[data-pos="top-right"] { top: 22px; right: 22px; align-items: flex-end; flex-direction: column-reverse; }
@@ -1147,7 +1149,7 @@
       </div>
 
       <!-- Floating Launcher Dock -->
-      <div class="wb-dock" id="wb-dock" data-pos="bottom-right">
+      <div class="wb-dock" id="wb-dock" data-pos="bottom-right" hidden>
         <div class="wb-quick-strip" id="wb-quick-strip"></div>
         <button type="button" class="wb-launcher" id="wb-launcher" data-style="grok" aria-label="Launch WebBrain AI">
           <span class="wb-launcher-icon" id="wb-launcher-icon"></span>
@@ -1295,6 +1297,7 @@
     const pos = ['bottom-right', 'bottom-left', 'top-right'].includes(siteConfig.position)
       ? siteConfig.position
       : 'bottom-right';
+    dockEl.hidden = siteConfig.showLauncher !== true;
     dockEl.setAttribute('data-pos', pos);
     panelEl.setAttribute('data-pos', pos);
 
@@ -2210,14 +2213,16 @@
   mountHost();
 
   // Fetch remote site config from SaaS server
+  let latestConfigRequest = 0;
   async function loadRemoteSiteConfig(siteIdToLoad = siteConfig.siteId) {
+    const request = ++latestConfigRequest;
     try {
       const res = await fetch(`${apiBase}/api/sites/${encodeURIComponent(siteIdToLoad)}/config`);
       if (!res.ok) return;
       const remoteConfig = await res.json();
-      if (siteConfig.siteId === siteIdToLoad && remoteConfig && typeof remoteConfig === 'object') {
+      if (request === latestConfigRequest && siteConfig.siteId === siteIdToLoad && remoteConfig && typeof remoteConfig === 'object') {
         const { installationCheckPending, ...settings } = remoteConfig;
-        siteConfig = { ...siteConfig, ...settings };
+        siteConfig = { ...siteConfig, ...settings, showLauncher: settings.showLauncher !== false };
         applyConfigToUI();
         if (installationCheckPending === true && settings.siteId === siteIdToLoad) {
           const reportMount = () => {
@@ -2240,6 +2245,11 @@
       }
     } catch {
       // Keep local defaults if server unreachable
+    } finally {
+      if (request === latestConfigRequest && siteConfig.siteId === siteIdToLoad && siteConfig.showLauncher === null) {
+        siteConfig.showLauncher = true;
+        dockEl.hidden = false;
+      }
     }
   }
   loadRemoteSiteConfig();
@@ -2255,7 +2265,12 @@
     getConfig: () => ({ ...siteConfig }),
     setSiteId: (newSiteId) => {
       if (!newSiteId) return;
-      siteConfig.siteId = String(newSiteId);
+      const nextSiteId = String(newSiteId);
+      if (nextSiteId !== siteConfig.siteId) {
+        siteConfig.showLauncher = null;
+        dockEl.hidden = true;
+      }
+      siteConfig.siteId = nextSiteId;
       siteConfig.saveChats = false;
       chatHistoryNoticeEl.hidden = true;
       inputEl.removeAttribute('aria-describedby');

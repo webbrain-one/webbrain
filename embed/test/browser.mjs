@@ -122,8 +122,39 @@ const toolMessages = (request) => request.messages.filter((m) => m.role === 'too
 test('embed.js loads as a classic script without page errors', async () => {
   const { page, pageErrors } = await openPage({ modePolicy: 'ask_only' });
   assert.equal(await page.evaluate(() => typeof window.__wbEmbedRuntime), 'object');
+  assert.equal(await page.evaluate(() => getComputedStyle(window.__testShadow.getElementById('wb-dock')).display), 'flex');
   assert.deepEqual(pageErrors, []);
   await page.close();
+});
+
+test('a hidden launcher leaves page buttons and the chat SDK working', async () => {
+  const { page, pageErrors } = await openPage({ modePolicy: 'ask_only', showLauncher: false }, [
+    { content: 'Answer from the page button.' },
+    { content: 'Answer from the chat SDK.' },
+  ]);
+  try {
+    const dockDisplay = () => page.evaluate(() => getComputedStyle(window.__testShadow.getElementById('wb-dock')).display);
+    assert.equal(await dockDisplay(), 'none');
+
+    await page.locator('#askbtn').click();
+    await page.waitForFunction(() => window.__testShadow.querySelector('.wb-msg-assistant')?.textContent.includes('Answer from the page button.'));
+
+    await page.evaluate(() => {
+      window.WebBrain.close();
+      window.WebBrain.ask('Question from a custom form');
+    });
+    await page.waitForFunction(() => Array.from(window.__testShadow.querySelectorAll('.wb-msg-assistant')).some((message) =>
+      message.textContent.includes('Answer from the chat SDK.')));
+    assert.equal(await page.evaluate(() => window.__testShadow.getElementById('wb-panel').classList.contains('open')), true);
+    assert.equal(await dockDisplay(), 'none');
+
+    state.config.showLauncher = true;
+    await page.evaluate(() => { window.WebBrain.reloadConfig(); });
+    await waitFor(async () => (await dockDisplay()) === 'flex', 'launcher after it is enabled');
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await page.close();
+  }
 });
 
 test('the widget links to WebBrain and separates tool rows on a phone', async () => {
