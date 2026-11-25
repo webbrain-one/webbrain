@@ -81,6 +81,7 @@ try {
                   return { activeProviderId: manager.activeProviderId };
                 }
                 if (msg.action === 'test_provider') return manager.testProvider(msg.providerId);
+                if (msg.action === 'list_provider_models') return manager.listProviderModels(msg.providerId);
                 if (msg.action === 'duplicate_provider') return manager.duplicateProvider(msg.providerId);
                 if (msg.action === 'remove_duplicate_provider') return manager.removeDuplicateProvider(msg.providerId);
                 if (msg.action === 'set_active_provider') await manager.setActive(msg.providerId);
@@ -99,6 +100,35 @@ try {
         const card = id => page.locator(`.provider-card[data-provider-id="${id}"]`);
         const rootCard = card('llamacpp');
         await rootCard.locator('input[data-key="label"]').waitFor();
+        for (const id of ['strata', 'maple']) {
+          const providerCard = card(id);
+          const icon = providerCard.locator(`img.provider-icon[src$="/${id}.svg"]`);
+          await icon.evaluate(img => img.decode());
+          await providerCard.locator('.provider-header').click();
+          assert.equal(await providerCard.locator('input[data-key="baseUrl"]').inputValue(), 'http://127.0.0.1:8080/v1');
+          const model = id === 'maple' ? 'gpt-oss-120b' : 'strata-loaded-model';
+          const apiKey = id === 'maple' ? 'synthetic-maple-key' : '';
+          if (apiKey) await providerCard.locator('input[data-key="apiKey"]').fill(apiKey);
+          const endpoint = 'http://127.0.0.1:8080/v1/**';
+          await page.route(endpoint, async route => {
+            const request = route.request();
+            assert.equal(await request.headerValue('Authorization'), apiKey ? `Bearer ${apiKey}` : null);
+            if (request.url().endsWith('/models')) {
+              await route.fulfill({ json: { data: [{ id: model, tasks: ['generate'] }] } });
+            } else {
+              assert.ok(request.url().endsWith('/chat/completions'));
+              assert.equal(request.postDataJSON().model, model);
+              await route.fulfill({ json: { choices: [{ message: { content: 'Hi' }, finish_reason: 'stop' }] } });
+            }
+          });
+          await providerCard.locator('.btn-load-models').click();
+          await providerCard.getByRole('option', { name: model, exact: true }).click();
+          assert.equal(await providerCard.locator('input[data-key="model"]').inputValue(), model);
+          await providerCard.locator('.btn-test').click();
+          await providerCard.locator('.test-result.ok.show').waitFor();
+          await page.unroute(endpoint);
+          await providerCard.locator('.provider-header').click();
+        }
         const aigrowCard = card('aigrow');
         await aigrowCard.locator('.provider-header').click();
         const aigrowPicker = aigrowCard.locator('.model-select');

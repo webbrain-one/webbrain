@@ -306,9 +306,12 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(anthropic.model, 'claude-sonnet-5');
     assert.deepEqual(lean.resolveLeanMode('auto', { provider: anthropic }),
       { active: true, setting: 'auto', reason: 'strong_cloud_model', family: 'claude' });
+    // Maple uses a loopback proxy for hosted inference.
+    const maple = built('maple');
+    assert.equal(maple.config.category, 'router');
+    assert.equal(maple.promptTier, 'full');
     // Auto agrees with ProviderManager.categoryFor on every built-in except
-    // the two local relays to the cloud, and every other built-in whose
-    // default URL is on this machine is local.
+    // the two local relays to the cloud. Other loopback runtimes run locally.
     const relays = ['webbrain_companion', 'local_openai_proxy'];
     for (const [id, config] of Object.entries(defaults)) {
       const category = ProviderManager.categoryFor(id, config);
@@ -318,7 +321,9 @@ for (const build of ['chrome', 'firefox']) {
       if (relay) assert.equal(category, 'local', `${id} is a local address`);
       assert.equal(info.local, category === 'local' && !relay, `${id} is ${category}`);
       assert.equal(info.cloud, category !== 'local' || relay, `${id} is ${category}`);
-      if (!relay && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])[:/]/.test(String(config.baseUrl || ''))) assert.ok(info.local, `${id} runs locally`);
+      if (!relay && id !== 'maple' && /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])[:/]/.test(String(config.baseUrl || ''))) {
+        assert.ok(info.local, `${id} runs locally`);
+      }
     }
   });
 

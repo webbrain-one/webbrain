@@ -3616,6 +3616,11 @@ function renderProviders() {
       .sort((a, b) => a.rank - b.rank || a.index - b.index)
       .map(({ entry }) => entry);
   }
+  const modelLoadingProviders = [
+    'llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm',
+    'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy',
+    'unsloth', 'maple', 'strata',
+  ];
   let visibleCount = 0;
   for (const [id, config] of entries) {
     const isSelected = id === activeProviderId;
@@ -3635,6 +3640,7 @@ function renderProviders() {
     let fieldsHTML = '';
     let collapsedFieldsHTML = '';
     for (const field of fieldDefs) {
+      const canLoadModels = field.key === 'model' && modelLoadingProviders.includes(definitionId);
       let fieldHTML = '';
       const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
       const placeholder = field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '');
@@ -3671,7 +3677,7 @@ function renderProviders() {
         if (field.hintKey) {
           fieldHTML += `<div class="field-hint" style="margin:-4px 0 10px;font-size:12px;color:var(--text2);">${escapeHtml(t(field.hintKey))}</div>`;
         }
-        } else if (field.suggestions && field.key === 'model') {
+      } else if (field.suggestions && field.key === 'model' && !canLoadModels) {
         const rawVal = config[field.key] || '';
         const isCustom = rawVal && !field.suggestions.includes(rawVal);
         const isBlankDuplicate = config.isDuplicate && !rawVal;
@@ -3691,8 +3697,6 @@ function renderProviders() {
           </div>
         `;
       } else {
-        const localModelProviders = ['llamacpp', 'ollama', 'ods', 'lmstudio', 'osaurus', 'jan', 'rapidmlx', 'vllm', 'sglang', 'localai', 'gpt4all', 'webbrain_companion', 'local_openai_proxy', 'unsloth'];
-        const canLoadModels = localModelProviders.includes(definitionId) && field.key === 'model';
         const listAttr = canLoadModels ? `list="models-${id}"` : '';
         const datalistHTML = canLoadModels ? `<datalist id="models-${id}"></datalist>` : '';
         const loadedModelsDialogHTML = canLoadModels

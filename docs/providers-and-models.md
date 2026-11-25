@@ -543,12 +543,12 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 92 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 94 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **127 built-in providers on Chromium** and **126 on Firefox**; the
-difference is the Chromium-only in-browser WebGPU runtime.
+Settings → Models → LLM lists **129 built-in providers on Chromium** and **128
+on Firefox**. The difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -562,6 +562,7 @@ difference is the Chromium-only in-browser WebGPU runtime.
 | `aigrow`                                                                                                                                                                                                                                                                                                                       |
 | `onomeo`                                                                                                                                                                                                                                                                                                                       |
 | `teamorouter`                                                                                                                                                                                                                                                                                                                  |
+| `maple`, `strata` |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -586,6 +587,22 @@ OpenAI-compatible proxy. Start the server, then configure the **Freebuff2API
 select a model with **Load Models**. Enter a proxy API key only when its
 `API_KEYS` access control is enabled; Freebuff authentication tokens remain on
 the proxy server and are never entered into WebBrain.
+
+#### Strata and Maple Proxy
+
+Both cards default to `http://127.0.0.1:8080/v1`. To run both services at once,
+configure separate ports and enter each service's URL on its card.
+
+- **Strata (Local)** runs inference on your computer. Start a model in Strata
+  and select it with **Load Models**. Enter the server key if authentication
+  is enabled, and set the context window to match the loaded model.
+  [Strata connection guide](https://github.com/Niko1221/Strata/blob/main/docs/TERMINAL_LAUNCH.md#connect-your-apps-strata-connect)
+- **Maple Proxy** forwards inference to Maple. For browser access, enable
+  CORS in Maple Research's Local Proxy or run the standalone Docker image
+  bound to loopback. Enter a Maple API key. The default model is
+  `gpt-oss-120b`. Use **Load Models** or enter a chat model ID. For a
+  different model, set its context window and enable vision if it accepts images.
+  [Maple Proxy setup](https://maple.ai/docs/proxy) · [Maple Docker setup](https://maple.ai/docs/proxy/configuration) · [Maple model capabilities](https://maple.ai/docs/proxy/models)
 
 #### IO.NET and Synthetic
 
