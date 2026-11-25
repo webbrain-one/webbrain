@@ -8394,7 +8394,7 @@ export class Agent extends LoopDetector {
     if (!task || !binding.text || !provider || !runId) return null;
     try {
       return { task, taskSha: this._sha256TextSync(binding.text), provider,
-        providerSha: this._sha256TextSync(JSON.stringify([provider.model, provider.config])),
+        providerSha: this._sha256TextSync(JSON.stringify([provider.config?._providerId, provider.name, provider.model, provider.config])),
         runId, abortState: this._runAbortStates.get(tabId),
         generation: this._systemOneGenerations?.get(tabId) || 0,
         steering: this._steeringRuns.get(tabId) || null,
@@ -8422,6 +8422,9 @@ export class Agent extends LoopDetector {
     display.options = Array.isArray(data.options) ? data.options.slice(0, 5).map(value => String(value).slice(0, 600)) : [];
     if (data.permission) {
       display.permission = record(data.permission, ['capability', 'host', 'grouped']);
+      if (data.permission.upload && typeof data.permission.upload === 'object') {
+        display.permission.upload = uploadApprovalCard(data.permission.upload);
+      }
       if (Array.isArray(data.permission.groupedCapabilities)) display.permission.groupedCapabilities =
         data.permission.groupedCapabilities.slice(0, 8).map(value => String(value).slice(0, 40));
     }
@@ -8469,8 +8472,11 @@ export class Agent extends LoopDetector {
     if (!current) return null;
     for (const [clarifyId, entry] of this._pendingClarifications.get(tabId) || []) {
       const saved = entry.uiCurrentClarification, previous = saved?.authority;
-      if (entry.settled || !previous || !['task', 'taskSha', 'provider', 'providerSha',
+      if (entry.settled || !previous || !['task', 'taskSha', 'providerSha',
           'runId', 'abortState', 'generation', 'steering', 'revision'].every(key => previous[key] === current[key])) continue;
+      // Reloading unchanged provider settings must not hide a permission
+      // still awaiting an explicit answer for this exact run and task.
+      if (previous.provider !== current.provider && saved.display.promptKind !== 'permission') continue;
       const data = structuredClone(saved.display);
       if (entry.timeoutSec > 0 && entry.deadlineTs > 0) {
         data.timeoutSec = entry.timeoutSec;
