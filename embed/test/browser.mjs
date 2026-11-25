@@ -39,7 +39,7 @@ const PAGE = `<!doctype html>
 </html>`;
 
 const bundle = buildEmbedBundle();
-const state = { config: {}, turns: [], requests: [] };
+const state = { config: {}, turns: [], requests: [], installationChecks: [] };
 let server;
 let browser;
 let origin;
@@ -53,6 +53,15 @@ before(async () => {
     if (req.url === '/') return send(200, 'text/html', PAGE);
     if (req.url === '/embed.js') return send(200, 'text/javascript', bundle);
     if (req.url === '/api/sites/site_test/config') return send(200, 'application/json', JSON.stringify(state.config));
+    if (req.url === '/api/sites/site_test/installation-check' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        state.installationChecks.push({ type: req.headers['content-type'], body: JSON.parse(body) });
+        send(204, 'text/plain', '');
+      });
+      return undefined;
+    }
     if (req.url === '/api/sites/site_test/chat' && req.method === 'POST') {
       let body = '';
       req.on('data', (chunk) => { body += chunk; });
@@ -115,6 +124,25 @@ test('embed.js loads as a classic script without page errors', async () => {
   assert.equal(await page.evaluate(() => typeof window.__wbEmbedRuntime), 'object');
   assert.deepEqual(pageErrors, []);
   await page.close();
+});
+
+test('embed confirms its mounted page only while installation verification is pending', async () => {
+  state.installationChecks = [];
+  const { page } = await openPage({ modePolicy: 'ask_only' });
+  try {
+    assert.deepEqual(state.installationChecks, []);
+    await page.evaluate(() => history.replaceState(null, '', '/docs/install?edition=team#details'));
+    state.config.installationCheckPending = true;
+    await page.evaluate(() => window.WebBrain.reloadConfig());
+    await waitFor(() => state.installationChecks.length === 1, 'the installation check');
+    assert.deepEqual(state.installationChecks, [{
+      type: 'text/plain',
+      body: { path: '/docs/install', search: '?edition=team' },
+    }]);
+    assert.equal(await page.evaluate(() => window.WebBrain.getConfig().installationCheckPending), undefined);
+  } finally {
+    await page.close();
+  }
 });
 
 test('navigate refuses javascript: URLs', async () => {
