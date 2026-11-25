@@ -1227,7 +1227,7 @@
             </button>
           </div>
           <div class="wb-footer-meta">
-            <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>Chats saved for site owner</p>
+            <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>Chats may be saved</p>
             <a class="wb-footer-credit" href="https://webbrain.one" target="_blank" rel="noopener noreferrer">Powered by WebBrain</a>
           </div>
         </footer>
