@@ -51,7 +51,7 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(teamorouter.type, 'openai', `${browser}: TeamoRouter must use the OpenAI-compatible adapter`);
   assert.equal(teamorouter.baseUrl, 'https://api.teamorouter.com/v1', `${browser}: TeamoRouter endpoint changed`);
   assert.equal(teamorouter.model, 'deepseek-v4-flash');
-  assert.equal(teamorouter.contextWindow, 131072);
+  assert.equal(teamorouter.contextWindow, 1000000);
   assert.equal(teamorouter.enabled, false);
   assert.equal(teamorouter.apiKey, '');
   assert.equal(teamorouter.supportsVision, false);

@@ -825,7 +825,8 @@ https://api.teamorouter.com/v1/models` with a key returns the list, and the
 billed per token.
 
 In WebBrain, open **Settings → Models → LLM → TeamoRouter**, paste your API key,
-keep the default `deepseek-v4-flash` model (131072 tokens), then click
+keep the default [`deepseek-v4-flash`](https://teamorouter.com/models/deepseek-v4-flash)
+model (1 million tokens of context), then click
 **Test Connection**. Interactive Ask streaming and tool calls work through the
 existing OpenAI-compatible path. The default model is text-only, so the card
 starts with vision off.
