@@ -145,6 +145,43 @@ test('embed confirms its mounted page only while installation verification is pe
   }
 });
 
+test('the widget discloses chat saving and sends stable conversation and turn IDs', async () => {
+  const { page } = await openPage({ modePolicy: 'ask_only', saveChats: true }, [
+    { toolCalls: [{ id: 'r1', name: 'read_page', arguments: {} }] },
+    { content: 'First answer' },
+    { content: 'Second answer' },
+    { content: 'New chat answer' },
+    { content: 'Unsaved answer' },
+  ]);
+  try {
+    const noticeHidden = () => page.evaluate(() => window.__testShadow.getElementById('wb-chat-history-notice').hidden);
+    assert.equal(await noticeHidden(), false);
+    async function ask(question, answer) {
+      await page.evaluate((text) => { window.WebBrain.ask(text); }, question);
+      await page.waitForFunction((expected) => [...window.__testShadow.querySelectorAll('.wb-msg-assistant')].at(-1)?.textContent === expected, answer);
+    }
+    await ask('First question', 'First answer');
+    await ask('Second question', 'Second answer');
+    await page.evaluate(() => window.WebBrain.clear());
+    await ask('Start again', 'New chat answer');
+    const [first, toolStep, second, cleared] = state.requests.map((request) => request.transcript);
+    assert.deepEqual(first, toolStep);
+    assert.match(first.chatId, /^[a-z0-9]{24}$/);
+    assert.equal(first.question, 'First question');
+    assert.equal(second.chatId, first.chatId);
+    assert.notEqual(second.turnId, first.turnId);
+    assert.notEqual(cleared.chatId, first.chatId);
+
+    state.config.saveChats = false;
+    await page.evaluate(() => window.WebBrain.reloadConfig());
+    await waitFor(noticeHidden, 'saving notice to hide');
+    await ask('Unsaved question', 'Unsaved answer');
+    assert.equal(state.requests.at(-1).transcript, undefined);
+  } finally {
+    await page.close();
+  }
+});
+
 test('navigate refuses javascript: URLs', async () => {
   const { page } = await openPage({ modePolicy: 'ask_and_act' }, [
     { toolCalls: [{ id: 'n1', name: 'navigate', arguments: { url: 'javascript:window.__pwned=1' } }] },

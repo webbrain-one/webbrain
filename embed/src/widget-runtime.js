@@ -194,6 +194,7 @@
     accentColor: '#5b52e8',
     greeting: 'How can I help with this page?',
     selectionShortcut: true,
+    saveChats: false,
     customQuestions: [],
     inlineTriggers: [],
     providerStatus: { configured: false, model: 'gpt-4o-mini' },
@@ -207,6 +208,7 @@
   let activeRun = null;
   let indicatorHideTimer = null;
   let conversation = [];
+  let chatId = '';
   let scratchpadNotes = [];
   let activityBrainHandle = null;
 
@@ -1017,6 +1019,11 @@
       .wb-input-row:focus-within {
         border-color: var(--accent);
       }
+      .wb-chat-history-notice {
+        margin: 0;
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
       .wb-textarea {
         flex: 1;
         background: transparent;
@@ -1175,6 +1182,7 @@
               </svg>
             </button>
           </div>
+          <p class="wb-chat-history-notice" id="wb-chat-history-notice" hidden>This site’s owner can review saved chats.</p>
         </footer>
       </aside>
     </div>
@@ -1204,6 +1212,7 @@
   const modeAskBtn = shadow.getElementById('wb-mode-ask');
   const modeActBtn = shadow.getElementById('wb-mode-act');
   const modeLockBadgeEl = shadow.getElementById('wb-mode-lock-badge');
+  const chatHistoryNoticeEl = shadow.getElementById('wb-chat-history-notice');
   const inputEl = shadow.getElementById('wb-input');
   const sendBtn = shadow.getElementById('wb-btn-send');
   const stopBtn = shadow.getElementById('wb-btn-stop');
@@ -1264,6 +1273,9 @@
     brandTitleEl.textContent = siteConfig.name || 'WebBrain AI';
     brandSubtitleEl.textContent = canAct() ? 'Ask & Act Agent' : 'Ask Mode · Read-Only';
     greetingEl.textContent = siteConfig.greeting || 'How can I help with this page?';
+    chatHistoryNoticeEl.hidden = siteConfig.saveChats !== true;
+    if (chatHistoryNoticeEl.hidden) inputEl.removeAttribute('aria-describedby');
+    else inputEl.setAttribute('aria-describedby', chatHistoryNoticeEl.id);
     emptyDescEl.textContent = canAct()
       ? 'Ask questions about this page or let WebBrain fill forms, click buttons, and automate tasks.'
       : 'Ask questions, summarize content, extract tables, and analyze this page.';
@@ -1629,6 +1641,7 @@
   function clearConversation() {
     stopActiveRun();
     conversation = [];
+    chatId = '';
     scratchpadNotes = [];
     messagesEl.innerHTML = '';
     emptyEl.style.display = '';
@@ -1919,8 +1932,14 @@
     currentMode = effectiveMode;
     updateModeButtons();
 
-    appendUserBubble(String(display || '').trim() || text);
+    const question = String(display || '').trim() || text;
+    appendUserBubble(question);
     inputEl.value = '';
+    let transcript;
+    if (siteConfig.saveChats === true) {
+      chatId ||= randomToken(24);
+      transcript = { chatId, turnId: randomToken(24), question: [...question].slice(0, 16000).join('') };
+    }
 
     // A cleared chat replaces `conversation`, so the run keeps its own history.
     const history = conversation;
@@ -1977,6 +1996,7 @@
             messages: history,
             finalize,
             pageContext,
+            transcript,
           }),
         });
 
@@ -2148,7 +2168,7 @@
       const res = await fetch(`${apiBase}/api/sites/${encodeURIComponent(siteIdToLoad)}/config`);
       if (!res.ok) return;
       const remoteConfig = await res.json();
-      if (remoteConfig && typeof remoteConfig === 'object') {
+      if (siteConfig.siteId === siteIdToLoad && remoteConfig && typeof remoteConfig === 'object') {
         const { installationCheckPending, ...settings } = remoteConfig;
         siteConfig = { ...siteConfig, ...settings };
         applyConfigToUI();
@@ -2189,6 +2209,9 @@
     setSiteId: (newSiteId) => {
       if (!newSiteId) return;
       siteConfig.siteId = String(newSiteId);
+      siteConfig.saveChats = false;
+      chatHistoryNoticeEl.hidden = true;
+      inputEl.removeAttribute('aria-describedby');
       clearConversation();
       loadRemoteSiteConfig(siteConfig.siteId);
     },

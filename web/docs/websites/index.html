@@ -148,12 +148,12 @@ WebBrain.reloadConfig();   // pick up dashboard changes without a reload</pre>
       <section class="doc-section" id="privacy"><h2>Privacy and safety</h2>
         <ul>
           <li><strong>What leaves the visitor's browser:</strong> their question, the conversation so far, and the parts of the page the assistant read. They go to sites.webbrain.one and on to the AI model provider for that turn.</li>
-          <li><strong>What we keep:</strong> counts per site (conversations, Ask and Act runs, tool calls) and the day's usage. Not the conversations.</li>
+          <li><strong>What we keep:</strong> WebBrain keeps usage counts and, by default, saves visitor messages and replies for authorized site managers to review in Chat history. Site managers can turn off future saving under <strong>Settings → Save visitor chats</strong>.</li>
           <li><strong>Passwords stay out.</strong> Values of password, hidden and other credential fields are never put in what the assistant reads.</li>
           <li><strong>Pages are untrusted.</strong> Page text is passed to the model marked as untrusted content, so text on a page can't pose as instructions. As with any AI agent, this reduces the risk; it doesn't remove it.</li>
           <li><strong>Visitors stay in control.</strong> Every Act run shows a glow around the page and a Stop button.</li>
         </ul>
-        <div class="callout"><strong class="callout-title">Tell your visitors</strong><p>If your privacy policy lists the services your site uses, add that page content and questions asked in the assistant are sent to WebBrain and its AI model provider to answer them.</p></div>
+        <div class="callout"><strong class="callout-title">Tell your visitors</strong><p>Disclose that WebBrain and its AI model provider receive the question and page context. If you save chats, explain that your site can review them. The widget shows a notice while chat saving is on.</p></div>
       </section>
 
       <section class="doc-section" id="troubleshooting"><h2>Troubleshooting</h2>
