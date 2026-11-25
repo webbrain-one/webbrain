@@ -2141,8 +2141,27 @@
       if (!res.ok) return;
       const remoteConfig = await res.json();
       if (remoteConfig && typeof remoteConfig === 'object') {
-        siteConfig = { ...siteConfig, ...remoteConfig };
+        const { installationCheckPending, ...settings } = remoteConfig;
+        siteConfig = { ...siteConfig, ...settings };
         applyConfigToUI();
+        if (installationCheckPending === true && settings.siteId === siteIdToLoad) {
+          const reportMount = () => {
+            if (!hostEl.isConnected || siteConfig.siteId !== siteIdToLoad) return;
+            const endpoint = apiBase + '/api/sites/' + encodeURIComponent(siteIdToLoad) + '/installation-check';
+            void fetch(endpoint, {
+              method: 'POST',
+              credentials: 'omit',
+              referrerPolicy: 'no-referrer',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ path: location.pathname, search: location.search }),
+            }).catch(() => {});
+          };
+          if (hostEl.isConnected || document.readyState !== 'loading') {
+            reportMount();
+          } else {
+            window.addEventListener('DOMContentLoaded', reportMount, { once: true });
+          }
+        }
       }
     } catch {
       // Keep local defaults if server unreachable
