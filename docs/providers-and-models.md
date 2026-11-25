@@ -543,12 +543,12 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 93 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 94 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **128 built-in providers on Chromium** and **127 on Firefox**; the
-difference is the Chromium-only in-browser WebGPU runtime.
+Settings → Models → LLM lists **129 built-in providers on Chromium** and **128
+on Firefox**. The difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -560,7 +560,9 @@ difference is the Chromium-only in-browser WebGPU runtime.
 | `standardcompute`                                                                                                                                                                                                                                                                                                              |
 | `openllm`                                                                                                                                                                                                                                                                                                                      |
 | `aigrow`                                                                                                                                                                                                                                                                                                                       |
-| `maple`, `onomeo`, `strata` |
+| `onomeo`                                                                                                                                                                                                                                                                                                                       |
+| `teamorouter`                                                                                                                                                                                                                                                                                                                  |
+| `maple`, `strata` |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -826,6 +828,30 @@ per account for up to 30 days. Its
 [default model's privacy notice](https://onomeo.com/models/deepseek-v4.1-flash)
 says the upstream model provider may use prompts and answers for training.
 Do not use this provider with sensitive page content.
+
+#### TeamoRouter
+
+[TeamoRouter](https://teamorouter.com) is an OpenAI-compatible gateway for GLM,
+Kimi, DeepSeek, Qwen, Claude, GPT and Gemini models behind one endpoint,
+`https://api.teamorouter.com/v1`, with a Bearer key from the
+[dashboard](https://teamorouter.com/dashboard?tab=api-keys). Model IDs are plain
+slugs without a vendor prefix (`deepseek-v4-flash`, `glm-5.3`, `kimi-k3.1-pro`,
+`claude-sonnet-5-5`, `gpt-6.2-astra` and others); `GET
+https://api.teamorouter.com/v1/models` with a key returns the list, and the
+[models page](https://teamorouter.com/models) shows prices. Usage is prepaid and
+billed per token.
+
+In WebBrain, open **Settings → Models → LLM → TeamoRouter**, paste your API key,
+keep the default [`deepseek-v4-flash`](https://teamorouter.com/models/deepseek-v4-flash)
+model (1 million tokens of context), then click
+**Test Connection**. Interactive Ask streaming and tool calls work through the
+existing OpenAI-compatible path. The default model is text-only, so the card
+starts with vision off.
+
+This is an **opt-in cloud provider**, not local inference. Prompts, page
+context and, when enabled, screenshots leave the browser and are sent to
+TeamoRouter and the upstream model provider. See the
+[privacy policy](https://teamorouter.com/privacy).
 
 ### Ask response streaming
 

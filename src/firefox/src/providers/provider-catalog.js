@@ -155,6 +155,7 @@ const PROVIDERS = [
   }),
   provider('submodel', 'submodel', 'https://llm.submodel.ai/v1', 'Qwen/Qwen3-235B-A22B-Thinking-2507', 262144, { apiKeyUrl: 'https://submodel.gitbook.io', inputCostPerMillionUsd: 0.2, outputCostPerMillionUsd: 0.6 }),
   provider('synthetic', 'Synthetic', 'https://api.synthetic.new/openai/v1', 'hf:moonshotai/Kimi-K2.7-Code', 262144, { apiKeyUrl: 'https://synthetic.new/', supportsVision: true, inputCostPerMillionUsd: 0.95, cacheReadCostPerMillionUsd: 0.95, outputCostPerMillionUsd: 4 }),
+  provider('teamorouter', 'TeamoRouter', 'https://api.teamorouter.com/v1', 'deepseek-v4-flash', 1000000, { apiKeyUrl: 'https://teamorouter.com/dashboard?tab=api-keys', suggestions: ['deepseek-v4-flash', 'glm-5.3', 'deepseek-v4-pro', 'kimi-k3.1-pro', 'claude-sonnet-5-5', 'gpt-6.2-astra'] }),
   provider('tencent-coding-plan', 'Tencent Coding Plan (China)', 'https://api.lkeap.cloud.tencent.com/coding/v3', 'minimax-m2.5', 204800, { category: 'cloud', apiKeyUrl: 'https://cloud.tencent.com/document/product/1772/128947' }),
   provider('upstage', 'Upstage', 'https://api.upstage.ai/v1/solar', 'solar-pro2', 65536, { category: 'cloud', apiKeyUrl: 'https://console.upstage.ai/api-keys', inputCostPerMillionUsd: 0.25, outputCostPerMillionUsd: 0.25 }),
   provider('v0', 'v0', 'https://api.v0.dev/v1', 'v0-1.0-md', 128000, { category: 'cloud', apiKeyUrl: 'https://v0.dev/chat/settings/keys', supportsVision: true, inputCostPerMillionUsd: 3, outputCostPerMillionUsd: 15 }),

@@ -9,6 +9,7 @@ globalThis.chrome = globalThis.browser = { storage: { local: area, session: area
 const builds = await Promise.all(['chrome', 'firefox'].map(async build => ({
   build, Agent: (await import(`../src/${build}/src/agent/agent.js`)).Agent,
   journalModule: await import(`../src/${build}/src/run-ui-journal.js`),
+  uploadApprovalCard: (await import(`../src/${build}/src/agent/permission-gate.js`)).uploadApprovalCard,
   source: await fs.readFile(new URL(`../src/${build}/src/ui/sidepanel.js`, import.meta.url), 'utf8'),
   background: await fs.readFile(new URL(`../src/${build}/src/background.js`, import.meta.url), 'utf8'),
   recoveryUi: await fs.readFile(new URL(`../src/${build}/src/ui/failure-recovery.js`, import.meta.url), 'utf8'),
@@ -27,7 +28,9 @@ before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
 function fixture(build) {
-  const provider = { name: 'owned', model: 'owned', config: { endpoint: 'http://owned.invalid', account: 'owned-account' } };
+  const config = { endpoint: 'http://owned.invalid', account: 'owned-account' };
+  Object.defineProperty(config, '_providerId', { value: 'owned' });
+  const provider = { name: 'owned', model: 'owned', config };
   const agent = new build.Agent({ getActive: () => provider });
   const tab = 73, request = 'owned-current-request', runId = 'owned-current-runtime';
   agent._persist = () => {}; agent._runningTabs.add(tab); agent.currentRunId.set(tab, runId);
@@ -56,7 +59,20 @@ function fixture(build) {
   const f = { ...build, provider, agent, tab, request, runId, journal, messages, context, waits,
     state: () => context.publicState({ action: 'agent_run_state', tabId: tab, requestId: request }),
     emit: (type, data) => context.sendAgentUpdate(tab, request, type, data),
-    permission() { let prompt; const promise = agent._promptPermission(tab, 'click', 'owned.invalid', (type, data) => { prompt = data; f.emit(type, data); }); waits.push(promise); return { promise, prompt }; },
+    reloadProvider(id = provider.config._providerId) {
+      const reloadedConfig = Object.defineProperty(structuredClone(provider.config), '_providerId', { value: id });
+      const reloaded = { ...provider, config: reloadedConfig };
+      agent.providerManager.getActive = () => reloaded;
+    },
+    permission(upload = null) {
+      let prompt;
+      const promise = agent._promptPermission(tab, upload ? 'upload' : 'click', 'owned.invalid', (type, data) => {
+        prompt = data;
+        f.emit(type, data);
+      }, upload);
+      waits.push(promise);
+      return { promise, prompt };
+    },
     async ordinary() { let prompt; agent.clarifyTimeoutSec = 30; const ready = deferred();
       const promise = agent._executeToolImpl(tab, 'clarify', { question: 'Choose an owned test option.', options: ['first', 'second'] },
         (type, data) => { prompt = data; f.emit(type, data); ready.resolve(); });
@@ -92,7 +108,12 @@ async function panel(f, options = {}) {
     'restorePendingCurrentClarification', 'submitClarify', 'restoreActiveRunState', 'placeAnsweredClarifyCardInTimeline', 'workflowHealingTargetLabel',
     'syncFailureRecoveryButtons', 'bindFailureRecoveryCard', 'renderFailureRecoveryCard', 'reconcileFailureRecoveryCards'];
   const functions = names.map(name => extract(f.source, name)).join('\n');
-  const helpers = `${f.journalModule.runUiDiscardedBeforeSeq.toString()}\n${f.journalModule.runUiUnavailableBeforeSeq.toString()}\n${f.recoveryUi.replaceAll('export function ', 'function ')}`;
+  const helpers = [
+    f.journalModule.runUiDiscardedBeforeSeq.toString(),
+    f.journalModule.runUiUnavailableBeforeSeq.toString(),
+    f.uploadApprovalCard.toString(),
+    f.recoveryUi.replaceAll('export function ', 'function '),
+  ].join('\n');
   await page.evaluate(({ functions, helpers, tab, options }) => {
     document.body.innerHTML = '<div id="messages"><div class="message assistant"><div class="message-content"><div class="message-text"></div></div></div></div>';
     const noop = () => {};
@@ -142,6 +163,55 @@ for (const build of builds) {
     } finally { await p.close(); await f.close(); }
   });
 
+  test(`${build.build}: provider reload mid-prompt keeps the awaited permission card answerable`, async () => {
+    const f = fixture(build), wait = f.permission(), p = await panel(f);
+    try {
+      await p.apply(); assert.equal((await p.shape()).permissionCards, 1);
+      assert.equal(f.journal.get(f.tab).events.length, 0);
+      f.reloadProvider();
+      await p.apply();
+      assert.equal((await p.shape()).permissionCards, 1);
+      await p.clearHtml();
+      await p.apply();
+      assert.equal(await p.page.locator('.clarify-card').getAttribute('data-clarify-id'), wait.prompt.clarifyId);
+      assert.equal(p.calls.filter(x => x.action === 'clarify_response').length, 0);
+      await p.page.locator('.clarify-option[data-value="once"]').click();
+      assert.equal(await wait.promise, 'once');
+    } finally { await p.close(); await f.close(); }
+  });
+
+  test(`${build.build}: steering dismisses a cancelled permission while the run continues`, async () => {
+    const f = fixture(build), wait = f.permission(), p = await panel(f);
+    try {
+      await p.apply();
+      assert.equal((await p.shape()).permissionCards, 1);
+      const result = f.agent.steerMessage(f.tab, 'Change the task.', { requestId: f.request, messageId: 'new-correction' });
+      assert.equal(result.accepted, true);
+      assert.equal(await wait.promise, null);
+      const state = await f.state();
+      assert.equal(state.running, true);
+      await p.apply(state);
+      assert.equal((await p.shape()).permissionCards, 0);
+    } finally { await p.close(); await f.close(); }
+  });
+
+  test(`${build.build}: restored upload permission still names the exact file and only allows once`, async () => {
+    const f = fixture(build);
+    const wait = f.permission({ kind: 'path', path: '/owned/test-file.txt' });
+    const p = await panel(f);
+    try {
+      await p.apply();
+      f.reloadProvider();
+      await p.clearHtml();
+      await p.apply();
+      const card = p.page.locator('.clarify-card[data-upload-exact-file="1"]');
+      assert.match(await card.innerText(), /Local path: \/owned\/test-file\.txt/);
+      assert.deepEqual(await card.locator('button').evaluateAll(buttons => buttons.map(button => button.dataset.value)), ['once', 'deny']);
+      await card.locator('[data-value="deny"]').click();
+      assert.equal(await wait.promise, 'deny');
+    } finally { await p.close(); await f.close(); }
+  });
+
   test(`${build.build}: rejected local-owner replay neither relabels newer assistant nor ACKs`, async () => {
     const f = fixture(build); f.permission(); const p = await panel(f, { staleLocalOwner: true });
     try { assert.equal(await p.apply(), false); const shape = await p.shape(); assert.equal(shape.cards, 0); assert.equal(shape.request, '');
@@ -149,7 +219,7 @@ for (const build of builds) {
     finally { await p.close(); await f.close(); }
   });
 
-  for (const change of ['settled', 'Stop', 'new-run', 'same-text-new-task', 'provider-object', 'provider-config', 'steering-revision', 'queued-steering', 'worker-loss']) {
+  for (const change of ['settled', 'Stop', 'new-run', 'same-text-new-task', 'provider-id', 'provider-config', 'steering-revision', 'queued-steering', 'worker-loss']) {
     test(`${build.build}: live descriptor refuses ${change}`, async () => {
       const f = fixture(build), wait = f.permission();
       const originalEntry = f.agent._pendingClarifications.get(f.tab).get(wait.prompt.clarifyId);
@@ -162,7 +232,7 @@ for (const build of builds) {
         if (change === 'Stop') f.agent.abortFlags.set(f.tab, true);
         if (change === 'new-run') f.agent.currentRunId.set(f.tab, 'new-runtime');
         if (change === 'same-text-new-task') f.agent.conversations.get(f.tab).push({ role: 'user', content: 'Inspect the owned test page.' });
-        if (change === 'provider-object') f.agent.providerManager.getActive = () => ({ ...f.provider });
+        if (change === 'provider-id') f.reloadProvider('different-provider');
         if (change === 'provider-config') f.provider.config.endpoint = 'http://changed.invalid';
         if (change === 'steering-revision') f.agent._steeringRuns.get(f.tab).revision++;
         if (change === 'queued-steering') f.agent._steeringRuns.get(f.tab).messages.push({ id: 'new-correction', text: 'Only explain.' });
@@ -257,11 +327,13 @@ for (const build of builds) {
     } finally { await p.close(); await f.close(); }
   });
 
-  test(`${build.build}: failed permission transport recreates only the actual still-live prompt`, async () => {
+  for (const reload of [false, true]) test(`${build.build}: failed permission transport recreates only the actual still-live prompt${reload ? ' after provider reload' : ''}`, async () => {
     const f = fixture(build), wait = f.permission(); let rejected = false;
     const p = await panel(f, { beforeAnswer: async () => { if (!rejected) { rejected = true; throw new Error('Owned transport failure'); } } });
     try {
-      await p.apply(); await p.page.locator('.clarify-option[data-value="once"]').click();
+      await p.apply();
+      if (reload) f.reloadProvider();
+      await p.page.locator('.clarify-option[data-value="once"]').click();
       await p.page.waitForFunction(() => document.querySelectorAll('.clarify-card[data-permission="1"]').length === 1);
       assert.equal(p.calls.filter(x => x.action === 'clarify_response').length, 1);
       await p.page.locator('.clarify-option[data-value="deny"]').click(); assert.equal(await wait.promise, 'deny');
