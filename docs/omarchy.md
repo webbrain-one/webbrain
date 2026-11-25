@@ -32,7 +32,7 @@ exists, but the MCP path has not been verified on a real Firefox installation.
 Clone the integration and MCP source from the same WebBrain checkout:
 
 ```bash
-git clone --filter=blob:none --sparse --depth 1 https://github.com/webbrain-one/webbrain.git
+git clone --filter=blob:none --sparse --depth 1 https://github.com/esokullu/webbrain.git
 cd webbrain
 git sparse-checkout set integrations/omarchy mcp-server
 node integrations/omarchy/bin/webbrain-omarchy.mjs install --agent claude
