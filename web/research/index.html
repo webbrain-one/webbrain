@@ -361,8 +361,6 @@
     .ve-eye { position: relative; width: 58px; height: 34px; border: 2px solid var(--accent); border-radius: 50% / 50%; }
     .ve-eye i { position: absolute; inset: 7px 19px; border-radius: 50%; background: var(--accent); }
 
-    .viz-shield span { display: block; width: 52px; height: 60px; background: var(--success); clip-path: polygon(50% 0, 100% 16%, 92% 66%, 50% 100%, 8% 66%, 0 16%); opacity: 0.85; }
-
     .viz-bits { display: flex; flex-direction: column; gap: 7px; }
     .viz-bits span { display: block; width: var(--w); min-width: 74px; padding: 5px 8px; border-radius: 6px; background: var(--tint-medium); }
     .viz-bits span:last-child { background: var(--accent); color: #fff; }
@@ -493,6 +491,74 @@
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
+
+    .viz-shield { display: flex; align-items: center; gap: 10px; }
+    .viz-shield img { display: block; border-radius: 10px; }
+    .shield-connector { width: 24px; height: 2px; background: var(--border-strong); }
+
+    .viz-openfal {
+      --model-gap: clamp(20px, 4vw, 52px);
+      display: grid;
+      grid-template-columns: clamp(54px, 8vw, 112px) minmax(0, 1fr);
+      align-items: center;
+      gap: var(--model-gap);
+      width: 100%;
+      padding: clamp(12px, 2vw, 24px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--bg);
+    }
+    .openfal-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--bg-card);
+    }
+    .openfal-mark img { display: block; width: 76%; height: auto; }
+    .openfal-mark::after, .openfal-models li::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: calc(var(--model-gap) / 2 + 1px);
+      height: 1px;
+      background: var(--accent);
+    }
+    .openfal-mark::after { inset-inline-start: 100%; }
+    .openfal-models {
+      position: relative;
+      display: grid;
+      grid-auto-rows: 1fr;
+      list-style: none;
+    }
+    .openfal-models::before {
+      content: '';
+      position: absolute;
+      inset-block: 12.5%;
+      inset-inline-start: calc(var(--model-gap) / -2);
+      width: 1px;
+      background: var(--accent);
+    }
+    .openfal-models li {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 38px;
+      margin-block: 3px;
+      padding: 7px clamp(8px, 1.5vw, 14px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      font: 650 13px/1.2 var(--mono);
+      overflow-wrap: anywhere;
+    }
+    .openfal-models li::before { inset-inline-end: 100%; }
+
+    @media (max-width: 1080px) {
+      .tile-full:has(.viz-openfal) { align-items: stretch; }
     }
 
   </style>
@@ -738,6 +804,26 @@
       <span class="tile-stats"><span class="tile-stat"><b>30.68M</b><span>parameters trained to add vision to Laguna XS 2.1</span></span><span class="tile-stat"><b>$0.073</b><span>per replay, against $0.670 for Qwen 3.6 27B</span></span></span>
       <span class="tile-more">Read the introduction</span>
     </a>
+    <a class="tile tile-full" href="https://openfal.org/">
+      <div class="tile-lead">
+        <span class="tile-kind">Local inference server</span>
+      <h2>openfal</h2>
+      <p>Generate images and video on your own hardware with an open-source, fal-compatible API.</p>
+        <span class="tile-stats"><span class="tile-stat"><b>3.98 s</b><span>Qwen-Image-2.1 warm latency on an RTX 5090 (1344×768, 8 steps)</span></span></span>
+      <span class="tile-more">Visit openfal</span>
+      </div>
+      <div class="viz viz-openfal">
+      <div class="openfal-mark">
+        <img src="/assets/research/openfal.svg" width="364" height="364" alt="">
+      </div>
+      <ul class="openfal-models" aria-label="Supported models">
+        <li>Qwen-Image-2.1</li>
+        <li>Wan 2.2</li>
+        <li>MiniMax H3</li>
+        <li>MiniMax H3 Image</li>
+      </ul>
+    </div>
+    </a>
     <a class="tile tile-m" href="/research/efficient-serving/">
       <span class="tile-kind">Quantization</span>
       <h2>Fast local serving</h2>
@@ -755,7 +841,14 @@
       <span class="tile-kind">Tiny classifier</span>
       <h2>SafeSocial</h2>
       <p>A 13.6 MB image classifier that runs on the device and blurs social-comparison triggers on Instagram, without waking an LLM for every image.</p>
-      <div class="viz viz-shield" aria-hidden="true"><span></span></div>
+      <div class="viz viz-shield" aria-hidden="true">
+      <img src="/assets/research/instagram.webp" width="42" height="42" alt="">
+      <span class="shield-connector"></span>
+      <svg width="55" height="60" viewBox="0 0 44 48" fill="none" stroke="var(--success)" stroke-width="2.6" stroke-linejoin="round">
+        <path d="M22 3c5.5 3.8 11.2 5.3 17 5.8V21c0 10.5-5.8 18.2-17 24C10.8 39.2 5 31.5 5 21V8.8c5.8-.5 11.5-2 17-5.8Z" fill="var(--success-bg)"/>
+        <path d="m14 23.5 5.3 5.2L30 18" stroke-linecap="round"/>
+      </svg>
+    </div>
       <span class="tile-stats"><span class="tile-stat"><b>13.6 MB</b><span>EfficientNet-Lite0, runs locally</span></span></span>
       <span class="tile-more">Read the introduction</span>
     </a>

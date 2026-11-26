@@ -1,0 +1,67 @@
+    .viz-shield { display: flex; align-items: center; gap: 10px; }
+    .viz-shield img { display: block; border-radius: 10px; }
+    .shield-connector { width: 24px; height: 2px; background: var(--border-strong); }
+
+    .viz-openfal {
+      --model-gap: clamp(20px, 4vw, 52px);
+      display: grid;
+      grid-template-columns: clamp(54px, 8vw, 112px) minmax(0, 1fr);
+      align-items: center;
+      gap: var(--model-gap);
+      width: 100%;
+      padding: clamp(12px, 2vw, 24px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--bg);
+    }
+    .openfal-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: var(--bg-card);
+    }
+    .openfal-mark img { display: block; width: 76%; height: auto; }
+    .openfal-mark::after, .openfal-models li::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: calc(var(--model-gap) / 2 + 1px);
+      height: 1px;
+      background: var(--accent);
+    }
+    .openfal-mark::after { inset-inline-start: 100%; }
+    .openfal-models {
+      position: relative;
+      display: grid;
+      grid-auto-rows: 1fr;
+      list-style: none;
+    }
+    .openfal-models::before {
+      content: '';
+      position: absolute;
+      inset-block: 12.5%;
+      inset-inline-start: calc(var(--model-gap) / -2);
+      width: 1px;
+      background: var(--accent);
+    }
+    .openfal-models li {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 38px;
+      margin-block: 3px;
+      padding: 7px clamp(8px, 1.5vw, 14px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      font: 650 13px/1.2 var(--mono);
+      overflow-wrap: anywhere;
+    }
+    .openfal-models li::before { inset-inline-end: 100%; }
+
+    @media (max-width: 1080px) {
+      .tile-full:has(.viz-openfal) { align-items: stretch; }
+    }

@@ -58,7 +58,7 @@ import {
   siteFooter,
   withSiteFooter,
 } from './site-footer.mjs';
-import { RESEARCH_PATH, renderResearchPages, researchPathFor } from './research.mjs';
+import { renderResearchPages, researchPathFor } from './research.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');           // web/
@@ -72,6 +72,7 @@ const FAQ_TEMPLATE_PATH = path.join(BUILD_DIR, 'faq-template.html');
 const RESEARCH_TEMPLATE_PATH = path.join(BUILD_DIR, 'research-template.html');
 const RESEARCH_DATA_PATH = path.join(BUILD_DIR, 'research.json');
 const RESEARCH_STYLES_PATH = path.join(BUILD_DIR, 'research.css');
+const RESEARCH_INDEX_STYLES_PATH = path.join(ROOT, 'assets', 'research', 'mosaic.css');
 const SITE_ORIGIN = 'https://webbrain.one';
 const SOCIAL_IMAGE_URL = `${SITE_ORIGIN}/og-image.png`;
 const WEBSITES_PATH = '/websites/';
@@ -707,6 +708,12 @@ async function main() {
   const researchTemplate = await readFile(RESEARCH_TEMPLATE_PATH, 'utf8');
   const researchData = JSON.parse(await readFile(RESEARCH_DATA_PATH, 'utf8'));
   const researchStyles = await readFile(RESEARCH_STYLES_PATH, 'utf8');
+  const researchIndexStyles = await readFile(RESEARCH_INDEX_STYLES_PATH, 'utf8');
+  const researchPages = renderResearchPages(researchTemplate, researchData, {
+    origin: SITE_ORIGIN,
+    styles: researchStyles,
+    indexStyles: researchIndexStyles,
+  });
   validateFaqRegistry();
   validateFooterLanguageOrder();
   await syncLanguageFlagAssets();
@@ -756,8 +763,8 @@ async function main() {
     // WebBrain for websites launches in English only.
     if (locale.isDefault) {
       pages.push({ page: 'websites', source: websitesTemplate, outPath: path.join(ROOT, 'websites', 'index.html') });
-      // Research is English-only too: the mosaic plus one page per research line.
-      for (const research of renderResearchPages(researchTemplate, researchData, { origin: SITE_ORIGIN, styles: researchStyles })) {
+      // Research is English-only too.
+      for (const research of researchPages) {
         pages.push({
           page: 'research',
           source: research.html,
@@ -802,8 +809,7 @@ async function main() {
   const sitemapUrls = [
     ...LOCALES.map((l) => ({ loc: homeUrlFor(l), alternates: 'home' })),
     ...(WEBSITES_LAUNCHED ? [{ loc: `${SITE_ORIGIN}${WEBSITES_PATH}` }] : []),
-    { loc: `${SITE_ORIGIN}${RESEARCH_PATH}` },
-    ...researchData.projects.map((project) => ({ loc: `${SITE_ORIGIN}${researchPathFor(project.slug)}` })),
+    ...researchPages.map(({ slug }) => ({ loc: `${SITE_ORIGIN}${researchPathFor(slug)}` })),
     ...LOCALES.map((l) => ({ loc: faqUrlFor(l), alternates: 'faq' })),
     { loc: `${SITE_ORIGIN}/privacy` },
     { loc: `${SITE_ORIGIN}/subscribe/` },

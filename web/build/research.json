@@ -1293,6 +1293,23 @@
       ]
     },
     {
+      "slug": "openfal",
+      "name": "openfal",
+      "kind": "Local inference server",
+      "summary": "Generate images and video on your own hardware with an open-source, fal-compatible API.",
+      "externalUrl": "https://openfal.org/",
+      "tile": {
+        "size": "full",
+        "visual": "openfal",
+        "stats": [
+          {
+            "value": "3.98 s",
+            "label": "Qwen-Image-2.1 warm latency on an RTX 5090 (1344×768, 8 steps)"
+          }
+        ]
+      }
+    },
+    {
       "slug": "efficient-serving",
       "name": "Fast local serving",
       "kind": "Quantization",

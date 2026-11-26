@@ -151,8 +151,6 @@
     .ve-eye { position: relative; width: 58px; height: 34px; border: 2px solid var(--accent); border-radius: 50% / 50%; }
     .ve-eye i { position: absolute; inset: 7px 19px; border-radius: 50%; background: var(--accent); }
 
-    .viz-shield span { display: block; width: 52px; height: 60px; background: var(--success); clip-path: polygon(50% 0, 100% 16%, 92% 66%, 50% 100%, 8% 66%, 0 16%); opacity: 0.85; }
-
     .viz-bits { display: flex; flex-direction: column; gap: 7px; }
     .viz-bits span { display: block; width: var(--w); min-width: 74px; padding: 5px 8px; border-radius: 6px; background: var(--tint-medium); }
     .viz-bits span:last-child { background: var(--accent); color: #fff; }

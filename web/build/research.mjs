@@ -1,6 +1,6 @@
 /**
  * The Research section: /research/ (a mosaic of WebBrain's research lines)
- * and one page per line at /research/<slug>/.
+ * and detail pages at /research/<slug>/.
  *
  * Content lives in web/build/research.json; this module turns it into the
  * {{research_*}} placeholders that web/build/research-template.html expects.
@@ -87,7 +87,14 @@ const VISUALS = {
     return `<div class="viz viz-bars" aria-hidden="true">${rows}</div>`;
   },
   eye: () => `<div class="viz viz-eye" aria-hidden="true"><span class="ve-model">LLM</span><span class="ve-plus">+</span><span class="ve-eye"><i></i></span></div>`,
-  shield: () => `<div class="viz viz-shield" aria-hidden="true"><span></span></div>`,
+  shield: () => `<div class="viz viz-shield" aria-hidden="true">
+      <img src="/assets/research/instagram.webp" width="42" height="42" alt="">
+      <span class="shield-connector"></span>
+      <svg width="55" height="60" viewBox="0 0 44 48" fill="none" stroke="var(--success)" stroke-width="2.6" stroke-linejoin="round">
+        <path d="M22 3c5.5 3.8 11.2 5.3 17 5.8V21c0 10.5-5.8 18.2-17 24C10.8 39.2 5 31.5 5 21V8.8c5.8-.5 11.5-2 17-5.8Z" fill="var(--success-bg)"/>
+        <path d="m14 23.5 5.3 5.2L30 18" stroke-linecap="round"/>
+      </svg>
+    </div>`,
   bits: () => `<div class="viz viz-bits" aria-hidden="true">
       <span style="--w:100%"><b>BF16</b></span>
       <span style="--w:50%"><b>FP8</b></span>
@@ -101,6 +108,17 @@ const VISUALS = {
   decision: () => `<div class="viz viz-decision" aria-hidden="true">
       <span class="vd-q">Is the cart ready to check out?</span>
       <span class="vd-a"><b>yes</b><i>no</i></span>
+    </div>`,
+  openfal: () => `<div class="viz viz-openfal">
+      <div class="openfal-mark">
+        <img src="/assets/research/openfal.svg" width="364" height="364" alt="">
+      </div>
+      <ul class="openfal-models" aria-label="Supported models">
+        <li>Qwen-Image-2.1</li>
+        <li>Wan 2.2</li>
+        <li>MiniMax H3</li>
+        <li>MiniMax H3 Image</li>
+      </ul>
     </div>`,
   unified: () => `<div class="viz viz-unified" aria-hidden="true">
       <div class="vu-stack">
@@ -131,15 +149,17 @@ const VISUALS = {
 
 function renderTile(project) {
   const tile = project.tile || {};
+  const href = esc(project.externalUrl || researchPathFor(project.slug));
+  const linkLabel = project.externalUrl ? `Visit ${project.name}` : 'Read the introduction';
   const visual = VISUALS[tile.visual] ? VISUALS[tile.visual](tile) : '';
   const stats = (tile.stats || []).map((stat) => `<span class="tile-stat"><b>${esc(stat.value)}</b><span>${esc(stat.label)}</span></span>`).join('');
   const body = `<span class="tile-kind">${esc(project.kind)}</span>
       <h2>${esc(project.name)}</h2>
       <p>${inline(project.summary)}</p>`;
   const tail = `${stats ? `<span class="tile-stats">${stats}</span>` : ''}
-      <span class="tile-more">Read the introduction</span>`;
+      <span class="tile-more">${esc(linkLabel)}</span>`;
   if (tile.size === 'full') {
-    return `<a class="tile tile-full" href="${researchPathFor(project.slug)}">
+    return `<a class="tile tile-full" href="${href}">
       <div class="tile-lead">
         ${body}
         ${tail}
@@ -147,7 +167,7 @@ function renderTile(project) {
       ${visual}
     </a>`;
   }
-  return `<a class="tile tile-${esc(tile.size || 'm')}" href="${researchPathFor(project.slug)}">
+  return `<a class="tile tile-${esc(tile.size || 'm')}" href="${href}">
       ${body}
       ${visual}
       ${tail}
@@ -214,7 +234,7 @@ function renderResults(results) {
     </section>`;
 }
 
-function renderDetail(data, project) {
+function renderDetail(project, next) {
   const page = project.page || {};
   const stats = (page.stats || project.tile?.stats || []).map((stat) => `<div><b>${esc(stat.value)}</b><span>${esc(stat.label)}</span></div>`).join('');
   const sections = (page.sections || []).map((section) => `<section class="detail-block">
@@ -229,8 +249,6 @@ function renderDetail(data, project) {
     : '';
   const posts = (project.posts || []).map((post) => `<li><a href="/blog/${esc(post.slug)}/">${esc(post.title)}</a><span>${esc(post.date)}</span></li>`).join('');
   const links = (project.links || []).map((link) => `<a class="detail-link" href="${esc(link.url)}"${/^https?:/.test(link.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(link.label)}</a>`).join('');
-  const index = data.projects.findIndex((p) => p.slug === project.slug);
-  const next = data.projects[(index + 1) % data.projects.length];
   return `  <nav class="crumbs" aria-label="Breadcrumb"><a href="${RESEARCH_PATH}">Research</a><span aria-hidden="true">/</span><span>${esc(project.name)}</span></nav>
   <section class="detail-hero" aria-labelledby="detail-title">
     <div>
@@ -266,13 +284,13 @@ function jsonLd(value) {
  * Every Research page, ready for applyTemplate(): [{ path, slug, html }].
  * `origin` is the site origin used for canonical URLs.
  */
-export function renderResearchPages(template, data, { origin, styles }) {
+export function renderResearchPages(template, data, { origin, styles, indexStyles }) {
   const pages = [];
   const fill = (main, { title, description, slug, ld }) => template
     .replace(/\{\{research_title\}\}/g, () => esc(title))
     .replace(/\{\{research_description\}\}/g, () => esc(description))
     .replace(/\{\{research_jsonld\}\}/g, () => jsonLd(ld))
-    .replace(/\{\{research_styles\}\}/g, () => styles)
+    .replace(/\{\{research_styles\}\}/g, () => (slug ? styles : `${styles}\n${indexStyles}`))
     .replace(/\{\{research_nav_current\}\}/g, () => (slug ? '' : ' aria-current="page"'))
     .replace(/\{\{page_url\}\}/g, () => `${origin}${researchPathFor(slug)}`)
     .replace(/\{\{research_main\}\}/g, () => main);
@@ -293,10 +311,12 @@ export function renderResearchPages(template, data, { origin, styles }) {
       },
     }),
   });
-  for (const project of data.projects) {
+  const localProjects = data.projects.filter((project) => !project.externalUrl);
+  for (const [index, project] of localProjects.entries()) {
+    const next = localProjects[(index + 1) % localProjects.length];
     pages.push({
       slug: project.slug,
-      html: fill(renderDetail(data, project), {
+      html: fill(renderDetail(project, next), {
         title: `${project.name} — WebBrain Research`,
         description: project.summary.replace(/\*\*|\[|\]\([^)]*\)/g, ''),
         slug: project.slug,

@@ -45856,7 +45856,7 @@ test('homepage MCP section gives a prompt to paste into the coding agent', () =>
   assert.match(template, /navigator\.clipboard\.writeText\(value\)\.then\(copied, fallback\)/, 'web home: copy uses the clipboard with a selection fallback');
 });
 
-test('research section renders a mosaic and one page per research line', () => {
+test('research section renders a mosaic with local pages and external links', () => {
   const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/build/research.json'), 'utf8'));
   const index = fs.readFileSync(path.join(ROOT, 'web/research/index.html'), 'utf8');
   const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/vercel.json'), 'utf8'));
@@ -45876,6 +45876,11 @@ test('research section renders a mosaic and one page per research line', () => {
     assert.match(project.slug, /^[a-z0-9-]+$/);
     assert.ok(!slugs.has(project.slug), `research: duplicate slug ${project.slug}`);
     slugs.add(project.slug);
+    if (project.externalUrl) {
+      assert.ok(index.includes(`href="${project.externalUrl}"`), `research: ${project.slug} external tile link missing`);
+      assert.ok(!sitemap.includes(`<loc>https://webbrain.one/research/${project.slug}/</loc>`), `sitemap: ${project.slug} links offsite`);
+      continue;
+    }
     assert.ok(index.includes(`href="/research/${project.slug}/"`), `research: ${project.slug} tile missing`);
     assert.ok(sitemap.includes(`<loc>https://webbrain.one/research/${project.slug}/</loc>`), `sitemap: ${project.slug} missing`);
     const page = fs.readFileSync(path.join(ROOT, `web/research/${project.slug}/index.html`), 'utf8');
