@@ -187,7 +187,7 @@ func (a *App) routes(e *gin.Engine) {
 		s := a.Snapshot()
 		var local []gin.H
 		if s.Local.Phase == localmodel.PhaseRunning {
-			local = append(local, gin.H{"id": localmodel.ModelID, "name": s.Local.ModelName, "vision": s.Local.Plan.Vision != "off", "context": s.Local.Plan.Context})
+			local = append(local, gin.H{"id": s.Local.ModelID, "name": s.Local.ModelName, "vision": s.Local.Plan.Vision != "off", "context": s.Local.Plan.Context})
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"app":             "webbrain-companion",

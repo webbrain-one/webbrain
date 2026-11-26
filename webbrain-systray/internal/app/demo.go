@@ -58,7 +58,7 @@ func applyDemo(s *Snapshot) {
 			{Window: "week", Label: "Week", Remaining: pct(12), ResetAt: at(75 * time.Hour)},
 		}),
 	}
-	s.Models = []string{"bonsai-2-27b", "claude-haiku-5-5", "claude-opus-5-5", "claude-sonnet-5-5", "gemini-3.8-flash", "gemini-4-argon",
+	s.Models = []string{localmodel.ModelID, "claude-haiku-5-5", "claude-opus-5-5", "claude-sonnet-5-5", "gemini-3.8-flash", "gemini-4-argon",
 		"gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol", "grok-4.7", "grok-4.7-build-fast"}
 
 	info := sysinfo.Info{OS: "darwin", Arch: "arm64", CPU: "Apple M4 Max", Cores: 16, MemoryBytes: 64 << 30, AvailableBytes: 41 << 30, AppleSilicon: true,
@@ -73,7 +73,7 @@ func applyDemo(s *Snapshot) {
 	s.Local.VisionMode = "auto"
 	s.Local.AutoStart = true
 	s.Local.Installed = map[string]bool{"gguf": true, "mlx": false}
-	s.Local.DiskBytes = 6575895904
+	s.Local.DiskBytes = 6_623_081_824
 	s.Local.Phase = localmodel.PhaseRunning
 	s.Local.Port = 18081
 	s.Local.StartedAt = &started
@@ -81,9 +81,9 @@ func applyDemo(s *Snapshot) {
 	if mode == "download" {
 		s.Local.Installed["gguf"] = false
 		s.Local.Phase = localmodel.PhaseDownloading
-		s.Local.Step = "Bonsai 2 27B weights (PTQ1_0)"
-		s.Local.Progress = &download.Progress{Done: 2_812_000_000, Total: 6_587_469_701, BytesPerSec: 48_600_000}
-		s.Local.DownloadBytes = 6_587_469_701
+		s.Local.Step = localmodel.ModelName + " weights (PTQ1_0)"
+		s.Local.DownloadBytes = s.Local.DiskBytes + 13_209_869
+		s.Local.Progress = &download.Progress{Done: 2_812_000_000, Total: s.Local.DownloadBytes, BytesPerSec: 48_600_000}
 		s.Local.DiskBytes = 0
 		s.Local.StartedAt = nil
 	}

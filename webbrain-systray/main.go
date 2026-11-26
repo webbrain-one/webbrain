@@ -1,6 +1,6 @@
 // WebBrain Companion: a small tray app that exposes your AI subscriptions as
 // OpenAI / Anthropic / Gemini compatible endpoints on 127.0.0.1 (via an
-// embedded CLIProxyAPI), shows their remaining quotas, can run Bonsai 2 27B
+// embedded CLIProxyAPI), shows their remaining quotas, can run Bonsai 2.5 27B
 // locally, and hosts WebBrain's d1 decision model.
 package main
 

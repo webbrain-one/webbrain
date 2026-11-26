@@ -25,7 +25,7 @@ Go module licenses for the full dependency graph are listed by
 
 | Component | License | Notes |
 |---|---|---|
-| [Ternary Bonsai 2 27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) GGUF / [MLX](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-mlx-2bit) (PrismML) | Apache-2.0 | Pinned revisions, SHA-256 verified |
+| [Ternary Bonsai 2.5 27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF) GGUF / [MLX](https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-mlx-2bit) (PrismML) | Apache-2.0 | Pinned revisions, SHA-256 verified |
 | [PrismML llama.cpp fork](https://github.com/PrismML-Eng/llama.cpp) release `prism-b10787-73bfe6c` | MIT | Needed for PTQ1_0; stock llama.cpp rejects it |
 | MLX, mlx-vlm, mlx-lm, transformers (PyPI, via [uv](https://github.com/astral-sh/uv)) | MIT / Apache-2.0 | Apple Silicon MLX path only |
 | [webbrain-compass-vld-v6-2b-onnx](https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-onnx) | LFM Open License v1.0 (`lfm1.0`) | Fine-tune of LiquidAI LFM3-VL-2B; same terms as d1, including the US$10M revenue threshold for commercial use |

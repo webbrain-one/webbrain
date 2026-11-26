@@ -119,7 +119,7 @@ func (m *Manager) format(info sysinfo.Info) string {
 
 // --- locations -----------------------------------------------------------------
 
-func ggufDir() string { return filepath.Join(paths.Models(), "bonsai-2-27b-gguf") }
+func ggufDir() string { return filepath.Join(paths.Models(), ModelID+"-gguf") }
 func mlxDir() string  { return filepath.Join(paths.Models(), mlxPack.Dir) }
 func uvDir() string   { return filepath.Join(paths.Runtimes(), "uv-"+uvVersion) }
 func mlxVenv() string { return filepath.Join(paths.Runtimes(), "mlx-venv") }
@@ -679,7 +679,7 @@ func (m *Manager) installGGUF(ctx context.Context, info sysinfo.Info) error {
 	rdir := runtimeDir(plan)
 	dl := filepath.Join(paths.Runtimes(), "_downloads")
 	items := []item{
-		{"Bonsai 2 27B weights (PTQ1_0)", hfURL(gguf.Repo, gguf.Rev, gguf.Model.Name), filepath.Join(ggufDir(), gguf.Model.Name), gguf.Model.Size, gguf.Model.SHA256},
+		{ModelName + " weights (PTQ1_0)", hfURL(gguf.Repo, gguf.Rev, gguf.Model.Name), filepath.Join(ggufDir(), gguf.Model.Name), gguf.Model.Size, gguf.Model.SHA256},
 		{"Vision projector (mmproj Q8_0)", hfURL(gguf.Repo, gguf.Rev, gguf.Proj.Name), filepath.Join(ggufDir(), gguf.Proj.Name), gguf.Proj.Size, gguf.Proj.SHA256},
 	}
 	runtimeReady := runtimeInstalled(plan)
@@ -729,7 +729,7 @@ func (m *Manager) installGGUF(ctx context.Context, info sysinfo.Info) error {
 func (m *Manager) installMLX(ctx context.Context, info sysinfo.Info) error {
 	var items []item
 	for _, f := range mlxPack.Files {
-		label := "Bonsai 2 27B MLX pack"
+		label := ModelName + " MLX pack"
 		if f.Name != "model.safetensors" {
 			label = "Model files"
 		}
@@ -948,7 +948,8 @@ func (m *Manager) Start() (startErr error) {
 			"-m", filepath.Join(ggufDir(), gguf.Model.Name),
 			"--host", "127.0.0.1", "--port", fmt.Sprint(port),
 			"-ngl", fmt.Sprint(plan.GPULayers), "-fa", "on", "-c", fmt.Sprint(plan.Context),
-			"--temp", "1.0", "--top-p", "0.95", "--top-k", "20", "--min-p", "0.05",
+			"--parallel", "1", // The memory plan accounts for one inference slot.
+			"--temp", "1.0", "--top-p", "0.95", "--top-k", "20", "--min-p", "0.0",
 			"--jinja", "--alias", ModelID,
 		}
 		if plan.Vision != "off" {
@@ -1002,12 +1003,15 @@ func (m *Manager) Start() (startErr error) {
 			if resp.StatusCode != http.StatusOK {
 				continue
 			}
-			vision := plan.Vision != "off"
+			model := core.LocalModel{Upstream: upstream, Alias: ModelID, DisplayName: ModelName + " (local)",
+				Vision: plan.Vision != "off", ContextLength: plan.Context}
+			// Existing clients can keep calling their saved API model ID.
+			legacy := model
+			legacy.Alias = legacyModelID
 			if err := m.register([]core.LocalUpstream{{
 				Name:    "local-bonsai",
 				BaseURL: fmt.Sprintf("http://127.0.0.1:%d/v1", port),
-				Models: []core.LocalModel{{Upstream: upstream, Alias: ModelID, DisplayName: ModelName + " (local)",
-					Vision: vision, ContextLength: plan.Context}},
+				Models:  []core.LocalModel{model, legacy},
 			}}); err != nil {
 				m.registrationFailed(err)
 				return
@@ -1196,7 +1200,7 @@ func (m *Manager) Remove(format string) error {
 			}
 		}
 		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), "llama-") {
+			if strings.HasPrefix(e.Name(), "llama-"+llamaTag+"-") {
 				remove(filepath.Join(paths.Runtimes(), e.Name()))
 			}
 		}

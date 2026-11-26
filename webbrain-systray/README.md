@@ -2,7 +2,7 @@
 
 A small tray app for Windows, macOS and Linux that serves your AI subscriptions
 to [WebBrain](https://webbrain.one) on `127.0.0.1`, shows how much of each one
-you have left, can run PrismML's Bonsai 2 27B on your own machine, and hosts
+you have left, can run PrismML's Bonsai 2.5 27B on your own machine, and hosts
 WebBrain's decision model (Compass VLD v6 2B, or d1) natively.
 
 - **Subscriptions on localhost.** Sign in with Claude, ChatGPT (Codex), Google
@@ -24,7 +24,7 @@ WebBrain's decision model (Compass VLD v6 2B, or d1) natively.
   the account that actually serves the agent; a standalone companion tracks
   usage but leaves checkout to the extension instead of selling credit to an
   id no client uses.
-- **Bonsai 2 27B locally.** The smallest packing (PTQ1_0, 5.95 GB) plus the Q8_0
+- **Bonsai 2.5 27B locally.** The smallest packing (PTQ1_0, 5.99 GB) plus the Q8_0
   vision projector through PrismML's llama.cpp fork, or the MLX 2-bit pack on
   Apple Silicon. The companion sizes it to your machine and decides whether the
   vision projector runs on the GPU, on the CPU, or not at all.
@@ -112,7 +112,7 @@ In WebBrain's **Providers** page (*More…* in the side panel's model menu), pic
 use the address shown in the panel or tray menu if the port changed. No API key
 is needed for the extension on this computer. Click **Load Models**, select a
 model, **Save**, and run **Test Connection**. Turn vision on only
-for a model that accepts images (the local `bonsai-2-27b` does when its
+for a model that accepts images (the local `bonsai-2.5-27b` does when its
 projector is on). Any OpenAI, Anthropic or Gemini client works the same way:
 
 ```bash
@@ -131,12 +131,14 @@ Your system may ask to allow incoming connections. Keep it off on public
 Wi-Fi.
 
 `GET /v1/models` lists every model your subscriptions (and the local model)
-provide. The local model's id is `bonsai-2-27b`.
+provide. The local model's ID is `bonsai-2.5-27b`. Existing clients can keep
+using `bonsai-2-27b` as a compatibility alias once 2.5 is running.
 
-## Local model: Bonsai 2 27B
+## Local model: Bonsai 2.5 27B
 
-Click **Bonsai 2 27B** in the panel to see what will run before anything
-downloads:
+Click **Bonsai 2.5 27B** in the panel to see the runtime and download size.
+If you used Bonsai 2 with Companion 0.2.0, click **Install** to download the 2.5
+weights to their own folder.
 
 | Machine | Runtime chosen |
 |---|---|

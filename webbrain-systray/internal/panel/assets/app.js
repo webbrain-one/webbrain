@@ -392,11 +392,11 @@
   // English; Turkish gets a translation.
   const STEP_TR = [
     [/^Verifying (.+)$/, (m) => `${goText(m[1])} doğrulanıyor`],
-    [/^Bonsai 2 27B weights \((.+)\)$/, (m) => `Bonsai 2 27B ağırlıkları (${m[1]})`],
+    [/^(Bonsai .+) weights \((.+)\)$/, (m) => `${m[1]} ağırlıkları (${m[2]})`],
     [/^Vision projector \((.+)\)$/, (m) => `Görsel projektör (${m[1]})`],
     [/^llama\.cpp runtime \((.+)\)$/, (m) => `llama.cpp çalışma ortamı (${m[1]})`],
     [/^Unpacking llama\.cpp runtime$/, () => "llama.cpp çalışma ortamı açılıyor"],
-    [/^Bonsai 2 27B MLX pack$/, () => "Bonsai 2 27B MLX paketi"],
+    [/^(Bonsai .+) MLX pack$/, (m) => `${m[1]} MLX paketi`],
     [/^Model files$/, () => "Model dosyaları"],
     [/^uv \(Python manager\)$/, () => "uv (Python yöneticisi)"],
     [/^Creating Python (\S+) environment$/, (m) => `Python ${m[1]} ortamı hazırlanıyor`],

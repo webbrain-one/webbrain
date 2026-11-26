@@ -395,6 +395,8 @@ func writeConfig(port int, opts Options, secret string, inPlace bool) error {
 			for _, m := range up.Models {
 				fmt.Fprintf(&b, "        - name: %s\n", q(m.Upstream))
 				fmt.Fprintf(&b, "          alias: %s\n", q(m.Alias))
+				// MLX uses an absolute model directory as its upstream ID.
+				b.WriteString("          force-mapping: true\n")
 				if m.DisplayName != "" {
 					fmt.Fprintf(&b, "          display-name: %s\n", q(m.DisplayName))
 				}
@@ -406,7 +408,7 @@ func writeConfig(port int, opts Options, secret string, inPlace bool) error {
 				} else {
 					b.WriteString("          input-modalities: [text]\n")
 				}
-				// Bonsai 2's chat template accepts only the efforts "low", "medium"
+				// Bonsai 2.5's chat template accepts only the efforts "low", "medium"
 				// and "xhigh" while thinking is on and raises on any other, which
 				// fails the request on either local server: PrismML's llama.cpp fork
 				// and mlx-vlm 0.7.8 both pass the effort to the template, and the
@@ -414,7 +416,7 @@ func writeConfig(port int, opts Options, secret string, inPlace bool) error {
 				// moves an undeclared level to the nearest declared one, the lower
 				// on a tie ("high" becomes "medium", "max" becomes "xhigh"), so only
 				// these three reach the server. zero-allowed passes "none" through
-				// as "none" instead of "low", which Bonsai 2 handles close to xhigh:
+				// as "none" instead of "low", which Bonsai 2.5 handles close to xhigh:
 				// both servers turn thinking off for "none", and the template then
 				// skips its effort check. WebBrain sends "none" on its planner and
 				// classifier calls.
