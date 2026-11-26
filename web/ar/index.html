@@ -419,12 +419,10 @@
       --shadow-strong: rgba(0,0,0,0.40);
       --nav-bg: rgba(11,14,23,0.80);
       --url-bg: rgba(0,0,0,0.30);
-      /* Browser mockup interior: in dark mode the side panel keeps its
-         original near-black blues so it reads as the WebBrain plugin UI.
-         In light mode (override below) these become warm cream tones. */
+      /* Extension side panel surfaces, matching styles/sidepanel.css. */
       --sp-bg: #1a1a2e;
-      --sp-msg-assistant-bg: #16213e;
-      --sp-msg-assistant-border: rgba(255,255,255,0.06);
+      --sp-surface: #16213e;
+      --sp-border: rgba(255,255,255,0.08);
       --sp-input-bg: #1e2746;
       /* Hero gradient text accent — keeps the same pink pop in both themes. */
       --hero-gradient-3: #e879f9;
@@ -456,11 +454,10 @@
       --shadow-strong: rgba(89,55,25,0.18);
       --nav-bg: rgba(247,241,230,0.85);
       --url-bg: rgba(89,55,25,0.07);
-      /* Light-mode mockup interior — cream variant of the WebBrain panel. */
-      --sp-bg: #f5e9d0;
-      --sp-msg-assistant-bg: #fff7e1;
-      --sp-msg-assistant-border: rgba(89,55,25,0.10);
-      --sp-input-bg: #fdf3dc;
+      --sp-bg: #f7f1e6;
+      --sp-surface: #fffdf8;
+      --sp-border: rgba(89,55,25,0.15);
+      --sp-input-bg: #fdf6e0;
       --hero-gradient-3: #b94db3;
       color-scheme: light;
     }
@@ -1369,13 +1366,10 @@
       overflow: hidden;
     }
     .browser-mockup {
-      max-width: 820px;
-      margin: 0 auto;
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
-      box-shadow: 0 24px 80px var(--shadow-strong);
     }
     .browser-bar {
       display: flex;
@@ -1431,7 +1425,7 @@
     /* Side panel mockup */
     .side-panel {
       width: 300px;
-      border-inline-start: 1px solid var(--border);
+      border-inline-start: 1px solid var(--sp-border);
       background: var(--sp-bg);
       display: flex;
       flex-direction: column;
@@ -1441,57 +1435,80 @@
        like real chat content instead of inheriting the centered hero text. */
     .scene-response-left .sp-msg.assistant { text-align: start; }
     .sp-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-    }
-    .sp-header .sp-brand {
-      font-size: 14px;
-      font-weight: 700;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .sp-brand-logo { width: 20px; height: 20px; border-radius: 5px; flex: 0 0 auto; }
-    .sp-header .sp-brand .sp-domain {
-      font-weight: 500;
-      opacity: 1;
-      background: none;
-      -webkit-text-fill-color: rgba(228,228,236,0.75);
-    }
-    .sp-status {
-      width: 7px; height: 7px;
-      background: var(--success);
-      border-radius: 50%;
-    }
-    /* Ask / Act / Dev mode switch in the panel header */
-    .sp-modes {
-      display: flex;
-      gap: 2px;
-      padding: 2px;
-      background: var(--tint-soft-2);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      margin-inline-start: auto;
-      margin-inline-end: 8px;
-    }
-    .sp-mode {
-      font-size: 9px;
-      font-weight: 600;
-      line-height: 1;
-      padding: 3px 7px;
-      border-radius: 999px;
+      flex-shrink: 0;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--sp-border);
+      background: var(--sp-surface);
       color: var(--text-dim);
     }
-    .sp-mode.is-on {
+    .sp-tools, .sp-conversation-tools, .sp-toolbar {
+      display: flex;
+      align-items: center;
+    }
+    .sp-tools { gap: 1px; }
+    .sp-conversation-tools, .sp-toolbar { gap: 4px; }
+    .sp-tool {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 26px;
+      flex: none;
+    }
+    .sp-tool svg, .sp-model svg {
+      display: block;
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .sp-conversation-tools .sp-tool {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--sp-border);
+      border-radius: 8px;
+      background: var(--sp-input-bg);
+    }
+    .sp-conversation-tools svg {
+      width: 14px;
+      height: 14px;
+    }
+    .sp-model {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      flex: none;
+      padding-inline: 4px;
+    }
+    .sp-model-icon { position: relative; }
+    .sp-model-icon img { display: block; border-radius: 4px; }
+    .sp-model-icon::after {
+      content: '';
+      position: absolute;
+      inset-inline-end: -2px;
+      inset-block-end: -1px;
+      width: 7px;
+      height: 7px;
+      border: 1px solid var(--sp-input-bg);
+      border-radius: 50%;
+      background: var(--success);
+    }
+    .sp-model svg { width: 11px; height: 11px; }
+    .sp-permissions { margin-inline-start: auto; }
+    .sp-tool.sp-send {
+      width: 29px;
+      height: 29px;
+      border-radius: 50%;
       background: var(--accent);
       color: #fff;
+      opacity: 0.6;
     }
+    .sp-send svg { fill: currentColor; stroke: none; }
     .sp-messages {
       flex: 1;
       padding: 12px;
@@ -1502,10 +1519,10 @@
     }
     .sp-msg {
       padding: 8px 12px;
-      border-radius: 10px;
+      border-radius: 12px;
       font-size: 12px;
       line-height: 1.5;
-      max-width: 90%;
+      max-width: 95%;
       overflow-wrap: anywhere;
       opacity: 0;
     }
@@ -1517,10 +1534,13 @@
       background: var(--accent);
       color: #fff;
       align-self: flex-end;
+      border-end-end-radius: 4px;
     }
     .sp-msg.assistant {
-      background: var(--sp-msg-assistant-bg);
-      border: 1px solid var(--sp-msg-assistant-border);
+      width: 95%;
+      background: var(--sp-surface);
+      border: 1px solid var(--sp-border);
+      border-end-start-radius: 4px;
       align-self: flex-start;
     }
     /* Messages animate only inside the active scene. Toggling .is-active on the
@@ -1532,14 +1552,17 @@
     .browser-mockup.is-active .sp-msg.user-2       { animation-delay: 0.95s; }
     .browser-mockup.is-active .sp-msg.assistant-2  { animation-delay: 1.30s; }
     .sp-msg .step {
-      display: flex;
-      align-items: center;
-      gap: 5px;
+      position: relative;
+      padding-inline-start: 13px;
       font-size: 10px;
       color: var(--text-dim);
-      margin-bottom: 4px;
+      margin-block-end: 4px;
     }
-    .sp-msg .step .check { color: var(--success); }
+    .sp-msg .step .check {
+      position: absolute;
+      inset-inline-start: 0;
+      color: var(--success);
+    }
     /* Fill a form: the reply grows with the form. Each step appears once its
        fields are done, and "Filled 9 fields" only after the last field
        (field 11 types at 3.0s and is checked at 3.45s). */
@@ -1551,19 +1574,23 @@
     .browser-mockup.scene-form.is-active .sp-msg.assistant .step:nth-child(3) { animation-delay: 2.9s; }
     .browser-mockup.scene-form.is-active .sp-msg.assistant .sp-result { animation-delay: 3.6s; }
     .sp-input {
-      padding: 10px;
-      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      padding: 9px 11px;
+      border-top: 1px solid var(--sp-border);
+      background: var(--sp-surface);
     }
     .sp-input-box {
-      display: flex;
-      align-items: center;
+      display: grid;
+      gap: 4px;
       background: var(--sp-input-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 8px 12px;
+      border: 1px solid var(--sp-border);
+      border-radius: 12px;
+      padding: 7px 8px 5px;
       font-size: 11px;
+      line-height: 1.45;
       color: var(--text-dim);
     }
+    .sp-placeholder { padding-inline: 3px; }
 
     /* ================================================================
        MOCKUP STACK — 5 demo scenes share the same grid cell and
@@ -1578,6 +1605,7 @@
       grid-template-columns: minmax(0, 1fr);
       max-width: 820px;
       margin: 0 auto;
+      border-radius: var(--radius);
       overflow: hidden;
     }
     .mockup-stage {
@@ -1591,10 +1619,6 @@
       grid-row: 1;
       display: flex;
       flex-direction: column;
-      /* Reset the base .browser-mockup's `margin: 0 auto` — on a grid item,
-         auto margins absorb the leftover track space instead of letting
-         the item stretch, which left the mockup ~470px wide. */
-      margin: 0;
       width: 100%;
       opacity: 0;
       transform: scale(0.985);
@@ -1744,7 +1768,7 @@
     /* Mini code editor inside an assistant message (Dev mode) */
     .sp-code {
       margin-top: 6px;
-      border: 1px solid var(--sp-msg-assistant-border);
+      border: 1px solid var(--sp-border);
       border-radius: 8px;
       overflow: hidden;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -4324,6 +4348,19 @@
        carries .is-active on load so its messages animate in immediately;
        the rotation script swaps the class on a timer / on click. -->
   <div class="hero-visual">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <symbol id="sp-icon-language" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+      <symbol id="sp-icon-scale" viewBox="0 0 24 24"><path d="m15 16 2.536-7.328a1.02 1.02 0 0 1 1.928 0L22 16"/><path d="M15.697 14h5.606"/><path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"/><path d="M3.304 13h6.392"/></symbol>
+      <symbol id="sp-icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+      <symbol id="sp-icon-expand" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+      <symbol id="sp-icon-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+      <symbol id="sp-icon-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+      <symbol id="sp-icon-attach" viewBox="0 0 24 24"><path d="m16 6-8.4 8.6a2 2 0 0 0 2.8 2.8l8.4-8.6a4 4 0 0 0-5.6-5.6l-8.4 8.6a6 6 0 0 0 8.5 8.5l8.4-8.6"/></symbol>
+      <symbol id="sp-icon-permissions" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+      <symbol id="sp-icon-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path d="M8 22h8"/></symbol>
+      <symbol id="sp-icon-send" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></symbol>
+      <symbol id="sp-icon-caret" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    </svg>
     <div class="mockup-stage">
       <button class="scene-arrow scene-arrow-prev" type="button" data-scene-step="-1" aria-label="سيناريو العرض التوضيحي السابق" aria-controls="mockup-stack">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
@@ -4350,10 +4387,17 @@
             <div class="placeholder-line"></div>
           </div>
           <div class="side-panel">
-            <div class="sp-header">
-              <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
-              <span class="sp-modes" aria-hidden="true"><span class="sp-mode is-on">Ask</span><span class="sp-mode">Act</span><span class="sp-mode">Dev</span></span>
-              <span class="sp-status"></span>
+            <div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
             </div>
             <div class="sp-messages">
               <div class="sp-msg user">لخّص هذا المقال</div>
@@ -4364,8 +4408,20 @@
                 <div style="margin-top:6px;">بحلول <strong>2026</strong>، يتوقّع الكاتب أن يعمل أكثر من 70% من أحمال الذكاء الاصطناعي الاستهلاكية على الجهاز مباشرةً.</div>
               </div>
             </div>
-            <div class="sp-input">
-              <div class="sp-input-box">اسأل أي شيء عن هذه الصفحة...</div>
+            <div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">اسأل أي شيء عن هذه الصفحة...</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4422,10 +4478,17 @@
             <span class="tf-submit">إرسال الإقرار</span>
           </div>
           <div class="side-panel">
-            <div class="sp-header">
-              <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
-              <span class="sp-modes" aria-hidden="true"><span class="sp-mode">Ask</span><span class="sp-mode is-on">Act</span><span class="sp-mode">Dev</span></span>
-              <span class="sp-status"></span>
+            <div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
             </div>
             <div class="sp-messages">
               <div class="sp-msg user">املأ هذا النموذج</div>
@@ -4436,8 +4499,20 @@
                 <div class="sp-result" style="margin-top:6px;">تم ملء <strong>9 حقول</strong>. توقف قبل الإرسال — راجع وأرسل عندما تكون جاهزًا.</div>
               </div>
             </div>
-            <div class="sp-input">
-              <div class="sp-input-box">اسأل أي شيء عن هذه الصفحة...</div>
+            <div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">اسأل أي شيء عن هذه الصفحة...</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4466,10 +4541,17 @@
             </div>
           </div>
           <div class="side-panel">
-            <div class="sp-header">
-              <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
-              <span class="sp-modes" aria-hidden="true"><span class="sp-mode">Ask</span><span class="sp-mode">Act</span><span class="sp-mode is-on">Dev</span></span>
-              <span class="sp-status"></span>
+            <div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
             </div>
             <div class="sp-messages">
               <div class="sp-msg user">كيف أجعل هذه الكتل أبعد عن بعضها، مع مزيد من التباعد؟</div>
@@ -4482,8 +4564,20 @@
                 <div style="margin-top:6px;">زد <strong>gap</strong> الشبكة وأضف هامشًا للقسم.</div>
               </div>
             </div>
-            <div class="sp-input">
-              <div class="sp-input-box">اسأل أي شيء عن هذه الصفحة...</div>
+            <div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">اسأل أي شيء عن هذه الصفحة...</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4512,10 +4606,17 @@
             </div>
           </div>
           <div class="side-panel scene-download-panel">
-            <div class="sp-header">
-              <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
-              <span class="sp-modes" aria-hidden="true"><span class="sp-mode">Ask</span><span class="sp-mode is-on">Act</span><span class="sp-mode">Dev</span></span>
-              <span class="sp-status"></span>
+            <div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
             </div>
             <div class="sp-messages">
               <div class="sp-msg user">نزّل هذا الفيديو</div>
@@ -4539,8 +4640,20 @@
                 <span>nomad-bodrum.mp4 · 4.2 MB</span>
               </span>
             </div>
-            <div class="sp-input">
-              <div class="sp-input-box">اسأل أي شيء عن هذه الصفحة...</div>
+            <div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">اسأل أي شيء عن هذه الصفحة...</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4566,10 +4679,17 @@
             </div>
           </div>
           <div class="side-panel">
-            <div class="sp-header">
-              <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
-              <span class="sp-modes" aria-hidden="true"><span class="sp-mode">Ask</span><span class="sp-mode is-on">Act</span><span class="sp-mode">Dev</span></span>
-              <span class="sp-status"></span>
+            <div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
             </div>
             <div class="sp-messages">
               <div class="sp-msg user">استخرج كل أسماء المنتجات وأسعارها من هذه الصفحة</div>
@@ -4585,8 +4705,20 @@
                 </div>
               </div>
             </div>
-            <div class="sp-input">
-              <div class="sp-input-box">اسأل أي شيء عن هذه الصفحة...</div>
+            <div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">اسأل أي شيء عن هذه الصفحة...</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

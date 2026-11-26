@@ -45747,8 +45747,8 @@ test('homepage leads with the browser extension and offers WebBrain for websites
   assert.ok(nav, 'web home: nav links missing');
   assert.deepEqual(
     [...nav[1].matchAll(/<a [^>]*>([^<]+)<\/a>/g)].map((m) => m[1]),
-    ['Docs', 'Blog', 'Download'],
-    'web home: next to the Developers menu, the nav keeps docs, blog and the install shortcut',
+    ['Companion', 'Docs', 'Blog', 'Download'],
+    'web home: next to the Developers menu, the nav keeps Companion, Docs, Blog and Download',
   );
   // Developers: For websites (while launched), Research, WebBrain Cloud and MCP.
   const devMenu = nav[1].match(/<details class="nav-dev" id="nav-dev">\s*<summary>Developers<svg[\s\S]*?<\/details>/);

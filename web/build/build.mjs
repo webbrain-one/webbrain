@@ -131,9 +131,40 @@ const PROVIDER_ICON_FILES = [
   'gemini.svg',
   'deepseek.svg',
   'mistral.svg',
+  'webbrain_cloud.png',
 ];
 const PROVIDER_ICON_SOURCE_DIR = path.resolve(ROOT, '../src/chrome/icons/providers');
 const PROVIDER_ICON_OUTPUT_DIR = path.join(ROOT, 'assets', 'providers');
+
+// The five demo scenes share the same extension chrome and keep their own transcript.
+const MOCKUP_PANEL_HEADER = `<div class="sp-header" aria-hidden="true">
+              <div class="sp-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-language"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-scale"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-settings"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-expand"/></svg></span>
+              </div>
+              <div class="sp-conversation-tools">
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-history"/></svg></span>
+                <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-plus"/></svg></span>
+              </div>
+            </div>`;
+
+const MOCKUP_PANEL_COMPOSER = `<div class="sp-input" aria-hidden="true">
+              <div class="sp-input-box">
+                <span class="sp-placeholder">{{t:hero.mockup.input_placeholder}}</span>
+                <div class="sp-toolbar">
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-attach"/></svg></span>
+                  <span class="sp-model">
+                    <span class="sp-model-icon"><img src="/assets/providers/webbrain_cloud.png" alt="" width="18" height="18"></span>
+                    <svg viewBox="0 0 24 24"><use href="#sp-icon-caret"/></svg>
+                  </span>
+                  <span class="sp-tool sp-permissions"><svg viewBox="0 0 24 24"><use href="#sp-icon-permissions"/></svg></span>
+                  <span class="sp-tool"><svg viewBox="0 0 24 24"><use href="#sp-icon-mic"/></svg></span>
+                  <span class="sp-tool sp-send"><svg viewBox="0 0 24 24"><use href="#sp-icon-send"/></svg></span>
+                </div>
+              </div>
+            </div>`;
 
 async function syncLanguageFlagAssets() {
   const missingFlagLocale = LOCALES.find((locale) => !LANGUAGE_FLAG_CODES[locale.code]);
@@ -653,6 +684,8 @@ function applyTemplate(template, dict, locale, page = 'home') {
     .replace(/\{\{websites_path\}\}/g, WEBSITES_PATH)
     .replace(/\{\{sites_dashboard_url\}\}/g, SITES_DASHBOARD_URL)
     .replace(/\{\{sites_demo_site_id\}\}/g, SITES_DEMO_SITE_ID)
+    .replace(/\{\{mockup_panel_header\}\}/g, () => MOCKUP_PANEL_HEADER)
+    .replace(/\{\{mockup_panel_composer\}\}/g, () => MOCKUP_PANEL_COMPOSER)
     .replace(/\{\{home_title_size\}\}/g, homeTitleSize(dict))
     .replace(/\{\{docs_url\}\}/g, docsUrl)
     .replace(/\{\{docs_language_label\}\}/g, TRANSLATED_DOCS[locale.code]
