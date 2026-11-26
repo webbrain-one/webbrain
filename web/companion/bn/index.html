@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, আপনার মেশিনের আকার</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML এর Ternary Bonsai 2 27B 27 বিলিয়ন প্যারামিটার 5.95 GB তে প্যাক করে। সঙ্গী এটির Q8_0 ভিশন প্রজেক্টর এবং PrismML এর llama.cpp এর বিল্ড, বা Apple Silicon এ MLX প্যাক হিসাবে এটি ইনস্টল করে এবং এটিকে আপনার সদস্যতার পাশে <code>bonsai-2-27b</code> হিসাবে তালিকাভুক্ত করে৷</p>
-      <p class="intro">কিছু ডাউনলোড করার আগে, মডেলটি কোথায় চলে এবং ইমেজ ইনপুট ফিট করে কিনা তা কাজ করে। ভিশন প্রজেক্টরটি GPU-এ চলে যায় যখন মডেল এবং এর প্রেক্ষাপটের পরে প্রায় 1 GB GPU মেমরি অবশিষ্ট থাকে, CPU-এ যখন শুধুমাত্র RAM সিস্টেমে জায়গা থাকে এবং অন্যথায় বন্ধ থাকে। আপনি প্যানেলে পছন্দ ওভাররাইড করতে পারেন।</p>
+      <p class="intro">Prism ML টুল কলিং ও কোডিংয়ের জন্য Bonsai 2.5 উন্নত করেছে। এর সবচেয়ে ছোট GGUF ফাইলে প্রায় ৬ GB ওজন রয়েছে। ছবি ইনপুটের জন্য আলাদা ভিশন প্রজেক্টর লাগে।</p>
+      <div>
+        <p class="intro">2.5 স্থানীয়ভাবে চালিয়ে WebBrain-এর llama.cpp প্রদানকারীতে লোড করুন। Q2_0-এর জন্য llama.cpp b11556 বা পরবর্তী সংস্করণ ব্যবহার করুন। PTQ1_0 ও PQ2_0-এর জন্য Prism ML-এর llama.cpp ফর্ক ব্যবহার করুন।</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Bonsai 2.5 ডাউনলোড ও সেটআপ</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>সঙ্গী সাধারণ মেশিনে যা বাছাই করে</caption>
-      <thead><tr><th scope="col">মেশিন</th><th scope="col">চলছে</th><th scope="col">ইমেজ ইনপুট</th><th scope="col">প্রসঙ্গ</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, আপনার মেশিনের আকার</h3>
+      <div class="split">
+        <p class="intro">PrismML এর Ternary Bonsai 2 27B 27 বিলিয়ন প্যারামিটার 5.95 GB তে প্যাক করে। সঙ্গী এটির Q8_0 ভিশন প্রজেক্টর এবং PrismML এর llama.cpp এর বিল্ড, বা Apple Silicon এ MLX প্যাক হিসাবে এটি ইনস্টল করে এবং এটিকে আপনার সদস্যতার পাশে <code>bonsai-2-27b</code> হিসাবে তালিকাভুক্ত করে৷</p>
+        <p class="intro">কিছু ডাউনলোড করার আগে, মডেলটি কোথায় চলে এবং ইমেজ ইনপুট ফিট করে কিনা তা কাজ করে। ভিশন প্রজেক্টরটি GPU-এ চলে যায় যখন মডেল এবং এর প্রেক্ষাপটের পরে প্রায় 1 GB GPU মেমরি অবশিষ্ট থাকে, CPU-এ যখন শুধুমাত্র RAM সিস্টেমে জায়গা থাকে এবং অন্যথায় বন্ধ থাকে। আপনি প্যানেলে পছন্দ ওভাররাইড করতে পারেন।</p>
+      </div>
+      <table class="machines">
+        <caption>সঙ্গী সাধারণ মেশিনে যা বাছাই করে</caption>
+        <thead><tr><th scope="col">মেশিন</th><th scope="col">চলছে</th><th scope="col">ইমেজ ইনপুট</th><th scope="col">প্রসঙ্গ</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 GB</td><td data-label="চলছে">Apple GPU সঙ্গে Metal। এটি ম্যাকের চেয়ে বেশি মেমরির প্রয়োজন, তাই অদলবদল আশা করুন।</td><td data-label="ইমেজ ইনপুট"><span class="vis off">বন্ধ</span></td><td data-label="প্রসঙ্গ">8K টোকেন</td></tr>
         <tr><td>MacBook Pro, 16 জিবি</td><td data-label="চলছে">Apple GPU সঙ্গে Metal</td><td data-label="ইমেজ ইনপুট"><span class="vis gpu">চালু, GPU</span></td><td data-label="প্রসঙ্গ">16K টোকেন</td></tr>
         <tr><td>একটি RTX 4060 (8 GB) এবং 16 GB RAM সহ ল্যাপটপ</td><td data-label="চলছে">CUDA, GPU-এ 64টির মধ্যে 57টি স্তর</td><td data-label="ইমেজ ইনপুট"><span class="vis cpu">চালু, CPU</span></td><td data-label="প্রসঙ্গ">8K টোকেন</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>একটি Radeon RX 7600 (8 GB) এবং 32 GB RAM সহ ডেস্কটপ</td><td data-label="চলছে">Vulkan, GPU-এ 64টির মধ্যে 61টি স্তর</td><td data-label="ইমেজ ইনপুট"><span class="vis cpu">চালু, CPU</span></td><td data-label="প্রসঙ্গ">8K টোকেন</td></tr>
         <tr><td>গ্রাফিক্স কার্ড ছাড়া পিসি, 16 জিবি RAM</td><td data-label="চলছে">CPU</td><td data-label="ইমেজ ইনপুট"><span class="vis cpu">চালু, CPU</span></td><td data-label="প্রসঙ্গ">8K টোকেন</td></tr>
         <tr><td>একটি গ্রাফিক্স কার্ড ছাড়া পিসি, 8 GB RAM</td><td data-label="চলছে">CPU, অল্প জায়গা ছাড়া</td><td data-label="ইমেজ ইনপুট"><span class="vis off">বন্ধ</span></td><td data-label="প্রসঙ্গ">8K টোকেন</td></tr>
-      </tbody>
-    </table>
-    <p class="note">মোট এবং বিনামূল্যে মেমরি থেকে সহচর এর পরিকল্পনাকারী দ্বারা কাজ করা; ইন্সটল করার সময় আপনার মেশিনের সংখ্যা নির্ধারণ করে। Apple Silicon-এ MLX প্যাকটি নিজস্ব দৃষ্টি টাওয়ার বহন করে, তাই ছবি সবসময় চালু থাকে।</p>
+        </tbody>
+      </table>
+      <p class="note">মোট এবং বিনামূল্যে মেমরি থেকে সহচর এর পরিকল্পনাকারী দ্বারা কাজ করা; ইন্সটল করার সময় আপনার মেশিনের সংখ্যা নির্ধারণ করে। Apple Silicon-এ MLX প্যাকটি নিজস্ব দৃষ্টি টাওয়ার বহন করে, তাই ছবি সবসময় চালু থাকে।</p>
+    </div>
   </div>
 </section>
 

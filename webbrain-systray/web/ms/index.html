@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, bersaiz pada mesin anda</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML Ternary Bonsai 2 27B mengemas 27 bilion parameter ke dalam 5.95 GB. Rakan itu memasangnya dengan projektor penglihatan Q8_0 dan llama.cpp binaan PrismML, atau sebagai pek MLX pada Apple Silicon dan menyenaraikannya di sebelah langganan anda sebagai <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Sebelum apa-apa dimuat turun, ia berfungsi di mana model dijalankan dan sama ada input imej sesuai. Projektor penglihatan dihidupkan pada GPU apabila kira-kira 1 GB memori GPU ditinggalkan selepas model dan konteksnya, pada CPU apabila hanya sistem RAM yang mempunyai ruang, dan tidak berfungsi sebaliknya. Anda boleh mengatasi pilihan dalam panel.</p>
+      <p class="intro">Prism ML menala Bonsai 2.5 untuk panggilan alat dan pengekodan. Fail GGUF terkecil mengandungi kira-kira 6 GB berat model. Input imej menggunakan projektor penglihatan yang berasingan.</p>
+      <div>
+        <p class="intro">Hoskan 2.5 secara setempat dan muatkannya melalui penyedia llama.cpp dalam WebBrain. Untuk Q2_0, gunakan llama.cpp b11556 atau lebih baharu. PTQ1_0 dan PQ2_0 menggunakan fork llama.cpp oleh Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Muat turun dan sediakan Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Perkara yang dipilih oleh rakan pada mesin biasa</caption>
-      <thead><tr><th scope="col">Mesin</th><th scope="col">berjalan terus</th><th scope="col">Input imej</th><th scope="col">Konteks</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, bersaiz pada mesin anda</h3>
+      <div class="split">
+        <p class="intro">PrismML Ternary Bonsai 2 27B mengemas 27 bilion parameter ke dalam 5.95 GB. Rakan itu memasangnya dengan projektor penglihatan Q8_0 dan llama.cpp binaan PrismML, atau sebagai pek MLX pada Apple Silicon dan menyenaraikannya di sebelah langganan anda sebagai <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Sebelum apa-apa dimuat turun, ia berfungsi di mana model dijalankan dan sama ada input imej sesuai. Projektor penglihatan dihidupkan pada GPU apabila kira-kira 1 GB memori GPU ditinggalkan selepas model dan konteksnya, pada CPU apabila hanya sistem RAM yang mempunyai ruang, dan tidak berfungsi sebaliknya. Anda boleh mengatasi pilihan dalam panel.</p>
+      </div>
+      <table class="machines">
+        <caption>Perkara yang dipilih oleh rakan pada mesin biasa</caption>
+        <thead><tr><th scope="col">Mesin</th><th scope="col">berjalan terus</th><th scope="col">Input imej</th><th scope="col">Konteks</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 GB</td><td data-label="berjalan terus">Apple GPU dengan Metal. Ia memerlukan lebih banyak memori daripada Mac, jadi harapkan pertukaran.</td><td data-label="Input imej"><span class="vis off">Mati</span></td><td data-label="Konteks">Token 8K</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="berjalan terus">Apple GPU dengan Metal</td><td data-label="Input imej"><span class="vis gpu">Hidup, GPU</span></td><td data-label="Konteks">Token 16K</td></tr>
         <tr><td>Komputer riba dengan RTX 4060 (8 GB) dan 16 GB RAM</td><td data-label="berjalan terus">CUDA, 57 daripada 64 lapisan pada GPU</td><td data-label="Input imej"><span class="vis cpu">Hidup, CPU</span></td><td data-label="Konteks">Token 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Desktop dengan Radeon RX 7600 (8 GB) dan 32 GB RAM</td><td data-label="berjalan terus">Vulkan, 61 daripada 64 lapisan pada GPU</td><td data-label="Input imej"><span class="vis cpu">Hidup, CPU</span></td><td data-label="Konteks">Token 8K</td></tr>
         <tr><td>PC tanpa kad grafik, 16 GB RAM</td><td data-label="berjalan terus">CPU</td><td data-label="Input imej"><span class="vis cpu">Hidup, CPU</span></td><td data-label="Konteks">Token 8K</td></tr>
         <tr><td>PC tanpa kad grafik, 8 GB RAM</td><td data-label="berjalan terus">CPU, dengan sedikit ruang untuk terluang</td><td data-label="Input imej"><span class="vis off">Mati</span></td><td data-label="Konteks">Token 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Diusahakan oleh perancang teman dari ingatan total dan bebas; nombor pada mesin anda pada masa pemasangan memutuskan. Pada Apple Silicon pek MLX membawa menara penglihatannya sendiri, jadi imej sentiasa dihidupkan.</p>
+        </tbody>
+      </table>
+      <p class="note">Diusahakan oleh perancang teman dari ingatan total dan bebas; nombor pada mesin anda pada masa pemasangan memutuskan. Pada Apple Silicon pek MLX membawa menara penglihatannya sendiri, jadi imej sentiasa dihidupkan.</p>
+    </div>
   </div>
 </section>
 

@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B ขนาดพอดีกับเครื่องของคุณ</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Ternary Bonsai 2 27B ของ PrismML บรรจุพารามิเตอร์ 27 พันล้านพารามิเตอร์ลงใน 5.95 GB เพื่อนนี้จะติดตั้งด้วยวิชันโปรเจ็กเตอร์ Q8_0 และ build llama.cpp ของ PrismML หรือเป็นชุด MLX บน Apple Silicon และแสดงรายการไว้ถัดจากการสมัครรับข้อมูลของคุณเป็น <code>bonsai-2-27b</code></p>
-      <p class="intro">ก่อนที่จะดาวน์โหลดสิ่งใดๆ จะต้องพิจารณาว่าโมเดลทำงานที่ใดและอินพุตรูปภาพพอดีหรือไม่ วิชันโปรเจ็กเตอร์จะทำงานบน GPU เมื่อหน่วยความจำ GPU เหลือประมาณ 1 GB หลังจากโมเดลและบริบทของโมเดล และบน CPU เมื่อมีเพียงระบบ RAM เท่านั้นที่มีที่ว่าง และจะไม่ทำงาน คุณสามารถแทนที่ตัวเลือกในแผงได้</p>
+      <p class="intro">Prism ML ปรับ Bonsai 2.5 ให้เหมาะกับการเรียกใช้เครื่องมือและการเขียนโค้ด ไฟล์ GGUF ที่เล็กที่สุดมีน้ำหนักโมเดลประมาณ 6 GB การรับภาพต้องใช้โปรเจ็กเตอร์ภาพแยกต่างหาก</p>
+      <div>
+        <p class="intro">เปิดเซิร์ฟเวอร์ 2.5 บนเครื่องแล้วโหลดโมเดลผ่านผู้ให้บริการ llama.cpp ใน WebBrain สำหรับ Q2_0 ให้ใช้ llama.cpp รุ่น b11556 ขึ้นไป ส่วน PTQ1_0 และ PQ2_0 ใช้ llama.cpp เวอร์ชันของ Prism ML</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">ดาวน์โหลดและตั้งค่า Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>สิ่งที่เพื่อนร่วมทางเลือกจากเครื่องทั่วไป</caption>
-      <thead><tr><th scope="col">เครื่อง</th><th scope="col">วิ่งต่อไป</th><th scope="col">อินพุตรูปภาพ</th><th scope="col">บริบท</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B ขนาดพอดีกับเครื่องของคุณ</h3>
+      <div class="split">
+        <p class="intro">Ternary Bonsai 2 27B ของ PrismML บรรจุพารามิเตอร์ 27 พันล้านพารามิเตอร์ลงใน 5.95 GB เพื่อนนี้จะติดตั้งด้วยวิชันโปรเจ็กเตอร์ Q8_0 และ build llama.cpp ของ PrismML หรือเป็นชุด MLX บน Apple Silicon และแสดงรายการไว้ถัดจากการสมัครรับข้อมูลของคุณเป็น <code>bonsai-2-27b</code></p>
+        <p class="intro">ก่อนที่จะดาวน์โหลดสิ่งใดๆ จะต้องพิจารณาว่าโมเดลทำงานที่ใดและอินพุตรูปภาพพอดีหรือไม่ วิชันโปรเจ็กเตอร์จะทำงานบน GPU เมื่อหน่วยความจำ GPU เหลือประมาณ 1 GB หลังจากโมเดลและบริบทของโมเดล และบน CPU เมื่อมีเพียงระบบ RAM เท่านั้นที่มีที่ว่าง และจะไม่ทำงาน คุณสามารถแทนที่ตัวเลือกในแผงได้</p>
+      </div>
+      <table class="machines">
+        <caption>สิ่งที่เพื่อนร่วมทางเลือกจากเครื่องทั่วไป</caption>
+        <thead><tr><th scope="col">เครื่อง</th><th scope="col">วิ่งต่อไป</th><th scope="col">อินพุตรูปภาพ</th><th scope="col">บริบท</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 กิกะไบต์</td><td data-label="วิ่งต่อไป">แอปเปิ้ล GPU กับ Metal ต้องการหน่วยความจำมากกว่าที่ Mac มี ดังนั้นคาดว่าจะต้องเปลี่ยน</td><td data-label="อินพุตรูปภาพ"><span class="vis off">ปิด</span></td><td data-label="บริบท">โทเค็น 8K</td></tr>
         <tr><td>MacBook Pro, 16GB</td><td data-label="วิ่งต่อไป">แอปเปิ้ล GPU กับ Metal</td><td data-label="อินพุตรูปภาพ"><span class="vis gpu">เปิด GPU</span></td><td data-label="บริบท">โทเค็น 16K</td></tr>
         <tr><td>แล็ปท็อปที่มี RTX 4060 (8 GB) และ 16 GB RAM</td><td data-label="วิ่งต่อไป">CUDA, 57 จาก 64 เลเยอร์บน GPU</td><td data-label="อินพุตรูปภาพ"><span class="vis cpu">เปิด CPU</span></td><td data-label="บริบท">โทเค็น 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>เดสก์ท็อปที่มี Radeon RX 7600 (8 GB) และ 32 GB RAM</td><td data-label="วิ่งต่อไป">Vulkan, 61 จาก 64 เลเยอร์บน GPU</td><td data-label="อินพุตรูปภาพ"><span class="vis cpu">เปิด CPU</span></td><td data-label="บริบท">โทเค็น 8K</td></tr>
         <tr><td>พีซีที่ไม่มีการ์ดกราฟิก 16 GB RAM</td><td data-label="วิ่งต่อไป">CPU</td><td data-label="อินพุตรูปภาพ"><span class="vis cpu">เปิด CPU</span></td><td data-label="บริบท">โทเค็น 8K</td></tr>
         <tr><td>พีซีที่ไม่มีการ์ดกราฟิก 8 GB RAM</td><td data-label="วิ่งต่อไป">CPU มีพื้นที่เหลือน้อย</td><td data-label="อินพุตรูปภาพ"><span class="vis off">ปิด</span></td><td data-label="บริบท">โทเค็น 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">คำนวณโดยผู้วางแผนของสหายจากหน่วยความจำทั้งหมดและว่าง ตัวเลขบนเครื่องของคุณ ณ เวลาติดตั้งจะตัดสินใจ ใน Apple Silicon ชุด MLX มีวิชันทาวเวอร์ของตัวเอง ดังนั้นภาพจึงเปิดอยู่ตลอดเวลา</p>
+        </tbody>
+      </table>
+      <p class="note">คำนวณโดยผู้วางแผนของสหายจากหน่วยความจำทั้งหมดและว่าง ตัวเลขบนเครื่องของคุณ ณ เวลาติดตั้งจะตัดสินใจ ใน Apple Silicon ชุด MLX มีวิชันทาวเวอร์ของตัวเอง ดังนั้นภาพจึงเปิดอยู่ตลอดเวลา</p>
+    </div>
   </div>
 </section>
 

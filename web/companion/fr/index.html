@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, dimensionné pour votre machine</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Le Ternary Bonsai 2 27B du PrismML regroupe 27 milliards de paramètres dans 5,95 Go. Le compagnon l'installe avec son projecteur de vision Q8_0 et la version PrismML de lama.cpp, ou en tant que pack MLX sur Apple Silicon, et le répertorie à côté de vos abonnements sous le nom <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Avant tout téléchargement, il détermine où le modèle s&#x27;exécute et si l&#x27;entrée d&#x27;image convient. Le projecteur de vision s&#x27;allume sur le GPU lorsqu&#x27;il reste environ 1 Go de mémoire GPU après le modèle et son contexte, sur le CPU lorsque seul le système RAM a de la place, et reste éteint dans le cas contraire. Vous pouvez remplacer le choix dans le panneau.</p>
+      <p class="intro">Prism ML a optimisé Bonsai 2.5 pour les appels d’outils et la programmation. Son plus petit fichier GGUF contient environ 6 Go de poids. Les images nécessitent un projecteur visuel distinct.</p>
+      <div>
+        <p class="intro">Lancez 2.5 sur un serveur local et chargez-le via le fournisseur llama.cpp dans WebBrain. Pour Q2_0, utilisez llama.cpp à partir de la version b11556. Les fichiers PTQ1_0 et PQ2_0 utilisent la version de llama.cpp de Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Télécharger et configurer Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Ce que le compagnon choisit sur les machines typiques</caption>
-      <thead><tr><th scope="col">Machine</th><th scope="col">Fonctionne sur</th><th scope="col">Saisie d&#x27;images</th><th scope="col">Contexte</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, dimensionné pour votre machine</h3>
+      <div class="split">
+        <p class="intro">Le Ternary Bonsai 2 27B du PrismML regroupe 27 milliards de paramètres dans 5,95 Go. Le compagnon l'installe avec son projecteur de vision Q8_0 et la version PrismML de lama.cpp, ou en tant que pack MLX sur Apple Silicon, et le répertorie à côté de vos abonnements sous le nom <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Avant tout téléchargement, il détermine où le modèle s&#x27;exécute et si l&#x27;entrée d&#x27;image convient. Le projecteur de vision s&#x27;allume sur le GPU lorsqu&#x27;il reste environ 1 Go de mémoire GPU après le modèle et son contexte, sur le CPU lorsque seul le système RAM a de la place, et reste éteint dans le cas contraire. Vous pouvez remplacer le choix dans le panneau.</p>
+      </div>
+      <table class="machines">
+        <caption>Ce que le compagnon choisit sur les machines typiques</caption>
+        <thead><tr><th scope="col">Machine</th><th scope="col">Fonctionne sur</th><th scope="col">Saisie d&#x27;images</th><th scope="col">Contexte</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 Go</td><td data-label="Fonctionne sur">Apple GPU avec Metal. Il a besoin de plus de mémoire que le Mac, alors attendez-vous à un échange.</td><td data-label="Saisie d&#x27;images"><span class="vis off">Désactivé</span></td><td data-label="Contexte">Jetons 8K</td></tr>
         <tr><td>MacBook Pro, 16 Go</td><td data-label="Fonctionne sur">Apple GPU avec Metal</td><td data-label="Saisie d&#x27;images"><span class="vis gpu">Allumé, GPU</span></td><td data-label="Contexte">Jetons 16K</td></tr>
         <tr><td>Ordinateur portable avec un RTX 4060 (8 Go) et un RAM de 16 Go</td><td data-label="Fonctionne sur">CUDA, 57 des 64 couches du GPU</td><td data-label="Saisie d&#x27;images"><span class="vis cpu">Allumé, CPU</span></td><td data-label="Contexte">Jetons 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Ordinateur de bureau avec un Radeon RX 7600 (8 Go) et un RAM de 32 Go</td><td data-label="Fonctionne sur">Vulkan, 61 des 64 couches du GPU</td><td data-label="Saisie d&#x27;images"><span class="vis cpu">Allumé, CPU</span></td><td data-label="Contexte">Jetons 8K</td></tr>
         <tr><td>PC sans carte graphique, 16 Go RAM</td><td data-label="Fonctionne sur">CPU</td><td data-label="Saisie d&#x27;images"><span class="vis cpu">Allumé, CPU</span></td><td data-label="Contexte">Jetons 8K</td></tr>
         <tr><td>PC sans carte graphique, 8 Go RAM</td><td data-label="Fonctionne sur">CPU, avec peu de place disponible</td><td data-label="Saisie d&#x27;images"><span class="vis off">Désactivé</span></td><td data-label="Contexte">Jetons 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Élaboré par le planificateur du compagnon à partir de la mémoire totale et libre ; les numéros sur votre machine au moment de l&#x27;installation décident. Sur le Apple Silicon, le pack MLX possède sa propre tour de vision, les images sont donc toujours actives.</p>
+        </tbody>
+      </table>
+      <p class="note">Élaboré par le planificateur du compagnon à partir de la mémoire totale et libre ; les numéros sur votre machine au moment de l&#x27;installation décident. Sur le Apple Silicon, le pack MLX possède sa propre tour de vision, les images sont donc toujours actives.</p>
+    </div>
   </div>
 </section>
 

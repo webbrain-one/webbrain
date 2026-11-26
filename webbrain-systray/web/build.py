@@ -29,6 +29,7 @@ FILES = {
     "sums": DL + "SHA256SUMS.txt",
 }
 GUIDE = "https://webbrain.one/docs/providers/#companion"
+BONSAI_25_GUIDE = "https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart"
 
 # Tray menu content, as the app renders it (internal/app/menu.go, i18n.go): the
 # status, the address, one line per plan with its tightest window, the panel.
@@ -104,6 +105,9 @@ T = {
         "shot3_h": "Local models",
         "shot3_p": "Click Bonsai 2 27B to see where it runs and whether images fit, and to change its options. d1 opens the same way.",
         "shot3_alt": "The Bonsai 2 27B details over the panel: running on the Apple GPU with image input on, 65,536 tokens of context, and its options.",
+        "bonsai25_intro": "Prism ML tuned Bonsai 2.5 for tool calling and coding. Its smallest GGUF contains about 6 GB of weights. Image input uses a separate vision projector.",
+        "bonsai25_setup": "Serve 2.5 locally and load it in WebBrain’s llama.cpp provider. Use upstream llama.cpp b11556 or later for Q2_0. The PTQ1_0 and PQ2_0 files use Prism ML’s llama.cpp fork.",
+        "bonsai25_guide": "Bonsai 2.5 downloads and setup",
         "local_h": "Bonsai 2 27B, sized to your machine",
         "local_p1": "PrismML's Ternary Bonsai 2 27B packs 27 billion parameters into 5.95 GB. The companion installs it with its Q8_0 vision projector and PrismML's build of llama.cpp, or as the MLX pack on Apple Silicon, and lists it next to your subscriptions as <code>bonsai-2-27b</code>.",
         "local_p2": "Before anything downloads, it works out where the model runs and whether image input fits. The vision projector goes on the GPU when about 1 GB of GPU memory is left after the model and its context, on the CPU when only system RAM has room, and stays off otherwise. You can override the choice in the panel.",
@@ -191,6 +195,9 @@ T = {
         "shot3_h": "Yerel modeller",
         "shot3_p": "Bonsai 2 27B'ye tıkla: nerede çalıştığını ve görsellerin sığıp sığmadığını görür, seçeneklerini değiştirirsin. d1 de aynı şekilde açılır.",
         "shot3_alt": "Panelin üzerinde Bonsai 2 27B ayrıntıları: Apple GPU'da görsel girdi açık çalışıyor, 65.536 token bağlam ve seçenekleri.",
+        "bonsai25_intro": "Prism ML, Bonsai 2.5’i araç çağırma ve kodlama için geliştirdi. En küçük GGUF dosyası yaklaşık 6 GB ağırlık içerir. Görsel girdi için ayrı bir projektör kullanılır.",
+        "bonsai25_setup": "2.5’i yerelde sunup WebBrain’deki llama.cpp sağlayıcısından yükleyebilirsin. Q2_0 için llama.cpp’nin b11556 veya daha yeni bir sürümünü kullan. PTQ1_0 ve PQ2_0 dosyaları Prism ML’in llama.cpp sürümüyle çalışır.",
+        "bonsai25_guide": "Bonsai 2.5 indirme ve kurulum",
         "local_h": "Bonsai 2 27B, makinene göre ayarlanır",
         "local_p1": "PrismML'in Ternary Bonsai 2 27B modeli 27 milyar parametreyi 5,95 GB'a sığdırır. Companion onu Q8_0 görsel projektörüyle ve PrismML'in llama.cpp sürümüyle, Apple Silicon'da istersen MLX paketi olarak kurar ve aboneliklerinin yanında <code>bonsai-2-27b</code> adıyla sunar.",
         "local_p2": "Daha hiçbir şey inmeden modelin nerede çalışacağını ve görsel girdinin sığıp sığmayacağını hesaplar. Model ve bağlamı yerleştikten sonra GPU'da yaklaşık 1 GB yer kalıyorsa görsel projektör GPU'ya, yalnızca sistem belleğinde yer varsa CPU'ya gider; ikisi de yoksa kapalı kalır. Bu seçimi panelden değiştirebilirsin.",
@@ -349,19 +356,29 @@ PAGE = r"""<!doctype html>
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">[[local_h]]</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">[[local_p1]]</p>
-      <p class="intro">[[local_p2]]</p>
+      <p class="intro">[[bonsai25_intro]]</p>
+      <div>
+        <p class="intro">[[bonsai25_setup]]</p>
+        <p><a href="[[bonsai25_url]]">[[bonsai25_guide]]</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>[[table_caption]]</caption>
-      <thead><tr><th scope="col">[[th_machine]]</th><th scope="col">[[th_runs]]</th><th scope="col">[[th_vision]]</th><th scope="col">[[th_context]]</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>[[local_h]]</h3>
+      <div class="split">
+        <p class="intro">[[local_p1]]</p>
+        <p class="intro">[[local_p2]]</p>
+      </div>
+      <table class="machines">
+        <caption>[[table_caption]]</caption>
+        <thead><tr><th scope="col">[[th_machine]]</th><th scope="col">[[th_runs]]</th><th scope="col">[[th_vision]]</th><th scope="col">[[th_context]]</th></tr></thead>
+        <tbody>
 [[machines]]
-      </tbody>
-    </table>
-    <p class="note">[[local_note]]</p>
+        </tbody>
+      </table>
+      <p class="note">[[local_note]]</p>
+    </div>
   </div>
 </section>
 
@@ -543,6 +560,7 @@ def render(lang):
         source=SOURCE,
         source_label=esc(t["source"]),
         guide_url=GUIDE,
+        bonsai25_url=BONSAI_25_GUIDE,
         menu=menu_html(lang),
         windows=windows_html(lang, root, t),
         machines=machines_html(lang, t),

@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, розмір якого відповідає вашій машині</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Ternary Bonsai 2 27B PrismML містить 27 мільярдів параметрів у 5,95 ГБ. Супутник встановлює його разом із проектором Q8_0 і збіркою llama.cpp від PrismML або як пакет MLX на Apple Silicon і вказує його поруч із вашими підписками як <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Перш ніж щось завантажувати, перевіряється, де працює модель і чи підходить вхідне зображення. Проектор візуалізації вмикається на GPU, коли після моделі та її контексту залишається приблизно 1 ГБ пам’яті GPU, на CPU, коли є місце лише в системі RAM, і залишається вимкненим в інших випадках. Ви можете змінити вибір на панелі.</p>
+      <p class="intro">Prism ML налаштувала Bonsai 2.5 для виклику інструментів і програмування. Найменший файл GGUF містить близько 6 ГБ ваг. Для зображень потрібен окремий візуальний проєктор.</p>
+      <div>
+        <p class="intro">Запустіть 2.5 на локальному сервері й завантажте модель через провайдер llama.cpp у WebBrain. Для Q2_0 використовуйте llama.cpp b11556 або новішу версію. PTQ1_0 і PQ2_0 працюють з версією llama.cpp від Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Завантаження та налаштування Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Те, що компаньйон обирає на типових машинах</caption>
-      <thead><tr><th scope="col">машина</th><th scope="col">Бігає далі</th><th scope="col">Введення зображення</th><th scope="col">Контекст</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, розмір якого відповідає вашій машині</h3>
+      <div class="split">
+        <p class="intro">Ternary Bonsai 2 27B PrismML містить 27 мільярдів параметрів у 5,95 ГБ. Супутник встановлює його разом із проектором Q8_0 і збіркою llama.cpp від PrismML або як пакет MLX на Apple Silicon і вказує його поруч із вашими підписками як <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Перш ніж щось завантажувати, перевіряється, де працює модель і чи підходить вхідне зображення. Проектор візуалізації вмикається на GPU, коли після моделі та її контексту залишається приблизно 1 ГБ пам’яті GPU, на CPU, коли є місце лише в системі RAM, і залишається вимкненим в інших випадках. Ви можете змінити вибір на панелі.</p>
+      </div>
+      <table class="machines">
+        <caption>Те, що компаньйон обирає на типових машинах</caption>
+        <thead><tr><th scope="col">машина</th><th scope="col">Бігає далі</th><th scope="col">Введення зображення</th><th scope="col">Контекст</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 Гб</td><td data-label="Бігає далі">Apple GPU з Metal. Йому потрібно більше пам’яті, ніж Mac, тому очікуйте заміни.</td><td data-label="Введення зображення"><span class="vis off">Вимкнено</span></td><td data-label="Контекст">Токени 8K</td></tr>
         <tr><td>MacBook Pro, 16 Гб</td><td data-label="Бігає далі">Apple GPU з Metal</td><td data-label="Введення зображення"><span class="vis gpu">Увімкнено, GPU</span></td><td data-label="Контекст">Токени 16K</td></tr>
         <tr><td>Ноутбук із RTX 4060 (8 ГБ) і 16 ГБ RAM</td><td data-label="Бігає далі">CUDA, 57 із 64 шарів на GPU</td><td data-label="Введення зображення"><span class="vis cpu">Увімкнено, CPU</span></td><td data-label="Контекст">Токени 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Робочий стіл із Radeon RX 7600 (8 ГБ) і 32 ГБ RAM</td><td data-label="Бігає далі">Vulkan, 61 із 64 шарів на GPU</td><td data-label="Введення зображення"><span class="vis cpu">Увімкнено, CPU</span></td><td data-label="Контекст">Токени 8K</td></tr>
         <tr><td>ПК без відеокарти, 16 ГБ RAM</td><td data-label="Бігає далі">CPU</td><td data-label="Введення зображення"><span class="vis cpu">Увімкнено, CPU</span></td><td data-label="Контекст">Токени 8K</td></tr>
         <tr><td>ПК без відеокарти, 8 ГБ RAM</td><td data-label="Бігає далі">CPU, з невеликим запасом місця</td><td data-label="Введення зображення"><span class="vis off">Вимкнено</span></td><td data-label="Контекст">Токени 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Розроблений планувальником товариша із загальної та вільної пам&#x27;яті; номери на вашій машині під час встановлення вирішують. На Apple Silicon набір MLX має власну башту, тому зображення завжди ввімкнено.</p>
+        </tbody>
+      </table>
+      <p class="note">Розроблений планувальником товариша із загальної та вільної пам&#x27;яті; номери на вашій машині під час встановлення вирішують. На Apple Silicon набір MLX має власну башту, тому зображення завжди ввімкнено.</p>
+    </div>
   </div>
 </section>
 

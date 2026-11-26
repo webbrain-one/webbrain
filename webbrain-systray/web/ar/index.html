@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B، بحجم مناسب لجهازك</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML Ternary Bonsai 2 27B يحزم 27 مليار معلمة في 5.95 جيجابايت. يقوم الرفيق بتثبيته باستخدام جهاز عرض الرؤية Q8_0 وإصدار PrismML من llama.cpp، أو كحزمة MLX على Apple Silicon، ويدرجه بجوار اشتراكاتك باسم <code>bonsai-2-27b</code>.</p>
-      <p class="intro">قبل تنزيل أي شيء، يتم تحديد مكان تشغيل النموذج وما إذا كان إدخال الصورة مناسبًا أم لا. يعمل جهاز عرض الرؤية على GPU عندما يتم ترك حوالي 1 جيجابايت من ذاكرة GPU بعد النموذج وسياقه، على CPU عندما يكون هناك مساحة لنظام RAM فقط، ويبقى بعيدًا بخلاف ذلك. يمكنك تجاوز الاختيار في اللوحة.</p>
+      <p class="intro">حسّنت Prism ML نموذج Bonsai 2.5 لاستدعاء الأدوات وكتابة الشيفرة. يبلغ حجم أصغر ملف أوزان بتنسيق GGUF نحو 6 غيغابايت. يتطلب إدخال الصور ملف إسقاط مرئي منفصلًا.</p>
+      <div>
+        <p class="intro">شغّل 2.5 محليًا وحمّله في مزوّد llama.cpp في WebBrain. استخدم llama.cpp بالإصدار b11556 أو أحدث مع Q2_0. يعمل PTQ1_0 وPQ2_0 مع نسخة Prism ML المعدّلة من llama.cpp.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">تنزيل Bonsai 2.5 وإعداده</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>ما يختاره الرفيق على الأجهزة النموذجية</caption>
-      <thead><tr><th scope="col">آلة</th><th scope="col">يعمل على</th><th scope="col">إدخال الصورة</th><th scope="col">السياق</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B، بحجم مناسب لجهازك</h3>
+      <div class="split">
+        <p class="intro">PrismML Ternary Bonsai 2 27B يحزم 27 مليار معلمة في 5.95 جيجابايت. يقوم الرفيق بتثبيته باستخدام جهاز عرض الرؤية Q8_0 وإصدار PrismML من llama.cpp، أو كحزمة MLX على Apple Silicon، ويدرجه بجوار اشتراكاتك باسم <code>bonsai-2-27b</code>.</p>
+        <p class="intro">قبل تنزيل أي شيء، يتم تحديد مكان تشغيل النموذج وما إذا كان إدخال الصورة مناسبًا أم لا. يعمل جهاز عرض الرؤية على GPU عندما يتم ترك حوالي 1 جيجابايت من ذاكرة GPU بعد النموذج وسياقه، على CPU عندما يكون هناك مساحة لنظام RAM فقط، ويبقى بعيدًا بخلاف ذلك. يمكنك تجاوز الاختيار في اللوحة.</p>
+      </div>
+      <table class="machines">
+        <caption>ما يختاره الرفيق على الأجهزة النموذجية</caption>
+        <thead><tr><th scope="col">آلة</th><th scope="col">يعمل على</th><th scope="col">إدخال الصورة</th><th scope="col">السياق</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air، 8 جيجابايت</td><td data-label="يعمل على">أبل GPU مع Metal. إنه يحتاج إلى ذاكرة أكبر من ذاكرة Mac، لذا توقع التبديل.</td><td data-label="إدخال الصورة"><span class="vis off">إيقاف</span></td><td data-label="السياق">الرموز المميزة 8K</td></tr>
         <tr><td>MacBook Pro، 16 جيجابايت</td><td data-label="يعمل على">أبل GPU مع Metal</td><td data-label="إدخال الصورة"><span class="vis gpu">على، GPU</span></td><td data-label="السياق">الرموز المميزة 16K</td></tr>
         <tr><td>كمبيوتر محمول مزود بذاكرة RTX 4060 (8 جيجابايت) و16 جيجابايت RAM</td><td data-label="يعمل على">CUDA، 57 من 64 طبقة على GPU</td><td data-label="إدخال الصورة"><span class="vis cpu">على، CPU</span></td><td data-label="السياق">الرموز المميزة 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>كمبيوتر مكتبي مزود بـ Radeon RX 7600 (8 جيجابايت) و32 جيجابايت RAM</td><td data-label="يعمل على">Vulkan، 61 من 64 طبقة على GPU</td><td data-label="إدخال الصورة"><span class="vis cpu">على، CPU</span></td><td data-label="السياق">الرموز المميزة 8K</td></tr>
         <tr><td>جهاز كمبيوتر بدون بطاقة رسوميات، 16 جيجابايت RAM</td><td data-label="يعمل على">CPU</td><td data-label="إدخال الصورة"><span class="vis cpu">على، CPU</span></td><td data-label="السياق">الرموز المميزة 8K</td></tr>
         <tr><td>جهاز كمبيوتر بدون بطاقة رسومات، 8 جيجابايت RAM</td><td data-label="يعمل على">CPU، مع مساحة صغيرة للتوفير</td><td data-label="إدخال الصورة"><span class="vis off">إيقاف</span></td><td data-label="السياق">الرموز المميزة 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">تم إعداده بواسطة مخطط الرفيق من الذاكرة الكاملة والحرة؛ الأرقام الموجودة على جهازك في وقت التثبيت هي التي تقرر. في Apple Silicon، تحمل حزمة MLX برج الرؤية الخاص بها، لذلك تكون الصور قيد التشغيل دائمًا.</p>
+        </tbody>
+      </table>
+      <p class="note">تم إعداده بواسطة مخطط الرفيق من الذاكرة الكاملة والحرة؛ الأرقام الموجودة على جهازك في وقت التثبيت هي التي تقرر. في Apple Silicon، تحمل حزمة MLX برج الرؤية الخاص بها، لذلك تكون الصور قيد التشغيل دائمًا.</p>
+    </div>
   </div>
 </section>
 

@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">귀하의 기계에 맞는 Bonsai 2 27B</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML의 Ternary Bonsai 2 27B는 270억 개의 매개변수를 5.95GB에 담았습니다. 컴패니언은 Q8_0 비전 프로젝터 및 PrismML의 llama.cpp 빌드와 함께 설치하거나 Apple Silicon에 MLX 팩으로 설치하고 구독 옆에 <code>bonsai-2-27b</code>로 나열합니다.</p>
-      <p class="intro">다운로드하기 전에 모델이 실행되는 위치와 이미지 입력이 적합한지 확인합니다. 비전 프로젝터는 모델과 해당 컨텍스트 뒤에 약 1GB의 GPU 메모리가 남을 때 GPU에서 작동하고, 시스템 RAM에만 공간이 있을 때 CPU에서 작동하고, 그렇지 않으면 꺼집니다. 패널에서 선택 사항을 재정의할 수 있습니다.</p>
+      <p class="intro">Prism ML은 Bonsai 2.5를 도구 호출과 코딩에 맞춰 조정했습니다. 가장 작은 GGUF에는 약 6GB의 가중치가 들어 있습니다. 이미지 입력에는 별도의 비전 프로젝터가 필요합니다.</p>
+      <div>
+        <p class="intro">2.5를 로컬 서버로 실행하고 WebBrain의 llama.cpp 제공자에서 불러오세요. Q2_0은 llama.cpp b11556 이상을 사용하세요. PTQ1_0과 PQ2_0은 Prism ML의 llama.cpp 포크에서 동작합니다.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Bonsai 2.5 다운로드 및 설정</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>동반자가 일반적인 기계에서 선택하는 것</caption>
-      <thead><tr><th scope="col">기계</th><th scope="col">실행 대상</th><th scope="col">이미지 입력</th><th scope="col">맥락</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>귀하의 기계에 맞는 Bonsai 2 27B</h3>
+      <div class="split">
+        <p class="intro">PrismML의 Ternary Bonsai 2 27B는 270억 개의 매개변수를 5.95GB에 담았습니다. 컴패니언은 Q8_0 비전 프로젝터 및 PrismML의 llama.cpp 빌드와 함께 설치하거나 Apple Silicon에 MLX 팩으로 설치하고 구독 옆에 <code>bonsai-2-27b</code>로 나열합니다.</p>
+        <p class="intro">다운로드하기 전에 모델이 실행되는 위치와 이미지 입력이 적합한지 확인합니다. 비전 프로젝터는 모델과 해당 컨텍스트 뒤에 약 1GB의 GPU 메모리가 남을 때 GPU에서 작동하고, 시스템 RAM에만 공간이 있을 때 CPU에서 작동하고, 그렇지 않으면 꺼집니다. 패널에서 선택 사항을 재정의할 수 있습니다.</p>
+      </div>
+      <table class="machines">
+        <caption>동반자가 일반적인 기계에서 선택하는 것</caption>
+        <thead><tr><th scope="col">기계</th><th scope="col">실행 대상</th><th scope="col">이미지 입력</th><th scope="col">맥락</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8GB</td><td data-label="실행 대상">Metal가 포함된 Apple GPU. Mac보다 더 많은 메모리가 필요하므로 교체가 필요합니다.</td><td data-label="이미지 입력"><span class="vis off">끄기</span></td><td data-label="맥락">8K 토큰</td></tr>
         <tr><td>MacBook Pro, 16GB</td><td data-label="실행 대상">애플 GPU와 Metal</td><td data-label="이미지 입력"><span class="vis gpu">켜짐, GPU</span></td><td data-label="맥락">16K 토큰</td></tr>
         <tr><td>RTX 4060(8GB) 및 16GB RAM가 탑재된 노트북</td><td data-label="실행 대상">CUDA, GPU의 64개 레이어 중 57개</td><td data-label="이미지 입력"><span class="vis cpu">켜짐, CPU</span></td><td data-label="맥락">8K 토큰</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Radeon RX 7600(8GB) 및 32GB RAM가 포함된 데스크탑</td><td data-label="실행 대상">Vulkan, GPU의 64개 레이어 중 61개</td><td data-label="이미지 입력"><span class="vis cpu">켜짐, CPU</span></td><td data-label="맥락">8K 토큰</td></tr>
         <tr><td>그래픽 카드가 없는 PC, 16GB RAM</td><td data-label="실행 대상">CPU</td><td data-label="이미지 입력"><span class="vis cpu">켜짐, CPU</span></td><td data-label="맥락">8K 토큰</td></tr>
         <tr><td>그래픽 카드가 없는 PC, 8GB RAM</td><td data-label="실행 대상">여유 공간이 거의 없는 CPU</td><td data-label="이미지 입력"><span class="vis off">끄기</span></td><td data-label="맥락">8K 토큰</td></tr>
-      </tbody>
-    </table>
-    <p class="note">동반자의 플래너가 전체 및 여유 메모리에서 작업했습니다. 설치 시 컴퓨터의 숫자가 결정됩니다. Apple Silicon에서 MLX 팩에는 자체 비전 타워가 있으므로 이미지가 항상 켜져 있습니다.</p>
+        </tbody>
+      </table>
+      <p class="note">동반자의 플래너가 전체 및 여유 메모리에서 작업했습니다. 설치 시 컴퓨터의 숫자가 결정됩니다. Apple Silicon에서 MLX 팩에는 자체 비전 타워가 있으므로 이미지가 항상 켜져 있습니다.</p>
+    </div>
   </div>
 </section>
 

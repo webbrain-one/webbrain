@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, размер соответствует вашей машине</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Ternary Bonsai 2 27B PrismML упаковывает 27 миллиардов параметров в 5,95 ГБ. Компаньон устанавливает его вместе с проектором Q8_0 и сборкой llama.cpp для PrismML или как пакет MLX на Apple Silicon и указывает его рядом с вашими подписками как <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Прежде чем что-либо загружается, выясняется, где работает модель и подходит ли входное изображение. Проектор изображения включается на GPU, когда после модели и ее контекста остается около 1 ГБ памяти GPU, на CPU, когда есть место только в системе RAM, и отключается в противном случае. Вы можете отменить выбор на панели.</p>
+      <p class="intro">Prism ML доработала Bonsai 2.5 для вызова инструментов и написания кода. Самый маленький файл GGUF содержит около 6 ГБ весов. Для ввода изображений нужен отдельный визуальный проектор.</p>
+      <div>
+        <p class="intro">Запустите 2.5 на локальном сервере и загрузите модель через провайдер llama.cpp в WebBrain. Для Q2_0 используйте llama.cpp b11556 или новее. Для PTQ1_0 и PQ2_0 нужна версия llama.cpp от Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Загрузка и настройка Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Что подбирает товарищ на типовых машинах</caption>
-      <thead><tr><th scope="col">Машина</th><th scope="col">Работает</th><th scope="col">Ввод изображения</th><th scope="col">Контекст</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, размер соответствует вашей машине</h3>
+      <div class="split">
+        <p class="intro">Ternary Bonsai 2 27B PrismML упаковывает 27 миллиардов параметров в 5,95 ГБ. Компаньон устанавливает его вместе с проектором Q8_0 и сборкой llama.cpp для PrismML или как пакет MLX на Apple Silicon и указывает его рядом с вашими подписками как <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Прежде чем что-либо загружается, выясняется, где работает модель и подходит ли входное изображение. Проектор изображения включается на GPU, когда после модели и ее контекста остается около 1 ГБ памяти GPU, на CPU, когда есть место только в системе RAM, и отключается в противном случае. Вы можете отменить выбор на панели.</p>
+      </div>
+      <table class="machines">
+        <caption>Что подбирает товарищ на типовых машинах</caption>
+        <thead><tr><th scope="col">Машина</th><th scope="col">Работает</th><th scope="col">Ввод изображения</th><th scope="col">Контекст</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 ГБ</td><td data-label="Работает">Apple GPU с Metal. Ему требуется больше памяти, чем у Mac, так что ожидайте замены.</td><td data-label="Ввод изображения"><span class="vis off">Выкл.</span></td><td data-label="Контекст">Токены 8K</td></tr>
         <tr><td>MacBook Pro, 16 ГБ</td><td data-label="Работает">Apple GPU с Metal</td><td data-label="Ввод изображения"><span class="vis gpu">Включено, GPU</span></td><td data-label="Контекст">Токены 16K</td></tr>
         <tr><td>Ноутбук с RTX 4060 (8 ГБ) и RAM 16 ГБ</td><td data-label="Работает">CUDA, 57 из 64 слоев на GPU</td><td data-label="Ввод изображения"><span class="vis cpu">Включено, CPU</span></td><td data-label="Контекст">Токены 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Настольный компьютер с Radeon RX 7600 (8 ГБ) и RAM 32 ГБ</td><td data-label="Работает">Vulkan, 61 из 64 слоев на GPU</td><td data-label="Ввод изображения"><span class="vis cpu">Включено, CPU</span></td><td data-label="Контекст">Токены 8K</td></tr>
         <tr><td>ПК без видеокарты, 16 ГБ RAM</td><td data-label="Работает">CPU</td><td data-label="Ввод изображения"><span class="vis cpu">Включено, CPU</span></td><td data-label="Контекст">Токены 8K</td></tr>
         <tr><td>ПК без видеокарты, 8 ГБ RAM</td><td data-label="Работает">CPU, свободного места мало</td><td data-label="Ввод изображения"><span class="vis off">Выкл.</span></td><td data-label="Контекст">Токены 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Разработано планировщиком компаньона из общей и свободной памяти; числа на вашем компьютере во время установки решают. На Apple Silicon пакет MLX имеет собственную обзорную башню, поэтому изображения всегда включены.</p>
+        </tbody>
+      </table>
+      <p class="note">Разработано планировщиком компаньона из общей и свободной памяти; числа на вашем компьютере во время установки решают. На Apple Silicon пакет MLX имеет собственную обзорную башню, поэтому изображения всегда включены.</p>
+    </div>
   </div>
 </section>
 

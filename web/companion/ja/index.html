@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B、マシンに合わせたサイズ</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML の Ternary Bonsai 2 27B は、270 億のパラメータを 5.95 GB に詰め込みます。コンパニオンは、Q8_0 ビジョン プロジェクターと PrismML の llama.cpp ビルドとともに、または Apple Silicon 上の MLX パックとしてインストールし、サブスクリプションの横に <code>bonsai-2-27b</code> としてリストします。</p>
-      <p class="intro">何かをダウンロードする前に、モデルがどこで実行されるか、画像入力が適合するかどうかが判断されます。ビジョン プロジェクターは、モデルとそのコンテキストの後に約 1 GB の GPU メモリが残っている場合は GPU で動作し、システム RAM のみに余裕がある場合は CPU で動作し、それ以外の場合はオフのままです。パネル内の選択を上書きできます。</p>
+      <p class="intro">Prism ML は Bonsai 2.5 をツール呼び出しとコーディング向けに調整しました。最小の GGUF ファイルには約 6 GB の重みが含まれます。画像入力には別途ビジョンプロジェクターを使います。</p>
+      <div>
+        <p class="intro">2.5 をローカルでサーバーとして起動し、WebBrain の llama.cpp プロバイダーで読み込みます。Q2_0 には llama.cpp b11556 以降を使用してください。PTQ1_0 と PQ2_0 は Prism ML の llama.cpp フォークで動作します。</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Bonsai 2.5 のダウンロードとセットアップ</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>コンパニオンが一般的なマシンで選択したもの</caption>
-      <thead><tr><th scope="col">機械</th><th scope="col">実行します</th><th scope="col">画像入力</th><th scope="col">コンテキスト</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B、マシンに合わせたサイズ</h3>
+      <div class="split">
+        <p class="intro">PrismML の Ternary Bonsai 2 27B は、270 億のパラメータを 5.95 GB に詰め込みます。コンパニオンは、Q8_0 ビジョン プロジェクターと PrismML の llama.cpp ビルドとともに、または Apple Silicon 上の MLX パックとしてインストールし、サブスクリプションの横に <code>bonsai-2-27b</code> としてリストします。</p>
+        <p class="intro">何かをダウンロードする前に、モデルがどこで実行されるか、画像入力が適合するかどうかが判断されます。ビジョン プロジェクターは、モデルとそのコンテキストの後に約 1 GB の GPU メモリが残っている場合は GPU で動作し、システム RAM のみに余裕がある場合は CPU で動作し、それ以外の場合はオフのままです。パネル内の選択を上書きできます。</p>
+      </div>
+      <table class="machines">
+        <caption>コンパニオンが一般的なマシンで選択したもの</caption>
+        <thead><tr><th scope="col">機械</th><th scope="col">実行します</th><th scope="col">画像入力</th><th scope="col">コンテキスト</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air、8GB</td><td data-label="実行します">アップル GPU と Metal。 Mac よりも多くのメモリが必要なため、交換が必要になります。</td><td data-label="画像入力"><span class="vis off">オフ</span></td><td data-label="コンテキスト">8K トークン</td></tr>
         <tr><td>MacBook Pro、16GB</td><td data-label="実行します">アップル GPU と Metal</td><td data-label="画像入力"><span class="vis gpu">オン、GPU</span></td><td data-label="コンテキスト">16K トークン</td></tr>
         <tr><td>RTX 4060 (8 GB) および 16 GB RAM を搭載したラップトップ</td><td data-label="実行します">CUDA、GPU の 64 レイヤーのうち 57</td><td data-label="画像入力"><span class="vis cpu">オン、CPU</span></td><td data-label="コンテキスト">8K トークン</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Radeon RX 7600 (8 GB) および 32 GB RAM を搭載したデスクトップ</td><td data-label="実行します">Vulkan、GPU の 64 レイヤーのうち 61</td><td data-label="画像入力"><span class="vis cpu">オン、CPU</span></td><td data-label="コンテキスト">8K トークン</td></tr>
         <tr><td>グラフィックス カードのない PC、16 GB RAM</td><td data-label="実行します">CPU</td><td data-label="画像入力"><span class="vis cpu">オン、CPU</span></td><td data-label="コンテキスト">8K トークン</td></tr>
         <tr><td>グラフィックス カードのない PC、8 GB RAM</td><td data-label="実行します">CPU、余裕がほとんどない</td><td data-label="画像入力"><span class="vis off">オフ</span></td><td data-label="コンテキスト">8K トークン</td></tr>
-      </tbody>
-    </table>
-    <p class="note">コンパニオンのプランナーが総メモリと空きメモリから計算します。インストール時のマシン上の数値によって決まります。 Apple Silicon では、MLX パックに独自のビジョンタワーが搭載されているため、画像は常にオンになります。</p>
+        </tbody>
+      </table>
+      <p class="note">コンパニオンのプランナーが総メモリと空きメモリから計算します。インストール時のマシン上の数値によって決まります。 Apple Silicon では、MLX パックに独自のビジョンタワーが搭載されているため、画像は常にオンになります。</p>
+    </div>
   </div>
 </section>
 

@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B، اندازه دستگاه شما</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML Ternary Bonsai 2 27B 27 میلیارد پارامتر را در 5.95 گیگابایت بسته بندی می کند. همراه آن را با پروژکتور دید Q8_0 و ساخت PrismML از llama.cpp یا به عنوان بسته MLX در Apple Silicon نصب می کند و آن را در کنار اشتراک های شما به عنوان <code>bonsai-2-27b</code> فهرست می کند.</p>
-      <p class="intro">قبل از دانلود، مشخص می‌شود که مدل کجا اجرا می‌شود و آیا ورودی تصویر متناسب است یا خیر. پروژکتور ویژن روشن می شودGPUزمانی که حدود 1 گیگابایتGPUحافظه بعد از مدل و زمینه آن، روی آن باقی می ماندCPUزمانی که فقط سیستمRAMجا دارد و در غیر این صورت خاموش می ماند. می توانید انتخاب را در پانل لغو کنید.</p>
+      <p class="intro">Prism ML مدل Bonsai 2.5 را برای فراخوانی ابزارها و کدنویسی بهینه کرده است. کوچک‌ترین فایل GGUF حدود ۶ گیگابایت وزن مدل دارد. ورودی تصویر به یک پروژکتور بینایی جداگانه نیاز دارد.</p>
+      <div>
+        <p class="intro">نسخهٔ 2.5 را به‌صورت محلی اجرا کنید و از طریق ارائه‌دهندهٔ llama.cpp در WebBrain بارگذاری کنید. برای Q2_0 از نسخهٔ b11556 یا جدیدتر llama.cpp استفاده کنید. فایل‌های PTQ1_0 و PQ2_0 به شاخهٔ llama.cpp شرکت Prism ML نیاز دارند.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">دانلود و راه‌اندازی Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>آنچه که همراه در ماشین های معمولی انتخاب می کند</caption>
-      <thead><tr><th scope="col">ماشین</th><th scope="col">اجرا می شود</th><th scope="col">ورودی تصویر</th><th scope="col">زمینه</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B، اندازه دستگاه شما</h3>
+      <div class="split">
+        <p class="intro">PrismML Ternary Bonsai 2 27B 27 میلیارد پارامتر را در 5.95 گیگابایت بسته بندی می کند. همراه آن را با پروژکتور دید Q8_0 و ساخت PrismML از llama.cpp یا به عنوان بسته MLX در Apple Silicon نصب می کند و آن را در کنار اشتراک های شما به عنوان <code>bonsai-2-27b</code> فهرست می کند.</p>
+        <p class="intro">قبل از دانلود، مشخص می‌شود که مدل کجا اجرا می‌شود و آیا ورودی تصویر متناسب است یا خیر. پروژکتور ویژن روشن می شودGPUزمانی که حدود 1 گیگابایتGPUحافظه بعد از مدل و زمینه آن، روی آن باقی می ماندCPUزمانی که فقط سیستمRAMجا دارد و در غیر این صورت خاموش می ماند. می توانید انتخاب را در پانل لغو کنید.</p>
+      </div>
+      <table class="machines">
+        <caption>آنچه که همراه در ماشین های معمولی انتخاب می کند</caption>
+        <thead><tr><th scope="col">ماشین</th><th scope="col">اجرا می شود</th><th scope="col">ورودی تصویر</th><th scope="col">زمینه</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air، 8 گیگابایت</td><td data-label="اجرا می شود">اپل GPU با Metal. به حافظه بیشتری نسبت به مک نیاز دارد، پس انتظار تعویض را داشته باشید.</td><td data-label="ورودی تصویر"><span class="vis off">خاموش</span></td><td data-label="زمینه">توکن های 8K</td></tr>
         <tr><td>MacBook Pro، 16 گیگابایت</td><td data-label="اجرا می شود">اپل GPU با Metal</td><td data-label="ورودی تصویر"><span class="vis gpu">روشن، GPU</span></td><td data-label="زمینه">توکن های 16K</td></tr>
         <tr><td>لپ تاپ با RTX 4060 (8 گیگابایت) و 16 گیگابایت RAM</td><td data-label="اجرا می شود">CUDA، 57 لایه از 64 لایه در GPU</td><td data-label="ورودی تصویر"><span class="vis cpu">روشن، CPU</span></td><td data-label="زمینه">توکن های 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>رومیزی با Radeon RX 7600 (8 گیگابایت) و 32 گیگابایت RAM</td><td data-label="اجرا می شود">Vulkan، 61 لایه از 64 لایه در GPU</td><td data-label="ورودی تصویر"><span class="vis cpu">روشن، CPU</span></td><td data-label="زمینه">توکن های 8K</td></tr>
         <tr><td>کامپیوتر بدون کارت گرافیک، 16 گیگابایت RAM</td><td data-label="اجرا می شود">CPU</td><td data-label="ورودی تصویر"><span class="vis cpu">روشن، CPU</span></td><td data-label="زمینه">توکن های 8K</td></tr>
         <tr><td>کامپیوتر بدون کارت گرافیک، 8 گیگابایت RAM</td><td data-label="اجرا می شود">CPU، با فضای کمی برای ذخیره</td><td data-label="ورودی تصویر"><span class="vis off">خاموش</span></td><td data-label="زمینه">توکن های 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">کار شده توسط برنامه ریز همراه از حافظه کامل و رایگان. اعداد روی دستگاه شما در زمان نصب تصمیم می گیرند. در Apple Silicon بسته MLX دارای برج بینایی خاص خود است، بنابراین تصاویر همیشه روشن هستند.</p>
+        </tbody>
+      </table>
+      <p class="note">کار شده توسط برنامه ریز همراه از حافظه کامل و رایگان. اعداد روی دستگاه شما در زمان نصب تصمیم می گیرند. در Apple Silicon بسته MLX دارای برج بینایی خاص خود است، بنابراین تصاویر همیشه روشن هستند.</p>
+    </div>
   </div>
 </section>
 

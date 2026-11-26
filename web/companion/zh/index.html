@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B，尺寸适合您的机器</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML 的 Ternary Bonsai 2 27B 将 270 亿个参数打包到 5.95 GB 中。配套产品与其 Q8_0 视觉投影仪和 PrismML 的 llama.cpp 版本一起安装，或者作为 Apple Silicon 上的 MLX 包安装，并在您的订阅旁边将其列为 <code>bonsai-2-27b</code>。</p>
-      <p class="intro">在下载任何内容之前，它会计算出模型运行的位置以及图像输入是否合适。当模型及其上下文之后还剩下大约 1 GB 的 GPU 内存时，视觉投影仪将在 GPU 上运行；当只有系统 RAM 有空间时，视觉投影仪将在 CPU 上运行，否则将保持关闭状态。您可以覆盖面板中的选择。</p>
+      <p class="intro">Prism ML 针对工具调用和编程任务调优了 Bonsai 2.5。最小的 GGUF 文件包含约 6 GB 的模型权重。图像输入需要单独的视觉投影器。</p>
+      <div>
+        <p class="intro">在本机启动 2.5 服务，然后在 WebBrain 的 llama.cpp 提供商中加载模型。Q2_0 需要 llama.cpp b11556 或更新版本。PTQ1_0 和 PQ2_0 使用 Prism ML 的 llama.cpp 分支。</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">下载和配置 Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>同伴在典型机器上选择了什么</caption>
-      <thead><tr><th scope="col">机器</th><th scope="col">运行于</th><th scope="col">图像输入</th><th scope="col">背景</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B，尺寸适合您的机器</h3>
+      <div class="split">
+        <p class="intro">PrismML 的 Ternary Bonsai 2 27B 将 270 亿个参数打包到 5.95 GB 中。配套产品与其 Q8_0 视觉投影仪和 PrismML 的 llama.cpp 版本一起安装，或者作为 Apple Silicon 上的 MLX 包安装，并在您的订阅旁边将其列为 <code>bonsai-2-27b</code>。</p>
+        <p class="intro">在下载任何内容之前，它会计算出模型运行的位置以及图像输入是否合适。当模型及其上下文之后还剩下大约 1 GB 的 GPU 内存时，视觉投影仪将在 GPU 上运行；当只有系统 RAM 有空间时，视觉投影仪将在 CPU 上运行，否则将保持关闭状态。您可以覆盖面板中的选择。</p>
+      </div>
+      <table class="machines">
+        <caption>同伴在典型机器上选择了什么</caption>
+        <thead><tr><th scope="col">机器</th><th scope="col">运行于</th><th scope="col">图像输入</th><th scope="col">背景</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air，8GB</td><td data-label="运行于">苹果 GPU 与 Metal。它需要比 Mac 更多的内存，因此需要交换。</td><td data-label="图像输入"><span class="vis off">关闭</span></td><td data-label="背景">8K 代币</td></tr>
         <tr><td>MacBook Pro，16 GB</td><td data-label="运行于">苹果 GPU 与 Metal</td><td data-label="图像输入"><span class="vis gpu">上，GPU</span></td><td data-label="背景">16K 代币</td></tr>
         <tr><td>配备 RTX 4060 (8 GB) 和 16 GB RAM 的笔记本电脑</td><td data-label="运行于">CUDA，GPU 上 64 层中的 57 层</td><td data-label="图像输入"><span class="vis cpu">上，CPU</span></td><td data-label="背景">8K 代币</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>配备 Radeon RX 7600 (8 GB) 和 32 GB RAM 的台式机</td><td data-label="运行于">Vulkan，GPU 上 64 层中的 61 层</td><td data-label="图像输入"><span class="vis cpu">上，CPU</span></td><td data-label="背景">8K 代币</td></tr>
         <tr><td>不带显卡的 PC，16 GB RAM</td><td data-label="运行于">CPU</td><td data-label="图像输入"><span class="vis cpu">上，CPU</span></td><td data-label="背景">8K 代币</td></tr>
         <tr><td>不带显卡的 PC，8 GB RAM</td><td data-label="运行于">CPU，剩余空间很小</td><td data-label="图像输入"><span class="vis off">关闭</span></td><td data-label="背景">8K 代币</td></tr>
-      </tbody>
-    </table>
-    <p class="note">由同伴的计划者根据全部和空闲记忆制定出；安装时计算机上的数字决定。在 Apple Silicon 上，MLX 包带有自己的视觉塔，因此图像始终处于开启状态。</p>
+        </tbody>
+      </table>
+      <p class="note">由同伴的计划者根据全部和空闲记忆制定出；安装时计算机上的数字决定。在 Apple Silicon 上，MLX 包带有自己的视觉塔，因此图像始终处于开启状态。</p>
+    </div>
   </div>
 </section>
 

@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, makinene göre ayarlanır</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML'in Ternary Bonsai 2 27B modeli 27 milyar parametreyi 5,95 GB'a sığdırır. Companion onu Q8_0 görsel projektörüyle ve PrismML'in llama.cpp sürümüyle, Apple Silicon'da istersen MLX paketi olarak kurar ve aboneliklerinin yanında <code>bonsai-2-27b</code> adıyla sunar.</p>
-      <p class="intro">Daha hiçbir şey inmeden modelin nerede çalışacağını ve görsel girdinin sığıp sığmayacağını hesaplar. Model ve bağlamı yerleştikten sonra GPU&#x27;da yaklaşık 1 GB yer kalıyorsa görsel projektör GPU&#x27;ya, yalnızca sistem belleğinde yer varsa CPU&#x27;ya gider; ikisi de yoksa kapalı kalır. Bu seçimi panelden değiştirebilirsin.</p>
+      <p class="intro">Prism ML, Bonsai 2.5’i araç çağırma ve kodlama için geliştirdi. En küçük GGUF dosyası yaklaşık 6 GB ağırlık içerir. Görsel girdi için ayrı bir projektör kullanılır.</p>
+      <div>
+        <p class="intro">2.5’i yerelde sunup WebBrain’deki llama.cpp sağlayıcısından yükleyebilirsin. Q2_0 için llama.cpp’nin b11556 veya daha yeni bir sürümünü kullan. PTQ1_0 ve PQ2_0 dosyaları Prism ML’in llama.cpp sürümüyle çalışır.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Bonsai 2.5 indirme ve kurulum</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Tipik makinelerde Companion&#x27;ın seçtikleri</caption>
-      <thead><tr><th scope="col">Makine</th><th scope="col">Nerede çalışır</th><th scope="col">Görsel girdi</th><th scope="col">Bağlam</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, makinene göre ayarlanır</h3>
+      <div class="split">
+        <p class="intro">PrismML'in Ternary Bonsai 2 27B modeli 27 milyar parametreyi 5,95 GB'a sığdırır. Companion onu Q8_0 görsel projektörüyle ve PrismML'in llama.cpp sürümüyle, Apple Silicon'da istersen MLX paketi olarak kurar ve aboneliklerinin yanında <code>bonsai-2-27b</code> adıyla sunar.</p>
+        <p class="intro">Daha hiçbir şey inmeden modelin nerede çalışacağını ve görsel girdinin sığıp sığmayacağını hesaplar. Model ve bağlamı yerleştikten sonra GPU&#x27;da yaklaşık 1 GB yer kalıyorsa görsel projektör GPU&#x27;ya, yalnızca sistem belleğinde yer varsa CPU&#x27;ya gider; ikisi de yoksa kapalı kalır. Bu seçimi panelden değiştirebilirsin.</p>
+      </div>
+      <table class="machines">
+        <caption>Tipik makinelerde Companion&#x27;ın seçtikleri</caption>
+        <thead><tr><th scope="col">Makine</th><th scope="col">Nerede çalışır</th><th scope="col">Görsel girdi</th><th scope="col">Bağlam</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 GB</td><td data-label="Nerede çalışır">Apple GPU&#x27;da Metal. Mac&#x27;teki bellekten fazlasını ister, takas (swap) beklenir.</td><td data-label="Görsel girdi"><span class="vis off">Kapalı</span></td><td data-label="Bağlam">8K token</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="Nerede çalışır">Apple GPU&#x27;da Metal</td><td data-label="Görsel girdi"><span class="vis gpu">Açık, GPU</span></td><td data-label="Bağlam">16K token</td></tr>
         <tr><td>RTX 4060 (8 GB) ve 16 GB RAM&#x27;li dizüstü</td><td data-label="Nerede çalışır">CUDA, 64 katmanın 57&#x27;si GPU&#x27;da</td><td data-label="Görsel girdi"><span class="vis cpu">Açık, CPU</span></td><td data-label="Bağlam">8K token</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Radeon RX 7600 (8 GB) ve 32 GB RAM&#x27;li masaüstü</td><td data-label="Nerede çalışır">Vulkan, 64 katmanın 61&#x27;i GPU&#x27;da</td><td data-label="Görsel girdi"><span class="vis cpu">Açık, CPU</span></td><td data-label="Bağlam">8K token</td></tr>
         <tr><td>Ekran kartı olmayan, 16 GB RAM&#x27;li PC</td><td data-label="Nerede çalışır">CPU</td><td data-label="Görsel girdi"><span class="vis cpu">Açık, CPU</span></td><td data-label="Bağlam">8K token</td></tr>
         <tr><td>Ekran kartı olmayan, 8 GB RAM&#x27;li PC</td><td data-label="Nerede çalışır">CPU, payı çok az</td><td data-label="Görsel girdi"><span class="vis off">Kapalı</span></td><td data-label="Bağlam">8K token</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Companion&#x27;ın planlayıcısı toplam ve boş belleğe bakarak hesaplar; son kararı kurulum anında makinendeki değerler verir. Apple Silicon&#x27;da MLX paketi kendi görsel katmanını taşır, görsel girdi her zaman açıktır.</p>
+        </tbody>
+      </table>
+      <p class="note">Companion&#x27;ın planlayıcısı toplam ve boş belleğe bakarak hesaplar; son kararı kurulum anında makinendeki değerler verir. Apple Silicon&#x27;da MLX paketi kendi görsel katmanını taşır, görsel girdi her zaman açıktır.</p>
+    </div>
   </div>
 </section>
 

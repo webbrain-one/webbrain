@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, dimensionado para sua máquina</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">O Ternary Bonsai 2 27B do PrismML contém 27 bilhões de parâmetros em 5,95 GB. O companheiro o instala com seu projetor de visão Q8_0 e a versão llama.cpp do PrismML, ou como o pacote MLX em Apple Silicon, e o lista ao lado de suas assinaturas como <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Antes de qualquer download, ele determina onde o modelo é executado e se a entrada da imagem se ajusta. O projetor de visão liga o GPU quando resta cerca de 1 GB de memória do GPU após o modelo e seu contexto, no CPU quando apenas o sistema RAM tem espaço e permanece desligado caso contrário. Você pode substituir a escolha no painel.</p>
+      <p class="intro">A Prism ML ajustou o Bonsai 2.5 para chamadas de ferramentas e tarefas de programação. O GGUF menor contém cerca de 6 GB de pesos. A entrada de imagens usa um projetor de visão separado.</p>
+      <div>
+        <p class="intro">Execute o 2.5 em um servidor local e carregue o modelo pelo provedor llama.cpp no WebBrain. Para Q2_0, use llama.cpp b11556 ou posterior. PTQ1_0 e PQ2_0 usam a versão do llama.cpp da Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Download e configuração do Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>O que o companheiro escolhe em máquinas típicas</caption>
-      <thead><tr><th scope="col">Máquina</th><th scope="col">Continua</th><th scope="col">Entrada de imagem</th><th scope="col">Contexto</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, dimensionado para sua máquina</h3>
+      <div class="split">
+        <p class="intro">O Ternary Bonsai 2 27B do PrismML contém 27 bilhões de parâmetros em 5,95 GB. O companheiro o instala com seu projetor de visão Q8_0 e a versão llama.cpp do PrismML, ou como o pacote MLX em Apple Silicon, e o lista ao lado de suas assinaturas como <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Antes de qualquer download, ele determina onde o modelo é executado e se a entrada da imagem se ajusta. O projetor de visão liga o GPU quando resta cerca de 1 GB de memória do GPU após o modelo e seu contexto, no CPU quando apenas o sistema RAM tem espaço e permanece desligado caso contrário. Você pode substituir a escolha no painel.</p>
+      </div>
+      <table class="machines">
+        <caption>O que o companheiro escolhe em máquinas típicas</caption>
+        <thead><tr><th scope="col">Máquina</th><th scope="col">Continua</th><th scope="col">Entrada de imagem</th><th scope="col">Contexto</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8GB</td><td data-label="Continua">Apple GPU com Metal. Ele precisa de mais memória do que o Mac, então espere a troca.</td><td data-label="Entrada de imagem"><span class="vis off">Desligado</span></td><td data-label="Contexto">Tokens 8K</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="Continua">Apple GPU com Metal</td><td data-label="Entrada de imagem"><span class="vis gpu">Ligado, GPU</span></td><td data-label="Contexto">Tokens 16K</td></tr>
         <tr><td>Laptop com RTX 4060 (8 GB) e 16 GB RAM</td><td data-label="Continua">CUDA, 57 de 64 camadas no GPU</td><td data-label="Entrada de imagem"><span class="vis cpu">Ligado, CPU</span></td><td data-label="Contexto">Tokens 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Desktop com Radeon RX 7600 (8 GB) e 32 GB RAM</td><td data-label="Continua">Vulkan, 61 de 64 camadas no GPU</td><td data-label="Entrada de imagem"><span class="vis cpu">Ligado, CPU</span></td><td data-label="Contexto">Tokens 8K</td></tr>
         <tr><td>PC sem placa gráfica, 16 GB RAM</td><td data-label="Continua">CPU</td><td data-label="Entrada de imagem"><span class="vis cpu">Ligado, CPU</span></td><td data-label="Contexto">Tokens 8K</td></tr>
         <tr><td>PC sem placa gráfica, 8 GB RAM</td><td data-label="Continua">CPU, com pouco espaço de sobra</td><td data-label="Entrada de imagem"><span class="vis off">Desligado</span></td><td data-label="Contexto">Tokens 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Elaborado pelo planner do acompanhante a partir de memória total e livre; os números em sua máquina no momento da instalação decidem. No Apple Silicon, o pacote MLX carrega sua própria torre de visão, portanto as imagens estão sempre ligadas.</p>
+        </tbody>
+      </table>
+      <p class="note">Elaborado pelo planner do acompanhante a partir de memória total e livre; os números em sua máquina no momento da instalação decidem. No Apple Silicon, o pacote MLX carrega sua própria torre de visão, portanto as imagens estão sempre ligadas.</p>
+    </div>
   </div>
 </section>
 

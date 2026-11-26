@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, có kích thước phù hợp với máy của bạn</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Ternary Bonsai 2 27B của PrismML chứa 27 tỷ thông số vào 5,95 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Trước khi tải xuống bất cứ thứ gì, nó sẽ tìm ra nơi mô hình chạy và liệu hình ảnh đầu vào có phù hợp hay không. Máy chiếu thị giác hoạt động trên GPU khi còn lại khoảng 1 GB bộ nhớ GPU sau kiểu máy và ngữ cảnh của nó, trên CPU khi chỉ có hệ thống RAM còn chỗ trống và nếu không thì sẽ tắt. Bạn có thể ghi đè lựa chọn trong bảng điều khiển.</p>
+      <p class="intro">Prism ML tinh chỉnh Bonsai 2.5 cho việc gọi công cụ và lập trình. Tệp GGUF nhỏ nhất chứa khoảng 6 GB trọng số. Đầu vào hình ảnh cần một bộ chiếu thị giác riêng.</p>
+      <div>
+        <p class="intro">Chạy 2.5 trên máy chủ cục bộ rồi tải mô hình qua nhà cung cấp llama.cpp trong WebBrain. Với Q2_0, dùng llama.cpp b11556 trở lên. PTQ1_0 và PQ2_0 dùng bản llama.cpp của Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Tải xuống và thiết lập Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Người bạn đồng hành chọn gì trên các máy thông thường</caption>
-      <thead><tr><th scope="col">Máy</th><th scope="col">Chạy tiếp</th><th scope="col">Đầu vào hình ảnh</th><th scope="col">Bối cảnh</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, có kích thước phù hợp với máy của bạn</h3>
+      <div class="split">
+        <p class="intro">Ternary Bonsai 2 27B của PrismML chứa 27 tỷ thông số vào 5,95 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Trước khi tải xuống bất cứ thứ gì, nó sẽ tìm ra nơi mô hình chạy và liệu hình ảnh đầu vào có phù hợp hay không. Máy chiếu thị giác hoạt động trên GPU khi còn lại khoảng 1 GB bộ nhớ GPU sau kiểu máy và ngữ cảnh của nó, trên CPU khi chỉ có hệ thống RAM còn chỗ trống và nếu không thì sẽ tắt. Bạn có thể ghi đè lựa chọn trong bảng điều khiển.</p>
+      </div>
+      <table class="machines">
+        <caption>Người bạn đồng hành chọn gì trên các máy thông thường</caption>
+        <thead><tr><th scope="col">Máy</th><th scope="col">Chạy tiếp</th><th scope="col">Đầu vào hình ảnh</th><th scope="col">Bối cảnh</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8GB</td><td data-label="Chạy tiếp">Apple GPU với Metal. Nó cần nhiều bộ nhớ hơn Mac, vì vậy hãy chờ đợi việc trao đổi.</td><td data-label="Đầu vào hình ảnh"><span class="vis off">Tắt</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="Chạy tiếp">Apple GPU với Metal</td><td data-label="Đầu vào hình ảnh"><span class="vis gpu">Bật, GPU</span></td><td data-label="Bối cảnh">Mã thông báo 16K</td></tr>
         <tr><td>Máy tính xách tay có RTX 4060 (8 GB) và 16 GB RAM</td><td data-label="Chạy tiếp">CUDA, 57 trên 64 lớp trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Máy tính để bàn có Radeon RX 7600 (8 GB) và 32 GB RAM</td><td data-label="Chạy tiếp">Vulkan, 61 trên 64 lớp trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>PC không có card đồ họa, 16 GB RAM</td><td data-label="Chạy tiếp">CPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>PC không có card đồ họa, 8 GB RAM</td><td data-label="Chạy tiếp">CPU, có rất ít chỗ trống</td><td data-label="Đầu vào hình ảnh"><span class="vis off">Tắt</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Được người lập kế hoạch của người bạn đồng hành thực hiện từ bộ nhớ tổng thể và còn trống; các con số trên máy của bạn lúc cài đặt sẽ quyết định. Trên Apple Silicon, gói MLX có tháp tầm nhìn riêng nên hình ảnh luôn bật.</p>
+        </tbody>
+      </table>
+      <p class="note">Được người lập kế hoạch của người bạn đồng hành thực hiện từ bộ nhớ tổng thể và còn trống; các con số trên máy của bạn lúc cài đặt sẽ quyết định. Trên Apple Silicon, gói MLX có tháp tầm nhìn riêng nên hình ảnh luôn bật.</p>
+    </div>
   </div>
 </section>
 

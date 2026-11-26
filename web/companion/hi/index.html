@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, आपकी मशीन के आकार का</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">PrismML का Ternary Bonsai 2 27B 27 बिलियन पैरामीटर्स को 5.95 जीबी में पैक करता है। साथी इसे अपने Q8_0 विज़न प्रोजेक्टर और PrismML के llama.cpp के निर्माण के साथ, या Apple Silicon पर MLX पैक के रूप में स्थापित करता है, और इसे आपकी सदस्यता के आगे <code>bonsai-2-27b</code> के रूप में सूचीबद्ध करता है।</p>
-      <p class="intro">कुछ भी डाउनलोड करने से पहले, यह पता लगाया जाता है कि मॉडल कहां चलता है और छवि इनपुट फिट बैठता है या नहीं। विज़न प्रोजेक्टर GPU पर तब चलता है जब मॉडल और उसके संदर्भ के बाद लगभग 1 जीबी GPU मेमोरी बची होती है, CPU पर जब केवल सिस्टम RAM में जगह होती है, और अन्यथा बंद रहता है। आप पैनल में विकल्प को ओवरराइड कर सकते हैं.</p>
+      <p class="intro">Prism ML ने Bonsai 2.5 को टूल कॉलिंग और कोडिंग के लिए बेहतर बनाया है। सबसे छोटी GGUF फ़ाइल में करीब 6 GB वेट हैं। इमेज इनपुट के लिए अलग विज़न प्रोजेक्टर लगता है।</p>
+      <div>
+        <p class="intro">2.5 को लोकल सर्वर पर चलाएँ और WebBrain में llama.cpp प्रदाता से लोड करें। Q2_0 के लिए llama.cpp का b11556 या नया बिल्ड इस्तेमाल करें। PTQ1_0 और PQ2_0 के लिए Prism ML का llama.cpp फ़ोर्क चाहिए।</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Bonsai 2.5 डाउनलोड और सेटअप</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>साथी विशिष्ट मशीनों पर क्या चुनता है</caption>
-      <thead><tr><th scope="col">मशीन</th><th scope="col">चलता रहता है</th><th scope="col">छवि इनपुट</th><th scope="col">प्रसंग</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, आपकी मशीन के आकार का</h3>
+      <div class="split">
+        <p class="intro">PrismML का Ternary Bonsai 2 27B 27 बिलियन पैरामीटर्स को 5.95 जीबी में पैक करता है। साथी इसे अपने Q8_0 विज़न प्रोजेक्टर और PrismML के llama.cpp के निर्माण के साथ, या Apple Silicon पर MLX पैक के रूप में स्थापित करता है, और इसे आपकी सदस्यता के आगे <code>bonsai-2-27b</code> के रूप में सूचीबद्ध करता है।</p>
+        <p class="intro">कुछ भी डाउनलोड करने से पहले, यह पता लगाया जाता है कि मॉडल कहां चलता है और छवि इनपुट फिट बैठता है या नहीं। विज़न प्रोजेक्टर GPU पर तब चलता है जब मॉडल और उसके संदर्भ के बाद लगभग 1 जीबी GPU मेमोरी बची होती है, CPU पर जब केवल सिस्टम RAM में जगह होती है, और अन्यथा बंद रहता है। आप पैनल में विकल्प को ओवरराइड कर सकते हैं.</p>
+      </div>
+      <table class="machines">
+        <caption>साथी विशिष्ट मशीनों पर क्या चुनता है</caption>
+        <thead><tr><th scope="col">मशीन</th><th scope="col">चलता रहता है</th><th scope="col">छवि इनपुट</th><th scope="col">प्रसंग</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 जीबी</td><td data-label="चलता रहता है">Apple GPU Metal के साथ। इसे मैक की तुलना में अधिक मेमोरी की आवश्यकता है, इसलिए स्वैपिंग की अपेक्षा करें।</td><td data-label="छवि इनपुट"><span class="vis off">बंद</span></td><td data-label="प्रसंग">8K टोकन</td></tr>
         <tr><td>MacBook Pro, 16 जीबी</td><td data-label="चलता रहता है">Apple GPU Metal के साथ</td><td data-label="छवि इनपुट"><span class="vis gpu">चालू, GPU</span></td><td data-label="प्रसंग">16K टोकन</td></tr>
         <tr><td>RTX 4060 (8 जीबी) और 16 जीबी RAM वाला लैपटॉप</td><td data-label="चलता रहता है">CUDA, GPU पर 64 में से 57 परतें</td><td data-label="छवि इनपुट"><span class="vis cpu">चालू, CPU</span></td><td data-label="प्रसंग">8K टोकन</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Radeon RX 7600 (8 जीबी) और 32 जीबी RAM के साथ डेस्कटॉप</td><td data-label="चलता रहता है">Vulkan, GPU पर 64 में से 61 परतें</td><td data-label="छवि इनपुट"><span class="vis cpu">चालू, CPU</span></td><td data-label="प्रसंग">8K टोकन</td></tr>
         <tr><td>बिना ग्राफिक्स कार्ड वाला पीसी, 16 जीबी RAM</td><td data-label="चलता रहता है">CPU</td><td data-label="छवि इनपुट"><span class="vis cpu">चालू, CPU</span></td><td data-label="प्रसंग">8K टोकन</td></tr>
         <tr><td>बिना ग्राफिक्स कार्ड वाला पीसी, 8 जीबी RAM</td><td data-label="चलता रहता है">CPU, बहुत कम जगह के साथ</td><td data-label="छवि इनपुट"><span class="vis off">बंद</span></td><td data-label="प्रसंग">8K टोकन</td></tr>
-      </tbody>
-    </table>
-    <p class="note">समग्र और मुक्त स्मृति से साथी के योजनाकार द्वारा काम किया गया; इंस्टॉल के समय आपकी मशीन पर मौजूद नंबर तय करते हैं। Apple Silicon पर MLX पैक का अपना विज़न टावर है, इसलिए छवियां हमेशा चालू रहती हैं।</p>
+        </tbody>
+      </table>
+      <p class="note">समग्र और मुक्त स्मृति से साथी के योजनाकार द्वारा काम किया गया; इंस्टॉल के समय आपकी मशीन पर मौजूद नंबर तय करते हैं। Apple Silicon पर MLX पैक का अपना विज़न टावर है, इसलिए छवियां हमेशा चालू रहती हैं।</p>
+    </div>
   </div>
 </section>
 

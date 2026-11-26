@@ -144,15 +144,24 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2 27B, sukat sa iyong makina</h2>
+    <h2 id="local-h">Bonsai 2.5 27B</h2>
     <div class="split">
-      <p class="intro">Ang Ternary Bonsai 2 27B ng PrismML ay naglalaman ng 27 bilyong parameter sa 5.95 GB. Ini-install ito ng kasama kasama ang Q8_0 vision projector nito at ang build ng PrismML ng llama.cpp, o bilang MLX pack sa Apple Silicon, at inililista ito sa tabi ng iyong mga subscription bilang <code>bonsai-2-27b</code>.</p>
-      <p class="intro">Bago mag-download ang anumang bagay, gagana ito kung saan tumatakbo ang modelo at kung umaangkop ang input ng imahe. Ang vision projector ay napupunta sa GPU kapag humigit-kumulang 1 GB ng GPU na memorya ang natitira pagkatapos ng modelo at ang konteksto nito, sa CPU kapag ang system na RAM lang ang may puwang, at nananatili kung hindi. Maaari mong i-override ang pagpipilian sa panel.</p>
+      <p class="intro">Inangkop ng Prism ML ang Bonsai 2.5 para sa pagtawag ng mga tool at pagsusulat ng code. Humigit-kumulang 6 GB ang mga timbang ng modelo sa pinakamaliit na GGUF. May hiwalay na vision projector para sa mga larawan.</p>
+      <div>
+        <p class="intro">Patakbuhin ang 2.5 sa lokal na server at i-load ito gamit ang llama.cpp provider sa WebBrain. Para sa Q2_0, gumamit ng llama.cpp b11556 o mas bago. Gumagana ang PTQ1_0 at PQ2_0 sa bersyon ng llama.cpp ng Prism ML.</p>
+        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">I-download at i-set up ang Bonsai 2.5</a></p>
+      </div>
     </div>
-    <table class="machines">
-      <caption>Ano ang pinipili ng kasama sa mga karaniwang makina</caption>
-      <thead><tr><th scope="col">Makina</th><th scope="col">Tumatakbo sa</th><th scope="col">Input ng larawan</th><th scope="col">Konteksto</th></tr></thead>
-      <tbody>
+    <div class="companion-model">
+      <h3>Bonsai 2 27B, sukat sa iyong makina</h3>
+      <div class="split">
+        <p class="intro">Ang Ternary Bonsai 2 27B ng PrismML ay naglalaman ng 27 bilyong parameter sa 5.95 GB. Ini-install ito ng kasama kasama ang Q8_0 vision projector nito at ang build ng PrismML ng llama.cpp, o bilang MLX pack sa Apple Silicon, at inililista ito sa tabi ng iyong mga subscription bilang <code>bonsai-2-27b</code>.</p>
+        <p class="intro">Bago mag-download ang anumang bagay, gagana ito kung saan tumatakbo ang modelo at kung umaangkop ang input ng imahe. Ang vision projector ay napupunta sa GPU kapag humigit-kumulang 1 GB ng GPU na memorya ang natitira pagkatapos ng modelo at ang konteksto nito, sa CPU kapag ang system na RAM lang ang may puwang, at nananatili kung hindi. Maaari mong i-override ang pagpipilian sa panel.</p>
+      </div>
+      <table class="machines">
+        <caption>Ano ang pinipili ng kasama sa mga karaniwang makina</caption>
+        <thead><tr><th scope="col">Makina</th><th scope="col">Tumatakbo sa</th><th scope="col">Input ng larawan</th><th scope="col">Konteksto</th></tr></thead>
+        <tbody>
         <tr><td>MacBook Air, 8 GB</td><td data-label="Tumatakbo sa">Apple GPU na may Metal. Kailangan nito ng mas maraming memorya kaysa sa Mac, kaya asahan ang pagpapalit.</td><td data-label="Input ng larawan"><span class="vis off">Naka-off</span></td><td data-label="Konteksto">Mga token ng 8K</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="Tumatakbo sa">Apple GPU na may Metal</td><td data-label="Input ng larawan"><span class="vis gpu">Naka-on, GPU</span></td><td data-label="Konteksto">Mga token ng 16K</td></tr>
         <tr><td>Laptop na may RTX 4060 (8 GB) at 16 GB RAM</td><td data-label="Tumatakbo sa">CUDA, 57 sa 64 na layer sa GPU</td><td data-label="Input ng larawan"><span class="vis cpu">Naka-on, CPU</span></td><td data-label="Konteksto">Mga token ng 8K</td></tr>
@@ -160,9 +169,10 @@
         <tr><td>Desktop na may Radeon RX 7600 (8 GB) at 32 GB RAM</td><td data-label="Tumatakbo sa">Vulkan, 61 sa 64 na layer sa GPU</td><td data-label="Input ng larawan"><span class="vis cpu">Naka-on, CPU</span></td><td data-label="Konteksto">Mga token ng 8K</td></tr>
         <tr><td>PC na walang graphics card, 16 GB RAM</td><td data-label="Tumatakbo sa">CPU</td><td data-label="Input ng larawan"><span class="vis cpu">Naka-on, CPU</span></td><td data-label="Konteksto">Mga token ng 8K</td></tr>
         <tr><td>PC na walang graphics card, 8 GB RAM</td><td data-label="Tumatakbo sa">CPU, na may maliit na silid na matitira</td><td data-label="Input ng larawan"><span class="vis off">Naka-off</span></td><td data-label="Konteksto">Mga token ng 8K</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Ginawa ng tagaplano ng kasama mula sa kabuuan at libreng memorya; ang mga numero sa iyong makina sa oras ng pag-install ay magpapasya. Sa Apple Silicon ang MLX pack ay nagdadala ng sarili nitong vision tower, kaya laging naka-on ang mga larawan.</p>
+        </tbody>
+      </table>
+      <p class="note">Ginawa ng tagaplano ng kasama mula sa kabuuan at libreng memorya; ang mga numero sa iyong makina sa oras ng pag-install ay magpapasya. Sa Apple Silicon ang MLX pack ay nagdadala ng sarili nitong vision tower, kaya laging naka-on ang mga larawan.</p>
+    </div>
   </div>
 </section>
 
