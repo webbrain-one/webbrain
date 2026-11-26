@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion : vos abonnements IA en WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Une petite application de plateau pour macOS, Windows et Linux qui sert vos abonnements Claude, ChatGPT, Google, Grok et Kimi à WebBrain sur 127.0.0.1, indique la quantité de chaque plan. à gauche et exécute Bonsai 2 27B sur votre propre machine.",
+    "description": "Une petite application de plateau pour macOS, Windows et Linux qui sert vos abonnements Claude, ChatGPT, Google, Grok et Kimi à WebBrain sur 127.0.0.1, indique la quantité de chaque plan. à gauche et exécute Bonsai 2.5 27B sur votre propre machine.",
     "skip": "Passer au contenu",
     "nav_label": "Sections",
     "nav_panel": "Le panneau",
@@ -22,18 +22,16 @@
     "panel_intro": "Cliquez sur l'icône pour l'ouvrir. Une page contient l'adresse de WebBrain, chaque plan avec ce qui reste et les deux modèles locaux ; cliquez sur une ligne pour ses détails ou sur l'engrenage pour les paramètres. Il suit votre environnement clair ou sombre et parle anglais et turc.",
     "shot1_h": "Une page",
     "shot1_p": "L'adresse dont WebBrain a besoin, chaque plan avec la limite la plus proche d'être épuisée et les modèles locaux avec leur bouton principal. Aucune clé API sur cet ordinateur.",
-    "shot1_alt": "Le panneau : l'adresse http://127.0.0.1:8327/v1 avec un bouton Copier, des compteurs d'utilisation pour Claude Max, ChatGPT Pro, Google AI Pro et SuperGrok, et Bonsai 2 27B fonctionnant à côté du modèle de décision d1.",
+    "shot1_alt": "Le panneau : l'adresse http://127.0.0.1:8327/v1 avec un bouton Copier, des compteurs d'utilisation pour Claude Max, ChatGPT Pro, Google AI Pro et SuperGrok, et Bonsai 2.5 27B fonctionnant à côté du modèle de décision Compass VLD v6 2B.",
     "shot2_h": "Ajouter un abonnement",
     "shot2_p": "Connectez-vous sur la page propre du fournisseur. La connexion reste sur votre ordinateur.",
     "shot2_alt": "La feuille d'ajout d'abonnement répertoriant Claude, ChatGPT, Google, Grok et Kimi, chacune indiquant la manière dont vous vous connectez.",
     "shot3_h": "Modèles locaux",
-    "shot3_p": "Cliquez sur Bonsai 2 27B pour voir où il s'exécute et si les images s'adaptent, et pour modifier ses options. d1 s'ouvre de la même manière.",
-    "shot3_alt": "Le Bonsai 2 27B détaille sur le panneau : fonctionnant sur le Apple GPU avec la saisie d'image activée, 65 536 jetons de contexte et ses options.",
-    "bonsai25_intro": "Prism ML a optimisé Bonsai 2.5 pour les appels d’outils et la programmation. Son plus petit fichier GGUF contient environ 6 Go de poids. Les images nécessitent un projecteur visuel distinct.",
-    "bonsai25_setup": "Lancez 2.5 sur un serveur local et chargez-le via le fournisseur llama.cpp dans WebBrain. Pour Q2_0, utilisez llama.cpp à partir de la version b11556. Les fichiers PTQ1_0 et PQ2_0 utilisent la version de llama.cpp de Prism ML.",
+    "shot3_p": "Cliquez sur Bonsai 2.5 27B pour voir où il s'exécute et si les images s'adaptent, et pour modifier ses options. Compass VLD v6 2B s'ouvre de la même manière.",
+    "shot3_alt": "Le Bonsai 2.5 27B détaille sur le panneau : fonctionnant sur le Apple GPU avec la saisie d'image activée, 65 536 jetons de contexte et ses options.",
     "bonsai25_guide": "Télécharger et configurer Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, dimensionné pour votre machine",
-    "local_p1": "Le Ternary Bonsai 2 27B du PrismML regroupe 27 milliards de paramètres dans 5,95 Go. Le compagnon l'installe avec son projecteur de vision Q8_0 et la version PrismML de lama.cpp, ou en tant que pack MLX sur Apple Silicon, et le répertorie à côté de vos abonnements sous le nom <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, dimensionné pour votre machine",
+    "local_p1": "Le Ternary Bonsai 2.5 27B du PrismML regroupe 27 milliards de paramètres dans 5,99 Go. Le compagnon l'installe avec son projecteur de vision Q8_0 et la version PrismML de lama.cpp, ou en tant que pack MLX sur Apple Silicon, et le répertorie à côté de vos abonnements sous le nom <code>bonsai-2.5-27b</code>.",
     "local_p2": "Avant tout téléchargement, il détermine où le modèle s'exécute et si l'entrée d'image convient. Le projecteur de vision s'allume sur le GPU lorsqu'il reste environ 1 Go de mémoire GPU après le modèle et son contexte, sur le CPU lorsque seul le système RAM a de la place, et reste éteint dans le cas contraire. Vous pouvez remplacer le choix dans le panneau.",
     "table_caption": "Ce que le compagnon choisit sur les machines typiques",
     "th_machine": "Machine",
@@ -77,7 +75,7 @@
       "Les autres appareils ne peuvent se connecter que si vous activez l'accès au réseau dans les paramètres du panneau. Il écoute ensuite sur 0.0.0.0 et a besoin de la clé API affichée par le panneau.",
       "Les connexions sont stockées dans votre dossier utilisateur et envoyées uniquement au fournisseur auquel elles appartiennent.",
       "Il n'y a pas d'analyse. Outre les fournisseurs auxquels vous vous connectez, il récupère uniquement la liste publique des modèles de CLIProxyAPI et, lorsque vous installez un modèle, ses fichiers de Hugging Face, GitHub et, pour MLX, PyPI.",
-      "Les invites envoyées à un abonnement sont toujours envoyées à ce fournisseur. Seuls Bonsai 2 27B et d1 fonctionnent sur votre ordinateur."
+      "Les invites envoyées à un abonnement sont toujours envoyées à ce fournisseur. Seuls Bonsai 2.5 27B et d1 fonctionnent sur votre ordinateur."
     ],
     "provider_h": "Ce que décide votre fournisseur",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Ordinateur portable avec un RTX 4060 (8 Go) et un RAM de 16 Go",
-      "CUDA, 57 des 64 couches du GPU",
+      "CUDA, 56 des 64 couches du GPU",
       "cpu",
       "8K"
     ],

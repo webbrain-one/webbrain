@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: đăng ký AI của bạn trong WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2 27B trên máy của riêng bạn.",
+    "description": "Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2.5 27B trên máy của riêng bạn.",
     "skip": "Chuyển đến nội dung",
     "nav_label": "Phần",
     "nav_panel": "Bảng điều khiển",
@@ -22,18 +22,16 @@
     "panel_intro": "Nhấp vào biểu tượng để mở nó. Một trang chứa địa chỉ của WebBrain, mọi gói còn lại và hai mô hình địa phương; nhấp vào một hàng để biết chi tiết về nó hoặc vào bánh răng để biết cài đặt. Nó tuân theo khung cảnh sáng hoặc tối của bạn và nói tiếng Anh và tiếng Thổ Nhĩ Kỳ.",
     "shot1_h": "Một trang",
     "shot1_p": "Địa chỉ mà WebBrain cần, mỗi gói có giới hạn gần hết nhất và các mẫu cục bộ có nút chính của chúng. Không có khóa API trên máy tính này.",
-    "shot1_alt": "Bảng điều khiển: địa chỉ http://127.0.0.1:8327/v1 với nút Sao chép, đồng hồ đo mức sử dụng cho Claude Max, ChatGPT Pro, Google AI Pro và SuperGrok và Bonsai 2 27B chạy bên cạnh mô hình quyết định d1.",
+    "shot1_alt": "Bảng điều khiển: địa chỉ http://127.0.0.1:8327/v1 với nút Sao chép, đồng hồ đo mức sử dụng cho Claude Max, ChatGPT Pro, Google AI Pro và SuperGrok và Bonsai 2.5 27B chạy bên cạnh mô hình quyết định Compass VLD v6 2B.",
     "shot2_h": "Thêm đăng ký",
     "shot2_p": "Đăng nhập trên trang riêng của nhà cung cấp. Việc đăng nhập vẫn còn trên máy tính của bạn.",
     "shot2_alt": "Bảng bổ sung đăng ký liệt kê Claude, ChatGPT, Google, Grok và Kimi, mỗi bảng đều có cách bạn đăng nhập.",
     "shot3_h": "Mô hình địa phương",
-    "shot3_p": "Nhấp vào Bonsai 2 27B để xem nó chạy ở đâu và liệu hình ảnh có phù hợp hay không và để thay đổi các tùy chọn của nó. d1 cũng mở theo cách tương tự.",
-    "shot3_alt": "Chi tiết về Bonsai 2 27B trên bảng điều khiển: chạy trên Apple GPU với đầu vào hình ảnh được bật, 65.536 mã thông báo ngữ cảnh và các tùy chọn của nó.",
-    "bonsai25_intro": "Prism ML tinh chỉnh Bonsai 2.5 cho việc gọi công cụ và lập trình. Tệp GGUF nhỏ nhất chứa khoảng 6 GB trọng số. Đầu vào hình ảnh cần một bộ chiếu thị giác riêng.",
-    "bonsai25_setup": "Chạy 2.5 trên máy chủ cục bộ rồi tải mô hình qua nhà cung cấp llama.cpp trong WebBrain. Với Q2_0, dùng llama.cpp b11556 trở lên. PTQ1_0 và PQ2_0 dùng bản llama.cpp của Prism ML.",
+    "shot3_p": "Nhấp vào Bonsai 2.5 27B để xem nó chạy ở đâu và liệu hình ảnh có phù hợp hay không và để thay đổi các tùy chọn của nó. Compass VLD v6 2B cũng mở theo cách tương tự.",
+    "shot3_alt": "Chi tiết về Bonsai 2.5 27B trên bảng điều khiển: chạy trên Apple GPU với đầu vào hình ảnh được bật, 65.536 mã thông báo ngữ cảnh và các tùy chọn của nó.",
     "bonsai25_guide": "Tải xuống và thiết lập Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, có kích thước phù hợp với máy của bạn",
-    "local_p1": "Ternary Bonsai 2 27B của PrismML chứa 27 tỷ thông số vào 5,95 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, có kích thước phù hợp với máy của bạn",
+    "local_p1": "Ternary Bonsai 2.5 27B của PrismML chứa 27 tỷ thông số vào 5,99 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2.5-27b</code>.",
     "local_p2": "Trước khi tải xuống bất cứ thứ gì, nó sẽ tìm ra nơi mô hình chạy và liệu hình ảnh đầu vào có phù hợp hay không. Máy chiếu thị giác hoạt động trên GPU khi còn lại khoảng 1 GB bộ nhớ GPU sau kiểu máy và ngữ cảnh của nó, trên CPU khi chỉ có hệ thống RAM còn chỗ trống và nếu không thì sẽ tắt. Bạn có thể ghi đè lựa chọn trong bảng điều khiển.",
     "table_caption": "Người bạn đồng hành chọn gì trên các máy thông thường",
     "th_machine": "Máy",
@@ -77,7 +75,7 @@
       "Các thiết bị khác chỉ có thể kết nối nếu bạn bật quyền truy cập mạng trong cài đặt của bảng điều khiển. Sau đó, nó sẽ lắng nghe trên 0.0.0.0 và họ cần khóa API mà bảng điều khiển hiển thị.",
       "Thông tin đăng nhập được lưu trữ trong thư mục người dùng của bạn và chỉ được gửi đến nhà cung cấp mà họ thuộc về.",
       "Không có phân tích. Ngoài các nhà cung cấp mà bạn đăng nhập, nó chỉ tìm nạp danh sách mô hình công khai của CLIProxyAPI và khi bạn cài đặt một mô hình, các tệp của nó từ Hugging Face, GitHub và đối với MLX, PyPI.",
-      "Lời nhắc gửi tới gói đăng ký vẫn được chuyển đến nhà cung cấp đó. Chỉ Bonsai 2 27B và d1 chạy trên máy của bạn."
+      "Lời nhắc gửi tới gói đăng ký vẫn được chuyển đến nhà cung cấp đó. Chỉ Bonsai 2.5 27B và d1 chạy trên máy của bạn."
     ],
     "provider_h": "Nhà cung cấp của bạn quyết định điều gì",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Máy tính xách tay có RTX 4060 (8 GB) và 16 GB RAM",
-      "CUDA, 57 trên 64 lớp trên GPU",
+      "CUDA, 56 trên 64 lớp trên GPU",
       "cpu",
       "8K"
     ],

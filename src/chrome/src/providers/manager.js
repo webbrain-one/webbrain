@@ -41,6 +41,7 @@ import {
 } from './webgpu.js';
 import { hasWebgpuTextModelCache, webgpuChatVisionReadiness } from './webgpu-model-cache.js';
 import { ADDITIONAL_PROVIDER_DEFAULTS, aigrowDefaultContextWindow } from './provider-catalog.js';
+import { COMPANION_BONSAI_MODEL, COMPANION_LEGACY_BONSAI_MODEL } from './companion-config.js';
 import { purgeShareGenerations } from '../trace/webbrain-share-outbox.js';
 import {
   DEEPSEEK_BASE_URL,
@@ -3148,13 +3149,17 @@ export class ProviderManager {
       // Maple's catalog also includes embedding and audio models.
       selectable = source.filter((m) => !Array.isArray(m?.tasks) || m.tasks.includes('generate'));
     }
-    const ids = selectable
+    const ids = new Set(selectable
       .map((m) => {
         if (typeof m === 'string') return m;
         return id === 'ollama' ? m?.name : m?.id;
       })
-      .filter(Boolean);
-    return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+      .filter(Boolean));
+    if (id === 'webbrain_companion' && ids.has(COMPANION_BONSAI_MODEL)) {
+      // The old ID still routes requests from existing Companion clients.
+      ids.delete(COMPANION_LEGACY_BONSAI_MODEL);
+    }
+    return [...ids].sort((a, b) => a.localeCompare(b));
   }
 
   /**

@@ -6,10 +6,12 @@
  */
 
 export const WEBBRAIN_COMPANION_DEFAULT_BASE_URL = 'http://127.0.0.1:8327/v1';
+export const COMPANION_BONSAI_MODEL = 'bonsai-2.5-27b';
+export const COMPANION_LEGACY_BONSAI_MODEL = 'bonsai-2-27b';
 
 // The tray app's current release. Settings and the install page both link to
 // these files, so a new release only changes them here.
-export const WEBBRAIN_COMPANION_VERSION = '0.2.0';
+export const WEBBRAIN_COMPANION_VERSION = '0.2.1';
 export const WEBBRAIN_COMPANION_SITE_URL = 'https://webbrain.one/companion/#download';
 export const WEBBRAIN_COMPANION_DOWNLOAD_BASE = `https://github.com/webbrain-one/webbrain/releases/download/systray-v${WEBBRAIN_COMPANION_VERSION}/WebBrain-Companion-${WEBBRAIN_COMPANION_VERSION}-`;
 export const WEBBRAIN_COMPANION_DOWNLOADS = Object.freeze({
@@ -54,14 +56,26 @@ export const COMPANION_PREFERRED_MODEL_PATTERNS = [
 ];
 
 /**
- * Automatically select the most preferred model from a list of Companion models.
- * If none of the preferred patterns match, falls back to the first available model.
+ * Keep an existing choice, upgrading its Bonsai ID when the new model is ready.
+ * For a new selection, use the preferred models or the first available model.
  */
-export function selectPreferredCompanionModel(models = []) {
+export function selectPreferredCompanionModel(models = [], currentModel = '') {
   if (!Array.isArray(models) || models.length === 0) return '';
+  if (currentModel === COMPANION_LEGACY_BONSAI_MODEL && models.includes(COMPANION_BONSAI_MODEL)) {
+    return COMPANION_BONSAI_MODEL;
+  }
+  // A chosen local model may be starting or updating. Keep that choice while
+  // Companion only advertises subscription models.
+  if (currentModel === COMPANION_BONSAI_MODEL || currentModel === COMPANION_LEGACY_BONSAI_MODEL
+      || models.includes(currentModel)) {
+    return currentModel;
+  }
   for (const pattern of COMPANION_PREFERRED_MODEL_PATTERNS) {
     const matched = models.find((m) => typeof m === 'string' && pattern.test(m));
     if (matched) return matched;
+  }
+  if (models[0] === COMPANION_LEGACY_BONSAI_MODEL && models.includes(COMPANION_BONSAI_MODEL)) {
+    return COMPANION_BONSAI_MODEL;
   }
   return typeof models[0] === 'string' ? models[0] : '';
 }

@@ -17,7 +17,7 @@ REPO = HERE.parent.parent
 LANGUAGES = json.loads((REPO / "web/build/languages.json").read_text(encoding="utf-8"))
 
 SITE = "https://webbrain.one/companion"  # where the pages are published
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 RELEASES = "https://github.com/webbrain-one/webbrain/releases"
 SOURCE = "https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray"
 DL = f"{RELEASES}/download/systray-v{VERSION}/WebBrain-Companion-{VERSION}-"
@@ -57,7 +57,7 @@ MACHINES = {
     "en": [
         ("MacBook Air, 8 GB", "Apple GPU with Metal. It needs more memory than the Mac has, so expect swapping.", "off", "8K"),
         ("MacBook Pro, 16 GB", "Apple GPU with Metal", "gpu", "16K"),
-        ("Laptop with an RTX 4060 (8 GB) and 16 GB RAM", "CUDA, 57 of 64 layers on the GPU", "cpu", "8K"),
+        ("Laptop with an RTX 4060 (8 GB) and 16 GB RAM", "CUDA, 56 of 64 layers on the GPU", "cpu", "8K"),
         ("Desktop with an RTX 4090 (24 GB) and 64 GB RAM", "CUDA, all on the GPU", "gpu", "64K"),
         ("Desktop with a Radeon RX 7600 (8 GB) and 32 GB RAM", "Vulkan, 61 of 64 layers on the GPU", "cpu", "8K"),
         ("PC without a graphics card, 16 GB RAM", "CPU", "cpu", "8K"),
@@ -66,7 +66,7 @@ MACHINES = {
     "tr": [
         ("MacBook Air, 8 GB", "Apple GPU'da Metal. Mac'teki bellekten fazlasını ister, takas (swap) beklenir.", "off", "8K"),
         ("MacBook Pro, 16 GB", "Apple GPU'da Metal", "gpu", "16K"),
-        ("RTX 4060 (8 GB) ve 16 GB RAM'li dizüstü", "CUDA, 64 katmanın 57'si GPU'da", "cpu", "8K"),
+        ("RTX 4060 (8 GB) ve 16 GB RAM'li dizüstü", "CUDA, 64 katmanın 56'si GPU'da", "cpu", "8K"),
         ("RTX 4090 (24 GB) ve 64 GB RAM'li masaüstü", "CUDA, tamamı GPU'da", "gpu", "64K"),
         ("Radeon RX 7600 (8 GB) ve 32 GB RAM'li masaüstü", "Vulkan, 64 katmanın 61'i GPU'da", "cpu", "8K"),
         ("Ekran kartı olmayan, 16 GB RAM'li PC", "CPU", "cpu", "8K"),
@@ -78,7 +78,7 @@ T = {
     "en": {
         "title": "WebBrain Companion: your AI subscriptions in WebBrain",
         "og_title": "WebBrain Companion",
-        "description": "A small tray app for macOS, Windows and Linux that serves your Claude, ChatGPT, Google, Grok and Kimi subscriptions to WebBrain on 127.0.0.1, shows how much of each plan is left, and runs Bonsai 2 27B on your own machine.",
+        "description": "A small tray app for macOS, Windows and Linux that serves your Claude, ChatGPT, Google, Grok and Kimi subscriptions to WebBrain on 127.0.0.1, shows how much of each plan is left, and runs Bonsai 2.5 27B on your own machine.",
         "skip": "Skip to content",
         "nav_label": "Sections",
         "nav_panel": "The panel",
@@ -98,18 +98,16 @@ T = {
         "panel_intro": "Click the icon to open it. One page holds the address for WebBrain, every plan with what's left, and the two local models; click a row for its details, or the gear for settings. It follows your light or dark setting and speaks English and Turkish.",
         "shot1_h": "One page",
         "shot1_p": "The address WebBrain needs, each plan with the limit closest to running out, and the local models with their main button. No API key on this computer.",
-        "shot1_alt": "The panel: the address http://127.0.0.1:8327/v1 with a Copy button, usage meters for Claude Max, ChatGPT Pro, Google AI Pro and SuperGrok, and Bonsai 2 27B running next to the d1 decision model.",
+        "shot1_alt": "The panel: the address http://127.0.0.1:8327/v1 with a Copy button, usage meters for Claude Max, ChatGPT Pro, Google AI Pro and SuperGrok, and Bonsai 2.5 27B running next to the Compass VLD v6 2B decision model.",
         "shot2_h": "Add a subscription",
         "shot2_p": "Sign in on the provider's own page. The login stays on your computer.",
         "shot2_alt": "The add subscription sheet listing Claude, ChatGPT, Google, Grok and Kimi, each with how you sign in.",
         "shot3_h": "Local models",
-        "shot3_p": "Click Bonsai 2 27B to see where it runs and whether images fit, and to change its options. d1 opens the same way.",
-        "shot3_alt": "The Bonsai 2 27B details over the panel: running on the Apple GPU with image input on, 65,536 tokens of context, and its options.",
-        "bonsai25_intro": "Prism ML tuned Bonsai 2.5 for tool calling and coding. Its smallest GGUF contains about 6 GB of weights. Image input uses a separate vision projector.",
-        "bonsai25_setup": "Serve 2.5 locally and load it in WebBrain’s llama.cpp provider. Use upstream llama.cpp b11556 or later for Q2_0. The PTQ1_0 and PQ2_0 files use Prism ML’s llama.cpp fork.",
+        "shot3_p": "Click Bonsai 2.5 27B to see where it runs and whether images fit, and to change its options. Compass VLD v6 2B opens the same way.",
+        "shot3_alt": "The Bonsai 2.5 27B details over the panel: running on the Apple GPU with image input on, 65,536 tokens of context, and its options.",
         "bonsai25_guide": "Bonsai 2.5 downloads and setup",
-        "local_h": "Bonsai 2 27B, sized to your machine",
-        "local_p1": "PrismML's Ternary Bonsai 2 27B packs 27 billion parameters into 5.95 GB. The companion installs it with its Q8_0 vision projector and PrismML's build of llama.cpp, or as the MLX pack on Apple Silicon, and lists it next to your subscriptions as <code>bonsai-2-27b</code>.",
+        "local_h": "Bonsai 2.5 27B, sized to your machine",
+        "local_p1": "Open Bonsai 2.5 27B in Companion and click <b>Install</b>. The 5.99 GB GGUF weights run in PrismML's build of llama.cpp with a Q8_0 vision projector. On Apple Silicon you can also choose the MLX pack. WebBrain lists the running model as <code>bonsai-2.5-27b</code>.",
         "local_p2": "Before anything downloads, it works out where the model runs and whether image input fits. The vision projector goes on the GPU when about 1 GB of GPU memory is left after the model and its context, on the CPU when only system RAM has room, and stays off otherwise. You can override the choice in the panel.",
         "table_caption": "What the companion picks on typical machines",
         "th_machine": "Machine",
@@ -153,7 +151,7 @@ T = {
             "Other devices can connect only if you turn on network access in the panel's settings. It then listens on 0.0.0.0, and they need the API key the panel shows.",
             "Logins are stored in your user folder and sent only to the provider they belong to.",
             "There are no analytics. Apart from the providers you sign in to, it only fetches CLIProxyAPI's public model list, and, when you install a model, its files from Hugging Face, GitHub and, for MLX, PyPI.",
-            "Prompts sent to a subscription still go to that provider. Only Bonsai 2 27B and d1 run on your machine.",
+            "Prompts sent to a subscription still go to that provider. Only Bonsai 2.5 27B and d1 run on your machine.",
         ],
         "provider_h": "What your provider decides",
         "provider": [
@@ -168,7 +166,7 @@ T = {
     "tr": {
         "title": "WebBrain Companion: yapay zekâ aboneliklerin WebBrain'de",
         "og_title": "WebBrain Companion",
-        "description": "Claude, ChatGPT, Google, Grok ve Kimi aboneliklerini WebBrain'e 127.0.0.1 üzerinden sunan, her planda ne kadar hakkın kaldığını gösteren ve Bonsai 2 27B'yi kendi bilgisayarında çalıştıran küçük bir tepsi uygulaması. macOS, Windows ve Linux için.",
+        "description": "Claude, ChatGPT, Google, Grok ve Kimi aboneliklerini WebBrain'e 127.0.0.1 üzerinden sunan, her planda ne kadar hakkın kaldığını gösteren ve Bonsai 2.5 27B'yi kendi bilgisayarında çalıştıran küçük bir tepsi uygulaması. macOS, Windows ve Linux için.",
         "skip": "İçeriğe geç",
         "nav_label": "Bölümler",
         "nav_panel": "Panel",
@@ -188,18 +186,16 @@ T = {
         "panel_intro": "Paneli simgeye tıklayarak açarsın. Tek sayfada WebBrain'in adresi, her planda kalan hak ve iki yerel model durur; ayrıntılar için bir satıra, ayarlar için dişli simgesine tıkla. Panel açık ya da koyu temana uyar; Türkçe ve İngilizce konuşur.",
         "shot1_h": "Tek sayfa",
         "shot1_p": "WebBrain'in istediği adres, her planın bitmeye en yakın sınırı ve ana düğmeleriyle yerel modeller. Bu bilgisayarda API anahtarı yok.",
-        "shot1_alt": "Panel: Kopyala düğmesiyle http://127.0.0.1:8327/v1 adresi; Claude Max, ChatGPT Pro, Google AI Pro ve SuperGrok kullanım göstergeleri; çalışan Bonsai 2 27B ve d1 karar modeli.",
+        "shot1_alt": "Panel: Kopyala düğmesiyle http://127.0.0.1:8327/v1 adresi; Claude Max, ChatGPT Pro, Google AI Pro ve SuperGrok kullanım göstergeleri; çalışan Bonsai 2.5 27B ve Compass VLD v6 2B karar modeli.",
         "shot2_h": "Abonelik ekleme",
         "shot2_p": "Girişi sağlayıcının kendi sayfasında yaparsın. Oturum bilgisi bilgisayarında kalır.",
         "shot2_alt": "Abonelik ekleme penceresi: Claude, ChatGPT, Google, Grok ve Kimi, her birinin giriş yöntemiyle.",
         "shot3_h": "Yerel modeller",
-        "shot3_p": "Bonsai 2 27B'ye tıkla: nerede çalıştığını ve görsellerin sığıp sığmadığını görür, seçeneklerini değiştirirsin. d1 de aynı şekilde açılır.",
-        "shot3_alt": "Panelin üzerinde Bonsai 2 27B ayrıntıları: Apple GPU'da görsel girdi açık çalışıyor, 65.536 token bağlam ve seçenekleri.",
-        "bonsai25_intro": "Prism ML, Bonsai 2.5’i araç çağırma ve kodlama için geliştirdi. En küçük GGUF dosyası yaklaşık 6 GB ağırlık içerir. Görsel girdi için ayrı bir projektör kullanılır.",
-        "bonsai25_setup": "2.5’i yerelde sunup WebBrain’deki llama.cpp sağlayıcısından yükleyebilirsin. Q2_0 için llama.cpp’nin b11556 veya daha yeni bir sürümünü kullan. PTQ1_0 ve PQ2_0 dosyaları Prism ML’in llama.cpp sürümüyle çalışır.",
+        "shot3_p": "Bonsai 2.5 27B'ye tıkla: nerede çalıştığını ve görsellerin sığıp sığmadığını görür, seçeneklerini değiştirirsin. Compass VLD v6 2B de aynı şekilde açılır.",
+        "shot3_alt": "Panelin üzerinde Bonsai 2.5 27B ayrıntıları: Apple GPU'da görsel girdi açık çalışıyor, 65.536 token bağlam ve seçenekleri.",
         "bonsai25_guide": "Bonsai 2.5 indirme ve kurulum",
-        "local_h": "Bonsai 2 27B, makinene göre ayarlanır",
-        "local_p1": "PrismML'in Ternary Bonsai 2 27B modeli 27 milyar parametreyi 5,95 GB'a sığdırır. Companion onu Q8_0 görsel projektörüyle ve PrismML'in llama.cpp sürümüyle, Apple Silicon'da istersen MLX paketi olarak kurar ve aboneliklerinin yanında <code>bonsai-2-27b</code> adıyla sunar.",
+        "local_h": "Bonsai 2.5 27B, makinene göre ayarlanır",
+        "local_p1": "Companion’da Bonsai 2.5 27B’yi aç ve <b>Kur</b> düğmesine tıkla. 5,99 GB’lık GGUF ağırlıkları, Q8_0 görsel projektörüyle PrismML’in llama.cpp sürümünde çalışır. Apple Silicon’da MLX paketini de seçebilirsin. WebBrain, çalışan modeli <code>bonsai-2.5-27b</code> adıyla listeler.",
         "local_p2": "Daha hiçbir şey inmeden modelin nerede çalışacağını ve görsel girdinin sığıp sığmayacağını hesaplar. Model ve bağlamı yerleştikten sonra GPU'da yaklaşık 1 GB yer kalıyorsa görsel projektör GPU'ya, yalnızca sistem belleğinde yer varsa CPU'ya gider; ikisi de yoksa kapalı kalır. Bu seçimi panelden değiştirebilirsin.",
         "table_caption": "Tipik makinelerde Companion'ın seçtikleri",
         "th_machine": "Makine",
@@ -243,7 +239,7 @@ T = {
             "Diğer cihazlar yalnızca panelin ayarlarından ağ erişimini açarsan bağlanabilir. Companion o zaman 0.0.0.0'da dinler ve o cihazlar panelin gösterdiği API anahtarını kullanmalıdır.",
             "Girişler kullanıcı klasöründe saklanır ve yalnızca ait oldukları sağlayıcıya gönderilir.",
             "Analitik yok. Giriş yaptığın sağlayıcılar dışında yalnızca CLIProxyAPI'nin herkese açık model listesini alır; bir model kurduğunda da dosyalarını Hugging Face'ten, GitHub'dan ve MLX için PyPI'dan indirir.",
-            "Bir aboneliğe giden istemler yine o sağlayıcıya gider. Bilgisayarında çalışan yalnızca Bonsai 2 27B ve d1'dir.",
+            "Bir aboneliğe giden istemler yine o sağlayıcıya gider. Bilgisayarında çalışan yalnızca Bonsai 2.5 27B ve d1'dir.",
         ],
         "provider_h": "Sağlayıcının belirledikleri",
         "provider": [
@@ -356,29 +352,20 @@ PAGE = r"""<!doctype html>
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2.5 27B</h2>
+    <h2 id="local-h">[[local_h]]</h2>
     <div class="split">
-      <p class="intro">[[bonsai25_intro]]</p>
-      <div>
-        <p class="intro">[[bonsai25_setup]]</p>
-        <p><a href="[[bonsai25_url]]">[[bonsai25_guide]]</a></p>
-      </div>
+      <p class="intro">[[local_p1]]</p>
+      <p class="intro">[[local_p2]]</p>
     </div>
-    <div class="companion-model">
-      <h3>[[local_h]]</h3>
-      <div class="split">
-        <p class="intro">[[local_p1]]</p>
-        <p class="intro">[[local_p2]]</p>
-      </div>
-      <table class="machines">
-        <caption>[[table_caption]]</caption>
-        <thead><tr><th scope="col">[[th_machine]]</th><th scope="col">[[th_runs]]</th><th scope="col">[[th_vision]]</th><th scope="col">[[th_context]]</th></tr></thead>
-        <tbody>
+    <table class="machines">
+      <caption>[[table_caption]]</caption>
+      <thead><tr><th scope="col">[[th_machine]]</th><th scope="col">[[th_runs]]</th><th scope="col">[[th_vision]]</th><th scope="col">[[th_context]]</th></tr></thead>
+      <tbody>
 [[machines]]
-        </tbody>
-      </table>
-      <p class="note">[[local_note]]</p>
-    </div>
+      </tbody>
+    </table>
+    <p class="note">[[local_note]]</p>
+    <p><a href="[[bonsai25_url]]">[[bonsai25_guide]]</a></p>
   </div>
 </section>
 
@@ -418,17 +405,17 @@ PAGE = r"""<!doctype html>
     <div class="downloads">
       <div class="dl" data-os="mac">
         <div><h3>macOS</h3><p class="req">[[mac_req]]</p><span class="yours">[[yours]]</span></div>
-        <ul class="files"><li><a href="[[dl_mac]]">[[mac_file]] <small>zip, 36 MB</small></a></li></ul>
+        <ul class="files"><li><a href="[[dl_mac]]">[[mac_file]] <small>zip, 37 MB</small></a></li></ul>
         <p class="how">[[mac_how]]</p>
       </div>
       <div class="dl" data-os="win">
         <div><h3>Windows</h3><p class="req">[[win_req]]</p><span class="yours">[[yours]]</span></div>
-        <ul class="files"><li><a href="[[dl_win]]">[[win_file]] <small>setup.exe, 23 MB</small></a></li></ul>
+        <ul class="files"><li><a href="[[dl_win]]">[[win_file]] <small>setup.exe, 24 MB</small></a></li></ul>
         <p class="how">[[win_how]]</p>
       </div>
       <div class="dl" data-os="linux">
         <div><h3>Linux</h3><p class="req">[[linux_req]]</p><span class="yours">[[yours]]</span></div>
-        <ul class="files"><li><a href="[[dl_linux_x64]]">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="[[dl_linux_arm64]]">Arm64 <small>tar.gz, 18 MB</small></a></li></ul>
+        <ul class="files"><li><a href="[[dl_linux_x64]]">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="[[dl_linux_arm64]]">Arm64 <small>tar.gz, 19 MB</small></a></li></ul>
         <p class="how">[[linux_how]]</p>
       </div>
     </div>

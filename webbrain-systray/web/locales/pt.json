@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: suas assinaturas de IA em WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Um pequeno aplicativo de bandeja para macOS, Windows e Linux que atende suas assinaturas Claude, ChatGPT, Google, Grok e Kimi para WebBrain em 127.0.0.1, mostra quanto resta de cada plano e executa Bonsai 2 27B em sua própria máquina.",
+    "description": "Um pequeno aplicativo de bandeja para macOS, Windows e Linux que atende suas assinaturas Claude, ChatGPT, Google, Grok e Kimi para WebBrain em 127.0.0.1, mostra quanto resta de cada plano e executa Bonsai 2.5 27B em sua própria máquina.",
     "skip": "Pular para o conteúdo",
     "nav_label": "Seções",
     "nav_panel": "O painel",
@@ -22,18 +22,16 @@
     "panel_intro": "Clique no ícone para abri-lo. Uma página contém o endereço WebBrain, cada plano com o que resta e os dois modelos locais; clique em uma linha para ver seus detalhes ou na engrenagem para ver as configurações. Ele segue seu ambiente claro ou escuro e fala inglês e turco.",
     "shot1_h": "Uma página",
     "shot1_p": "O endereço que WebBrain precisa, cada plano com o limite mais próximo de esgotar, e os modelos locais com seu botão principal. Nenhuma chave de API neste computador.",
-    "shot1_alt": "O painel: o endereço http://127.0.0.1:8327/v1 com um botão Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro e SuperGrok e Bonsai 2 27B rodando próximo ao modelo de decisão d1.",
+    "shot1_alt": "O painel: o endereço http://127.0.0.1:8327/v1 com um botão Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro e SuperGrok e Bonsai 2.5 27B rodando próximo ao modelo de decisão Compass VLD v6 2B.",
     "shot2_h": "Adicionar uma assinatura",
     "shot2_p": "Faça login na própria página do provedor. O login permanece no seu computador.",
     "shot2_alt": "A folha de assinatura adicional lista Claude, ChatGPT, Google, Grok e Kimi, cada uma com a forma como você faz login.",
     "shot3_h": "Modelos locais",
-    "shot3_p": "Clique em Bonsai 2 27B para ver onde ele é executado e se as imagens cabem, e para alterar suas opções. d1 abre da mesma maneira.",
-    "shot3_alt": "Os detalhes do Bonsai 2 27B no painel: rodando no Apple GPU com entrada de imagem ativada, 65.536 tokens de contexto e suas opções.",
-    "bonsai25_intro": "A Prism ML ajustou o Bonsai 2.5 para chamadas de ferramentas e tarefas de programação. O GGUF menor contém cerca de 6 GB de pesos. A entrada de imagens usa um projetor de visão separado.",
-    "bonsai25_setup": "Execute o 2.5 em um servidor local e carregue o modelo pelo provedor llama.cpp no WebBrain. Para Q2_0, use llama.cpp b11556 ou posterior. PTQ1_0 e PQ2_0 usam a versão do llama.cpp da Prism ML.",
+    "shot3_p": "Clique em Bonsai 2.5 27B para ver onde ele é executado e se as imagens cabem, e para alterar suas opções. Compass VLD v6 2B abre da mesma maneira.",
+    "shot3_alt": "Os detalhes do Bonsai 2.5 27B no painel: rodando no Apple GPU com entrada de imagem ativada, 65.536 tokens de contexto e suas opções.",
     "bonsai25_guide": "Download e configuração do Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, dimensionado para sua máquina",
-    "local_p1": "O Ternary Bonsai 2 27B do PrismML contém 27 bilhões de parâmetros em 5,95 GB. O companheiro o instala com seu projetor de visão Q8_0 e a versão llama.cpp do PrismML, ou como o pacote MLX em Apple Silicon, e o lista ao lado de suas assinaturas como <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, dimensionado para sua máquina",
+    "local_p1": "O Ternary Bonsai 2.5 27B do PrismML contém 27 bilhões de parâmetros em 5,99 GB. O companheiro o instala com seu projetor de visão Q8_0 e a versão llama.cpp do PrismML, ou como o pacote MLX em Apple Silicon, e o lista ao lado de suas assinaturas como <code>bonsai-2.5-27b</code>.",
     "local_p2": "Antes de qualquer download, ele determina onde o modelo é executado e se a entrada da imagem se ajusta. O projetor de visão liga o GPU quando resta cerca de 1 GB de memória do GPU após o modelo e seu contexto, no CPU quando apenas o sistema RAM tem espaço e permanece desligado caso contrário. Você pode substituir a escolha no painel.",
     "table_caption": "O que o companheiro escolhe em máquinas típicas",
     "th_machine": "Máquina",
@@ -77,7 +75,7 @@
       "Outros dispositivos só poderão se conectar se você ativar o acesso à rede nas configurações do painel. Em seguida, ele escuta em 0.0.0.0 e precisa da chave de API que o painel mostra.",
       "Os logins são armazenados na sua pasta de usuário e enviados apenas ao provedor ao qual pertencem.",
       "Não há análises. Além dos provedores nos quais você faz login, ele busca apenas a lista de modelos públicos do CLIProxyAPI e, quando você instala um modelo, seus arquivos de Hugging Face, GitHub e, para MLX, PyPI.",
-      "Os prompts enviados para uma assinatura ainda vão para esse provedor. Somente Bonsai 2 27B e d1 são executados em sua máquina."
+      "Os prompts enviados para uma assinatura ainda vão para esse provedor. Somente Bonsai 2.5 27B e d1 são executados em sua máquina."
     ],
     "provider_h": "O que seu provedor decide",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Laptop com RTX 4060 (8 GB) e 16 GB RAM",
-      "CUDA, 57 de 64 camadas no GPU",
+      "CUDA, 56 de 64 camadas no GPU",
       "cpu",
       "8K"
     ],

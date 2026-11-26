@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: langganan AI Anda di WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Aplikasi baki kecil untuk macOS, Windows dan Linux yang melayani langganan Claude, ChatGPT, Google, Grok dan Kimi Anda ke WebBrain di 127.0.0.1, menunjukkan berapa banyak sisa paket, dan menjalankan Bonsai 2 27B di mesin Anda sendiri.",
+    "description": "Aplikasi baki kecil untuk macOS, Windows dan Linux yang melayani langganan Claude, ChatGPT, Google, Grok dan Kimi Anda ke WebBrain di 127.0.0.1, menunjukkan berapa banyak sisa paket, dan menjalankan Bonsai 2.5 27B di mesin Anda sendiri.",
     "skip": "Lewati ke konten",
     "nav_label": "Bagian",
     "nav_panel": "Panel",
@@ -22,18 +22,16 @@
     "panel_intro": "Klik ikon untuk membukanya. Satu halaman berisi alamat WebBrain, setiap paket dengan sisa, dan dua model lokal; klik satu baris untuk mengetahui detailnya, atau klik roda gigi untuk pengaturan. Ini mengikuti pengaturan terang atau gelap Anda dan berbicara bahasa Inggris dan Turki.",
     "shot1_h": "Satu halaman",
     "shot1_p": "Alamat yang dibutuhkan WebBrain, setiap paket dengan batas yang hampir habis, dan model lokal dengan tombol utamanya. Tidak ada kunci API di komputer ini.",
-    "shot1_alt": "Panel: alamat http://127.0.0.1:8327/v1 dengan tombol Salin, pengukur penggunaan untuk Claude Max, ChatGPT Pro, Google AI Pro dan SuperGrok, dan Bonsai 2 27B yang dijalankan di sebelah model keputusan d1.",
+    "shot1_alt": "Panel: alamat http://127.0.0.1:8327/v1 dengan tombol Salin, pengukur penggunaan untuk Claude Max, ChatGPT Pro, Google AI Pro dan SuperGrok, dan Bonsai 2.5 27B yang dijalankan di sebelah model keputusan Compass VLD v6 2B.",
     "shot2_h": "Tambahkan langganan",
     "shot2_p": "Masuk ke halaman penyedia itu sendiri. Login tetap ada di komputer Anda.",
     "shot2_alt": "Lembar langganan tambahan berisi daftar Claude, ChatGPT, Google, Grok, dan Kimi, masing-masing dengan cara Anda masuk.",
     "shot3_h": "Model lokal",
-    "shot3_p": "Klik Bonsai 2 27B untuk melihat di mana ia berjalan dan apakah gambarnya cocok, dan untuk mengubah pilihannya. d1 terbuka dengan cara yang sama.",
-    "shot3_alt": "Detail Bonsai 2 27B di panel: berjalan di Apple GPU dengan input gambar aktif, 65.536 token konteks, dan opsinya.",
-    "bonsai25_intro": "Prism ML mengoptimalkan Bonsai 2.5 untuk pemanggilan alat dan pemrograman. File GGUF terkecil memuat sekitar 6 GB bobot model. Input gambar memakai proyektor visi terpisah.",
-    "bonsai25_setup": "Jalankan server lokal untuk 2.5, lalu muat model melalui penyedia llama.cpp di WebBrain. Untuk Q2_0, gunakan llama.cpp b11556 atau yang lebih baru. PTQ1_0 dan PQ2_0 menggunakan fork llama.cpp dari Prism ML.",
+    "shot3_p": "Klik Bonsai 2.5 27B untuk melihat di mana ia berjalan dan apakah gambarnya cocok, dan untuk mengubah pilihannya. Compass VLD v6 2B terbuka dengan cara yang sama.",
+    "shot3_alt": "Detail Bonsai 2.5 27B di panel: berjalan di Apple GPU dengan input gambar aktif, 65.536 token konteks, dan opsinya.",
     "bonsai25_guide": "Unduhan dan penyiapan Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, disesuaikan dengan ukuran mesin Anda",
-    "local_p1": "Ternary Bonsai 2 27B PrismML mengemas 27 miliar parameter ke dalam 5,95 GB. Pendamping menginstalnya dengan proyektor visi Q8_0 dan versi llama.cpp PrismML, atau sebagai paket MLX di Apple Silicon, dan mencantumkannya di samping langganan Anda sebagai <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, disesuaikan dengan ukuran mesin Anda",
+    "local_p1": "Ternary Bonsai 2.5 27B PrismML mengemas 27 miliar parameter ke dalam 5,99 GB. Pendamping menginstalnya dengan proyektor visi Q8_0 dan versi llama.cpp PrismML, atau sebagai paket MLX di Apple Silicon, dan mencantumkannya di samping langganan Anda sebagai <code>bonsai-2.5-27b</code>.",
     "local_p2": "Sebelum mengunduh apa pun, ia mengetahui di mana model dijalankan dan apakah masukan gambar cocok. Proyektor vision akan menyala pada GPU ketika tersisa sekitar 1 GB memori GPU setelah model dan konteksnya, pada CPU ketika hanya sistem RAM yang memiliki ruang, dan sebaliknya tetap mati. Anda dapat mengesampingkan pilihan di panel.",
     "table_caption": "Apa yang dipilih rekannya pada mesin biasa",
     "th_machine": "Mesin",
@@ -77,7 +75,7 @@
       "Perangkat lain hanya dapat terhubung jika Anda mengaktifkan akses jaringan di pengaturan panel. Kemudian mendengarkan pada 0.0.0.0, dan mereka memerlukan kunci API yang ditampilkan panel.",
       "Login disimpan di folder pengguna Anda dan hanya dikirim ke penyedianya.",
       "Tidak ada analitik. Selain penyedia tempat Anda masuk, ini hanya mengambil daftar model publik CLIProxyAPI, dan, saat Anda menginstal model, filenya dari Hugging Face, GitHub dan, untuk MLX, PyPI.",
-      "Perintah yang dikirim ke langganan tetap masuk ke penyedia itu. Hanya Bonsai 2 27B dan d1 yang berjalan di mesin Anda."
+      "Perintah yang dikirim ke langganan tetap masuk ke penyedia itu. Hanya Bonsai 2.5 27B dan d1 yang berjalan di mesin Anda."
     ],
     "provider_h": "Apa yang diputuskan oleh penyedia Anda",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Laptop dengan RTX 4060 (8 GB) dan 16 GB RAM",
-      "CUDA, 57 dari 64 lapisan pada GPU",
+      "CUDA, 56 dari 64 lapisan pada GPU",
       "cpu",
       "8K"
     ],

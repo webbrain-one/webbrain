@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion：您在 WebBrain 中的 AI 订阅",
     "og_title": "WebBrain Companion",
-    "description": "适用于 macOS、Windows 和 Linux 的小托盘应用程序，为您在 WebBrain 上订阅的 Claude、ChatGPT、Google、Grok 和 Kimi 提供服务127.0.0.1，显示每个计划还剩多少，并在您自己的计算机上运行 Bonsai 2 27B。",
+    "description": "适用于 macOS、Windows 和 Linux 的小托盘应用程序，为您在 WebBrain 上订阅的 Claude、ChatGPT、Google、Grok 和 Kimi 提供服务127.0.0.1，显示每个计划还剩多少，并在您自己的计算机上运行 Bonsai 2.5 27B。",
     "skip": "跳至内容",
     "nav_label": "部分",
     "nav_panel": "面板",
@@ -22,18 +22,16 @@
     "panel_intro": "单击该图标将其打开。一页包含 WebBrain 的地址、剩余的每个计划以及两个本地型号；单击一行查看其详细信息，或单击齿轮查看设置。它会跟随您的浅色或深色环境，并讲英语和土耳其语。",
     "shot1_h": "一页",
     "shot1_p": "WebBrain 需要的地址、最接近耗尽限制的每个计划以及带有主按钮的本地模型。此计算机上没有 API 密钥。",
-    "shot1_alt": "面板：带有复制按钮的地址 http://127.0.0.1:8327/v1，Claude Max、ChatGPT Pro、Google AI Pro 和 SuperGrok 的使用计量表，以及在 d1 决策模型旁边运行的 Bonsai 2 27B。",
+    "shot1_alt": "面板：带有复制按钮的地址 http://127.0.0.1:8327/v1，Claude Max、ChatGPT Pro、Google AI Pro 和 SuperGrok 的使用计量表，以及在 Compass VLD v6 2B 决策模型旁边运行的 Bonsai 2.5 27B。",
     "shot2_h": "添加订阅",
     "shot2_p": "在提供商自己的页面上登录。登录信息保留在您的计算机上。",
     "shot2_alt": "添加订阅表列出了 Claude、ChatGPT、Google、Grok 和 Kimi，每个表都包含您的登录方式。",
     "shot3_h": "本地型号",
-    "shot3_p": "单击 Bonsai 2 27B 查看其运行位置以及图像是否适合，并更改其选项。 d1以同样的方式打开。",
-    "shot3_alt": "Bonsai 2 27B 面板上的详细信息：在 Apple GPU 上运行，打开图像输入，65,536 个上下文标记及其选项。",
-    "bonsai25_intro": "Prism ML 针对工具调用和编程任务调优了 Bonsai 2.5。最小的 GGUF 文件包含约 6 GB 的模型权重。图像输入需要单独的视觉投影器。",
-    "bonsai25_setup": "在本机启动 2.5 服务，然后在 WebBrain 的 llama.cpp 提供商中加载模型。Q2_0 需要 llama.cpp b11556 或更新版本。PTQ1_0 和 PQ2_0 使用 Prism ML 的 llama.cpp 分支。",
+    "shot3_p": "单击 Bonsai 2.5 27B 查看其运行位置以及图像是否适合，并更改其选项。 Compass VLD v6 2B以同样的方式打开。",
+    "shot3_alt": "Bonsai 2.5 27B 面板上的详细信息：在 Apple GPU 上运行，打开图像输入，65,536 个上下文标记及其选项。",
     "bonsai25_guide": "下载和配置 Bonsai 2.5",
-    "local_h": "Bonsai 2 27B，尺寸适合您的机器",
-    "local_p1": "PrismML 的 Ternary Bonsai 2 27B 将 270 亿个参数打包到 5.95 GB 中。配套产品与其 Q8_0 视觉投影仪和 PrismML 的 llama.cpp 版本一起安装，或者作为 Apple Silicon 上的 MLX 包安装，并在您的订阅旁边将其列为 <code>bonsai-2-27b</code>。",
+    "local_h": "Bonsai 2.5 27B，尺寸适合您的机器",
+    "local_p1": "PrismML 的 Ternary Bonsai 2.5 27B 将 270 亿个参数打包到 5.99 GB 中。配套产品与其 Q8_0 视觉投影仪和 PrismML 的 llama.cpp 版本一起安装，或者作为 Apple Silicon 上的 MLX 包安装，并在您的订阅旁边将其列为 <code>bonsai-2.5-27b</code>。",
     "local_p2": "在下载任何内容之前，它会计算出模型运行的位置以及图像输入是否合适。当模型及其上下文之后还剩下大约 1 GB 的 GPU 内存时，视觉投影仪将在 GPU 上运行；当只有系统 RAM 有空间时，视觉投影仪将在 CPU 上运行，否则将保持关闭状态。您可以覆盖面板中的选择。",
     "table_caption": "同伴在典型机器上选择了什么",
     "th_machine": "机器",
@@ -77,7 +75,7 @@
       "仅当您在面板设置中打开网络访问时，其他设备才能连接。然后它会监听 0.0.0.0，并且他们需要面板显示的 API 密钥。",
       "登录信息存储在您的用户文件夹中，并且仅发送给它们所属的提供商。",
       "没有分析。除了您登录的提供商之外，它仅获取 CLIProxyAPI 的公共模型列表，并且当您安装模型时，它的文件来自 Hugging Face、GitHub 以及 MLX、PyPI。",
-      "发送到订阅的提示仍会发送到该提供商。只有 Bonsai 2 27B 和 d1 在您的计算机上运行。"
+      "发送到订阅的提示仍会发送到该提供商。只有 Bonsai 2.5 27B 和 d1 在您的计算机上运行。"
     ],
     "provider_h": "您的提供商决定什么",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "配备 RTX 4060 (8 GB) 和 16 GB RAM 的笔记本电脑",
-      "CUDA，GPU 上 64 层中的 57 层",
+      "CUDA，GPU 上 64 层中的 56 层",
       "cpu",
       "8K"
     ],

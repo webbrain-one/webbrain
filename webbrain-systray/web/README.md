@@ -29,7 +29,7 @@ The site never shows a real desktop.
   restyles it the way each system draws the menu.
 - **Panel windows**: screenshots of the companion's panel only, taken with sample
   data (`WBC_DEMO=1`, accounts like `ada@example.com`) by `tools/shots.py`: the
-  main page, adding a subscription and the Bonsai 2 27B details, in English and
+  main page, adding a subscription and the Bonsai 2.5 27B details, in English and
   Turkish, light and dark. Pages pick the dark set with `prefers-color-scheme`.
 - **Social card** (`assets/img/og.png`): rendered from the hero by `tools/og.py`.
 
@@ -37,7 +37,7 @@ The site never shows a real desktop.
 
 - `SITE` in `build.py` is the public address used for canonical and social
   links (`https://webbrain.one/companion` by default).
-- Download links point directly at the public GitHub release `systray-v0.2.0`
+- Download links point directly at the public GitHub release `systray-v0.2.1`
   of `webbrain-one/webbrain`. The CI workflow drafts a release when its tag is
   pushed; publish that draft before linking a new version. Update `VERSION`
   and the file sizes in `build.py` for new releases.

@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: tus suscripciones de IA en WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2 27B en su propia máquina.",
+    "description": "Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2.5 27B en su propia máquina.",
     "skip": "Saltar al contenido",
     "nav_label": "Secciones",
     "nav_panel": "el panel",
@@ -22,18 +22,16 @@
     "panel_intro": "Haga clic en el icono para abrirlo. Una página contiene la dirección de WebBrain, cada plano con lo que queda y los dos modelos locales; haga clic en una fila para ver sus detalles o en el engranaje para ver la configuración. Sigue tu entorno de luz u oscuridad y habla inglés y turco.",
     "shot1_h": "una pagina",
     "shot1_p": "La dirección que necesita WebBrain, cada plan con el límite más próximo a agotarse y los modelos locales con su botón principal. No hay clave API en esta computadora.",
-    "shot1_alt": "El panel: la dirección http://127.0.0.1:8327/v1 con un botón Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro y SuperGrok, y Bonsai 2 27B ejecutándose junto al modelo de decisión d1.",
+    "shot1_alt": "El panel: la dirección http://127.0.0.1:8327/v1 con un botón Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro y SuperGrok, y Bonsai 2.5 27B ejecutándose junto al modelo de decisión Compass VLD v6 2B.",
     "shot2_h": "Agregar una suscripción",
     "shot2_p": "Inicia sesión en la propia página del proveedor. El inicio de sesión permanece en su computadora.",
     "shot2_alt": "La hoja para agregar suscripción enumera Claude, ChatGPT, Google, Grok y Kimi, cada uno con cómo iniciar sesión.",
     "shot3_h": "Modelos locales",
-    "shot3_p": "Haga clic en Bonsai 2 27B para ver dónde se ejecuta y si las imágenes encajan, y para cambiar sus opciones. d1 se abre de la misma manera.",
-    "shot3_alt": "Detalles del Bonsai 2 27B en el panel: ejecutándose en el GPU de Apple con entrada de imagen activada, 65,536 tokens de contexto y sus opciones.",
-    "bonsai25_intro": "Prism ML ajustó Bonsai 2.5 para llamadas a herramientas y tareas de programación. El GGUF más pequeño contiene unos 6 GB de pesos. La entrada de imágenes usa un proyector de visión independiente.",
-    "bonsai25_setup": "Sirve 2.5 en local y cárgalo en el proveedor llama.cpp de WebBrain. Para Q2_0, usa llama.cpp b11556 o posterior. PTQ1_0 y PQ2_0 funcionan con la versión de llama.cpp de Prism ML.",
+    "shot3_p": "Haga clic en Bonsai 2.5 27B para ver dónde se ejecuta y si las imágenes encajan, y para cambiar sus opciones. Compass VLD v6 2B se abre de la misma manera.",
+    "shot3_alt": "Detalles del Bonsai 2.5 27B en el panel: ejecutándose en el GPU de Apple con entrada de imagen activada, 65,536 tokens de contexto y sus opciones.",
     "bonsai25_guide": "Descargas y configuración de Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, adaptado a su máquina",
-    "local_p1": "El Ternary Bonsai 2 27B de PrismML incluye 27 mil millones de parámetros en 5,95 GB. El complemento lo instala con su proyector de visión Q8_0 y la compilación de llama.cpp de PrismML, o como el paquete MLX en Apple Silicon, y lo incluye junto a sus suscripciones como <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, adaptado a su máquina",
+    "local_p1": "El Ternary Bonsai 2.5 27B de PrismML incluye 27 mil millones de parámetros en 5,99 GB. El complemento lo instala con su proyector de visión Q8_0 y la compilación de llama.cpp de PrismML, o como el paquete MLX en Apple Silicon, y lo incluye junto a sus suscripciones como <code>bonsai-2.5-27b</code>.",
     "local_p2": "Antes de descargar cualquier cosa, determina dónde se ejecuta el modelo y si la entrada de la imagen encaja. El proyector de visión se enciende en el GPU cuando queda aproximadamente 1 GB de memoria GPU después del modelo y su contexto, en el CPU cuando solo el sistema RAM tiene espacio y, en caso contrario, permanece apagado. Puede anular la elección en el panel.",
     "table_caption": "Lo que el compañero elige en las máquinas típicas",
     "th_machine": "maquina",
@@ -77,7 +75,7 @@
       "Otros dispositivos pueden conectarse solo si activa el acceso a la red en la configuración del panel. Luego escucha en 0.0.0.0 y necesitan la clave API que muestra el panel.",
       "Los inicios de sesión se almacenan en su carpeta de usuario y se envían únicamente al proveedor al que pertenecen.",
       "No hay análisis. Aparte de los proveedores en los que inicia sesión, solo recupera la lista de modelos públicos de CLIProxyAPI y, cuando instala un modelo, sus archivos de Hugging Face, GitHub y, para MLX, PyPI.",
-      "Las indicaciones enviadas a una suscripción aún se envían a ese proveedor. Sólo Bonsai 2 27B y d1 se ejecutan en su máquina."
+      "Las indicaciones enviadas a una suscripción aún se envían a ese proveedor. Sólo Bonsai 2.5 27B y d1 se ejecutan en su máquina."
     ],
     "provider_h": "Lo que decide su proveedor",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Portátil con RTX 4060 (8 GB) y RAM de 16 GB",
-      "CUDA, 57 de 64 capas en el GPU",
+      "CUDA, 56 de 64 capas en el GPU",
       "cpu",
       "8K"
     ],

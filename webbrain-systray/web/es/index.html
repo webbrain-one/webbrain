@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WebBrain Companion: tus suscripciones de IA en WebBrain</title>
-<meta name="description" content="Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2 27B en su propia máquina.">
+<meta name="description" content="Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2.5 27B en su propia máquina.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbf6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a0f18" media="(prefers-color-scheme: dark)">
@@ -35,7 +35,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="WebBrain">
 <meta property="og:title" content="WebBrain Companion">
-<meta property="og:description" content="Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2 27B en su propia máquina.">
+<meta property="og:description" content="Una pequeña aplicación de bandeja para macOS, Windows y Linux que sirve sus suscripciones de Claude, ChatGPT, Google, Grok y Kimi a WebBrain en 127.0.0.1, muestra cuánto de cada plan es izquierda y ejecuta Bonsai 2.5 27B en su propia máquina.">
 <meta property="og:url" content="https://webbrain.one/companion/es/">
 <meta property="og:image" content="https://webbrain.one/companion/assets/img/og.png">
 <meta property="og:image:width" content="1200">
@@ -94,8 +94,8 @@
     <h1>Tus suscripciones de IA, listas para usar en WebBrain</h1>
     <p class="lede">WebBrain Companion se encuentra en la barra de menú o en la bandeja del sistema. Inicie sesión en Claude, ChatGPT, Google, Grok o Kimi una vez y WebBrain llegará a todos ellos en una dirección en su computadora. La bandeja muestra cuánto queda de cada plan y cuándo se reinicia.</p>
     <div class="cta">
-      <a class="button primary" id="get" href="#download" data-mac="Descargar para macOS" data-win="Descargar para Windows" data-linux="Descargar para Linux" data-mac-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-macos-universal.zip" data-win-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-windows-setup.exe" data-linux-href="#download">Descargar</a>
-      <span class="cta-note">Versión 0.2.0 para macOS, Windows y Linux. Gratis y de código abierto.</span>
+      <a class="button primary" id="get" href="#download" data-mac="Descargar para macOS" data-win="Descargar para Windows" data-linux="Descargar para Linux" data-mac-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-macos-universal.zip" data-win-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-windows-setup.exe" data-linux-href="#download">Descargar</a>
+      <span class="cta-note">Versión 0.2.1 para macOS, Windows y Linux. Gratis y de código abierto.</span>
     </div>
   </div>
   <div class="desk-wrap">
@@ -125,7 +125,7 @@
     <ul class="windows">
       <li><figure>
         <div class="window"><div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>WebBrain Companion</span></div>
-          <picture><source srcset="../assets/img/panel-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/panel-en-light.webp" width="460" height="760" alt="El panel: la dirección http://127.0.0.1:8327/v1 con un botón Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro y SuperGrok, y Bonsai 2 27B ejecutándose junto al modelo de decisión d1." loading="lazy" decoding="async"></picture></div>
+          <picture><source srcset="../assets/img/panel-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/panel-en-light.webp" width="460" height="760" alt="El panel: la dirección http://127.0.0.1:8327/v1 con un botón Copiar, medidores de uso para Claude Max, ChatGPT Pro, Google AI Pro y SuperGrok, y Bonsai 2.5 27B ejecutándose junto al modelo de decisión Compass VLD v6 2B." loading="lazy" decoding="async"></picture></div>
         <figcaption><h3>una pagina</h3><p>La dirección que necesita WebBrain, cada plan con el límite más próximo a agotarse y los modelos locales con su botón principal. No hay clave API en esta computadora.</p></figcaption>
       </figure></li>
       <li><figure>
@@ -135,8 +135,8 @@
       </figure></li>
       <li><figure>
         <div class="window"><div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>WebBrain Companion</span></div>
-          <picture><source srcset="../assets/img/local-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/local-en-light.webp" width="460" height="760" alt="Detalles del Bonsai 2 27B en el panel: ejecutándose en el GPU de Apple con entrada de imagen activada, 65,536 tokens de contexto y sus opciones." loading="lazy" decoding="async"></picture></div>
-        <figcaption><h3>Modelos locales</h3><p>Haga clic en Bonsai 2 27B para ver dónde se ejecuta y si las imágenes encajan, y para cambiar sus opciones. d1 se abre de la misma manera.</p></figcaption>
+          <picture><source srcset="../assets/img/local-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/local-en-light.webp" width="460" height="760" alt="Detalles del Bonsai 2.5 27B en el panel: ejecutándose en el GPU de Apple con entrada de imagen activada, 65,536 tokens de contexto y sus opciones." loading="lazy" decoding="async"></picture></div>
+        <figcaption><h3>Modelos locales</h3><p>Haga clic en Bonsai 2.5 27B para ver dónde se ejecuta y si las imágenes encajan, y para cambiar sus opciones. Compass VLD v6 2B se abre de la misma manera.</p></figcaption>
       </figure></li>
     </ul>
   </div>
@@ -144,35 +144,26 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2.5 27B</h2>
+    <h2 id="local-h">Bonsai 2.5 27B, adaptado a su máquina</h2>
     <div class="split">
-      <p class="intro">Prism ML ajustó Bonsai 2.5 para llamadas a herramientas y tareas de programación. El GGUF más pequeño contiene unos 6 GB de pesos. La entrada de imágenes usa un proyector de visión independiente.</p>
-      <div>
-        <p class="intro">Sirve 2.5 en local y cárgalo en el proveedor llama.cpp de WebBrain. Para Q2_0, usa llama.cpp b11556 o posterior. PTQ1_0 y PQ2_0 funcionan con la versión de llama.cpp de Prism ML.</p>
-        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Descargas y configuración de Bonsai 2.5</a></p>
-      </div>
+      <p class="intro">El Ternary Bonsai 2.5 27B de PrismML incluye 27 mil millones de parámetros en 5,99 GB. El complemento lo instala con su proyector de visión Q8_0 y la compilación de llama.cpp de PrismML, o como el paquete MLX en Apple Silicon, y lo incluye junto a sus suscripciones como <code>bonsai-2.5-27b</code>.</p>
+      <p class="intro">Antes de descargar cualquier cosa, determina dónde se ejecuta el modelo y si la entrada de la imagen encaja. El proyector de visión se enciende en el GPU cuando queda aproximadamente 1 GB de memoria GPU después del modelo y su contexto, en el CPU cuando solo el sistema RAM tiene espacio y, en caso contrario, permanece apagado. Puede anular la elección en el panel.</p>
     </div>
-    <div class="companion-model">
-      <h3>Bonsai 2 27B, adaptado a su máquina</h3>
-      <div class="split">
-        <p class="intro">El Ternary Bonsai 2 27B de PrismML incluye 27 mil millones de parámetros en 5,95 GB. El complemento lo instala con su proyector de visión Q8_0 y la compilación de llama.cpp de PrismML, o como el paquete MLX en Apple Silicon, y lo incluye junto a sus suscripciones como <code>bonsai-2-27b</code>.</p>
-        <p class="intro">Antes de descargar cualquier cosa, determina dónde se ejecuta el modelo y si la entrada de la imagen encaja. El proyector de visión se enciende en el GPU cuando queda aproximadamente 1 GB de memoria GPU después del modelo y su contexto, en el CPU cuando solo el sistema RAM tiene espacio y, en caso contrario, permanece apagado. Puede anular la elección en el panel.</p>
-      </div>
-      <table class="machines">
-        <caption>Lo que el compañero elige en las máquinas típicas</caption>
-        <thead><tr><th scope="col">maquina</th><th scope="col">Sigue funcionando</th><th scope="col">Entrada de imagen</th><th scope="col">Contexto</th></tr></thead>
-        <tbody>
+    <table class="machines">
+      <caption>Lo que el compañero elige en las máquinas típicas</caption>
+      <thead><tr><th scope="col">maquina</th><th scope="col">Sigue funcionando</th><th scope="col">Entrada de imagen</th><th scope="col">Contexto</th></tr></thead>
+      <tbody>
         <tr><td>MacBook Air, 8GB</td><td data-label="Sigue funcionando">Apple GPU con Metal. Necesita más memoria que la que tiene la Mac, así que espere un intercambio.</td><td data-label="Entrada de imagen"><span class="vis off">Apagado</span></td><td data-label="Contexto">Fichas 8K</td></tr>
         <tr><td>MacBook Pro, 16GB</td><td data-label="Sigue funcionando">Apple GPU con Metal</td><td data-label="Entrada de imagen"><span class="vis gpu">Encendido, GPU</span></td><td data-label="Contexto">Fichas 16K</td></tr>
-        <tr><td>Portátil con RTX 4060 (8 GB) y RAM de 16 GB</td><td data-label="Sigue funcionando">CUDA, 57 de 64 capas en el GPU</td><td data-label="Entrada de imagen"><span class="vis cpu">Encendido, CPU</span></td><td data-label="Contexto">Fichas 8K</td></tr>
+        <tr><td>Portátil con RTX 4060 (8 GB) y RAM de 16 GB</td><td data-label="Sigue funcionando">CUDA, 56 de 64 capas en el GPU</td><td data-label="Entrada de imagen"><span class="vis cpu">Encendido, CPU</span></td><td data-label="Contexto">Fichas 8K</td></tr>
         <tr><td>Computadora de escritorio con RTX 4090 (24 GB) y RAM de 64 GB</td><td data-label="Sigue funcionando">CUDA, todo en el GPU</td><td data-label="Entrada de imagen"><span class="vis gpu">Encendido, GPU</span></td><td data-label="Contexto">Fichas 64K</td></tr>
         <tr><td>Computadora de escritorio con Radeon RX 7600 (8 GB) y RAM de 32 GB</td><td data-label="Sigue funcionando">Vulkan, 61 de 64 capas en el GPU</td><td data-label="Entrada de imagen"><span class="vis cpu">Encendido, CPU</span></td><td data-label="Contexto">Fichas 8K</td></tr>
         <tr><td>PC sin tarjeta gráfica, 16 GB RAM</td><td data-label="Sigue funcionando">CPU</td><td data-label="Entrada de imagen"><span class="vis cpu">Encendido, CPU</span></td><td data-label="Contexto">Fichas 8K</td></tr>
         <tr><td>PC sin tarjeta gráfica, 8 GB RAM</td><td data-label="Sigue funcionando">CPU, con poco espacio de sobra</td><td data-label="Entrada de imagen"><span class="vis off">Apagado</span></td><td data-label="Contexto">Fichas 8K</td></tr>
-        </tbody>
-      </table>
-      <p class="note">Elaborado por el planificador del acompañante de memoria total y libre; Los números en su máquina en el momento de la instalación deciden. En Apple Silicon, el paquete MLX lleva su propia torre de visión, por lo que las imágenes siempre están encendidas.</p>
-    </div>
+      </tbody>
+    </table>
+    <p class="note">Elaborado por el planificador del acompañante de memoria total y libre; Los números en su máquina en el momento de la instalación deciden. En Apple Silicon, el paquete MLX lleva su propia torre de visión, por lo que las imágenes siempre están encendidas.</p>
+    <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Descargas y configuración de Bonsai 2.5</a></p>
   </div>
 </section>
 
@@ -222,25 +213,25 @@
 <section class="section" id="download" aria-labelledby="download-h">
   <div class="wrap">
     <h2 id="download-h">Descargar</h2>
-    <p class="intro">Versión 0.2.0. Cada paquete contiene un único programa; su configuración e inicios de sesión se encuentran en su carpeta de usuario.</p>
+    <p class="intro">Versión 0.2.1. Cada paquete contiene un único programa; su configuración e inicios de sesión se encuentran en su carpeta de usuario.</p>
     <div class="downloads">
       <div class="dl" data-os="mac">
         <div><h3>macOS</h3><p class="req">macOS 12 o posterior, Apple Silicon y Intel (d1 requiere Apple Silicon)</p><span class="yours">Tu sistema</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-macos-universal.zip">Aplicación universal <small>zip, 36 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-macos-universal.zip">Aplicación universal <small>zip, 37 MB</small></a></li></ul>
         <p class="how">Mueva WebBrain Companion a Aplicaciones. La compilación no está certificada por Apple: la primera vez, permítala en Configuración del sistema, Privacidad y seguridad (Abierto de todos modos). En macOS 14 y versiones anteriores, haga clic con la tecla Control presionada y elija Abrir.</p>
       </div>
       <div class="dl" data-os="win">
         <div><h3>Windows</h3><p class="req">Windows 10 y 11, x64 y Arm64</p><span class="yours">Tu sistema</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-windows-setup.exe">Instalador <small>setup.exe, 23 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-windows-setup.exe">Instalador <small>setup.exe, 24 MB</small></a></li></ul>
         <p class="how">Ejecute el instalador: se instala para su cuenta, sin que el administrador lo solicite y agrega WebBrain Companion al menú Inicio. Hasta que el instalador esté firmado con el código, SmartScreen puede decir &quot;Windows protegió su PC&quot;: elija Más información y luego Ejecutar de todos modos.</p>
       </div>
       <div class="dl" data-os="linux">
         <div><h3>Linux</h3><p class="req">x64 y Arm64</p><span class="yours">Tu sistema</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-x64.tar.gz">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-arm64.tar.gz">Arm64 <small>tar.gz, 18 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-linux-x64.tar.gz">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-linux-arm64.tar.gz">Arm64 <small>tar.gz, 19 MB</small></a></li></ul>
         <p class="how">Desempaquete y ejecute webbrain-companion. El ícono necesita una bandeja StatusNotifierItem: KDE, XFCE o GNOME con la extensión AppIndicator.</p>
       </div>
     </div>
-    <p class="more-links"><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-SHA256SUMS.txt">Sumas de comprobación SHA-256</a><a href="https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray">código fuente</a><a href="https://github.com/webbrain-one/webbrain/releases">Todos los lanzamientos</a></p>
+    <p class="more-links"><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-SHA256SUMS.txt">Sumas de comprobación SHA-256</a><a href="https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray">código fuente</a><a href="https://github.com/webbrain-one/webbrain/releases">Todos los lanzamientos</a></p>
   </div>
 </section>
 
@@ -255,7 +246,7 @@
           <li>Otros dispositivos pueden conectarse solo si activa el acceso a la red en la configuración del panel. Luego escucha en 0.0.0.0 y necesitan la clave API que muestra el panel.</li>
           <li>Los inicios de sesión se almacenan en su carpeta de usuario y se envían únicamente al proveedor al que pertenecen.</li>
           <li>No hay análisis. Aparte de los proveedores en los que inicia sesión, solo recupera la lista de modelos públicos de CLIProxyAPI y, cuando instala un modelo, sus archivos de Hugging Face, GitHub y, para MLX, PyPI.</li>
-          <li>Las indicaciones enviadas a una suscripción aún se envían a ese proveedor. Sólo Bonsai 2 27B y d1 se ejecutan en su máquina.</li>
+          <li>Las indicaciones enviadas a una suscripción aún se envían a ese proveedor. Sólo Bonsai 2.5 27B y d1 se ejecutan en su máquina.</li>
         </ul>
       </div>
       <div>

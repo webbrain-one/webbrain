@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: uw AI-abonnementen in WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Een kleine lade-app voor macOS, Windows en Linux die uw Claude-, ChatGPT-, Google-, Grok- en Kimi-abonnementen op WebBrain op 127.0.0.1 laat zien hoeveel van elk plan er nog over is, en voert Bonsai 2 27B uit op uw eigen machine.",
+    "description": "Een kleine lade-app voor macOS, Windows en Linux die uw Claude-, ChatGPT-, Google-, Grok- en Kimi-abonnementen op WebBrain op 127.0.0.1 laat zien hoeveel van elk plan er nog over is, en voert Bonsai 2.5 27B uit op uw eigen machine.",
     "skip": "Ga naar de inhoud",
     "nav_label": "Secties",
     "nav_panel": "Het paneel",
@@ -22,18 +22,16 @@
     "panel_intro": "Klik op het pictogram om het te openen. Eén pagina bevat het adres van WebBrain, elk plan met wat er nog over is, en de twee lokale modellen; klik op een rij voor de details, of op het tandwiel voor instellingen. Het volgt uw lichte of donkere omgeving en spreekt Engels en Turks.",
     "shot1_h": "Eén pagina",
     "shot1_p": "Het adres dat WebBrain nodig heeft, elk plan waarvan de limiet bijna op is, en de lokale modellen met hun hoofdknop. Geen API-sleutel op deze computer.",
-    "shot1_alt": "Het paneel: het adres http://127.0.0.1:8327/v1 met een knop Kopiëren, gebruiksmeters voor Claude Max, ChatGPT Pro, Google AI Pro en SuperGrok, en Bonsai 2 27B naast het beslissingsmodel d1.",
+    "shot1_alt": "Het paneel: het adres http://127.0.0.1:8327/v1 met een knop Kopiëren, gebruiksmeters voor Claude Max, ChatGPT Pro, Google AI Pro en SuperGrok, en Bonsai 2.5 27B naast het beslissingsmodel Compass VLD v6 2B.",
     "shot2_h": "Voeg een abonnement toe",
     "shot2_p": "Log in op de eigen pagina van de aanbieder. De login blijft op uw computer staan.",
     "shot2_alt": "Het add-abonnementsblad met de vermelding Claude, ChatGPT, Google, Grok en Kimi, elk met hoe u zich aanmeldt.",
     "shot3_h": "Lokale modellen",
-    "shot3_p": "Klik op Bonsai 2 27B om te zien waar het wordt uitgevoerd, of afbeeldingen passen, en om de opties te wijzigen. d1 opent op dezelfde manier.",
-    "shot3_alt": "De details van de Bonsai 2 27B op het paneel: draaien op de Apple GPU met beeldinvoer ingeschakeld, 65.536 tokens aan context en de opties ervan.",
-    "bonsai25_intro": "Prism ML heeft Bonsai 2.5 afgestemd op toolaanroepen en programmeren. Het kleinste GGUF-bestand bevat ongeveer 6 GB aan gewichten. Voor afbeeldingen is er een aparte vision-projector.",
-    "bonsai25_setup": "Draai 2.5 op een lokale server en laad het model via de llama.cpp-provider in WebBrain. Gebruik voor Q2_0 llama.cpp b11556 of nieuwer. PTQ1_0 en PQ2_0 werken met de llama.cpp-fork van Prism ML.",
+    "shot3_p": "Klik op Bonsai 2.5 27B om te zien waar het wordt uitgevoerd, of afbeeldingen passen, en om de opties te wijzigen. Compass VLD v6 2B opent op dezelfde manier.",
+    "shot3_alt": "De details van de Bonsai 2.5 27B op het paneel: draaien op de Apple GPU met beeldinvoer ingeschakeld, 65.536 tokens aan context en de opties ervan.",
     "bonsai25_guide": "Bonsai 2.5 downloaden en instellen",
-    "local_h": "Bonsai 2 27B, op maat van uw machine",
-    "local_p1": "PrismML's Ternary Bonsai 2 27B verpakt 27 miljard parameters in 5,95 GB. De metgezel installeert het met zijn Q8_0 vision-projector en PrismML's versie van llama.cpp, of als het MLX-pakket op Apple Silicon, en vermeldt het naast uw abonnementen als <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, op maat van uw machine",
+    "local_p1": "PrismML's Ternary Bonsai 2.5 27B verpakt 27 miljard parameters in 5,99 GB. De metgezel installeert het met zijn Q8_0 vision-projector en PrismML's versie van llama.cpp, of als het MLX-pakket op Apple Silicon, en vermeldt het naast uw abonnementen als <code>bonsai-2.5-27b</code>.",
     "local_p2": "Voordat er iets wordt gedownload, wordt uitgezocht waar het model draait en of de beeldinvoer past. De vision-projector gaat op de GPU als er ongeveer 1 GB GPU-geheugen over is na het model en zijn context, op de CPU als alleen systeem RAM ruimte heeft, en blijft anders uit. U kunt de keuze in het paneel overschrijven.",
     "table_caption": "Wat de metgezel kiest op typische machines",
     "th_machine": "Machine",
@@ -77,7 +75,7 @@
       "Andere apparaten kunnen alleen verbinding maken als u netwerktoegang inschakelt in de paneelinstellingen. Vervolgens luistert het naar 0.0.0.0 en hebben ze de API-sleutel nodig die op het paneel wordt weergegeven.",
       "Logins worden opgeslagen in uw gebruikersmap en alleen verzonden naar de provider waartoe ze behoren.",
       "Er zijn geen analyses. Afgezien van de providers waarbij u zich aanmeldt, haalt het alleen de openbare modellenlijst van CLIProxyAPI op, en, wanneer u een model installeert, de bestanden van Hugging Face, GitHub en, voor MLX, PyPI.",
-      "Prompts die naar een abonnement worden gestuurd, gaan nog steeds naar die provider. Alleen Bonsai 2 27B en d1 draaien op uw machine."
+      "Prompts die naar een abonnement worden gestuurd, gaan nog steeds naar die provider. Alleen Bonsai 2.5 27B en d1 draaien op uw machine."
     ],
     "provider_h": "Wat uw provider beslist",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Laptop met een RTX 4060 (8 GB) en 16 GB RAM",
-      "CUDA, 57 van 64 lagen op de GPU",
+      "CUDA, 56 van 64 lagen op de GPU",
       "cpu",
       "8K"
     ],

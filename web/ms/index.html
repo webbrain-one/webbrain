@@ -528,9 +528,20 @@
       gap: 10px;
       font-size: 20px;
       font-weight: 800;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+    .nav-brand .brand-word {
       background: linear-gradient(135deg, var(--accent), var(--accent2));
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
+    }
+    .nav-brand .brand-domain {
+      margin-inline-start: 3px;
+      color: var(--text-dim);
+      font-weight: 400;
+      -webkit-text-fill-color: currentColor;
     }
     .nav-brand .brand-logo {
       width: 28px;
@@ -4219,7 +4230,8 @@
 <nav>
   <div class="nav-inner">
     <a href="https://webbrain.one/ms/" class="nav-brand" style="text-decoration:none;">
-      <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
+      <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true">
+      <span class="brand-word" dir="ltr">WebBrain<span class="brand-domain">.one</span></span>
     </a>
     <div class="nav-links">
       <a href="/companion/ms/" class="nav-secondary">Companion</a>

@@ -216,8 +216,6 @@ p { margin: 0 0 1em; }
 .windows figcaption p { color: var(--muted); font-size: 16px; margin: 0; }
 
 /* Local model planner table */
-.companion-model { margin-block-start: 32px; padding-block-start: 28px; border-top: 1px solid var(--line); }
-.companion-model h3 { margin-block-end: 16px; font-size: 1.5rem; letter-spacing: -.02em; line-height: 1.2; }
 .machines { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 16px; }
 .machines caption { text-align: start; font-weight: 680; font-size: 1.2rem; padding-bottom: 14px; letter-spacing: -.01em; }
 .machines th { text-align: start; font-size: 14px; font-weight: 600; color: var(--muted); padding: 0 16px 10px 0; border-bottom: 1.5px solid var(--ink); white-space: nowrap; }

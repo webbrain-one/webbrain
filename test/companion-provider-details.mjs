@@ -61,6 +61,21 @@ for (const build of ['chrome', 'firefox']) {
     assert.equal(selectPreferredCompanionModel([]), '');
   });
 
+  test(`${build}: upgrade a selected Bonsai model when Companion advertises 2.5`, () => {
+    const previous = 'bonsai-2-27b';
+    const current = 'bonsai-2.5-27b';
+    const subscription = 'claude-haiku-5-5';
+    const manager = new ProviderManager();
+    const ids = models => manager._extractModelIds('webbrain_companion', { data: models.map(id => ({ id })) });
+    const models = ids([previous, current, subscription]);
+    assert.deepEqual(models, [current, subscription]);
+    assert.equal(selectPreferredCompanionModel(models, previous), current);
+    assert.equal(selectPreferredCompanionModel(models, subscription), subscription);
+    assert.deepEqual(ids([previous]), [previous]);
+    assert.equal(selectPreferredCompanionModel([subscription], previous), previous);
+    assert.equal(selectPreferredCompanionModel([subscription], current), current);
+  });
+
   test(`${build}: webbrain_companion default config & visionMode handling`, async () => {
     const manager = new ProviderManager();
     manager.save = async () => {};
@@ -134,6 +149,7 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
 
       await page.addInitScript(({ build }) => {
         localStorage.setItem('wbLocale', 'en');
+        const upgradingBonsai = sessionStorage.getItem('testCompanionBonsaiUpgrade') === 'yes';
         const data = {
           wbLocale: 'en',
           providers: {
@@ -144,15 +160,17 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
               label: 'Your Existing Subscription',
               providerName: 'webbrain-companion',
               baseUrl: 'http://127.0.0.1:8327/v1',
-              model: '',
+              model: upgradingBonsai ? 'bonsai-2-27b' : '',
               visionMode: 'auto',
-              configured: false,
+              configured: upgradingBonsai,
             },
           },
-          activeProvider: 'webbrain_cloud',
+          activeProvider: upgradingBonsai ? 'webbrain_companion' : 'webbrain_cloud',
         };
         window.testStore = data;
-        window.companionMockModels = ['gemini-3.8-flash', 'claude-haiku-5-5'];
+        window.companionMockModels = upgradingBonsai
+          ? ['bonsai-2.5-27b', 'claude-haiku-5-5']
+          : ['gemini-3.8-flash', 'claude-haiku-5-5'];
 
         const storage = {
           async get(keys) {
@@ -303,6 +321,12 @@ for (const [build, engine] of [['chrome', chromium], ['firefox', firefox]]) {
         'gpt-6.1-luna',
         'header must display updated auto-selected model',
       );
+
+      await page.evaluate(() => sessionStorage.setItem('testCompanionBonsaiUpgrade', 'yes'));
+      await page.reload();
+      await page.waitForFunction(() => window.testStore?.providers.webbrain_companion.model === 'bonsai-2.5-27b');
+      assert.equal(await card.locator('input[data-key="model"]').inputValue(), 'bonsai-2.5-27b');
+      assert.equal(await card.locator('.provider-model').textContent(), 'bonsai-2.5-27b');
 
       assert.deepEqual(errors, [], 'no uncaught page errors');
     } finally {

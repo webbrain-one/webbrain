@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WebBrain Companion: đăng ký AI của bạn trong WebBrain</title>
-<meta name="description" content="Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2 27B trên máy của riêng bạn.">
+<meta name="description" content="Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2.5 27B trên máy của riêng bạn.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#fbf6f8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a0f18" media="(prefers-color-scheme: dark)">
@@ -35,7 +35,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="WebBrain">
 <meta property="og:title" content="WebBrain Companion">
-<meta property="og:description" content="Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2 27B trên máy của riêng bạn.">
+<meta property="og:description" content="Một ứng dụng khay nhỏ dành cho macOS, Windows và Linux phục vụ các đăng ký Claude, ChatGPT, Google, Grok và Kimi của bạn trên WebBrain trên 127.0.0.1, cho biết mỗi gói còn lại bao nhiêu và chạy Bonsai 2.5 27B trên máy của riêng bạn.">
 <meta property="og:url" content="https://webbrain.one/companion/vi/">
 <meta property="og:image" content="https://webbrain.one/companion/assets/img/og.png">
 <meta property="og:image:width" content="1200">
@@ -94,8 +94,8 @@
     <h1>Dùng các gói AI bạn đã đăng ký trong WebBrain</h1>
     <p class="lede">WebBrain Companion tồn tại trong thanh menu hoặc khay hệ thống của bạn. Đăng nhập vào Claude, ChatGPT, Google, Grok hoặc Kimi một lần và WebBrain tiếp cận tất cả chúng tại một địa chỉ trên máy tính của bạn. Khay hiển thị số lượng mỗi gói còn lại và thời điểm đặt lại.</p>
     <div class="cta">
-      <a class="button primary" id="get" href="#download" data-mac="Tải xuống cho macOS" data-win="Tải xuống cho Windows" data-linux="Tải xuống cho Linux" data-mac-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-macos-universal.zip" data-win-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-windows-setup.exe" data-linux-href="#download">Tải xuống</a>
-      <span class="cta-note">Phiên bản 0.2.0 dành cho macOS, Windows và Linux. Nguồn mở và miễn phí.</span>
+      <a class="button primary" id="get" href="#download" data-mac="Tải xuống cho macOS" data-win="Tải xuống cho Windows" data-linux="Tải xuống cho Linux" data-mac-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-macos-universal.zip" data-win-href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-windows-setup.exe" data-linux-href="#download">Tải xuống</a>
+      <span class="cta-note">Phiên bản 0.2.1 dành cho macOS, Windows và Linux. Nguồn mở và miễn phí.</span>
     </div>
   </div>
   <div class="desk-wrap">
@@ -125,7 +125,7 @@
     <ul class="windows">
       <li><figure>
         <div class="window"><div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>WebBrain Companion</span></div>
-          <picture><source srcset="../assets/img/panel-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/panel-en-light.webp" width="460" height="760" alt="Bảng điều khiển: địa chỉ http://127.0.0.1:8327/v1 với nút Sao chép, đồng hồ đo mức sử dụng cho Claude Max, ChatGPT Pro, Google AI Pro và SuperGrok và Bonsai 2 27B chạy bên cạnh mô hình quyết định d1." loading="lazy" decoding="async"></picture></div>
+          <picture><source srcset="../assets/img/panel-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/panel-en-light.webp" width="460" height="760" alt="Bảng điều khiển: địa chỉ http://127.0.0.1:8327/v1 với nút Sao chép, đồng hồ đo mức sử dụng cho Claude Max, ChatGPT Pro, Google AI Pro và SuperGrok và Bonsai 2.5 27B chạy bên cạnh mô hình quyết định Compass VLD v6 2B." loading="lazy" decoding="async"></picture></div>
         <figcaption><h3>Một trang</h3><p>Địa chỉ mà WebBrain cần, mỗi gói có giới hạn gần hết nhất và các mẫu cục bộ có nút chính của chúng. Không có khóa API trên máy tính này.</p></figcaption>
       </figure></li>
       <li><figure>
@@ -135,8 +135,8 @@
       </figure></li>
       <li><figure>
         <div class="window"><div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>WebBrain Companion</span></div>
-          <picture><source srcset="../assets/img/local-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/local-en-light.webp" width="460" height="760" alt="Chi tiết về Bonsai 2 27B trên bảng điều khiển: chạy trên Apple GPU với đầu vào hình ảnh được bật, 65.536 mã thông báo ngữ cảnh và các tùy chọn của nó." loading="lazy" decoding="async"></picture></div>
-        <figcaption><h3>Mô hình địa phương</h3><p>Nhấp vào Bonsai 2 27B để xem nó chạy ở đâu và liệu hình ảnh có phù hợp hay không và để thay đổi các tùy chọn của nó. d1 cũng mở theo cách tương tự.</p></figcaption>
+          <picture><source srcset="../assets/img/local-en-dark.webp" media="(prefers-color-scheme: dark)"><img src="../assets/img/local-en-light.webp" width="460" height="760" alt="Chi tiết về Bonsai 2.5 27B trên bảng điều khiển: chạy trên Apple GPU với đầu vào hình ảnh được bật, 65.536 mã thông báo ngữ cảnh và các tùy chọn của nó." loading="lazy" decoding="async"></picture></div>
+        <figcaption><h3>Mô hình địa phương</h3><p>Nhấp vào Bonsai 2.5 27B để xem nó chạy ở đâu và liệu hình ảnh có phù hợp hay không và để thay đổi các tùy chọn của nó. Compass VLD v6 2B cũng mở theo cách tương tự.</p></figcaption>
       </figure></li>
     </ul>
   </div>
@@ -144,35 +144,26 @@
 
 <section class="section" id="local" aria-labelledby="local-h">
   <div class="wrap">
-    <h2 id="local-h">Bonsai 2.5 27B</h2>
+    <h2 id="local-h">Bonsai 2.5 27B, có kích thước phù hợp với máy của bạn</h2>
     <div class="split">
-      <p class="intro">Prism ML tinh chỉnh Bonsai 2.5 cho việc gọi công cụ và lập trình. Tệp GGUF nhỏ nhất chứa khoảng 6 GB trọng số. Đầu vào hình ảnh cần một bộ chiếu thị giác riêng.</p>
-      <div>
-        <p class="intro">Chạy 2.5 trên máy chủ cục bộ rồi tải mô hình qua nhà cung cấp llama.cpp trong WebBrain. Với Q2_0, dùng llama.cpp b11556 trở lên. PTQ1_0 và PQ2_0 dùng bản llama.cpp của Prism ML.</p>
-        <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Tải xuống và thiết lập Bonsai 2.5</a></p>
-      </div>
+      <p class="intro">Ternary Bonsai 2.5 27B của PrismML chứa 27 tỷ thông số vào 5,99 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2.5-27b</code>.</p>
+      <p class="intro">Trước khi tải xuống bất cứ thứ gì, nó sẽ tìm ra nơi mô hình chạy và liệu hình ảnh đầu vào có phù hợp hay không. Máy chiếu thị giác hoạt động trên GPU khi còn lại khoảng 1 GB bộ nhớ GPU sau kiểu máy và ngữ cảnh của nó, trên CPU khi chỉ có hệ thống RAM còn chỗ trống và nếu không thì sẽ tắt. Bạn có thể ghi đè lựa chọn trong bảng điều khiển.</p>
     </div>
-    <div class="companion-model">
-      <h3>Bonsai 2 27B, có kích thước phù hợp với máy của bạn</h3>
-      <div class="split">
-        <p class="intro">Ternary Bonsai 2 27B của PrismML chứa 27 tỷ thông số vào 5,95 GB. Người đồng hành cài đặt nó với máy chiếu thị giác Q8_0 và bản dựng llama.cpp của PrismML hoặc dưới dạng gói MLX trên Apple Silicon và liệt kê nó bên cạnh đăng ký của bạn là <code>bonsai-2-27b</code>.</p>
-        <p class="intro">Trước khi tải xuống bất cứ thứ gì, nó sẽ tìm ra nơi mô hình chạy và liệu hình ảnh đầu vào có phù hợp hay không. Máy chiếu thị giác hoạt động trên GPU khi còn lại khoảng 1 GB bộ nhớ GPU sau kiểu máy và ngữ cảnh của nó, trên CPU khi chỉ có hệ thống RAM còn chỗ trống và nếu không thì sẽ tắt. Bạn có thể ghi đè lựa chọn trong bảng điều khiển.</p>
-      </div>
-      <table class="machines">
-        <caption>Người bạn đồng hành chọn gì trên các máy thông thường</caption>
-        <thead><tr><th scope="col">Máy</th><th scope="col">Chạy tiếp</th><th scope="col">Đầu vào hình ảnh</th><th scope="col">Bối cảnh</th></tr></thead>
-        <tbody>
+    <table class="machines">
+      <caption>Người bạn đồng hành chọn gì trên các máy thông thường</caption>
+      <thead><tr><th scope="col">Máy</th><th scope="col">Chạy tiếp</th><th scope="col">Đầu vào hình ảnh</th><th scope="col">Bối cảnh</th></tr></thead>
+      <tbody>
         <tr><td>MacBook Air, 8GB</td><td data-label="Chạy tiếp">Apple GPU với Metal. Nó cần nhiều bộ nhớ hơn Mac, vì vậy hãy chờ đợi việc trao đổi.</td><td data-label="Đầu vào hình ảnh"><span class="vis off">Tắt</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>MacBook Pro, 16 GB</td><td data-label="Chạy tiếp">Apple GPU với Metal</td><td data-label="Đầu vào hình ảnh"><span class="vis gpu">Bật, GPU</span></td><td data-label="Bối cảnh">Mã thông báo 16K</td></tr>
-        <tr><td>Máy tính xách tay có RTX 4060 (8 GB) và 16 GB RAM</td><td data-label="Chạy tiếp">CUDA, 57 trên 64 lớp trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
+        <tr><td>Máy tính xách tay có RTX 4060 (8 GB) và 16 GB RAM</td><td data-label="Chạy tiếp">CUDA, 56 trên 64 lớp trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>Máy tính để bàn có RTX 4090 (24 GB) và 64 GB RAM</td><td data-label="Chạy tiếp">CUDA, tất cả đều có trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis gpu">Bật, GPU</span></td><td data-label="Bối cảnh">Mã thông báo 64K</td></tr>
         <tr><td>Máy tính để bàn có Radeon RX 7600 (8 GB) và 32 GB RAM</td><td data-label="Chạy tiếp">Vulkan, 61 trên 64 lớp trên GPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>PC không có card đồ họa, 16 GB RAM</td><td data-label="Chạy tiếp">CPU</td><td data-label="Đầu vào hình ảnh"><span class="vis cpu">Bật, CPU</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
         <tr><td>PC không có card đồ họa, 8 GB RAM</td><td data-label="Chạy tiếp">CPU, có rất ít chỗ trống</td><td data-label="Đầu vào hình ảnh"><span class="vis off">Tắt</span></td><td data-label="Bối cảnh">Mã thông báo 8K</td></tr>
-        </tbody>
-      </table>
-      <p class="note">Được người lập kế hoạch của người bạn đồng hành thực hiện từ bộ nhớ tổng thể và còn trống; các con số trên máy của bạn lúc cài đặt sẽ quyết định. Trên Apple Silicon, gói MLX có tháp tầm nhìn riêng nên hình ảnh luôn bật.</p>
-    </div>
+      </tbody>
+    </table>
+    <p class="note">Được người lập kế hoạch của người bạn đồng hành thực hiện từ bộ nhớ tổng thể và còn trống; các con số trên máy của bạn lúc cài đặt sẽ quyết định. Trên Apple Silicon, gói MLX có tháp tầm nhìn riêng nên hình ảnh luôn bật.</p>
+    <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2.5-27B-GGUF#quickstart">Tải xuống và thiết lập Bonsai 2.5</a></p>
   </div>
 </section>
 
@@ -222,25 +213,25 @@
 <section class="section" id="download" aria-labelledby="download-h">
   <div class="wrap">
     <h2 id="download-h">Tải xuống</h2>
-    <p class="intro">Phiên bản 0.2.0. Mỗi gói chứa một chương trình duy nhất; cài đặt và thông tin đăng nhập của bạn nằm trong thư mục người dùng của bạn.</p>
+    <p class="intro">Phiên bản 0.2.1. Mỗi gói chứa một chương trình duy nhất; cài đặt và thông tin đăng nhập của bạn nằm trong thư mục người dùng của bạn.</p>
     <div class="downloads">
       <div class="dl" data-os="mac">
         <div><h3>macOS</h3><p class="req">macOS 12 trở lên, Apple Silicon và Intel (d1 yêu cầu Apple Silicon)</p><span class="yours">Hệ thống của bạn</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-macos-universal.zip">Ứng dụng phổ quát <small>zip, 36 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-macos-universal.zip">Ứng dụng phổ quát <small>zip, 37 MB</small></a></li></ul>
         <p class="how">Di chuyển WebBrain Companion sang Ứng dụng. Bản dựng không được Apple công chứng: lần đầu tiên, hãy cho phép nó trong Cài đặt hệ thống, Quyền riêng tư &amp; Bảo mật (Vẫn mở). Trên macOS 14 trở về trước, hãy giữ Control khi nhấp vào nó và chọn Mở.</p>
       </div>
       <div class="dl" data-os="win">
         <div><h3>Windows</h3><p class="req">Windows 10 và 11, x64 và Arm64</p><span class="yours">Hệ thống của bạn</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-windows-setup.exe">Trình cài đặt <small>setup.exe, 23 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-windows-setup.exe">Trình cài đặt <small>setup.exe, 24 MB</small></a></li></ul>
         <p class="how">Chạy trình cài đặt: nó sẽ cài đặt cho tài khoản của bạn mà không cần lời nhắc của quản trị viên và thêm WebBrain Companion vào menu Bắt đầu. Cho đến khi trình cài đặt được ký mã, SmartScreen có thể nói &quot;Windows đã bảo vệ PC của bạn&quot;: chọn Thông tin thêm, sau đó vẫn chạy.</p>
       </div>
       <div class="dl" data-os="linux">
         <div><h3>Linux</h3><p class="req">x64 và Arm64</p><span class="yours">Hệ thống của bạn</span></div>
-        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-x64.tar.gz">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-linux-arm64.tar.gz">Arm64 <small>tar.gz, 18 MB</small></a></li></ul>
+        <ul class="files"><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-linux-x64.tar.gz">x64 <small>tar.gz, 20 MB</small></a></li><li><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-linux-arm64.tar.gz">Arm64 <small>tar.gz, 19 MB</small></a></li></ul>
         <p class="how">Giải nén và chạy webbrain-companion. Biểu tượng cần có khay StatusNotifierItem: KDE, XFCE hoặc GNOME với phần mở rộng AppIndicator.</p>
       </div>
     </div>
-    <p class="more-links"><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.0/WebBrain-Companion-0.2.0-SHA256SUMS.txt">Tổng kiểm tra SHA-256</a><a href="https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray">Mã nguồn</a><a href="https://github.com/webbrain-one/webbrain/releases">Tất cả các bản phát hành</a></p>
+    <p class="more-links"><a href="https://github.com/webbrain-one/webbrain/releases/download/systray-v0.2.1/WebBrain-Companion-0.2.1-SHA256SUMS.txt">Tổng kiểm tra SHA-256</a><a href="https://github.com/webbrain-one/webbrain/tree/main/webbrain-systray">Mã nguồn</a><a href="https://github.com/webbrain-one/webbrain/releases">Tất cả các bản phát hành</a></p>
   </div>
 </section>
 
@@ -255,7 +246,7 @@
           <li>Các thiết bị khác chỉ có thể kết nối nếu bạn bật quyền truy cập mạng trong cài đặt của bảng điều khiển. Sau đó, nó sẽ lắng nghe trên 0.0.0.0 và họ cần khóa API mà bảng điều khiển hiển thị.</li>
           <li>Thông tin đăng nhập được lưu trữ trong thư mục người dùng của bạn và chỉ được gửi đến nhà cung cấp mà họ thuộc về.</li>
           <li>Không có phân tích. Ngoài các nhà cung cấp mà bạn đăng nhập, nó chỉ tìm nạp danh sách mô hình công khai của CLIProxyAPI và khi bạn cài đặt một mô hình, các tệp của nó từ Hugging Face, GitHub và đối với MLX, PyPI.</li>
-          <li>Lời nhắc gửi tới gói đăng ký vẫn được chuyển đến nhà cung cấp đó. Chỉ Bonsai 2 27B và d1 chạy trên máy của bạn.</li>
+          <li>Lời nhắc gửi tới gói đăng ký vẫn được chuyển đến nhà cung cấp đó. Chỉ Bonsai 2.5 27B và d1 chạy trên máy của bạn.</li>
         </ul>
       </div>
       <div>

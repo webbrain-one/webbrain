@@ -1,6 +1,6 @@
 # 提供商与模型
 
-**WebBrain Companion** 是独立桌面应用。[下载 Windows、macOS 或 Linux 版本](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.2.0)，
+**WebBrain Companion** 是独立桌面应用。[下载 Windows、macOS 或 Linux 版本](https://github.com/webbrain-one/webbrain/releases/tag/systray-v0.2.1)，
 然后选择 **WebBrain Companion** 提供商卡片。默认地址是
 `http://127.0.0.1:8327/v1`；同一台电脑上的扩展无需 API 密钥。加载模型、
 保存卡片并测试连接。[应用指南](../../webbrain-systray/README.md)提供安装说明。

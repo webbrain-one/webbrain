@@ -2,7 +2,7 @@
   "text": {
     "title": "WebBrain Companion: ang iyong mga subscription sa AI sa WebBrain",
     "og_title": "WebBrain Companion",
-    "description": "Isang maliit na tray app para samacOS, WindowsatLinuxna nagsisilbi sa iyoClaude, ChatGPT, Google, GrokatKimimga subscription saWebBrainsa 127.0.0.1, ipinapakita kung gaano karami sa bawat plano ang natitira, at tumatakboBonsai 2 27Bsa sarili mong makina.",
+    "description": "Isang maliit na tray app para samacOS, WindowsatLinuxna nagsisilbi sa iyoClaude, ChatGPT, Google, GrokatKimimga subscription saWebBrainsa 127.0.0.1, ipinapakita kung gaano karami sa bawat plano ang natitira, at tumatakboBonsai 2.5 27Bsa sarili mong makina.",
     "skip": "Lumaktaw sa nilalaman",
     "nav_label": "Mga seksyon",
     "nav_panel": "Ang panel",
@@ -22,18 +22,16 @@
     "panel_intro": "I-click ang icon para buksan ito. Nasa isang pahina ang address para sa WebBrain, bawat plano kasama ang natitira, at ang dalawang lokal na modelo; i-click ang isang row para sa mga detalye nito, o ang gear para sa mga setting. Sinusundan nito ang iyong liwanag o madilim na setting at nagsasalita ng English at Turkish.",
     "shot1_h": "Isang pahina",
     "shot1_p": "Ang address na WebBrain ay kailangan, ang bawat plano ay may limitasyon na pinakamalapit sa pag-ubos, at ang mga lokal na modelo sa kanilang pangunahing button. Walang API key sa computer na ito.",
-    "shot1_alt": "Ang panel: ang address na http://127.0.0.1:8327/v1 na may button na Kopyahin, mga metro ng paggamit para sa Claude Max, ChatGPT Pro, Google AI Pro at SuperGrok, at Bonsai 2 27B na tumatakbo sa tabi ng modelo ng desisyong d1.",
+    "shot1_alt": "Ang panel: ang address na http://127.0.0.1:8327/v1 na may button na Kopyahin, mga metro ng paggamit para sa Claude Max, ChatGPT Pro, Google AI Pro at SuperGrok, at Bonsai 2.5 27B na tumatakbo sa tabi ng modelo ng desisyong Compass VLD v6 2B.",
     "shot2_h": "Magdagdag ng subscription",
     "shot2_p": "Mag-sign in sa sariling page ng provider. Ang pag-login ay mananatili sa iyong computer.",
     "shot2_alt": "Ang listahan ng add subscription sheet na Claude, ChatGPT, Google, Grok at Kimi, bawat isa ay kung paano ka magsa-sign in.",
     "shot3_h": "Mga lokal na modelo",
-    "shot3_p": "I-click ang Bonsai 2 27B upang makita kung saan ito tumatakbo at kung magkasya ang mga larawan, at upang baguhin ang mga opsyon nito. Ang d1 ay bumubukas sa parehong paraan.",
-    "shot3_alt": "Ang mga detalye ng Bonsai 2 27B sa ibabaw ng panel: tumatakbo sa Apple GPU na may naka-on na input ng imahe, 65,536 token ng konteksto, at mga opsyon nito.",
-    "bonsai25_intro": "Inangkop ng Prism ML ang Bonsai 2.5 para sa pagtawag ng mga tool at pagsusulat ng code. Humigit-kumulang 6 GB ang mga timbang ng modelo sa pinakamaliit na GGUF. May hiwalay na vision projector para sa mga larawan.",
-    "bonsai25_setup": "Patakbuhin ang 2.5 sa lokal na server at i-load ito gamit ang llama.cpp provider sa WebBrain. Para sa Q2_0, gumamit ng llama.cpp b11556 o mas bago. Gumagana ang PTQ1_0 at PQ2_0 sa bersyon ng llama.cpp ng Prism ML.",
+    "shot3_p": "I-click ang Bonsai 2.5 27B upang makita kung saan ito tumatakbo at kung magkasya ang mga larawan, at upang baguhin ang mga opsyon nito. Ang Compass VLD v6 2B ay bumubukas sa parehong paraan.",
+    "shot3_alt": "Ang mga detalye ng Bonsai 2.5 27B sa ibabaw ng panel: tumatakbo sa Apple GPU na may naka-on na input ng imahe, 65,536 token ng konteksto, at mga opsyon nito.",
     "bonsai25_guide": "I-download at i-set up ang Bonsai 2.5",
-    "local_h": "Bonsai 2 27B, sukat sa iyong makina",
-    "local_p1": "Ang Ternary Bonsai 2 27B ng PrismML ay naglalaman ng 27 bilyong parameter sa 5.95 GB. Ini-install ito ng kasama kasama ang Q8_0 vision projector nito at ang build ng PrismML ng llama.cpp, o bilang MLX pack sa Apple Silicon, at inililista ito sa tabi ng iyong mga subscription bilang <code>bonsai-2-27b</code>.",
+    "local_h": "Bonsai 2.5 27B, sukat sa iyong makina",
+    "local_p1": "Ang Ternary Bonsai 2.5 27B ng PrismML ay naglalaman ng 27 bilyong parameter sa 5.99 GB. Ini-install ito ng kasama kasama ang Q8_0 vision projector nito at ang build ng PrismML ng llama.cpp, o bilang MLX pack sa Apple Silicon, at inililista ito sa tabi ng iyong mga subscription bilang <code>bonsai-2.5-27b</code>.",
     "local_p2": "Bago mag-download ang anumang bagay, gagana ito kung saan tumatakbo ang modelo at kung umaangkop ang input ng imahe. Ang vision projector ay napupunta sa GPU kapag humigit-kumulang 1 GB ng GPU na memorya ang natitira pagkatapos ng modelo at ang konteksto nito, sa CPU kapag ang system na RAM lang ang may puwang, at nananatili kung hindi. Maaari mong i-override ang pagpipilian sa panel.",
     "table_caption": "Ano ang pinipili ng kasama sa mga karaniwang makina",
     "th_machine": "Makina",
@@ -77,7 +75,7 @@
       "Makakakonekta lang ang ibang mga device kung i-on mo ang access sa network sa mga setting ng panel. Pagkatapos ay nakikinig ito sa 0.0.0.0, at kailangan nila ang API key na ipinapakita ng panel.",
       "Ang mga pag-login ay nakaimbak sa iyong folder ng user at ipinadala lamang sa provider na kinabibilangan nila.",
       "Walang analytics. Bukod sa mga provider kung saan ka nagsa-sign in, kinukuha lang nito ang listahan ng pampublikong modelo ng CLIProxyAPI, at, kapag nag-install ka ng modelo, ang mga file nito mula sa Hugging Face, GitHub at, para sa MLX, PyPI.",
-      "Ang mga prompt na ipinadala sa isang subscription ay mapupunta pa rin sa provider na iyon. Tanging Bonsai 2 27B at d1 lang ang tumatakbo sa iyong makina."
+      "Ang mga prompt na ipinadala sa isang subscription ay mapupunta pa rin sa provider na iyon. Tanging Bonsai 2.5 27B at d1 lang ang tumatakbo sa iyong makina."
     ],
     "provider_h": "Kung ano ang desisyon ng iyong provider",
     "provider": [
@@ -133,7 +131,7 @@
     ],
     [
       "Laptop na may RTX 4060 (8 GB) at 16 GB RAM",
-      "CUDA, 57 sa 64 na layer sa GPU",
+      "CUDA, 56 sa 64 na layer sa GPU",
       "cpu",
       "8K"
     ],

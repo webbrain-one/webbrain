@@ -76,6 +76,7 @@ import {
   COMPANION_PREFERRED_MODEL_PATTERNS,
   WEBBRAIN_COMPANION_DOWNLOAD_BASE,
   WEBBRAIN_COMPANION_SITE_URL,
+  COMPANION_LEGACY_BONSAI_MODEL,
   selectPreferredCompanionModel,
 } from '../providers/companion-config.js';
 import { AUTO_GROUP_TABS_KEY } from '../tab-group-preference.js';
@@ -2552,11 +2553,8 @@ async function checkAndAutoSelectCompanionModel(id) {
     if (!config) return;
 
     const currentModel = String(config.model || '').trim();
-    let selectedModel = currentModel;
-    if (!currentModel || !res.models.includes(currentModel)) {
-      selectedModel = selectPreferredCompanionModel(res.models);
-    }
-    if (!selectedModel) return;
+    const selectedModel = selectPreferredCompanionModel(res.models, currentModel);
+    if (!res.models.includes(selectedModel)) return;
 
     const needsUpdate = config.model !== selectedModel || !config.configured;
     if (needsUpdate) {
@@ -2580,6 +2578,8 @@ async function checkAndAutoSelectCompanionModel(id) {
         markConfigured: true,
       });
 
+      const modelInput = document.querySelector(`input[data-provider="${id}"][data-key="model"]`);
+      if (modelInput?.value.trim() === currentModel) modelInput.value = selectedModel;
       updateCollapsedProviderHeader(id, config);
     }
   } catch {
@@ -3840,7 +3840,7 @@ function renderProviders() {
 
     providersContainer.appendChild(wrapCollapsibleCard(id, config, isSelected, isConfigured, body));
     const expanded = isSelected || expandedProviders.has(id);
-    if (!expanded && isCompanion) {
+    if (isCompanion && (!expanded || config.model === COMPANION_LEGACY_BONSAI_MODEL)) {
       void checkAndAutoSelectCompanionModel(id);
     }
   }

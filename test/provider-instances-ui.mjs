@@ -204,7 +204,7 @@ try {
           links => links.map(link => link.href),
         );
         assert.equal(companionDownloads.length, 4);
-        assert.ok(companionDownloads.every(href => href.includes('/releases/download/systray-v0.2.0/')));
+        assert.ok(companionDownloads.every(href => href.includes('/releases/download/systray-v0.2.1/')));
         await rootCard.locator('input[data-key="label"]').fill('   ');
         await rootCard.locator('.btn-save').click();
         await rootCard.locator('.test-result.fail.show').waitFor();
