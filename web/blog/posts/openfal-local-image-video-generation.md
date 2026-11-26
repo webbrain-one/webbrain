@@ -1,12 +1,12 @@
 ---
-title: I built openfal to run image and video models locally
+title: Introducing openfal for local image and video generation
 slug: openfal-local-image-video-generation
 date: 2026-11-26
 readTime: 2 min read
 description: >
-  How a few WebBrain requests for video explanations led to openfal, a local inference server with a fal-style API, a job queue, and a browser Studio.
+  openfal serves image and video models on local hardware through a fal-style API, with a request queue, a Python SDK, and a browser Studio.
 excerpt: >
-  A few WebBrain requests for video explanations got me thinking about local generation. I built openfal to serve image and video models from my own machine.
+  A local inference server for Qwen-Image-2.1, Wan 2.2, and MiniMax H3 with an API and queue that apps can use.
 keywords:
   - openfal
   - WebBrain
@@ -17,31 +17,27 @@ keywords:
   - RTX 5090
 ---
 
-A few shared WebBrain queries stuck with me. People were asking for things like “explain this concept in a video,” and the requests ended without a usable video. I wanted to see what it would take to handle that kind of request while keeping WebBrain’s goal of running locally and offline.
+**openfal** gives applications a local API for generating images and video. The project grew out of requests for video explanations in WebBrain. Handling those requests offline called for a way to run media generation on the same machine as the browser agent.
 
-## Giving apps a local API for media generation
+## From prompt to file
 
-Hosted APIs like fal.ai make media generation easy to call from an app. I wanted that workflow on my own machine, with ready-to-run presets for common jobs. So I built **openfal**, a local inference server for images and video.
+Apps can submit jobs through a fal-style HTTP API or the Python SDK. The server returns a request ID for each queued job. Clients can poll for status or subscribe to server-sent events, then fetch the finished image or video. The browser-based Studio lets developers try the same workflows interactively.
 
-- A fal-style HTTP API and job queue
-- A Python SDK and status updates through polling or server-sent events (SSE)
-- A browser-based Studio for trying prompts and inspecting results
-- Selected workflows for Qwen-Image-2.1, Wan 2.2, and MiniMax H3
+The API covers image generation and editing with Qwen-Image-2.1, video generation with Wan 2.2, and selected image and video workflows with MiniMax H3. The server listens on localhost by default. With the required model files and inputs on disk, generation can run offline.
 
-Once you’ve downloaded the required model files, inference can run offline with local inputs. The server binds to localhost (`127.0.0.1`) by default.
+## How openfal uses memory
 
-## What fits on your hardware
+Inspired in part by Strata’s approach to hardware limits, openfal can move model blocks between system RAM and the compute device during inference. This allows fewer model weights to occupy VRAM at once. Memory requirements vary by model and configuration.
 
-I took some inspiration from the way Strata works within hardware limits. During inference, openfal can move model blocks between system RAM and the compute device as needed. The model and its settings determine how much RAM and VRAM you’ll need.
+## What the RTX 5090 tests measured
 
-I ran openfal, ComfyUI, and vLLM-Omni on the same RTX 5090. The fastest engine varied by workload. The runs used different configurations and, for one video scenario, different output durations. The benchmark report includes the run settings, cold and warm timings, and peak VRAM.
+In the published tests on one RTX 5090, openfal averaged **3.98 seconds** per warm Qwen-Image-2.1 Turbo request at 1344 × 768 and eight steps. The benchmark compares latency and peak VRAM across four workloads with ComfyUI and vLLM-Omni. The fastest engine varied by workload. The report records differences in engine settings and video output lengths. [RTX 5090 benchmark report](https://github.com/webbrain-one/openfal/blob/main/docs/benchmark-rtx-5090-2026-11-18.md)
 
-## Try it on your machine
+## Run openfal
 
 - [Source code and setup guide](https://github.com/webbrain-one/openfal)
-- [RTX 5090 benchmark report](https://github.com/webbrain-one/openfal/blob/main/docs/benchmark-rtx-5090-2026-11-18.md)
-- [openfal website](https://openfal.org/)
+- [Project website and quickstart](https://openfal.org/)
 
 openfal is an independent project. The server code is MIT-licensed, and the model weights retain their upstream licenses.
 
-I’d especially like to hear from people trying openfal on a smaller GPU. If you give it a go, share the GPU, how much VRAM it has, and which models and settings worked for you.
+When sharing a run on a smaller GPU, include the GPU model, available VRAM, checkpoint, and generation settings.

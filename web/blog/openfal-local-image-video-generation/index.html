@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>I built openfal to run image and video models locally - WebBrain Blog</title>
-  <meta name="description" content="How a few WebBrain requests for video explanations led to openfal, a local inference server with a fal-style API, a job queue, and a browser Studio.">
+  <title>Introducing openfal for local image and video generation - WebBrain Blog</title>
+  <meta name="description" content="openfal serves image and video models on local hardware through a fal-style API, with a request queue, a Python SDK, and a browser Studio.">
   <meta name="keywords" content="openfal, WebBrain, local inference, image generation, video generation, self-hosting, RTX 5090">
-  <meta property="og:title" content="I built openfal to run image and video models locally">
-  <meta property="og:description" content="How a few WebBrain requests for video explanations led to openfal, a local inference server with a fal-style API, a job queue, and a browser Studio.">
+  <meta property="og:title" content="Introducing openfal for local image and video generation">
+  <meta property="og:description" content="openfal serves image and video models on local hardware through a fal-style API, with a request queue, a Python SDK, and a browser Studio.">
   <meta property="og:type" content="article">
   <meta property="og:url" content="https://webbrain.one/blog/openfal-local-image-video-generation">
   <meta property="og:image" content="https://webbrain.one/og-image.png">
@@ -17,8 +17,8 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="WebBrain — Open-source AI browser agent">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="I built openfal to run image and video models locally">
-  <meta name="twitter:description" content="How a few WebBrain requests for video explanations led to openfal, a local inference server with a fal-style API, a job queue, and a browser Studio.">
+  <meta name="twitter:title" content="Introducing openfal for local image and video generation">
+  <meta name="twitter:description" content="openfal serves image and video models on local hardware through a fal-style API, with a request queue, a Python SDK, and a browser Studio.">
   <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
   <meta name="twitter:image:alt" content="WebBrain — Open-source AI browser agent">
   <link rel="icon" type="image/png" href="/favicon.png">
@@ -509,8 +509,8 @@
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "I built openfal to run image and video models locally",
-  "description": "How a few WebBrain requests for video explanations led to openfal, a local inference server with a fal-style API, a job queue, and a browser Studio.",
+  "headline": "Introducing openfal for local image and video generation",
+  "description": "openfal serves image and video models on local hardware through a fal-style API, with a request queue, a Python SDK, and a browser Studio.",
   "author": {
     "@type": "Person",
     "name": "Emre Sokullu",
@@ -559,19 +559,19 @@
 
   <article>
     <div class="meta">November 26, 2026 &middot; 2 min read &middot; <a href="/blog">&larr; All posts</a></div>
-    <h1>I built openfal to run image and video models locally</h1>
-    <p class="lede">A few shared WebBrain queries stuck with me. People were asking for things like “explain this concept in a video,” and the requests ended without a usable video. I wanted to see what it would take to handle that kind of request while keeping WebBrain’s goal of running locally and offline.</p>
-<h2 id="giving-apps-a-local-api-for-media-generation">Giving apps a local API for media generation</h2>
-<p>Hosted APIs like fal.ai make media generation easy to call from an app. I wanted that workflow on my own machine, with ready-to-run presets for common jobs. So I built <strong>openfal</strong>, a local inference server for images and video.</p>
-<ul><li>A fal-style HTTP API and job queue</li><li>A Python SDK and status updates through polling or server-sent events (SSE)</li><li>A browser-based Studio for trying prompts and inspecting results</li><li>Selected workflows for Qwen-Image-2.1, Wan 2.2, and MiniMax H3</li></ul>
-<p>Once you’ve downloaded the required model files, inference can run offline with local inputs. The server binds to localhost (<code>127.0.0.1</code>) by default.</p>
-<h2 id="what-fits-on-your-hardware">What fits on your hardware</h2>
-<p>I took some inspiration from the way Strata works within hardware limits. During inference, openfal can move model blocks between system RAM and the compute device as needed. The model and its settings determine how much RAM and VRAM you’ll need.</p>
-<p>I ran openfal, ComfyUI, and vLLM-Omni on the same RTX 5090. The fastest engine varied by workload. The runs used different configurations and, for one video scenario, different output durations. The benchmark report includes the run settings, cold and warm timings, and peak VRAM.</p>
-<h2 id="try-it-on-your-machine">Try it on your machine</h2>
-<ul><li><a href="https://github.com/webbrain-one/openfal" target="_blank" rel="noopener">Source code and setup guide</a></li><li><a href="https://github.com/webbrain-one/openfal/blob/main/docs/benchmark-rtx-5090-2026-11-18.md" target="_blank" rel="noopener">RTX 5090 benchmark report</a></li><li><a href="https://openfal.org/" target="_blank" rel="noopener">openfal website</a></li></ul>
+    <h1>Introducing openfal for local image and video generation</h1>
+    <p class="lede"><strong>openfal</strong> gives applications a local API for generating images and video. The project grew out of requests for video explanations in WebBrain. Handling those requests offline called for a way to run media generation on the same machine as the browser agent.</p>
+<h2 id="from-prompt-to-file">From prompt to file</h2>
+<p>Apps can submit jobs through a fal-style HTTP API or the Python SDK. The server returns a request ID for each queued job. Clients can poll for status or subscribe to server-sent events, then fetch the finished image or video. The browser-based Studio lets developers try the same workflows interactively.</p>
+<p>The API covers image generation and editing with Qwen-Image-2.1, video generation with Wan 2.2, and selected image and video workflows with MiniMax H3. The server listens on localhost by default. With the required model files and inputs on disk, generation can run offline.</p>
+<h2 id="how-openfal-uses-memory">How openfal uses memory</h2>
+<p>Inspired in part by Strata’s approach to hardware limits, openfal can move model blocks between system RAM and the compute device during inference. This allows fewer model weights to occupy VRAM at once. Memory requirements vary by model and configuration.</p>
+<h2 id="what-the-rtx-5090-tests-measured">What the RTX 5090 tests measured</h2>
+<p>In the published tests on one RTX 5090, openfal averaged <strong>3.98 seconds</strong> per warm Qwen-Image-2.1 Turbo request at 1344 × 768 and eight steps. The benchmark compares latency and peak VRAM across four workloads with ComfyUI and vLLM-Omni. The fastest engine varied by workload. The report records differences in engine settings and video output lengths. <a href="https://github.com/webbrain-one/openfal/blob/main/docs/benchmark-rtx-5090-2026-11-18.md" target="_blank" rel="noopener">RTX 5090 benchmark report</a></p>
+<h2 id="run-openfal">Run openfal</h2>
+<ul><li><a href="https://github.com/webbrain-one/openfal" target="_blank" rel="noopener">Source code and setup guide</a></li><li><a href="https://openfal.org/" target="_blank" rel="noopener">Project website and quickstart</a></li></ul>
 <p>openfal is an independent project. The server code is MIT-licensed, and the model weights retain their upstream licenses.</p>
-<p>I’d especially like to hear from people trying openfal on a smaller GPU. If you give it a go, share the GPU, how much VRAM it has, and which models and settings worked for you.</p>
+<p>When sharing a run on a smaller GPU, include the GPU model, available VRAM, checkpoint, and generation settings.</p>
 
     <div class="author-box">
       Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is GPL-3.0-or-later and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
