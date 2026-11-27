@@ -29,6 +29,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | openllm | OpenLLM official logo mark (`icon.svg` from the OpenLLM docs site, openllm.sh; black, white in dark mode) |
 | standardcompute | Standard Compute logo mark (standardcompute.com) |
 | teamorouter | TeamoRouter logo mark (teamorouter.com/teamo-mark.svg) |
+| llmtr | LLMTR logo mark (llmtr.com/favicon.svg) |
 | abliteration | [Abliteration.ai official icon](https://abliteration.ai/icon.svg) |
 | aigrow | AIGROW "A" mark, white on black (aigrow.gg) |
 | onomeo | onomeo pixel mascot mark (onomeo.com) |

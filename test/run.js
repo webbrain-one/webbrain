@@ -77564,17 +77564,17 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
     evroc fastrouter freebuff2api friendli google-vertex google-vertex-anthropic helicone
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
-    kuae-cloud-coding-plan llama lucidquery meganova minimax-cn-coding-plan
+    kuae-cloud-coding-plan llama llmtr lucidquery maple meganova minimax-cn-coding-plan
     minimax-coding-plan moark modelscope morph nano-gpt nearai nebius nova novita-ai
     ollama-cloud onomeo opencode opencode-go openllm opper orcarouter ovhcloud perplexity
     perplexity-agent poe pollinations privatemode-ai qihang-ai qiniu-ai requesty runcrate scaleway siliconflow
-    siliconflow-cn stackit standardcompute stepfun submodel synthetic teamorouter tencent-coding-plan
+    siliconflow-cn stackit standardcompute stepfun strata submodel synthetic teamorouter tencent-coding-plan
     upstage v0 venice vercel vivgrid vultr wandb xiaomi zai-coding-plan zenmux
     zhipuai zhipuai-coding-plan
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 92);
+  assert.equal(expectedIds.length, 95);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -77590,7 +77590,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
     // deliberately omitted from the 124/123 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 128 : 127;
+    const expectedDefaultCount = label === 'chrome' ? 131 : 130;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
