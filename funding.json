@@ -1,0 +1,58 @@
+{
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
+  "entity": {
+    "type": "individual",
+    "role": "maintainer",
+    "name": "Emre Sokullu",
+    "email": "emre@webbrain.one",
+    "description": "I started WebBrain and lead its open-source development and releases. This request is for maintaining the free browser extension.",
+    "webpageUrl": {
+      "url": "https://github.com/esokullu"
+    }
+  },
+  "projects": [
+    {
+      "guid": "webbrain",
+      "name": "WebBrain",
+      "description": "WebBrain is an open-source browser agent for Chrome and Firefox. Users can choose a local model or a hosted provider without changing browsers. Mozilla profiled the extension in its Add-ons Developer Spotlight: https://blog.mozilla.org/addons/2026/11/20/developer-spotlight-webbrain/. The public store listings show 2,000 Chrome users and 209 Firefox users as of November 27, 2026. These are separate store counts, not daily active users.",
+      "webpageUrl": {
+        "url": "https://webbrain.one/"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/webbrain-one/webbrain"
+      },
+      "licenses": [
+        "spdx:GPL-3.0-or-later"
+      ],
+      "tags": [
+        "browser",
+        "ai",
+        "automation"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "bank-transfer",
+        "type": "bank",
+        "description": "Please contact emre@webbrain.one for payment coordination. No banking information is published here."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "extension-maintenance",
+        "status": "active",
+        "name": "WebBrain extension maintenance",
+        "description": "One-time support for the free Chrome and Firefox extension: $5,000 to automate release checks for both browsers, including checks that the packages bundle the code they need; $3,000 to test compatibility with a small set of local model runtimes and publish the results; and $2,000 for setup, troubleshooting and contributor release guides. The tests and docs will be public in the WebBrain repository. This does not fund the hosted Compass service or a new product.",
+        "amount": 10000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": [
+          "bank-transfer"
+        ]
+      }
+    ]
+  }
+}
