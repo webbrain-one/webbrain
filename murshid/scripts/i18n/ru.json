@@ -35,26 +35,6 @@
       "en": "Dev Preview",
       "ru": "Предпросмотр"
     },
-    "nav.sections": {
-      "en": "Sections",
-      "ru": "Разделы"
-    },
-    "nav.browser": {
-      "en": "Browser",
-      "ru": "Браузер"
-    },
-    "nav.way": {
-      "en": "The way",
-      "ru": "Путь"
-    },
-    "nav.companion": {
-      "en": "Companion",
-      "ru": "Companion"
-    },
-    "nav.get-it": {
-      "en": "Get it",
-      "ru": "Скачать"
-    },
     "nav.github": {
       "en": "Murshid on GitHub",
       "ru": "Murshid на GitHub"

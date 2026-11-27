@@ -35,26 +35,6 @@
       "en": "Dev Preview",
       "tr": "Önizleme"
     },
-    "nav.sections": {
-      "en": "Sections",
-      "tr": "Bölümler"
-    },
-    "nav.browser": {
-      "en": "Browser",
-      "tr": "Tarayıcı"
-    },
-    "nav.way": {
-      "en": "The way",
-      "tr": "Yol"
-    },
-    "nav.companion": {
-      "en": "Companion",
-      "tr": "<span lang=\"en\">Companion</span>"
-    },
-    "nav.get-it": {
-      "en": "Get it",
-      "tr": "İndir"
-    },
     "nav.github": {
       "en": "Murshid on GitHub",
       "tr": "GitHub'da Murshid"
