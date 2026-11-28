@@ -305,7 +305,7 @@ Recent changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## MCP server
 
-To use your browser from DeepSeek Harness, install the [WebBrain plugin](integrations/deepseek-harness/) in your `web` profile.
+In DeepSeek Harness Desktop, open **Plugins → Installed → Add plugin**, enter `@webbrain/dsh-local@0.1.0` in **Package name or address**, click **Install**, then **Enable now**. With the CLI, install the [WebBrain plugin](integrations/deepseek-harness/) in your `web` profile.
 
 ```bash
 dsh plugin --profile web add @webbrain/dsh-local@0.1.0
