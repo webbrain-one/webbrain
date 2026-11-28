@@ -60,6 +60,23 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(teamorouter.apiKeyUrl, 'https://teamorouter.com/dashboard?tab=api-keys');
   assert.ok(providerIconUrl('teamorouter').endsWith('/teamorouter.svg'));
 
+  const llmtr = ADDITIONAL_PROVIDER_DEFAULTS.llmtr;
+  assert.equal(llmtr.type, 'openai', `${browser}: LLMTR must use the OpenAI-compatible adapter`);
+  assert.equal(llmtr.baseUrl, 'https://llmtr.com/v1', `${browser}: LLMTR endpoint changed`);
+  assert.equal(llmtr.model, 'qwen/qwen3.8-flash');
+  assert.equal(llmtr.contextWindow, 1000000);
+  assert.equal(llmtr.enabled, false);
+  assert.equal(llmtr.apiKey, '');
+  assert.equal(llmtr.supportsVision, true);
+  assert.equal(llmtr.supportsTools, true);
+  assert.equal(llmtr.supportsAskStreaming, true);
+  assert.equal(llmtr.apiKeyUrl, 'https://llmtr.com/dashboard/keys');
+  assert.ok(providerIconUrl('llmtr').endsWith('/llmtr.svg'));
+  assert.deepEqual(
+    ADDITIONAL_PROVIDER_UI.llmtr.suggestions,
+    ['qwen/qwen3.8-flash', 'qwen/qwen3.8-max', 'mistral/mistral-large-4', 'qwen/qwen3.8-27b-free'],
+  );
+
   const aigrow = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
   assert.equal(aigrow.type, 'openai', `${browser}: AIGROW must use the OpenAI-compatible adapter`);
   assert.equal(aigrow.baseUrl, 'https://aigrow.gg/v1', `${browser}: AIGROW endpoint changed`);

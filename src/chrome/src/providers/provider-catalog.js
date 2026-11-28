@@ -103,6 +103,7 @@ const PROVIDERS = [
   provider('kimi-for-coding', 'Kimi For Coding', 'https://api.kimi.com/coding/v1', 'kimi-for-coding', 262144, { category: 'cloud', apiKeyUrl: 'https://www.kimi.com/code/docs/en/', supportsVision: true, suggestions: ['kimi-for-coding', 'kimi-for-coding-highspeed', 'k3'] }),
   provider('kuae-cloud-coding-plan', 'KUAE Cloud Coding Plan', 'https://coding-plan-endpoint.kuaecloud.net/v1', 'GLM-4.7', 204800, { category: 'cloud', apiKeyUrl: 'https://docs.mthreads.com/kuaecloud/kuaecloud-doc-online/coding_plan/' }),
   provider('llama', 'Meta Llama API', 'https://api.llama.com/compat/v1', 'llama-4-scout-17b-16e-instruct-fp8', 128000, { category: 'cloud', apiKeyUrl: 'https://llama.developer.meta.com/', supportsVision: true }),
+  provider('llmtr', 'LLMTR', 'https://llmtr.com/v1', 'qwen/qwen3.8-flash', 1000000, { apiKeyUrl: 'https://llmtr.com/dashboard/keys', supportsVision: true, suggestions: ['qwen/qwen3.8-flash', 'qwen/qwen3.8-max', 'mistral/mistral-large-4', 'qwen/qwen3.8-27b-free'] }),
   provider('lucidquery', 'LucidQuery', 'https://api.lucidquery.com/v1', 'lucidnova-rf1-100b', 120000, { apiKeyUrl: 'https://lucidquery.com/docs', supportsVision: true, inputCostPerMillionUsd: 2, outputCostPerMillionUsd: 5 }),
   // The proxy listens on loopback and forwards inference to Maple.
   provider('maple', 'Maple Proxy', 'http://127.0.0.1:8080/v1', 'gpt-oss-120b', 131072, {

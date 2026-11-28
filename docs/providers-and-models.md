@@ -543,11 +543,11 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 94 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 95 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards,
-Settings → Models → LLM lists **129 built-in providers on Chromium** and **128
+Settings → Models → LLM lists **130 built-in providers on Chromium** and **129
 on Firefox**. The difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
@@ -563,6 +563,7 @@ on Firefox**. The difference is the Chromium-only in-browser WebGPU runtime.
 | `onomeo`                                                                                                                                                                                                                                                                                                                       |
 | `teamorouter`                                                                                                                                                                                                                                                                                                                  |
 | `maple`, `strata` |
+| `llmtr`                                                                                                                                                                                                                                                                                                                     |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
 The exceptions are:
@@ -852,6 +853,30 @@ This is an **opt-in cloud provider**, not local inference. Prompts, page
 context and, when enabled, screenshots leave the browser and are sent to
 TeamoRouter and the upstream model provider. See the
 [privacy policy](https://teamorouter.com/privacy).
+
+#### LLMTR
+
+[LLMTR](https://llmtr.com) is a prepaid OpenAI-compatible gateway for Qwen,
+MiniMax, Mistral, Gemini and other models behind one endpoint,
+`https://llmtr.com/v1`, with a Bearer key from the
+[dashboard](https://llmtr.com/dashboard/keys). Model IDs use a `vendor/model`
+prefix (`qwen/qwen3.8-flash`, `qwen/qwen3.8-max`, `mistral/mistral-large-4`,
+`qwen/qwen3.8-27b-free` and others); `GET https://llmtr.com/v1/models`
+returns the live list, and the [models page](https://llmtr.com/models) shows
+prices. Usage is prepaid and billed per token.
+
+In WebBrain, open **Settings → Models → LLM → LLMTR**, paste your API key,
+keep the default `qwen/qwen3.8-flash` model (1 million tokens of context),
+then click **Test Connection**. Interactive Ask streaming and tool calls work
+through the existing OpenAI-compatible path. The default model accepts images,
+so the card starts with vision on. If you switch to `qwen/qwen3.8-27b-free`
+(free with a daily usage quota), lower **Context window** to `131042` (and
+**Max output** to `16384` or less) to match its limits.
+
+This is an **opt-in cloud provider**, not local inference. Prompts, page
+context and, when enabled, screenshots leave the browser and are sent to
+LLMTR and the upstream model provider. See the
+[privacy policy](https://llmtr.com/privacy).
 
 ### Ask response streaming
 
