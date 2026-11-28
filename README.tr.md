@@ -274,6 +274,14 @@ Yakın zamandaki değişiklikler [CHANGELOG.md](CHANGELOG.md) dosyasında yer al
 
 ## MCP sunucusu
 
+Tarayıcınızı DeepSeek Harness üzerinden kullanmak için WebBrain eklentisini `web` profiline kurun.
+
+```bash
+dsh plugin --profile web add @webbrain/dsh-local@0.1.0
+```
+
+Tarayıcı uzantısını eşleştirmek ve bağlantıyı kontrol etmek için [Türkçe kurulum rehberini](https://www.webbrain.one/docs/tr/mcp/#deepseek-harness) izleyin.
+
 Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan WebBrain'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz.
 
 ```bash

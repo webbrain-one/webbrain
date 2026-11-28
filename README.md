@@ -305,8 +305,13 @@ Recent changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## MCP server
 
-DeepSeek Harness users can install the [WebBrain local browser plugin](integrations/deepseek-harness/)
-to delegate tasks to their paired extension.
+To use your browser from DeepSeek Harness, install the [WebBrain plugin](integrations/deepseek-harness/) in your `web` profile.
+
+```bash
+dsh plugin --profile web add @webbrain/dsh-local@0.1.0
+```
+
+Then [pair the extension and check the connection](https://www.webbrain.one/docs/mcp/#deepseek-harness).
 
 Let a coding agent use *your* browser. Claude Code, Codex, Cursor and OpenClaw
 can delegate a task to WebBrain running in the session you are already signed
