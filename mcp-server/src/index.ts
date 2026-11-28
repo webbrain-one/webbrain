@@ -403,17 +403,14 @@ server.registerTool(
     }
     return ok(
       `Not connected. Listening on ${bridgeUrl()}, but no paired extension has dialled in.\n\n` +
-        "To connect: open a Chromium browser (Chrome, Edge, Brave), then in " +
+        "Open WebBrain in Chromium or Firefox, then in " +
         "WebBrain → Settings → Bridge set the URL to\n" +
         `  ${bridgeUrl()}\n` +
         "paste the pairing key into Pairing key, and enable it. The key comes from " +
         `${bridge.pairingKeySource()}; when that is a file, the user can print it with ` +
         "`npx -y @webbrain/mcp-server pairing-key`. " +
         "Do not ask the user to paste the key into this chat. WebBrain versions without a " +
-        "Pairing key field must be updated first. The extension holds one bridge socket at a time, so this cannot " +
-        "run at the same time as WebBrain Cloud on port 17373.\n\n" +
-        "Firefox cannot host the bridge — that build has no offscreen document. If the " +
-        "user is on Firefox, say so rather than suggesting settings changes.",
+        "Pairing key field must be updated first. The extension connects to one local bridge destination at a time.",
     );
   },
 );

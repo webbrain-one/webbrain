@@ -352,14 +352,12 @@ export class BridgeClient {
     return (
       "No WebBrain browser extension is connected, so browser tools are unavailable. " +
       `This plugin is listening on ${this.url}. To connect: install the WebBrain ` +
-      "extension (https://webbrain.one) on a Chromium browser — Chrome, Edge, Brave, " +
-      "Opera or Vivaldi — open it, then set WebBrain → Settings → Bridge to " +
+      "extension (https://webbrain.one) in Chromium or Firefox, open it, then set WebBrain → Settings → Bridge to " +
       `${this.url}, paste the pairing key from ${this.pairingSource || "~/.webbrain/bridge-key"} ` +
       "into Pairing key, and enable it. Ask the user to copy the key themselves; never request " +
       "it in chat. Older WebBrain versions without a Pairing key field must be " +
       "updated first. The extension holds one bridge at a time, so it " +
       "cannot also be pointed at WebBrain Cloud (17373) or the MCP server (17374). " +
-      "Firefox cannot host the bridge at all: that build has no offscreen document. " +
       "fetch_url and research_url keep working everywhere, with or without the extension."
     );
   }
