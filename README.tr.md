@@ -274,7 +274,7 @@ Yakın zamandaki değişiklikler [CHANGELOG.md](CHANGELOG.md) dosyasında yer al
 
 ## MCP sunucusu
 
-Tarayıcınızı DeepSeek Harness üzerinden kullanmak için WebBrain eklentisini `web` profiline kurun.
+DeepSeek Harness masaüstü uygulamasında **Plugins → Installed → Add plugin** yolunu izleyin. **Package name or address** alanına `@webbrain/dsh-local@0.1.0` yazın, **Install** düğmesine, kurulum bitince de **Enable now** düğmesine tıklayın. CLI kullanıyorsanız eklentiyi `web` profiline şu komutla kurabilirsiniz.
 
 ```bash
 dsh plugin --profile web add @webbrain/dsh-local@0.1.0

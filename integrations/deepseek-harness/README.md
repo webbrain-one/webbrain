@@ -2,7 +2,14 @@
 
 The `@webbrain/dsh-local` bundle gives Harness six tools for the WebBrain extension in your signed-in browser. Harness starts the paired WebBrain MCP server as a child process. Run Harness, Node.js 24.9 or later, and the browser on the same computer. Choose a model in WebBrain for delegated tasks.
 
-## Install from npm
+## Install in the desktop app
+
+1. Open **Plugins** in the Harness sidebar, select **Installed**, then click **Add plugin**.
+2. Paste `@webbrain/dsh-local@0.1.0` into **Package name or address** and click **Install**.
+3. Click **Enable now** when installation finishes. If you already closed the dialog, turn the plugin on in **Installed**. Restart Harness if prompted.
+4. [Pair your browser](#pair-the-browser), then ask Harness to call `mcp__webbrain__webbrain_connection`. A paired browser reports `Connected.`.
+
+## Install with the CLI
 
 When your registry offers both `@webbrain/dsh-local@0.1.0` and its paired server dependency `@webbrain/mcp-server@0.1.2`, install the bundle into the profile you use. These examples use the `web` profile.
 
@@ -26,7 +33,7 @@ Keep this checkout available while the plugin is installed. Restart the profile 
 
 ## Pair the browser
 
-1. For an npm installation, run `npx -y @webbrain/mcp-server@0.1.2 pairing-key` in your own terminal. For a checkout installation, run `node mcp-server/dist/index.js pairing-key` from the repository root. Copy the value directly into the extension.
+1. Once the server starts, open `~/.webbrain/bridge-key` on macOS or Linux, or `%USERPROFILE%\.webbrain\bridge-key` on Windows. You can also print the same key in your own terminal with `npx -y @webbrain/mcp-server@0.1.2 pairing-key`. For a checkout installation, run `node mcp-server/dist/index.js pairing-key` from the repository root. Copy the value directly into the extension.
 2. In **WebBrain → Settings → Bridge**, set the URL to `ws://127.0.0.1:17374/extension`, paste the value into **Pairing key**, and enable the bridge. The Cloud Bridge token field can stay empty.
 3. In Harness, ask it to call `mcp__webbrain__webbrain_connection`. A paired browser reports `Connected.`.
 
