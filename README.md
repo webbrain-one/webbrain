@@ -311,7 +311,7 @@ In DeepSeek Harness Desktop, open **Plugins → Installed → Add plugin**, ente
 dsh plugin --profile web add @webbrain/dsh-local@0.1.0
 ```
 
-Then [pair the extension and check the connection](https://www.webbrain.one/docs/mcp/#deepseek-harness).
+In the WebBrain extension, choose **Settings → Bridge → DeepSeek Harness**. Follow the pairing steps there, then ask Harness to call `mcp__webbrain__webbrain_connection`. [DeepSeek Harness setup guide](https://www.webbrain.one/docs/mcp/#deepseek-harness)
 
 Let a coding agent use *your* browser. Claude Code, Codex, Cursor and OpenClaw
 can delegate a task to WebBrain running in the session you are already signed
@@ -330,9 +330,12 @@ open (press `Ctrl+C` to stop it):
 npx -y @webbrain/mcp-server
 ```
 
-Once the server is running, open **WebBrain → Settings → Bridge**,
-set the URL to `ws://127.0.0.1:17374/extension`, paste the pairing key printed by
-`npx -y @webbrain/mcp-server pairing-key` into **Pairing key**, and enable it.
+In **WebBrain → Settings → Bridge**, choose **Claude Code**, **Cursor**,
+**OpenCode**, or **DeepSeek Harness** to see setup steps for that client.
+Choose **MCP** for other local MCP clients. Each uses
+`ws://127.0.0.1:17374/extension`. Once the client starts the server, paste the
+key printed by `npx -y @webbrain/mcp-server@0.1.2 pairing-key` into **Pairing key**
+and click **Save & test connection**.
 The server only trusts a socket that proves it holds that key (an HMAC over a
 fresh challenge; the key is never sent), so another local process cannot pose
 as the extension. The LM Studio plugin uses the same key file,
@@ -372,8 +375,9 @@ examples, safety boundaries, and troubleshooting guide live at
 [`web/docs/mcp/`](web/docs/mcp/).
 
 > The extension holds **one** bridge socket at a time — WebBrain Cloud (17373),
-> the MCP server (17374), or the LM Studio plugin (17375). Switch by changing
-> the URL under **Settings → Bridge**.
+> the MCP server (17374), or the LM Studio plugin (17375). Choose the destination
+> under **Settings → Bridge**. Close the first MCP client before starting another
+> on port 17374.
 
 ## Omarchy integration
 

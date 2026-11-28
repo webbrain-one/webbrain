@@ -34,10 +34,10 @@ Keep this checkout available while the plugin is installed. Restart the profile 
 ## Pair the browser
 
 1. Once the server starts, open `~/.webbrain/bridge-key` on macOS or Linux, or `%USERPROFILE%\.webbrain\bridge-key` on Windows. You can also print the same key in your own terminal with `npx -y @webbrain/mcp-server@0.1.2 pairing-key`. For a checkout installation, run `node mcp-server/dist/index.js pairing-key` from the repository root. Copy the value directly into the extension.
-2. In **WebBrain → Settings → Bridge**, set the URL to `ws://127.0.0.1:17374/extension`, paste the value into **Pairing key**, and enable the bridge. The Cloud Bridge token field can stay empty.
+2. In **WebBrain → Settings → Bridge**, choose **DeepSeek Harness**. If your extension does not show that button yet, choose **MCP** or enter `ws://127.0.0.1:17374/extension` manually. Paste the value into **Pairing key** and click **Save & test connection**.
 3. In Harness, ask it to call `mcp__webbrain__webbrain_connection`. A paired browser reports `Connected.`.
 
-The extension uses one bridge destination at a time. To switch between this plugin and LM Studio, change the bridge URL in the extension. Each uses the same default local pairing key.
+The extension uses one bridge destination at a time. To use LM Studio, select **LM Studio** in Bridge settings. The two destinations share the default pairing key. OpenCode, Claude Code, and Cursor use the same MCP port as Harness, so stop the current client's server before switching between those clients.
 
 ## Use the tools
 
@@ -52,6 +52,6 @@ Try “Use WebBrain in Ask mode to summarize the active tab.” For a longer tas
 | `webbrain_respond` | Relay the user’s answer when a run requests input. |
 | `webbrain_abort` | Stop a running task. |
 
-The setup uses a local extension and its configured model. WebBrain Cloud has its own Harness bundle and hosted browser sessions.
+This setup uses a local extension and its configured model. For hosted browser sessions, see the [WebBrain Cloud plugin for Harness](https://webbrain.cloud/docs#deepseek-harness).
 
 To remove the local bundle, run `dsh plugin --profile web remove @webbrain/dsh-local`.

@@ -45,7 +45,7 @@ The MCP server hosts the listener; the extension dials out to it. A Manifest V3 
    > ```
    >
    > and register `node /absolute/path/to/webbrain/mcp-server/dist/index.js` as the MCP command in your client.
-3. In **WebBrain → Settings → Bridge**, set the URL to `ws://127.0.0.1:17374/extension`, paste the key into **Pairing key**, and enable the bridge.
+3. In **WebBrain → Settings → Bridge**, choose **OpenCode**, **DeepSeek Harness**, **Claude Code**, or **Cursor** for client-specific setup steps. Choose **MCP** for another local stdio client. Each fills in `ws://127.0.0.1:17374/extension`. Once the client starts the server, paste the key into **Pairing key** and click **Save & test connection**.
 4. Ask your MCP client to call `webbrain_connection` to confirm.
 
 The LM Studio plugin reads the same key file, so one pairing covers both destinations.
@@ -79,24 +79,39 @@ The `@webbrain/dsh-local` plugin starts this server for the selected Harness
 profile. After pairing, ask Harness to call `mcp__webbrain__webbrain_connection`.
 See the [DeepSeek Harness setup and checkout instructions](https://webbrain.one/docs/mcp/#deepseek-harness).
 
+**OpenCode v2**
+
+Register the server from your project directory, then start OpenCode there.
+
+```bash
+opencode mcp add webbrain -- npx -y @webbrain/mcp-server@0.1.2
+```
+
+After pairing, ask OpenCode to check WebBrain’s browser connection. The [OpenCode setup guide](https://www.webbrain.one/docs/mcp/#opencode) also shows the equivalent configuration file.
+
 **Claude Code**
 
 ```bash
-claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server
+claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server@0.1.2
 ```
 
-**Codex / Cursor / anything reading `mcp.json`**
+**Cursor**
+
+Merge this entry into your project's `.cursor/mcp.json`, open the project in Cursor and enable `webbrain` under MCP.
 
 ```json
 {
   "mcpServers": {
     "webbrain": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@webbrain/mcp-server"]
+      "args": ["-y", "@webbrain/mcp-server@0.1.2"]
     }
   }
 }
 ```
+
+For Codex, follow the [Codex setup instructions](https://www.webbrain.one/docs/mcp/#codex).
 
 The MCP client launches this command as a child process when it starts the
 configured server; you do not need to keep a second copy running in a terminal.

@@ -6,6 +6,7 @@ import { t } from './i18n.js';
 const KEYS = {
   enabled: 'webbrainCloudBridgeEnabled',
   url: 'webbrainCloudBridgeUrl',
+  client: 'webbrainCloudBridgeClient',
   token: 'webbrainCloudBridgeToken',
   browserId: 'webbrainCloudBridgeBrowserId',
   installationId: 'webbrainCloudBridgeInstallationId',
@@ -22,8 +23,9 @@ const installationEl = $('cb-installation-id');
 const statusEl = $('cb-status');
 const statusText = $('cb-status-text');
 const testBtn = $('cb-test');
-const presetButtons = Array.from(document.querySelectorAll('#cb-presets [data-cb-preset]'));
-const customPill = $('cb-preset-custom');
+const presetButtons = Array.from(document.querySelectorAll('#cb-presets [data-cb-client]'));
+const guideSteps = document.querySelectorAll('#cb-setup [data-cb-guide]');
+let selectedClient;
 
 async function send(action, data = {}) {
   const response = await browser.runtime.sendMessage({ target: 'background', action, ...data });
@@ -61,34 +63,31 @@ function pillUrl(value) {
   try { return normalizeUrl(value); } catch { return ''; }
 }
 
-function markCustomPill() {
+function selectClient(client) {
+  selectedClient = client;
   for (const btn of presetButtons) {
-    btn.classList.remove('active');
-    btn.setAttribute('aria-pressed', 'false');
-  }
-  if (customPill) {
-    customPill.classList.add('active');
-    customPill.setAttribute('aria-pressed', 'true');
-  }
-}
-
-function markActivePill(url) {
-  const current = pillUrl(url);
-  let matched = false;
-  for (const btn of presetButtons) {
-    const on = !!current && pillUrl(btn.dataset.cbPreset) === current;
+    const on = btn.dataset.cbClient === client;
     btn.classList.toggle('active', on);
     btn.setAttribute('aria-pressed', String(on));
-    if (on) matched = true;
   }
-  if (!matched) markCustomPill();
+  for (const step of guideSteps) step.hidden = !step.dataset.cbGuide.split(' ').includes(client);
+}
+
+function restoreClient(url, savedClient) {
+  // Older versions only stored the URL. The first match on 17374 is generic MCP.
+  const current = pillUrl(url);
+  const matches = presetButtons.filter(btn => btn.dataset.cbPreset === current);
+  if (savedClient === 'custom' || matches.some(btn => btn.dataset.cbClient === savedClient)) {
+    return savedClient;
+  }
+  return matches[0]?.dataset.cbClient || 'custom';
 }
 
 async function load() {
   const stored = await browser.storage.local.get(Object.values(KEYS));
   enabled.checked = !!stored[KEYS.enabled];
   urlInput.value = stored[KEYS.url] || DEFAULT_URL;
-  markActivePill(urlInput.value);
+  selectClient(restoreClient(urlInput.value, stored[KEYS.client]));
   tokenInput.value = stored[KEYS.token] || '';
   pairingKeyInput.value = stored[KEYS.pairingKey] || '';
   nameInput.value = stored[KEYS.browserId] || '';
@@ -107,7 +106,7 @@ async function refresh() {
 async function save() {
   const url = normalizeUrl(urlInput.value);
   urlInput.value = url;
-  const patch = { [KEYS.url]: url, [KEYS.enabled]: enabled.checked, [KEYS.token]: tokenInput.value.trim(), [KEYS.pairingKey]: pairingKeyInput.value.trim() };
+  const patch = { [KEYS.url]: url, [KEYS.client]: selectedClient, [KEYS.enabled]: enabled.checked, [KEYS.token]: tokenInput.value.trim(), [KEYS.pairingKey]: pairingKeyInput.value.trim() };
   const name = nameInput.value.trim();
   await browser.storage.local.set(patch);
   if (name) await browser.storage.local.set({ [KEYS.browserId]: name });
@@ -148,20 +147,35 @@ testBtn.addEventListener('click', testConnection);
 for (const btn of presetButtons) {
   btn.addEventListener('click', async () => {
     try {
+      selectClient(btn.dataset.cbClient);
+      if (selectedClient === 'custom') {
+        urlInput.focus();
+        await browser.storage.local.set({ [KEYS.client]: selectedClient });
+        return;
+      }
       urlInput.value = btn.dataset.cbPreset;
       const url = await save();
-      markActivePill(url);
-      if (enabled.checked) render(await send('cloud_bridge_start', { url }));
+      if (enabled.checked && selectedClient === btn.dataset.cbClient) render(await send('cloud_bridge_start', { url }));
     } catch (e) { setStatus('error', e.message); }
   });
 }
-if (customPill) {
-  customPill.addEventListener('click', () => {
-    markCustomPill();
-    urlInput.focus();
+urlInput.addEventListener('input', () => selectClient('custom'));
+for (const btn of document.querySelectorAll('#cb-setup .cb-snippet button')) {
+  btn.addEventListener('click', async () => {
+    const code = btn.previousElementSibling;
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      btn.textContent = t('sp.copied');
+      setTimeout(() => { btn.textContent = t('sp.copy'); }, 1500);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
   });
 }
-urlInput.addEventListener('input', () => markCustomPill());
 setInterval(refresh, 2000);
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && Object.values(KEYS).some((k) => changes[k]) && !document.activeElement?.closest('#cb-card')) load();

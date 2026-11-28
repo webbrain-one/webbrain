@@ -8,7 +8,8 @@
 // in General (settings-presets.js) with the Advanced controls they stand for,
 // the provider refresh after a profile sync in another Settings tab, the
 // Permissions & privacy switches while the other sections are still loading,
-// and an unsaved Vision endpoint surviving a refocus (Chrome).
+// the Bridge client guides and their saved endpoint, and an unsaved Vision
+// endpoint surviving a refocus (Chrome).
 import { chromium, firefox } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -148,6 +149,83 @@ const tabsOf = page => page.locator('.tab-btn').evaluateAll(buttons => buttons.m
 const activeTab = page => page.locator('.tab-btn.active').getAttribute('data-tab');
 const store = (page, key) => page.evaluate(k => window.testStore[k], key);
 const visible = (page, selector) => page.locator(selector).isVisible();
+
+async function testBridgeSetup(browser, build) {
+  const mcp = 'ws://127.0.0.1:17374/extension';
+  const manual = 'ws://localhost:18374/extension';
+  const { page, errors } = await open(browser, build, 'settings.html#cloudbridge', {
+    seed: { webbrainCloudBridgeUrl: mcp, webbrainCloudBridgePairingKey: 'test-only-key' },
+  });
+  const selected = page.locator('#cb-presets [aria-pressed="true"]');
+  const url = page.locator('#cb-url');
+  async function checkClient(client, endpoint) {
+    await page.locator(`[data-cb-client="${client}"][aria-pressed="true"]`).waitFor();
+    assert.equal(await selected.count(), 1, `${build}: only ${client} is selected`);
+    assert.equal(await url.inputValue(), endpoint);
+  }
+
+  // An existing installation can have only the URL. MCP is its original label.
+  await checkClient('mcp', mcp);
+  assert.equal(await page.locator('#cb-enabled').isChecked(), false);
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', {
+    value: { async writeText(text) { window.testClipboard = text; } },
+  }));
+  for (const [client, instructions] of [
+    ['opencode', ['opencode mcp add webbrain -- npx -y @webbrain/mcp-server@0.1.2', 'opencode mcp list']],
+    ['deepseek-harness', ['Add plugin', '@webbrain/dsh-local@0.1.0', 'Enable now']],
+    ['claude-code', ['claude mcp add']],
+    ['cursor', ['mcp.json', '@webbrain/mcp-server']],
+  ]) {
+    await page.locator(`[data-cb-client="${client}"]`).click();
+    await checkClient(client, mcp);
+    const guide = page.locator('#cb-setup');
+    await guide.locator(`[data-cb-guide~="${client}"]`).first().waitFor();
+    const text = await guide.innerText();
+    const checkTool = client === 'deepseek-harness' ? 'mcp__webbrain__webbrain_connection' : 'webbrain_connection';
+    for (const step of [...instructions, 'npx -y @webbrain/mcp-server@0.1.2 pairing-key', checkTool]) {
+      assert.ok(text.includes(step), `${build}: ${client} setup includes ${step}`);
+    }
+    const snippet = guide.locator('.cb-snippet:visible').first();
+    const expected = await snippet.locator('code').textContent();
+    await snippet.locator('button').click();
+    assert.equal(await page.evaluate(() => window.testClipboard), expected, `${build}: copy the install snippet exactly`);
+    assert.equal(await store(page, 'webbrainCloudBridgeClient'), client);
+    assert.equal(await store(page, 'webbrainCloudBridgeEnabled'), false);
+  }
+  assert.equal(await store(page, 'webbrainCloudBridgePairingKey'), 'test-only-key');
+  assert.equal(await page.evaluate(() => window.testRequests.some(msg => msg.action === 'cloud_bridge_start')), false);
+  await page.reload();
+  await checkClient('cursor', mcp);
+  await page.locator('#cb-setup [data-cb-guide~="cursor"]').first().waitFor();
+  assert.equal(await page.locator('#cb-setup [data-cb-guide="deepseek-harness"]:visible').count(), 0);
+
+  // A custom choice survives even if the entered address matches a built-in.
+  await page.locator('[data-cb-client="custom"]').click();
+  await page.reload();
+  await checkClient('custom', mcp);
+  await page.locator('[data-cb-client="opencode"]').click();
+  await url.fill(manual);
+  await checkClient('custom', manual);
+  await page.locator('#cb-enabled').locator('..').click();
+  await page.waitForFunction(endpoint => window.testRequests.some(msg => msg.action === 'cloud_bridge_start' && msg.url === endpoint), manual);
+  await page.reload();
+  await checkClient('custom', manual);
+  // Older versions saved the address alone, including hand-entered URLs.
+  for (const [client, endpoint] of [['cloud', 'ws://127.0.0.1:17373/extension'], ['lmstudio', 'ws://127.0.0.1:17375/extension'], ['custom', manual]]) {
+    await page.evaluate(async value => {
+      await chrome.storage.local.remove('webbrainCloudBridgeClient');
+      await chrome.storage.local.set({ webbrainCloudBridgeUrl: value });
+    }, endpoint);
+    await page.reload();
+    await checkClient(client, endpoint);
+  }
+  await page.evaluate(() => chrome.storage.local.set({ webbrainCloudBridgeClient: 'opencode' }));
+  await page.reload();
+  await checkClient('custom', manual);
+  assert.deepEqual(errors, [], `${build}: Bridge client setup page errors`);
+  await page.close();
+}
+
 // Keys that resolved to nothing: i18n.js renders a missing key as the key itself.
 const untranslated = page => page.evaluate(() => {
   const missing = [];
@@ -168,6 +246,7 @@ try {
     if (process.env.SETTINGS_PAGES_BROWSER && process.env.SETTINGS_PAGES_BROWSER !== build) continue;
     const browser = await engine.launch();
     try {
+      await testBridgeSetup(browser, build);
       // --- settings.html: tabs, moved controls, defaults ---
       for (const lang of ['en', 'tr', 'ar']) {
         const { page, errors } = await open(browser, build, 'settings.html', { lang });
