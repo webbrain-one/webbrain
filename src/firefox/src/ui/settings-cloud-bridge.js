@@ -161,12 +161,14 @@ for (const btn of presetButtons) {
 }
 urlInput.addEventListener('input', () => selectClient('custom'));
 for (const btn of document.querySelectorAll('#cb-setup .cb-snippet button')) {
+  let resetTimer;
   btn.addEventListener('click', async () => {
     const code = btn.previousElementSibling;
     try {
       await navigator.clipboard.writeText(code.textContent);
+      clearTimeout(resetTimer);
       btn.textContent = t('sp.copied');
-      setTimeout(() => { btn.textContent = t('sp.copy'); }, 1500);
+      resetTimer = setTimeout(() => { btn.textContent = t('sp.copy'); }, 1500);
     } catch {
       const range = document.createRange();
       range.selectNodeContents(code);

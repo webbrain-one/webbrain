@@ -16220,6 +16220,7 @@ test('every setting the Settings page writes is exported or deliberately device-
     meteredProviderCostSpentUsd: ['chrome', 'firefox'],
     // The WebBrain Cloud bridge pairing of this browser.
     webbrainCloudBridgeBrowserId: ['chrome', 'firefox'],
+    webbrainCloudBridgeClient: ['chrome', 'firefox'],
     // Chrome's in-browser vision model: consent and downloaded weights belong to
     // this device, and the choice must not reach Firefox.
     webgpuVisionEnabled: ['chrome'],
