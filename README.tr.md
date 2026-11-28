@@ -280,7 +280,7 @@ DeepSeek Harness masaüstü uygulamasında **Plugins → Installed → Add plugi
 dsh plugin --profile web add @webbrain/dsh-local@0.1.0
 ```
 
-Tarayıcı uzantısını eşleştirmek ve bağlantıyı kontrol etmek için [Türkçe kurulum rehberini](https://www.webbrain.one/docs/tr/mcp/#deepseek-harness) izleyin.
+WebBrain uzantısında **Ayarlar → Köprü → DeepSeek Harness** seçeneğine tıklayın. Ekrandaki adımlarla tarayıcıyı eşleştirin ve Harness sohbetinde `mcp__webbrain__webbrain_connection` aracını çağırmasını isteyin. [DeepSeek Harness kurulum rehberi](https://www.webbrain.one/docs/tr/mcp/#deepseek-harness)
 
 Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan WebBrain'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz.
 
@@ -296,8 +296,7 @@ açık bırakın (durdurmak için `Ctrl+C` tuşlarına basın):
 npx -y @webbrain/mcp-server
 ```
 
-Sunucu çalışmaya başladıktan sonra **WebBrain → Settings → Bridge** (Ayarlar → Köprü) kısmını açın,
-URL'yi `ws://127.0.0.1:17374/extension` olarak ayarlayın, `npx -y @webbrain/mcp-server pairing-key` komutunun gösterdiği anahtarı **Pairing key** alanına yapıştırın ve köprüyü etkinleştirin. Sunucu, anahtarı göndermeden yeni bir sınama üzerinde HMAC ile anahtara sahip olduğunu kanıtlayan bağlantılara güvenir. LM Studio eklentisi de `~/.webbrain/bridge-key` dosyasını kullanır. Sunucuyu yükseltmeden önce uzantıyı güncelleyin; Pairing key alanı olmayan sürümler eşleşemez.
+**WebBrain → Ayarlar → Köprü** bölümünde **Claude Code**, **Cursor**, **OpenCode** veya **DeepSeek Harness** seçeneğine tıklayarak o istemcinin kurulum adımlarını görebilirsiniz. Diğer yerel istemciler için **MCP**’yi seçin. Bu seçeneklerin tümü `ws://127.0.0.1:17374/extension` adresini kullanır. İstemci sunucuyu başlattıktan sonra `npx -y @webbrain/mcp-server@0.1.2 pairing-key` komutunun gösterdiği anahtarı **Eşleştirme anahtarı** alanına yapıştırıp **Kaydet & bağlantıyı sına** düğmesine tıklayın. Sunucu, anahtarı göndermeden yeni bir sınama üzerinde HMAC ile anahtara sahip olduğunu kanıtlayan bağlantılara güvenir. LM Studio eklentisi de `~/.webbrain/bridge-key` dosyasını kullanır. Sunucuyu yükseltmeden önce uzantıyı güncelleyin; Pairing key alanı olmayan sürümler eşleşemez.
 Chromium tabanlı tarayıcılarda köprü, uzantının ekran dışı belgesi (off-screen document) üzerinden çalışır.
 Firefox ise bunu arka plan sayfasında barındırır ve yapılandırma yine aynı
 **Settings → Bridge** sekmesi altından yapılır (gerçek bir Firefox kurulumunda
@@ -324,8 +323,8 @@ ihtiyaç duyduğu durumlarda, JSON Şeması (JSON Schema) ile birlikte `webbrain
 Eksiksiz istemci kurulumu, araç argümanları, çalıştırma yaşam döngüsü, yapılandırılmış çıktı örnekleri, güvenlik sınırları ve sorun giderme kılavuzu [`web/docs/mcp/`](web/docs/mcp/) adresinde yer almaktadır.
 
 > Uzantı, aynı anda **tek bir** köprü soketi (bridge socket) tutar: WebBrain Cloud (17373),
-> MCP sunucusu (17374) veya LM Studio eklentisi (17375). **Ayarlar → Köprü (Settings → Bridge)**
-> altındaki URL'yi değiştirerek geçiş yapabilirsiniz.
+> MCP sunucusu (17374) veya LM Studio eklentisi (17375). Hedefi **Ayarlar → Köprü**
+> bölümünden seçebilirsiniz. Başka bir MCP istemcisini başlatmadan önce 17374 portunu kullanan istemciyi kapatın.
 
 ## LM Studio eklentisi
 

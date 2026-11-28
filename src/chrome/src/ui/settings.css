@@ -983,6 +983,24 @@ button:active { transform: scale(0.97); }
 .cb-preset-pill.active:hover { color: #fff; }
 .cb-preset-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+.cb-setup { overflow-wrap: anywhere; }
+.cb-setup ol { margin: 0; padding-inline-start: 1.5em; }
+.cb-setup li { padding-block: 2px; }
+.cb-setup p { margin: 8px 0 0; }
+.cb-snippet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-block: 6px;
+}
+.cb-snippet code {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  text-align: start;
+}
+.cb-snippet button { padding: 3px 8px; }
+
 .loaded-model-dialog {
   position: fixed;
   inset: 0;

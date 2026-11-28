@@ -1121,10 +1121,62 @@
           </label>
         </div>
         <div class="cb-presets" id="cb-presets" role="group" data-i18n-aria-label="st.cb.preset_label">
-          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17373/extension" data-i18n="st.cb.preset_cloud" data-i18n-title="st.cb.preset_cloud_hint" aria-pressed="false">Cloud</button>
-          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17374/extension" data-i18n="st.cb.preset_mcp" data-i18n-title="st.cb.preset_mcp_hint" aria-pressed="false">MCP</button>
-          <button class="cb-preset-pill" type="button" data-cb-preset="ws://127.0.0.1:17375/extension" data-i18n="st.cb.preset_lmstudio" data-i18n-title="st.cb.preset_lmstudio_hint" aria-pressed="false">LM Studio</button>
-          <button class="cb-preset-pill" type="button" id="cb-preset-custom" data-i18n="st.cb.preset_custom" data-i18n-title="st.cb.preset_custom_hint" aria-pressed="false">Custom</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="cloud" data-cb-preset="ws://127.0.0.1:17373/extension" data-i18n="st.cb.preset_cloud" data-i18n-title="st.cb.preset_cloud_hint" aria-pressed="false">Cloud</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="mcp" data-cb-preset="ws://127.0.0.1:17374/extension" data-i18n="st.cb.preset_mcp" data-i18n-title="st.cb.preset_mcp_hint" aria-pressed="false">MCP</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="lmstudio" data-cb-preset="ws://127.0.0.1:17375/extension" data-i18n="st.cb.preset_lmstudio" data-i18n-title="st.cb.preset_lmstudio_hint" aria-pressed="false">LM Studio</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="opencode" data-cb-preset="ws://127.0.0.1:17374/extension" aria-pressed="false">OpenCode</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="deepseek-harness" data-cb-preset="ws://127.0.0.1:17374/extension" aria-pressed="false">DeepSeek Harness</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="claude-code" data-cb-preset="ws://127.0.0.1:17374/extension" aria-pressed="false">Claude Code</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="cursor" data-cb-preset="ws://127.0.0.1:17374/extension" aria-pressed="false">Cursor</button>
+          <button class="cb-preset-pill" type="button" data-cb-client="custom" id="cb-preset-custom" data-i18n="st.cb.preset_custom" data-i18n-title="st.cb.preset_custom_hint" aria-pressed="false">Custom</button>
+        </div>
+        <div class="info-box cb-setup" id="cb-setup">
+          <p hidden data-cb-guide="mcp opencode claude-code cursor"><a href="https://nodejs.org/en/download" target="_blank" rel="noopener noreferrer">Node.js 20+ · npm</a></p>
+          <p hidden data-cb-guide="deepseek-harness"><a href="https://nodejs.org/en/download" target="_blank" rel="noopener noreferrer">Node.js 24.9+ · npm</a></p>
+          <ol>
+            <li hidden data-cb-guide="cloud" data-i18n-html="st.cb.howto_html"></li>
+            <li hidden data-cb-guide="custom" data-i18n="st.cb.setup_custom"></li>
+            <li hidden data-cb-guide="mcp">
+              <span data-i18n="st.cb.setup_mcp"></span>
+              <div class="cb-snippet"><code dir="ltr">npx -y @webbrain/mcp-server@0.1.2</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="opencode">
+              <span data-i18n="st.cb.setup_opencode"></span>
+              <div class="cb-snippet"><code dir="ltr">opencode mcp add webbrain -- npx -y @webbrain/mcp-server@0.1.2</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="deepseek-harness">
+              <span data-i18n="st.cb.setup_harness"></span>
+              <div class="cb-snippet"><code dir="ltr">@webbrain/dsh-local@0.1.0</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="claude-code">
+              <span data-i18n="st.cb.setup_claude"></span>
+              <div class="cb-snippet"><code dir="ltr">claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server@0.1.2</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="cursor">
+              <span data-i18n="st.cb.setup_cursor"></span>
+              <div class="cb-snippet"><code dir="ltr">{
+  "mcpServers": {
+    "webbrain": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@webbrain/mcp-server@0.1.2"]
+    }
+  }
+}</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="lmstudio">
+              <span data-i18n="st.cb.setup_lmstudio"></span>
+              <a href="https://lmstudio.ai/webbrain/web-tools" target="_blank" rel="noopener noreferrer">WebBrain Web Tools</a>
+            </li>
+            <li hidden data-cb-guide="mcp opencode deepseek-harness claude-code cursor lmstudio">
+              <span data-i18n="st.cb.setup_pair"></span>
+              <div class="cb-snippet"><code dir="ltr">npx -y @webbrain/mcp-server@0.1.2 pairing-key</code><button type="button" class="btn-secondary" data-i18n="sp.copy"></button></div>
+            </li>
+            <li hidden data-cb-guide="mcp opencode cursor claude-code" data-i18n="st.cb.setup_verify" data-i18n-params='{"tool":"webbrain_connection"}'></li>
+            <li hidden data-cb-guide="deepseek-harness" data-i18n="st.cb.setup_verify" data-i18n-params='{"tool":"mcp__webbrain__webbrain_connection"}'></li>
+            <li hidden data-cb-guide="lmstudio" data-i18n="st.cb.setup_verify" data-i18n-params='{"tool":"browser_status"}'></li>
+          </ol>
+          <p hidden data-cb-guide="mcp opencode deepseek-harness claude-code cursor" data-i18n="st.cb.setup_port"></p>
         </div>
         <label class="cloud-bridge-url-field" for="cb-url" style="margin-top:12px;">
           <span class="cloud-bridge-url-label" data-i18n="st.cb.url"></span>
@@ -1157,7 +1209,6 @@
           <span class="cloud-bridge-status-dot" aria-hidden="true"></span>
           <span id="cb-status-text" data-i18n="st.cb.status_disabled"></span>
         </div>
-        <div class="info-box" style="margin-top:16px;" data-i18n-html="st.cb.howto_html"></div>
       </div>
       <div class="provider-card" id="webmcp-card">
         <div class="setting-row">

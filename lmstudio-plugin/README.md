@@ -106,9 +106,9 @@ The extension connects to the plugin from an offscreen document in Chromium
    Windows). The file is readable only by you. If you also use the MCP server,
    it uses the same key. With the paired MCP package installed, you can also
    print it in your terminal with `webbrain-mcp pairing-key`.
-3. In **WebBrain → Settings → Bridge**, set the URL to
-   `ws://127.0.0.1:17375/extension`, paste the key into **Pairing key**, and
-   enable it.
+3. In **WebBrain → Settings → Bridge**, choose **LM Studio**. This fills in
+   `ws://127.0.0.1:17375/extension`. Paste the key into **Pairing key** and
+   click **Save & test connection**.
 4. Ask the model to call `browser_status` to confirm.
 
 > **One bridge at a time.** The extension holds exactly one outbound bridge

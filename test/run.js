@@ -16220,6 +16220,7 @@ test('every setting the Settings page writes is exported or deliberately device-
     meteredProviderCostSpentUsd: ['chrome', 'firefox'],
     // The WebBrain Cloud bridge pairing of this browser.
     webbrainCloudBridgeBrowserId: ['chrome', 'firefox'],
+    webbrainCloudBridgeClient: ['chrome', 'firefox'],
     // Chrome's in-browser vision model: consent and downloaded weights belong to
     // this device, and the choice must not reach Firefox.
     webgpuVisionEnabled: ['chrome'],
@@ -68193,7 +68194,7 @@ test('inspect_event_listeners resolves marked ref targets through CDP and always
   }
 });
 
-test('MCP bridge settings are Chromium-only, live under Bridge, and keep setup guidance in sync', async () => {
+test('MCP bridge settings live under Bridge and keep setup guidance in sync across browsers', async () => {
   const chromeHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.html'), 'utf8');
   const chromeSettings = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings.js'), 'utf8');
   const chromeBridgeSettings = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/settings-cloud-bridge.js'), 'utf8');
@@ -68251,8 +68252,9 @@ test('MCP bridge settings are Chromium-only, live under Bridge, and keep setup g
   assert.match(chromeBridgeSettings, /send\('cloud_bridge_start', \{ url/, 'bridge controls should start the configured endpoint');
   assert.match(chromeBridgeSettings, /send\('cloud_bridge_stop'\)/, 'bridge controls should stop the endpoint');
   assert.match(chromeBridgeSettings, /send\('cloud_bridge_status'\)/, 'bridge controls should report live connection status');
-  assert.match(chromeBridgeSettings, /data-cb-preset/, 'bridge presets should fill the URL from quick-select chips');
-  assert.match(chromeBridgeSettings, /markCustomPill/, 'manual URL edits should stay on the Custom pill');
+  for (const source of [chromeBridgeSettings, firefoxBridgeSettings]) {
+    assert.match(source, /webbrainCloudBridgeClient/, 'Bridge settings should remember which client uses a shared URL');
+  }
   assert.match(chromeBridgeSettings, /cb-approval-details/, 'approval fields should auto-open when a token is stored');
   assert.match(chromeBridgeSettings, /url\.protocol !== 'ws:'[\s\S]*127\.0\.0\.1[\s\S]*localhost[\s\S]*\[::1\]/, 'settings should reject non-loopback bridge URLs before saving');
   const chromeBridgeCopy = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales/cloud-bridge-copy.mjs')).href);
