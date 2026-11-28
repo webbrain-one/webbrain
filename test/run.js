@@ -77589,7 +77589,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 124/123 Settings provider cards.
+    // deliberately omitted from the 130/129 Settings provider cards.
     const expectedDefaultCount = label === 'chrome' ? 131 : 130;
     assert.equal(
       Object.keys(defaults).length,

@@ -854,24 +854,24 @@ context and, when enabled, screenshots leave the browser and are sent to
 TeamoRouter and the upstream model provider. See the
 [privacy policy](https://teamorouter.com/privacy).
 
-
 #### LLMTR
 
 [LLMTR](https://llmtr.com) is a prepaid OpenAI-compatible gateway for Qwen,
 MiniMax, Mistral, Gemini and other models behind one endpoint,
 `https://llmtr.com/v1`, with a Bearer key from the
 [dashboard](https://llmtr.com/dashboard/keys). Model IDs use a `vendor/model`
-prefix (`qwen/qwen3.8-flash`, `qwen/qwen3.8-max`, `mistral/devstral-medium-latest`,
-`qwen/qwen3.8-27b-free` and others); `GET
-https://llmtr.com/v1/models` with a key returns the list, and the
-[models page](https://llmtr.com/models) shows prices. Usage is prepaid and
-billed per token.
+prefix (`qwen/qwen3.8-flash`, `qwen/qwen3.8-max`, `mistral/mistral-large-4`,
+`qwen/qwen3.8-27b-free` and others); `GET https://llmtr.com/v1/models`
+returns the live list, and the [models page](https://llmtr.com/models) shows
+prices. Usage is prepaid and billed per token.
 
 In WebBrain, open **Settings → Models → LLM → LLMTR**, paste your API key,
 keep the default `qwen/qwen3.8-flash` model (1 million tokens of context),
 then click **Test Connection**. Interactive Ask streaming and tool calls work
 through the existing OpenAI-compatible path. The default model accepts images,
-so the card starts with vision on.
+so the card starts with vision on. If you switch to `qwen/qwen3.8-27b-free`
+(free with a daily usage quota), lower **Context window** to `131042` (and
+**Max output** to `16384` or less) to match its limits.
 
 This is an **opt-in cloud provider**, not local inference. Prompts, page
 context and, when enabled, screenshots leave the browser and are sent to

@@ -72,6 +72,10 @@ for (const browser of ['chrome', 'firefox']) {
   assert.equal(llmtr.supportsAskStreaming, true);
   assert.equal(llmtr.apiKeyUrl, 'https://llmtr.com/dashboard/keys');
   assert.ok(providerIconUrl('llmtr').endsWith('/llmtr.svg'));
+  assert.deepEqual(
+    ADDITIONAL_PROVIDER_UI.llmtr.suggestions,
+    ['qwen/qwen3.8-flash', 'qwen/qwen3.8-max', 'mistral/mistral-large-4', 'qwen/qwen3.8-27b-free'],
+  );
 
   const aigrow = ADDITIONAL_PROVIDER_DEFAULTS.aigrow;
   assert.equal(aigrow.type, 'openai', `${browser}: AIGROW must use the OpenAI-compatible adapter`);
