@@ -305,6 +305,9 @@ Recent changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## MCP server
 
+DeepSeek Harness users can install the [WebBrain local browser plugin](integrations/deepseek-harness/)
+to delegate tasks to their paired extension.
+
 Let a coding agent use *your* browser. Claude Code, Codex, Cursor and OpenClaw
 can delegate a task to WebBrain running in the session you are already signed
 into — cookies present, SSO already passed. A headless framework starts logged

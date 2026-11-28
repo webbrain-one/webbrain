@@ -35,9 +35,7 @@ have the browser extension, to act inside your own signed-in session.
   `<article>`, drops header/nav/footer/aside before stripping tags.
   Best for news, blog posts, READMEs, Wikipedia, docs.
 
-**Adds real browser access when the [WebBrain extension](https://webbrain.one)
-is installed on a Chromium browser** (Chrome, Edge, Brave, Opera, Vivaldi —
-[not Firefox](#why-not-firefox)):
+**Adds access to your signed-in browser with the [WebBrain extension](https://webbrain.one)**:
 
 - **`browser_task`** — hand a goal to WebBrain running in the browser
   you are already logged into. Reaches the authenticated dashboards,
@@ -98,32 +96,25 @@ headlines.
 
 ## Connect your browser (optional)
 
-`browser_task` needs the [WebBrain extension](https://webbrain.one) on a
-**Chromium browser** — Chrome, Edge, Brave, Opera or Vivaldi. The extension
-dials out to this plugin; a Manifest V3 extension cannot listen on a socket,
-so the plugin hosts the listener.
-
-### Why not Firefox
-
-The bridge runs from the extension's **offscreen document**, and the Firefox
-build has none — see [`src/firefox/ARCHITECTURE.md`](../src/firefox/ARCHITECTURE.md).
-`cloud-bridge.js` and `cloud-runs.js` exist only under `src/chrome/`. On
-Firefox, `browser_task` will always return the not-connected response.
-`fetch_url` and `research_url` are unaffected and work everywhere.
+`browser_task` uses the [WebBrain extension](https://webbrain.one) in your browser.
+The extension connects to the plugin from an offscreen document in Chromium
+(Chrome, Edge, Brave, Opera or Vivaldi) or from the background page in Firefox.
 
 1. Install the extension and open your browser.
 2. Enable the plugin once so it creates its pairing key, then copy the key
    from `~/.webbrain/bridge-key` (`%USERPROFILE%\.webbrain\bridge-key` on
    Windows). The file is readable only by you. If you also use the MCP server,
-   it is the same key (`npx -y @webbrain/mcp-server pairing-key` prints it).
+   it uses the same key. With the paired MCP package installed, you can also
+   print it in your terminal with `webbrain-mcp pairing-key`.
 3. In **WebBrain → Settings → Bridge**, set the URL to
    `ws://127.0.0.1:17375/extension`, paste the key into **Pairing key**, and
    enable it.
 4. Ask the model to call `browser_status` to confirm.
 
 > **One bridge at a time.** The extension holds exactly one outbound bridge
-> socket. Pointing it here means it is *not* pointed at WebBrain Cloud
-> (`17373`) or the MCP server (`17374`). Override the port with
+> socket. Use port `17375` for LM Studio and port `17374` for
+> [DeepSeek Harness with the local MCP server](https://webbrain.one/docs/mcp/#deepseek-harness).
+> Both integrations read the same default pairing key. Override the port with
 > `WEBBRAIN_BRIDGE_PORT`, and the key with `WEBBRAIN_BRIDGE_KEY` or
 > `WEBBRAIN_BRIDGE_KEY_FILE`.
 

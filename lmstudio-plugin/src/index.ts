@@ -27,7 +27,8 @@
 
 import { createConfigSchematics, tool } from "@lmstudio/sdk";
 import type { PluginContext, ToolsProviderController } from "@lmstudio/sdk";
-import { z } from "zod";
+// LM Studio's tool() wraps these fields in a Zod 3 object.
+import { z } from "zod/v3";
 import { fetchUrl } from "./tools/fetchUrl.js";
 import { researchUrl } from "./tools/researchUrl.js";
 import {
@@ -192,9 +193,8 @@ const browserTaskTool = tool({
     "If a task keeps running, poll browser_status with its runId. If it needs user " +
     "input, ask the user and forward their answer with browser_respond. If the user " +
     "wants a continuing run stopped, call browser_abort.\n\n" +
-    "Requires the WebBrain extension (https://webbrain.one) on a Chromium browser " +
-    "(Chrome, Edge, Brave), pointed at this plugin's bridge. Firefox cannot host the " +
-    "bridge. If it is not connected the tool returns a hint explaining exactly what to " +
+    "Requires the WebBrain extension (https://webbrain.one) in Chromium or Firefox, " +
+    "connected to this plugin’s bridge. If it is not connected the tool returns a hint explaining what to " +
     "do — relay that to the user rather than retrying.",
   parameters: {
     task: z

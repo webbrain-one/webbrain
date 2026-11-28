@@ -1,0 +1,17 @@
+{
+  "name": "@webbrain/dsh-local",
+  "version": "0.1.0",
+  "description": "Give DeepSeek Harness access to the WebBrain extension in your local browser.",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png"
+  },
+  "files": ["cordis.patch.yml", "index.mjs", "locale", "icon.png"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "dependencies": { "@webbrain/mcp-server": "0.1.2" },
+  "peerDependencies": { "@deepseek-ai/dsh-mcp-client": ">=0.2.2-rc.5 <0.3.0" },
+  "engines": { "dsh": ">=0.2.2-rc.5 <0.3.0", "node": ">=24.9.0" },
+  "license": "GPL-3.0-or-later"
+}

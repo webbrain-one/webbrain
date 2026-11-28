@@ -73,6 +73,12 @@ Deleting `~/.webbrain/bridge-key` and restarting the server rotates the key; pas
 
 ## Register with a client
 
+**DeepSeek Harness**
+
+The `@webbrain/dsh-local` plugin starts this server for the selected Harness
+profile. After pairing, ask Harness to call `mcp__webbrain__webbrain_connection`.
+See the [DeepSeek Harness setup and checkout instructions](https://webbrain.one/docs/mcp/#deepseek-harness).
+
 **Claude Code**
 
 ```bash
@@ -136,8 +142,8 @@ lsof -nP -iTCP:17374 -sTCP:LISTEN
 No output means the MCP server is not listening. If it is listening but the
 extension does not connect, make sure another bridge destination is not selected:
 WebBrain Cloud uses `17373`, this MCP server uses `17374`, and the LM Studio
-plugin uses `17375`. Only one can be selected at a time. The bridge is available
-in Chromium browsers only, not Firefox.
+plugin uses `17375`. Only one can be selected at a time. Chromium and Firefox
+both configure the connection under **Settings → Bridge**.
 
 **Rejected by the backend: Pairing key mismatch** means the key under
 **Settings → Bridge → Pairing key** is not the one this server uses. Print it
